@@ -42,6 +42,7 @@ agent.md
 
 # Local configuration
 taskpps.yaml
+.githubtoken
 
 # Example config files that users should copy
 examples/taskpps.yaml
