@@ -1,0 +1,6 @@
+[submodule "cli"]
+	path = cli
+	url = http://10.98.72.23:8418/liheng/taskpps-cli.git
+[submodule "server"]
+	path = server
+	url = http://10.98.72.23:8418/liheng/taskpps-server.git
