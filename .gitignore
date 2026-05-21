@@ -28,13 +28,13 @@ cli/ppsctl
 
 # Environment & User specific
 # Don't track user project content
-pipelines/
-tasks/
+/pipelines/
+/tasks/
 .agents/
-agents/
-credentials/
-plugins/
-docs/
+/agents/
+/credentials/
+/plugins/
+/docs/
 
 # Trae IDE
 .agents/
@@ -47,3 +47,4 @@ taskpps.yaml
 
 # Example config files that users should copy
 examples/taskpps.yaml
+test_projects/
