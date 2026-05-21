@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )

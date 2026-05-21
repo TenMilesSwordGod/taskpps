@@ -24,6 +24,7 @@ htmlcov/
 # Go
 cli/bin/
 cli/.pytest_cache/
+cli/ppsctl
 
 # Environment & User specific
 # Don't track user project content

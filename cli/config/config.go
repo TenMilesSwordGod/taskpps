@@ -11,8 +11,8 @@ import (
 var App *Config
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Executor ExecutorConfig `mapstructure:"executor"`
+	Server   ServerConfig      `mapstructure:"server"`
+	Executor ExecutorConfig    `mapstructure:"executor"`
 	Env      map[string]string `mapstructure:"env"`
 }
 

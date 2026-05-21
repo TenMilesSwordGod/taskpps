@@ -11,8 +11,8 @@ func TestParseParams(t *testing.T) {
 		expected map[string]interface{}
 	}{
 		{
-			name:  "empty input",
-			input: []string{},
+			name:     "empty input",
+			input:    []string{},
 			expected: map[string]interface{}{},
 		},
 		{
@@ -42,11 +42,10 @@ func TestParseParams(t *testing.T) {
 			},
 		},
 		{
-			name:  "invalid format (no equals)",
-			input: []string{"invalid"},
+			name:     "invalid format (no equals)",
+			input:    []string{"invalid"},
 			expected: map[string]interface{}{},
 		},
-
 	}
 
 	for _, tc := range testCases {
@@ -89,7 +88,6 @@ func TestBuildNestedMap(t *testing.T) {
 				},
 			},
 		},
-
 	}
 
 	for _, tc := range testCases {

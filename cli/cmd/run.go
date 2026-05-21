@@ -7,6 +7,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/taskpps/ppsctl/client"
+	"github.com/taskpps/ppsctl/models"
 )
 
 var runParams []string
@@ -67,27 +68,28 @@ func watchRun(runID string) error {
 			return err
 		}
 
-		if run.Status != lastStatus {
-			statusColor := colorForStatus(string(run.Status))
-			statusColor.Printf("Status: %s\n", run.Status)
-			lastStatus = run.Status
+		statusStr := string(run.Status)
+		if statusStr != lastStatus {
+			statusColor := colorForStatus(statusStr)
+			statusColor.Printf("Status: %s\n", statusStr)
+			lastStatus = statusStr
 		}
 
 		for _, task := range run.Tasks {
 			taskColor := colorForTaskStatus(string(task.Status))
-			taskColor.Printf("  [%s] %s", task.Status, task.TaskName)
+			taskColor.Printf("  [%s] %s", string(task.Status), task.TaskName)
 			if task.FinishedAt != nil {
 				fmt.Printf(" (done)")
 			}
 			fmt.Println()
 		}
 
-		if run.Status == "success" {
+		if run.Status == models.RunStatusSuccess {
 			color.Green("\nPipeline completed successfully!\n")
 			return nil
 		}
-		if run.Status == "failed" || run.Status == "cancelled" || run.Status == "partial" {
-			color.Red("\nPipeline finished with status: %s\n", run.Status)
+		if run.Status == models.RunStatusFailed || run.Status == models.RunStatusCancelled || run.Status == models.RunStatusPartial {
+			color.Red("\nPipeline finished with status: %s\n", string(run.Status))
 			return nil
 		}
 

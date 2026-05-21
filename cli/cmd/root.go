@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	cfgFile    string
-	apiClient  *client.Client
-	appConfig  *config.Config
+	cfgFile   string
+	apiClient *client.Client
+	appConfig *config.Config
 )
 
 var RootCmd = &cobra.Command{
