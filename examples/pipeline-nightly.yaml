@@ -1,0 +1,25 @@
+name: nightly
+options:
+  host: prod-server
+  credential: prod-cred
+  env:
+    APP_ENV: production
+  timeout: 1800
+  on_failure: continue
+
+tasks:
+  - name: backup-db
+    command: pg_dump -U admin mydb > /backup/db_$(date +%Y%m%d).sql
+    timeout: 600
+
+  - name: run-reports
+    command: python /app/generate_reports.py
+    timeout: 1200
+
+  - name: cleanup-logs
+    command: find /var/log/app -name "*.log" -mtime +30 -delete
+    depends_on: [backup-db]
+
+  - name: notify
+    command: curl -X POST https://hooks.example.com/notify -d 'nightly done'
+    depends_on: [run-reports, cleanup-logs]

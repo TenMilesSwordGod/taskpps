@@ -1,0 +1,184 @@
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Optional, Sequence
+
+from sqlalchemy import delete, select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from taskpps.models.run import PipelineRun, TaskRun, RunStatus, TaskStatus
+from taskpps.models.trigger import Trigger
+
+
+class RunRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_run(self, pipeline_name: str, pipeline_file: str = "", params: dict | None = None) -> PipelineRun:
+        run = PipelineRun(
+            pipeline_name=pipeline_name,
+            pipeline_file=pipeline_file,
+            params=json.dumps(params or {}),
+            status=RunStatus.PENDING,
+        )
+        self.session.add(run)
+        await self.session.commit()
+        await self.session.refresh(run)
+        return run
+
+    async def get_run(self, run_id: str) -> Optional[PipelineRun]:
+        result = await self.session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
+        return result.scalar_one_or_none()
+
+    async def list_runs(
+        self,
+        pipeline: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> Sequence[PipelineRun]:
+        stmt = select(PipelineRun).order_by(PipelineRun.created_at.desc())
+        if pipeline:
+            stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
+        if status:
+            stmt = stmt.where(PipelineRun.status == status)
+        stmt = stmt.limit(limit)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def update_run_status(self, run_id: str, status: RunStatus, started_at: datetime | None = None, finished_at: datetime | None = None) -> None:
+        run = await self.get_run(run_id)
+        if run is None:
+            return
+        run.status = status
+        if started_at is not None:
+            run.started_at = started_at
+        if finished_at is not None:
+            run.finished_at = finished_at
+        await self.session.commit()
+
+    async def delete_runs_older_than(self, days: int) -> int:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        stmt = delete(PipelineRun).where(PipelineRun.created_at < cutoff)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
+
+    async def delete_runs_keep(self, keep: int) -> int:
+        sub = select(PipelineRun.id).order_by(PipelineRun.created_at.desc()).limit(keep)
+        stmt = delete(PipelineRun).where(PipelineRun.id.not_in(sub))
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
+
+    async def delete_all_runs(self) -> int:
+        stmt = delete(PipelineRun)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
+
+
+class TaskRunRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_task_run(self, run_id: str, task_name: str, task_type: str = "command", log_path: str = "") -> TaskRun:
+        tr = TaskRun(
+            run_id=run_id,
+            task_name=task_name,
+            task_type=task_type,
+            log_path=log_path,
+            status=TaskStatus.PENDING,
+        )
+        self.session.add(tr)
+        await self.session.commit()
+        await self.session.refresh(tr)
+        return tr
+
+    async def get_task_run(self, task_run_id: str) -> Optional[TaskRun]:
+        result = await self.session.execute(select(TaskRun).where(TaskRun.id == task_run_id))
+        return result.scalar_one_or_none()
+
+    async def list_task_runs(self, run_id: str) -> Sequence[TaskRun]:
+        result = await self.session.execute(
+            select(TaskRun).where(TaskRun.run_id == run_id).order_by(TaskRun.created_at)
+        )
+        return result.scalars().all()
+
+    async def update_task_status(
+        self,
+        task_run_id: str,
+        status: TaskStatus,
+        exit_code: int | None = None,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        tr = await self.get_task_run(task_run_id)
+        if tr is None:
+            return
+        tr.status = status
+        if exit_code is not None:
+            tr.exit_code = exit_code
+        if started_at is not None:
+            tr.started_at = started_at
+        if finished_at is not None:
+            tr.finished_at = finished_at
+        await self.session.commit()
+
+    async def cancel_pending_tasks(self, run_id: str) -> int:
+        stmt = (
+            select(TaskRun)
+            .where(TaskRun.run_id == run_id, TaskRun.status == TaskStatus.PENDING)
+        )
+        result = await self.session.execute(stmt)
+        tasks = result.scalars().all()
+        count = 0
+        for t in tasks:
+            t.status = TaskStatus.CANCELLED
+            count += 1
+        await self.session.commit()
+        return count
+
+    async def get_running_tasks(self, run_id: str) -> Sequence[TaskRun]:
+        result = await self.session.execute(
+            select(TaskRun).where(TaskRun.run_id == run_id, TaskRun.status == TaskStatus.RUNNING)
+        )
+        return result.scalars().all()
+
+    async def delete_tasks_for_run(self, run_id: str) -> int:
+        stmt = delete(TaskRun).where(TaskRun.run_id == run_id)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
+
+
+class TriggerRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_trigger(self, type: str, config: dict, pipeline_file: str, enabled: bool = True) -> Trigger:
+        trigger = Trigger(
+            type=type,
+            config=json.dumps(config),
+            pipeline_file=pipeline_file,
+            enabled=enabled,
+        )
+        self.session.add(trigger)
+        await self.session.commit()
+        await self.session.refresh(trigger)
+        return trigger
+
+    async def get_trigger(self, trigger_id: str) -> Optional[Trigger]:
+        result = await self.session.execute(select(Trigger).where(Trigger.id == trigger_id))
+        return result.scalar_one_or_none()
+
+    async def list_triggers(self) -> Sequence[Trigger]:
+        result = await self.session.execute(select(Trigger).order_by(Trigger.created_at))
+        return result.scalars().all()
+
+    async def delete_trigger(self, trigger_id: str) -> bool:
+        trigger = await self.get_trigger(trigger_id)
+        if trigger is None:
+            return False
+        await self.session.delete(trigger)
+        await self.session.commit()
+        return True

@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+import os
+import re
+from typing import Any, Dict, List, Optional
+
+from taskpps.config import get_settings
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+
+
+_NAME_INDEX_PATTERN = re.compile(r'^(\w+)\["([^"]+)"\]$')
+_NUMERIC_INDEX_PATTERN = re.compile(r'^(\w+)\[(\d+)\]$')
+
+
+def _navigate_to_key(current: Any, key: str) -> Any:
+    m = _NAME_INDEX_PATTERN.match(key)
+    m2 = _NUMERIC_INDEX_PATTERN.match(key)
+    if m:
+        field = m.group(1)
+        name = m.group(2)
+        container = current[field] if isinstance(current, dict) else current
+        if isinstance(container, list):
+            for item in container:
+                if isinstance(item, dict) and item.get("name") == name:
+                    return item
+            raise KeyError(f"Item with name '{name}' not found in '{field}'")
+        return container
+    elif m2:
+        field = m2.group(1)
+        idx = int(m2.group(2))
+        container = current[field] if isinstance(current, dict) else current
+        if isinstance(container, list):
+            return container[idx]
+        return container
+    elif isinstance(current, dict):
+        return current[key]
+    elif isinstance(current, list):
+        return current[int(key)]
+    else:
+        raise KeyError(f"Cannot resolve key '{key}'")
+
+
+def _set_key(current: Any, key: str, value: Any) -> None:
+    m = _NAME_INDEX_PATTERN.match(key)
+    m2 = _NUMERIC_INDEX_PATTERN.match(key)
+    if m:
+        field = m.group(1)
+        name = m.group(2)
+        container = current[field] if isinstance(current, dict) else current
+        if isinstance(container, list):
+            for item in container:
+                if isinstance(item, dict) and item.get("name") == name:
+                    item[key.split(".")[-1] if "." in key else list(item.keys())[-1]] = value
+                    return
+            raise KeyError(f"Item with name '{name}' not found in '{field}'")
+    elif m2:
+        field = m2.group(1)
+        idx = int(m2.group(2))
+        container = current[field] if isinstance(current, dict) else current
+        if isinstance(container, list):
+            container[idx] = value
+            return
+    if isinstance(current, dict):
+        current[key] = value
+    elif isinstance(current, list):
+        current[int(key)] = value
+
+
+def resolve_dot_path(data: dict, path: str) -> Any:
+    keys = path.split(".")
+    current = data
+    for key in keys:
+        current = _navigate_to_key(current, key)
+    return current
+
+
+def set_dot_path(data: dict, path: str, value: Any) -> None:
+    keys = path.split(".")
+    current = data
+    for key in keys[:-1]:
+        current = _navigate_to_key(current, key)
+    last_key = keys[-1]
+    m = _NAME_INDEX_PATTERN.match(last_key)
+    m2 = _NUMERIC_INDEX_PATTERN.match(last_key)
+
+    if m:
+        field = m.group(1)
+        name = m.group(2)
+        container = current.get(field) if isinstance(current, dict) else current
+        if isinstance(container, list):
+            for item in container:
+                if isinstance(item, dict) and item.get("name") == name:
+                    return
+            raise KeyError(f"Item with name '{name}' not found in '{field}'")
+    elif m2:
+        field = m2.group(1)
+        idx = int(m2.group(2))
+        container = current.get(field) if isinstance(current, dict) else current
+        if isinstance(container, list):
+            container[idx] = value
+            return
+
+    if isinstance(current, dict):
+        current[last_key] = value
+    elif isinstance(current, list):
+        current[int(last_key)] = value
+
+
+def apply_overrides(pipeline_data: dict, overrides: Dict[str, Any]) -> dict:
+    import copy
+    data = copy.deepcopy(pipeline_data)
+    for path, value in overrides.items():
+        keys = path.split(".")
+        current = data
+        for key in keys[:-1]:
+            current = _navigate_to_key(current, key)
+        last_key = keys[-1]
+        if isinstance(current, dict):
+            current[last_key] = value
+        elif isinstance(current, list):
+            current[int(last_key)] = value
+    return data
+
+
+def build_env(
+    system_env: Dict[str, str] | None = None,
+    global_env: Dict[str, str] | None = None,
+    pipeline_env: Dict[str, str] | None = None,
+    task_env: Dict[str, str] | None = None,
+    cli_env: Dict[str, str] | None = None,
+) -> Dict[str, str]:
+    result = dict(system_env or os.environ)
+    if global_env:
+        result.update(global_env)
+    if pipeline_env:
+        result.update(pipeline_env)
+    if task_env:
+        result.update(task_env)
+    if cli_env:
+        result.update(cli_env)
+    return result
+
+
+class ExecutionContext:
+    def __init__(
+        self,
+        pipeline: ResolvedPipeline,
+        run_id: str,
+        env: Optional[Dict[str, str]] = None,
+    ):
+        self.pipeline = pipeline
+        self.run_id = run_id
+        self.env = env or {}
+
+    def get_task_env(self, task: ResolvedTask) -> Dict[str, str]:
+        settings = get_settings()
+        return build_env(
+            global_env=settings.env,
+            pipeline_env=self.pipeline.options.env,
+            task_env=task.env,
+            cli_env=self.env,
+        )

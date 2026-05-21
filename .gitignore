@@ -1,0 +1,35 @@
+# Python
+.taskpps/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.db
+*.log
+.uv/
+
+# Go
+cli/bin/
+cli/.pytest_cache/
+
+# Environment & User specific
+# Don't track user project content
+pipelines/
+tasks/
+agents/
+credentials/
+plugins/
+docs/

@@ -1,0 +1,23 @@
+name: deploy
+options:
+  host: staging-server
+  credential: default-cred
+  env:
+    APP_ENV: staging
+  timeout: 600
+  on_failure: fail
+
+tasks:
+  - name: pull-images
+    command: docker pull myapp:${TAG}
+
+  - name: migrate
+    invoke:
+      task: deploy_tasks.migrate_db
+      kwargs:
+        target_version: ${MIGRATE_VERSION}
+    timeout: 300
+
+  - name: restart
+    command: supervisorctl restart all
+    depends_on: [migrate]

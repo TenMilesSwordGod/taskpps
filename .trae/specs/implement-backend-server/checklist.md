@@ -1,0 +1,20 @@
+- [x] 项目脚手架：server/ 目录结构完整，pyproject.toml 依赖声明正确，uv sync 可成功安装
+- [x] 全局配置：taskpps.yaml 加载正确，缺失时使用默认值，Settings 模型字段完整
+- [x] 数据库层：SQLModel 模型定义完整（PipelineRun, TaskRun, Trigger），异步 CRUD 操作正常，启动时自动建表
+- [x] Pydantic Schema：请求/响应模型定义完整，字段类型和验证规则正确
+- [x] YAML 加载器：流水线/Agent/凭据 YAML 加载和 Pydantic 验证正常，环境变量替换 ${VAR} 工作正确
+- [x] DAG 解析：拓扑排序正确，循环依赖检测有效，并行层级识别正确
+- [x] 参数覆盖：点路径解析正确，任务名称索引解析正确，环境变量优先级合并正确
+- [x] 本地执行器：asyncio.subprocess 执行命令正常，实时输出捕获，超时终止
+- [x] SSH 执行器：paramiko SSH 连接和命令执行正常，输出捕获正确
+- [x] Invoke 执行器：动态导入和调用 invoke task 函数正常，参数传递正确
+- [x] 执行引擎：DAG 层级并行执行正确，失败策略（fail/continue）行为正确，超时控制有效
+- [x] 日志系统：日志文件写入路径正确（.taskpps/logs/<pipeline>/<task>/<id>.log），实时写入和流式读取正常
+- [x] 事件总线：blinker 信号定义完整，关键节点事件发布正常，插件可订阅接收
+- [x] 插件框架：插件接口定义完整，plugins/ 目录扫描加载正常，Cron 触发器按表达式触发
+- [x] API 端点：所有 8 个端点功能正确，请求参数验证有效，错误响应格式统一
+- [x] 流式日志：SSE 流式响应正常，follow 模式持续推送直到任务完成
+- [x] 取消运行：未开始任务标记 cancelled，运行中任务尝试中断
+- [x] 清理 API：按时间/数量清理记录和日志文件正确，force 全量清理正常
+- [x] 服务启动：python -m taskpps 和 taskpps-server 命令均可启动服务
+- [x] 端到端验证：完整流水线运行生命周期（创建→执行→查询→日志→完成/取消）正常

@@ -1,0 +1,14 @@
+server:
+  host: 127.0.0.1
+  port: 26521
+executor:
+  default_timeout: 3600
+  max_workers: 10
+env:
+  GLOBAL_VAR: global_value
+plugins:
+  paths: ["plugins"]
+triggers:
+  - type: cron
+    schedule: "0 2 * * *"
+    pipeline: nightly.yaml
