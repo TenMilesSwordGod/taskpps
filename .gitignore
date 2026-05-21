@@ -23,14 +23,15 @@ htmlcov/
 
 # Go
 cli/bin/
-cli/.pytest_cache/
 cli/ppsctl
+cli/coverage.out
+
+# Binary
+ppsctl
 
 # Environment & User specific
-# Don't track user project content
 /pipelines/
 /tasks/
-.agents/
 /agents/
 /credentials/
 /plugins/
@@ -48,3 +49,7 @@ taskpps.yaml
 # Example config files that users should copy
 examples/taskpps.yaml
 test_projects/
+
+# Spec files
+.spec/
+.trae/

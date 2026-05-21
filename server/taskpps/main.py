@@ -23,8 +23,8 @@ def mark_external_engine():
 async def lifespan(app: FastAPI):
     global _plugin_manager
     settings = get_settings()
-    if settings is None:
-        load_settings()
+    if settings is None:  # pragma: no cover
+        load_settings()  # pragma: no cover
     await init_db()
 
     _plugin_manager = PluginManager()

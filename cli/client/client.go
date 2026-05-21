@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/imroc/req"
@@ -19,6 +20,7 @@ type Client struct {
 
 func New(cfg *config.Config) *Client {
 	addr := config.GetServerAddr(cfg)
+	os.Setenv("NO_PROXY", "127.0.0.1,localhost")
 	return &Client{
 		baseURL: fmt.Sprintf("http://%s/api", addr),
 		http:    req.New(),
@@ -73,7 +75,14 @@ func (c *Client) ListRuns(pipeline, status string, limit int) (*models.RunListRe
 	}
 	var list models.RunListResponse
 	if err := resp.ToJSON(&list); err != nil {
-		return nil, err
+		var runs []models.Run
+		if err2 := resp.ToJSON(&runs); err2 != nil {
+			return nil, err
+		}
+		list = models.RunListResponse{
+			Items: runs,
+			Total: len(runs),
+		}
 	}
 	return &list, nil
 }

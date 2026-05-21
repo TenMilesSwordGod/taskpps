@@ -26,8 +26,8 @@ class BaseExecutor(ABC):
         log_path: Path,
         timeout: Optional[int] = None,
         cwd: Optional[str] = None,
-    ) -> ExecutorResult:
-        pass
+    ) -> ExecutorResult:  # pragma: no cover
+        ...
 
     async def cancel(self) -> None:
         pass

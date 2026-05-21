@@ -2,12 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/taskpps/ppsctl/client"
-	"github.com/taskpps/ppsctl/models"
+	"github.com/taskpps/ppsctl/tui"
 )
 
 var runParams []string
@@ -48,7 +47,7 @@ Examples:
 		}
 
 		if runWatch {
-			return watchRun(run.ID)
+			return tui.StartWatch(apiClient, run.ID)
 		}
 
 		if run.Status == "running" || run.Status == "pending" {
@@ -56,45 +55,6 @@ Examples:
 		}
 		return nil
 	},
-}
-
-func watchRun(runID string) error {
-	color.Cyan("Monitoring run %s (Ctrl+C to stop)\n", runID)
-
-	lastStatus := ""
-	for {
-		run, err := apiClient.GetRun(runID)
-		if err != nil {
-			return err
-		}
-
-		statusStr := string(run.Status)
-		if statusStr != lastStatus {
-			statusColor := colorForStatus(statusStr)
-			statusColor.Printf("Status: %s\n", statusStr)
-			lastStatus = statusStr
-		}
-
-		for _, task := range run.Tasks {
-			taskColor := colorForTaskStatus(string(task.Status))
-			taskColor.Printf("  [%s] %s", string(task.Status), task.TaskName)
-			if task.FinishedAt != nil {
-				fmt.Printf(" (done)")
-			}
-			fmt.Println()
-		}
-
-		if run.Status == models.RunStatusSuccess {
-			color.Green("\nPipeline completed successfully!\n")
-			return nil
-		}
-		if run.Status == models.RunStatusFailed || run.Status == models.RunStatusCancelled || run.Status == models.RunStatusPartial {
-			color.Red("\nPipeline finished with status: %s\n", string(run.Status))
-			return nil
-		}
-
-		time.Sleep(2 * time.Second)
-	}
 }
 
 func colorForStatus(s string) *color.Color {
