@@ -29,7 +29,19 @@ cli/.pytest_cache/
 # Don't track user project content
 pipelines/
 tasks/
+.agents/
 agents/
 credentials/
 plugins/
 docs/
+
+# Trae IDE
+.agents/
+skills-lock.json
+agent.md
+
+# Local configuration
+taskpps.yaml
+
+# Example config files that users should copy
+examples/taskpps.yaml
