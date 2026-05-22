@@ -33,9 +33,14 @@ func (c *Client) HealthCheck() (*models.HealthResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connection failed: %w", err)
 	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
 	var health models.HealthResponse
 	if err := resp.ToJSON(&health); err != nil {
-		return nil, err
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
 	}
 	return &health, nil
 }
@@ -74,11 +79,16 @@ func (c *Client) ListRuns(pipeline, status string, limit int) (*models.RunListRe
 	if err != nil {
 		return nil, fmt.Errorf("failed to list runs: %w", err)
 	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
 	var list models.RunListResponse
 	if err := resp.ToJSON(&list); err != nil {
 		var runs []models.Run
 		if err2 := resp.ToJSON(&runs); err2 != nil {
-			return nil, err
+			body, _ := resp.ToString()
+			return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
 		}
 		list = models.RunListResponse{
 			Items: runs,
@@ -93,12 +103,17 @@ func (c *Client) GetRun(runID string) (*models.Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run: %w", err)
 	}
-	if resp.Response().StatusCode == 404 {
-		return nil, fmt.Errorf("run %s not found", runID)
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		if resp.Response().StatusCode == 404 {
+			return nil, fmt.Errorf("run %s not found", runID)
+		}
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
 	}
 	var run models.Run
 	if err := resp.ToJSON(&run); err != nil {
-		return nil, err
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
 	}
 	return &run, nil
 }
@@ -115,11 +130,16 @@ func (c *Client) GetLogs(runID, task string, tail int) (map[string]string, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logs: %w", err)
 	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
 	var result struct {
 		Logs map[string]string `json:"logs"`
 	}
 	if err := resp.ToJSON(&result); err != nil {
-		return nil, err
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
 	}
 	return result.Logs, nil
 }
