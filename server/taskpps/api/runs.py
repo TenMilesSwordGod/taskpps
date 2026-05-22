@@ -72,13 +72,22 @@ async def get_run_logs(
         for tr in task_runs:
             log_path = Path(tr.log_path)
             if log_path.exists():
-                with open(log_path) as f:
-                    lines = f.readlines()
                 if tail:
-                    lines = lines[-tail:]
-                result[tr.task_name] = "".join(lines)
-            else:  # pragma: no cover
-                result[tr.task_name] = ""  # pragma: no cover
+                    with open(log_path, "rb") as f:
+                        f.seek(0, 2)
+                        file_size = f.tell()
+                        chunk_size = min(file_size, tail * 256)
+                        f.seek(max(0, file_size - chunk_size))
+                        raw = f.read().decode("utf-8", errors="replace")
+                        lines = raw.split("\n")
+                        if file_size > chunk_size:
+                            lines = lines[1:]
+                        result[tr.task_name] = "\n".join(lines[-tail:])
+                else:
+                    with open(log_path) as f:
+                        result[tr.task_name] = f.read()
+            else:
+                result[tr.task_name] = ""
         return {"logs": result}
 
     async def _log_stream():
