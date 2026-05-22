@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import shlex
+import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -33,14 +34,15 @@ class SSHExecutor(BaseExecutor):
         self._ensure_log_dir(log_path)
 
         shell = get_settings().executor.shell
-        parts = []
-        if cwd:
-            parts.append(f"cd {shlex.quote(cwd)}")
-        for k, v in env.items():
-            parts.append(f"export {shlex.quote(k)}={shlex.quote(v)}")
-        parts.append(command)
-        inner_script = " && ".join(parts)
-        full_command = f"{shell} -c {shlex.quote(inner_script)}"
+
+        def _build_script_content():
+            lines = ["#!/bin/sh", "set -e"]
+            if cwd:
+                lines.append(f"cd {shlex.quote(cwd)}")
+            for k, v in env.items():
+                lines.append(f"export {shlex.quote(k)}={shlex.quote(v)}")
+            lines.append(command)
+            return "\n".join(lines) + "\n"
 
         def _run_ssh():
             client = paramiko.SSHClient()
@@ -57,20 +59,37 @@ class SSHExecutor(BaseExecutor):
             elif self.password:
                 connect_kwargs["password"] = self.password
 
-            client.connect(timeout=30, **connect_kwargs)
+            try:
+                client.connect(timeout=30, **connect_kwargs)
 
-            stdin, stdout, stderr = client.exec_command(full_command, timeout=timeout)  # pragma: no cover
-            self._channel = stdout.channel  # pragma: no cover
+                script_id = uuid.uuid4().hex[:12]
+                remote_script = f"/tmp/.taskpps_{script_id}.sh"
+                try:
+                    with client.open_sftp() as sftp:
+                        with sftp.file(remote_script, "w") as f:
+                            f.write(_build_script_content())
+                        sftp.chmod(remote_script, 0o700)
 
-            output = stdout.read().decode("utf-8", errors="replace")  # pragma: no cover
-            error = stderr.read().decode("utf-8", errors="replace")  # pragma: no cover
-            exit_code = stdout.channel.recv_exit_status()  # pragma: no cover
+                    exec_cmd = f"{shell} {shlex.quote(remote_script)}"
+                    stdin, stdout, stderr = client.exec_command(exec_cmd, timeout=timeout)
+                    self._channel = stdout.channel
 
-            client.close()  # pragma: no cover
-            self._client = None  # pragma: no cover
-            self._channel = None  # pragma: no cover
+                    output = stdout.read().decode("utf-8", errors="replace")
+                    error = stderr.read().decode("utf-8", errors="replace")
+                    exit_code = stdout.channel.recv_exit_status()
 
-            return exit_code, output, error  # pragma: no cover
+                    with client.open_sftp() as sftp:
+                        try:
+                            sftp.remove(remote_script)
+                        except OSError:
+                            pass
+
+                    return exit_code, output, error
+                finally:
+                    self._channel = None
+            finally:
+                client.close()
+                self._client = None
 
         try:
             loop = asyncio.get_event_loop()
