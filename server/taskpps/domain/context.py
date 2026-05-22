@@ -106,19 +106,41 @@ def set_dot_path(data: dict, path: str, value: Any) -> None:
         current[int(last_key)] = value
 
 
+_ALLOWED_OVERRIDE_PATHS = {
+    "options.host", "options.credential", "options.timeout", "options.on_failure",
+    "options.env",
+}
+
+_ALLOWED_TASK_OVERRIDE_KEYS = {
+    "command", "timeout", "on_failure", "env", "cwd", "host", "credential",
+}
+
+
 def apply_overrides(pipeline_data: dict, overrides: Dict[str, Any]) -> dict:
     import copy
     data = copy.deepcopy(pipeline_data)
     for path, value in overrides.items():
         keys = path.split(".")
+        if len(keys) >= 2 and keys[0] == "options":
+            if path not in _ALLOWED_OVERRIDE_PATHS:
+                raise ValueError(f"Override path not allowed: {path}")
+        elif len(keys) >= 2 and keys[0] == "tasks":
+            if len(keys) < 3:
+                raise ValueError(f"Task override must specify a field: {path}")
+            last_key = keys[-1]
+            if last_key not in _ALLOWED_TASK_OVERRIDE_KEYS:
+                raise ValueError(f"Task override key not allowed: {last_key}")
+        elif keys[0] in ("name",):
+            raise ValueError(f"Override path not allowed: {path}")
+
         current = data
         for key in keys[:-1]:
             current = _navigate_to_key(current, key)
         last_key = keys[-1]
         if isinstance(current, dict):
             current[last_key] = value
-        elif isinstance(current, list):  # pragma: no cover
-            current[int(last_key)] = value  # pragma: no cover
+        elif isinstance(current, list):
+            current[int(last_key)] = value
     return data
 
 
