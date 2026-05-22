@@ -1,8 +1,11 @@
+import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger("taskpps")
 
 from taskpps.api import health, runs, triggers
 from taskpps.config import get_settings, load_settings
@@ -30,6 +33,8 @@ async def lifespan(app: FastAPI):
         load_settings()
         settings = get_settings()
     set_locale(settings.locale)
+    if settings.server.api_key is None:
+        logger.warning("No API key configured — all API endpoints are accessible without authentication")
     await init_db()
 
     _plugin_manager = PluginManager()
