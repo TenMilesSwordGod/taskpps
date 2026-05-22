@@ -64,6 +64,10 @@ class RunRepository:
         return result.rowcount
 
     async def delete_runs_keep(self, keep: int) -> int:
+        if keep < 0:
+            raise ValueError("keep must be non-negative")
+        if keep == 0:
+            return await self.delete_all_runs()
         sub = select(PipelineRun.id).order_by(PipelineRun.created_at.desc()).limit(keep)
         stmt = delete(PipelineRun).where(PipelineRun.id.not_in(sub))
         result = await self.session.execute(stmt)
