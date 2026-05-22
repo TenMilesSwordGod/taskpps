@@ -35,8 +35,13 @@ class PipelineLoader:
 
     def load(self, pipeline_file: str, env: Optional[Dict[str, str]] = None) -> PipelineYAML:
         path = self.base_dir / pipeline_file
-        if not path.exists():
-            path = Path(pipeline_file)
+        try:
+            resolved = path.resolve()
+            if not str(resolved).startswith(str(self.base_dir.resolve())):
+                raise FileNotFoundError(f"Path traversal not allowed: {pipeline_file}")
+        except (OSError, ValueError):
+            raise FileNotFoundError(f"Invalid pipeline file path: {pipeline_file}")
+
         if not path.exists():
             raise FileNotFoundError(f"Pipeline file not found: {pipeline_file}")
 
