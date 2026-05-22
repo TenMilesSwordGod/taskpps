@@ -30,7 +30,8 @@ taskpps/
 │   ├── cmd/
 │   ├── client/
 │   ├── config/
-│   └── models/
+│   ├── models/
+│   └── tui/
 ├── server/              # Python 后端服务
 │   ├── pyproject.toml
 │   ├── taskpps/
@@ -48,6 +49,8 @@ taskpps/
 - **动态参数化** — CLI 运行时覆盖流水线配置
 - **插件化扩展** — 触发器、通知器、执行器均可通过插件机制集成
 - **状态可观测** — 实时日志、运行历史、任务进度查询
+- **可配置 Shell** — 通过配置文件自定义执行器使用的 Shell
+- **整洁的项目结构** — 配置文件统一放置在 .taskpps 目录
 
 ## 快速开始
 
@@ -62,10 +65,20 @@ uv sync
 
 ```bash
 mkdir my-project && cd my-project
-mkdir -p pipelines tasks agents credentials plugins
+ppsctl init
 ```
 
-创建 `taskpps.yaml` 配置文件（参考 `examples/taskpps.yaml`）。
+这将创建以下结构：
+```
+my-project/
+├── .taskpps/
+│   └── taskpps.yaml
+├── pipelines/
+├── tasks/
+├── agents/
+├── credentials/
+└── plugins/
+```
 
 ### 3. 定义流水线
 
@@ -95,7 +108,18 @@ tasks:
     depends_on: [migrate]
 ```
 
-### 4. 启动服务
+### 4. 配置 Shell（可选）
+
+在 `.taskpps/taskpps.yaml` 中配置执行器使用的 Shell：
+
+```yaml
+executor:
+  shell: /bin/bash  # 或 /bin/zsh, /bin/sh 等
+  default_timeout: 3600
+  max_workers: 10
+```
+
+### 5. 启动服务
 
 ```bash
 cd server
@@ -104,18 +128,19 @@ uv run taskpps-server
 uv run python -m taskpps
 ```
 
-### 5. 运行流水线
+### 6. 运行流水线
 
 ```bash
+# 使用 ppsctl
+ppsctl run deploy.yaml
+
+# 带参数覆盖
+ppsctl run deploy.yaml TAG=latest
+
 # 使用 API
 curl -X POST http://127.0.0.1:26521/api/runs/ \
   -H "Content-Type: application/json" \
   -d '{"pipeline": "deploy.yaml"}'
-
-# 带参数覆盖
-curl -X POST http://127.0.0.1:26521/api/runs/ \
-  -H "Content-Type: application/json" \
-  -d '{"pipeline": "deploy.yaml", "params": {"options.host": "prod-server"}}'
 ```
 
 ## API 端点
@@ -124,7 +149,7 @@ curl -X POST http://127.0.0.1:26521/api/runs/ \
 |:--|:--|:--|
 | `/api/health` | GET | 健康检查 |
 | `/api/runs` | POST | 创建流水线运行 |
-| `/api/runs` | GET | 列表查询 |
+| `/api/runs` | GET | 列表查询（返回 `{"items": [...], "total": N}`） |
 | `/api/runs/{run_id}` | GET | 运行详情 |
 | `/api/runs/{run_id}/logs` | GET | 日志查询（支持 SSE 流式） |
 | `/api/runs/{run_id}/cancel` | POST | 取消运行 |
@@ -178,7 +203,7 @@ tasks:
 1. CLI 参数覆盖
 2. 任务 `env` 定义
 3. Pipeline `options.env` 定义
-4. 全局配置 `taskpps.yaml` 中的 `env`
+4. 全局配置 `.taskpps/taskpps.yaml` 中的 `env`
 5. 系统环境变量
 
 ## 失败策略
@@ -188,7 +213,7 @@ tasks:
 
 ## 触发器
 
-在 `taskpps.yaml` 中配置 Cron 触发器：
+在 `.taskpps/taskpps.yaml` 中配置 Cron 触发器：
 
 ```yaml
 triggers:
@@ -219,6 +244,6 @@ go build -o bin/ppsctl main.go
 ## 技术栈
 
 - **后端**: Python 3.10+, FastAPI, SQLModel, aiosqlite, Pydantic, paramiko, invoke, blinker, croniter
-- **CLI**: Go 1.19+, Cobra
+- **CLI**: Go 1.19+, Cobra, Bubble Tea
 - **数据库**: SQLite (异步)
 - **包管理**: uv (Python), go mod (Go)
