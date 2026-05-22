@@ -71,6 +71,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					task := m.runDetail.SelectedTask()
 					if task != nil {
+						m.rightTab = TabLogs
 						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
 					}
 				}
@@ -132,6 +133,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sel := m.runDetail.SelectedRun()
 		if sel != nil {
 			cmds = append(cmds, fetchRun(m.client, sel.ID))
+			if m.rightTab == TabLogs {
+				task := m.runDetail.SelectedTask()
+				if task != nil {
+					cmds = append(cmds, fetchLogs(m.client, sel.ID, task.TaskName))
+				}
+			}
 		}
 		cmds = append(cmds, tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
 			return tickMsg{}
