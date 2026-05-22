@@ -64,8 +64,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.focusedPanel == FocusRightPanel {
 				if m.rightTab == TabDetail {
-					var detailCmd tea.Cmd
-					m.runDetail, detailCmd = m.runDetail.Update(msg)
+					detailCmd := m.runDetail.Update(msg)
 					if detailCmd != nil {
 						cmds = append(cmds, detailCmd)
 					}
@@ -159,9 +158,7 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 		return cmd
 	case FocusRightPanel:
 		if m.rightTab == TabDetail {
-			var cmd tea.Cmd
-			m.runDetail, cmd = m.runDetail.Update(msg)
-			return cmd
+			return m.runDetail.Update(msg)
 		} else {
 			return m.logViewer.Update(msg)
 		}
