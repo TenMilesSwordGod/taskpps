@@ -88,26 +88,10 @@ func (m *LogViewerModel) Content() string {
 	return strings.Join(m.lines, "\n")
 }
 
-func (m LogViewerModel) Update(msg tea.Msg) (LogViewerModel, tea.Cmd) {
+func (m *LogViewerModel) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "pgup":
-			m.viewport.ViewUp()
-		case "pgdown":
-			m.viewport.ViewDown()
-		case "home":
-			m.viewport.GotoTop()
-		case "end":
-			m.viewport.GotoBottom()
-		default:
-			m.viewport, cmd = m.viewport.Update(msg)
-		}
-	default:
-		m.viewport, cmd = m.viewport.Update(msg)
-	}
-	return m, cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return cmd
 }
 
 func (m LogViewerModel) View() string {

@@ -163,9 +163,7 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 			m.runDetail, cmd = m.runDetail.Update(msg)
 			return cmd
 		} else {
-			var cmd tea.Cmd
-			m.logViewer, cmd = m.logViewer.Update(msg)
-			return cmd
+			return m.logViewer.Update(msg)
 		}
 	}
 	return nil
