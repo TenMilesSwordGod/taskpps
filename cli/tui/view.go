@@ -33,19 +33,24 @@ func (m Model) View() string {
 		availableH = 5
 	}
 
-	w := m.width
-	h := availableH
+	totalW := m.width
+	totalH := availableH
 
-	// Panel border (1 each side) + padding (1 each side) = 4 total
-	panelFrameW := 4
-	gap := 2
+	// Panel has border (1) + padding (1) on all sides = 2x4
+	borderPaddingW := 4 // left and right
+	borderPaddingH := 4 // top and bottom
+	gap := 2 // between panels
 
-	// Calculate actual content widths (inside panels)
-	totalFrameAndGapW := panelFrameW + gap + panelFrameW
-	contentW := w - totalFrameAndGapW
-	if contentW < 42 { // 16 +26 =42 min content width
+	// Right panel has an extra line for tabs
+	rightExtraH := 2
+
+	// Calculate available content area for both panels
+	totalFrameAndGapW := borderPaddingW + gap + borderPaddingW
+	contentW := totalW - totalFrameAndGapW
+	if contentW < 42 {
 		contentW = 42
 	}
+
 	leftContentW := contentW * 20 / 100
 	rightContentW := contentW - leftContentW
 
@@ -56,16 +61,14 @@ func (m Model) View() string {
 	if rightContentW < 26 {
 		rightContentW = 26
 		leftContentW = contentW - rightContentW
-		if leftContentW < 16 {
-			leftContentW =16
-			rightContentW =26
-			// if even that is too big, just use min sizes
+		if leftContentW <16 {
+			leftContentW = 16
+			rightContentW = 26
 		}
 	}
 
 	listView := m.runList.View()
 
-	// Determine which content to show in right panel based on active tab
 	var rightContent string
 	if m.rightTab == TabDetail {
 		rightContent = m.runDetail.View()
@@ -73,15 +76,25 @@ func (m Model) View() string {
 		rightContent = m.logViewer.View()
 	}
 
-	// Add tabs to right panel content
 	tabs := renderTabs(m.rightTab, rightContentW)
 	rightView := tabs + "\n" + rightContent
 
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
 
-	leftPanel := renderPanel(listView, leftFocused, leftContentW, h)
-	rightPanel := renderPanel(rightView, rightFocused, rightContentW, h)
+	// Calculate the actual component sizes (content area)
+	leftComponentH := totalH - borderPaddingH
+	rightComponentH := totalH - borderPaddingH - rightExtraH
+	if rightComponentH < 3 {
+		rightComponentH =3
+	}
+	if leftComponentH <3 {
+		leftComponentH=3
+	}
+
+	// Set components with the calculated sizes (this is handled by resizeComponents, but just in case)
+	leftPanel := renderPanel(listView, leftFocused, leftContentW, totalH)
+	rightPanel := renderPanel(rightView, rightFocused, rightContentW, totalH)
 
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, strings.Repeat(" ", gap), rightPanel)
 

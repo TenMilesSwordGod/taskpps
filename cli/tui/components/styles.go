@@ -15,8 +15,7 @@ var (
 
 var (
 	PanelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			Padding(1, 1)
+			Border(lipgloss.RoundedBorder())
 
 	FocusedPanelStyle = PanelStyle.Copy().
 				BorderForeground(ColorCyan)

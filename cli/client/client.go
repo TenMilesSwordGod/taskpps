@@ -10,7 +10,6 @@ import (
 
 	"github.com/imroc/req"
 	"github.com/taskpps/ppsctl/config"
-	"github.com/taskpps/ppsctl/logger"
 	"github.com/taskpps/ppsctl/models"
 )
 
@@ -21,7 +20,6 @@ type Client struct {
 
 func New(cfg *config.Config) *Client {
 	addr := config.GetServerAddr(cfg)
-	logger.Debug("Initializing client with server address: %s", addr)
 	os.Setenv("NO_PROXY", "127.0.0.1,localhost")
 	return &Client{
 		baseURL: fmt.Sprintf("http://%s/api", addr),
@@ -31,18 +29,14 @@ func New(cfg *config.Config) *Client {
 
 func (c *Client) HealthCheck() (*models.HealthResponse, error) {
 	url := fmt.Sprintf("http://%s/health", config.GetServerAddr(config.App))
-	logger.Debug("Making health check request to %s", url)
 	resp, err := c.http.Get(url)
 	if err != nil {
-		logger.Debug("Health check failed: %v", err)
 		return nil, fmt.Errorf("connection failed: %w", err)
 	}
 	var health models.HealthResponse
 	if err := resp.ToJSON(&health); err != nil {
-		logger.Debug("Failed to parse health check response: %v", err)
 		return nil, err
 	}
-	logger.Debug("Health check passed, status: %s, version: %s", health.Status, health.Version)
 	return &health, nil
 }
 

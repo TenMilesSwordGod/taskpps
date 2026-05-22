@@ -6,7 +6,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/taskpps/ppsctl/logger"
 	"github.com/taskpps/ppsctl/tui/components"
 )
 
@@ -16,7 +15,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		logger.Debug("Window size changed: w=%d, h=%d", msg.Width, msg.Height)
 		m.width = msg.Width
 		m.height = msg.Height
 		if !m.ready {
@@ -87,10 +85,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case runsFetchedMsg:
 		if msg.err != nil {
-			logger.Error("Failed to fetch runs: %v", msg.err)
 			m.errMsg = msg.err.Error()
 		} else {
-			logger.Debug("Fetched %d runs", len(msg.runs))
 			m.errMsg = ""
 			m.runs = msg.runs
 			m.runList.SetRuns(msg.runs)
@@ -98,7 +94,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.targetRunID != "" {
 				for i, r := range msg.runs {
 					if r.ID == m.targetRunID {
-						logger.Debug("Target run found: %s, selecting it", m.targetRunID)
 						m.runList.SetCursor(i)
 						m.runDetail.SetRun(&msg.runs[i])
 						m.focusedPanel = FocusRightPanel
@@ -113,21 +108,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case runFetchedMsg:
 		if msg.err != nil {
-			logger.Error("Failed to fetch run details: %v", msg.err)
 			m.errMsg = msg.err.Error()
 		} else {
-			logger.Debug("Fetched run details successfully")
 			m.errMsg = ""
 			m.runDetail.SetRun(msg.run)
 		}
 
 	case logsFetchedMsg:
 		if msg.err != nil {
-			logger.Error("Failed to fetch logs: %v", msg.err)
 			m.errMsg = msg.err.Error()
 			m.logViewer.SetContent("Error: " + msg.err.Error())
 		} else {
-			logger.Debug("Fetched %d log entries", len(msg.logs))
 			m.errMsg = ""
 			var content string
 			for taskName, log := range msg.logs {
@@ -193,27 +184,27 @@ func (m *Model) resizeComponents() {
 		availableH = 5
 	}
 
-	w := m.width
-	h := availableH
+	totalW := m.width
+	totalH := availableH
 
-	// Panel border (1 each side) + padding (1 each side) = 4 total
-	panelFrameW := 4
-	gap := 2
-	// Right panel has tabs which take 2 lines
-	rightTabH := 2
+	// Panel border only is 2 on each side (left and right: total 4)
+	// No padding, padding should be handled by components if needed
+	borderW := 2 // left + right border
+	borderH := 2 // top + bottom border
+	gap := 2     // between panels
+	rightTabH :=2
 
-	// 2-panel layout: left (run list) + right (detail/logs)
-	// Calculate content widths (inside panels)
-	totalFrameAndGapW := panelFrameW + gap + panelFrameW
-	contentW := w - totalFrameAndGapW
-	if contentW <42 { // min total content width
-		contentW =42
+	// Calculate total available content width
+	totalFrameAndGapW := borderW + gap + borderW
+	contentW := totalW - totalFrameAndGapW
+	if contentW < 42 {
+		contentW = 42
 	}
 
 	leftContentW := contentW * 20 / 100
 	rightContentW := contentW - leftContentW
 
-	if leftContentW < 16 {
+	if leftContentW <16 {
 		leftContentW =16
 		rightContentW = contentW - leftContentW
 	}
@@ -221,16 +212,16 @@ func (m *Model) resizeComponents() {
 		rightContentW =26
 		leftContentW = contentW - rightContentW
 		if leftContentW <16 {
-			leftContentW=16
-			rightContentW=26
+			leftContentW =16
+			rightContentW =26
 		}
 	}
 
-	// Component heights = available height minus frame for left panel
-	// Right panel components: available height minus frame minus tabs
-	// Note: the panel applies the frame itself, so content height is available height
-	leftComponentH := h
-	rightComponentH := h - rightTabH
+	leftComponentH := totalH - borderH
+	rightComponentH := totalH - borderH - rightTabH
+	if leftComponentH <3 {
+		leftComponentH =3
+	}
 	if rightComponentH <3 {
 		rightComponentH =3
 	}

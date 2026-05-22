@@ -23,32 +23,59 @@ var RootCmd = &cobra.Command{
 	Long: `ppsctl is the command-line interface for taskpps, a lightweight 
 task pipeline orchestration system. It communicates with the taskpps 
 backend server via REST API.`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		logger.SetLevel(verbose)
-		logger.Debug("Verbose level set to %d", verbose)
-		logger.Debug("Command: %s", cmd.Name())
-	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Map verbose count (-v) to our log levels:
+		// 0: LevelNone (no logs)
+		// 1: LevelError
+		// 2: LevelWarn
+		// 3: LevelInfo
+		// 4+: LevelDebug
+		logLevel := 0
+		if verbose == 1 {
+			logLevel = 1
+		} else if verbose == 2 {
+			logLevel = 2
+		} else if verbose == 3 {
+			logLevel = 3
+		} else if verbose >= 4 {
+			logLevel = 4
+		}
+		logger.SetLevel(logLevel)
+		if logLevel >= 4 {
+			logger.Debug("Verbose level set to %d (logLevel: %d)", verbose, logLevel)
+			logger.Debug("Command: %s", cmd.Name())
+		}
+
 		if cmd.Name() == "init" || cmd.Name() == "version" {
 			return nil
 		}
 		var err error
 		appConfig, err = config.Load(cfgFile)
 		if err != nil {
-			logger.Error("Failed to load config: %v", err)
+			if verbose >= 1 {
+				logger.Error("Failed to load config: %v", err)
+			}
 			return fmt.Errorf("failed to load config: %w", err)
 		}
-		logger.Info("Config loaded successfully")
+		if verbose >= 3 {
+			logger.Info("Config loaded successfully")
+		}
 		apiClient = client.New(appConfig)
-		logger.Debug("API client initialized")
+		if verbose >=4 {
+			logger.Debug("API client initialized")
+		}
 		
-		// 检查版本匹配
+		// Check version mismatch
 		health, err := apiClient.HealthCheck()
 		if err == nil && health != nil {
-			logger.Debug("Server version: %s", health.Version)
+			if verbose >=4 {
+				logger.Debug("Server version: %s", health.Version)
+			}
 			CheckVersionMismatch(health.Version)
 		} else if err != nil {
-			logger.Warn("Could not check server version: %v", err)
+			if verbose >=2 {
+				logger.Warn("Could not check server version: %v", err)
+			}
 		}
 		
 		return nil
