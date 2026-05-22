@@ -72,9 +72,18 @@ class PipelineService:
         runner = PipelineRunner(run_id=run.id, pipeline=resolved, context=context)
         runner._task_run_ids = task_run_ids
 
-        asyncio.create_task(runner.run())
+        task = asyncio.create_task(runner.run())
+        task.add_done_callback(self._handle_run_error)
 
         return {"id": run.id, "pipeline_name": run.pipeline_name, "status": run.status}
+
+    @staticmethod
+    def _handle_run_error(task: asyncio.Task):
+        try:
+            task.result()
+        except Exception as e:
+            import logging
+            logging.getLogger("taskpps").error(f"Pipeline run failed unexpectedly: {e}")
 
     async def get_run(self, run_id: str) -> Optional[dict]:
         async with get_session_factory()() as session:
