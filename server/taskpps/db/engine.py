@@ -1,4 +1,6 @@
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
@@ -14,7 +16,20 @@ def get_engine() -> AsyncEngine:
         db_path = get_db_path()
         db_path.parent.mkdir(parents=True, exist_ok=True)
         url = f"sqlite+aiosqlite:///{db_path}"
-        _engine = create_async_engine(url, echo=False, connect_args={"check_same_thread": False}, pool_size=5, max_overflow=10)
+        _engine = create_async_engine(
+            url,
+            echo=False,
+            connect_args={"check_same_thread": False, "timeout": 30},
+            poolclass=NullPool,
+        )
+
+        @event.listens_for(_engine.sync_engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.close()
+
     return _engine
 
 
