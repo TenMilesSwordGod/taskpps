@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -49,6 +48,7 @@ func (m *LogViewerModel) SetSize(w, h int) {
 	if !m.ready {
 		m.viewport = viewport.New(w, h-2)
 		m.viewport.YPosition = 0
+		m.viewport.Style = lipgloss.NewStyle()
 		m.ready = true
 	} else {
 		m.viewport.Width = w
@@ -115,16 +115,17 @@ func (m LogViewerModel) View() string {
 
 	title := TitleStyle.Render("Logs")
 	b.WriteString(title)
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	if len(m.lines) == 0 {
+		b.WriteString("\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(no output)"))
+		b.WriteString("\n")
 		return b.String()
 	}
 
-	var vpContent string
 	if m.ready {
-		vpContent = fmt.Sprintf("%s\n%s", m.viewport.View(), "(scroll with PgUp/PgDown)")
+		b.WriteString(m.viewport.View())
 	} else {
 		maxLines := 20
 		var displayLines []string
@@ -134,9 +135,8 @@ func (m LogViewerModel) View() string {
 			displayLines = m.lines
 		}
 		processedLines := processLines(displayLines, m.width)
-		vpContent = strings.Join(processedLines, "\n")
+		b.WriteString(strings.Join(processedLines, "\n"))
 	}
-	b.WriteString(vpContent)
 
 	return b.String()
 }

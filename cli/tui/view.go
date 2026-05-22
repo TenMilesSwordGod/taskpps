@@ -33,33 +33,39 @@ func (m Model) View() string {
 		availableH = 5
 	}
 
-	// Get panel sizes from resizeComponents logic (consistent)
 	w := m.width
 	h := availableH
 
-	listW := w * 25 / 100
-	detailW := w * 35 / 100
-	logW := w - listW - detailW - 6 // 6 = 2*3 for borders
+	// 2-panel layout: left (run list) + right (detail/logs tabbed)
+	// Left panel: 20% width
+	// Right panel: remaining width
+	leftW := w * 20 / 100
+	rightW := w - leftW - 2 // 2px gap between panels
 
-	if listW < 15 {
-		listW = 15
+	if leftW < 20 {
+		leftW = 20
 	}
-	if detailW < 20 {
-		detailW = 20
-	}
-	if logW < 20 {
-		logW = 20
+	if rightW < 30 {
+		rightW = 30
 	}
 
 	listView := m.runList.View()
-	detailView := m.runDetail.View()
-	logView := m.logViewer.View()
+	
+	// Determine which content to show in right panel based on active tab
+	var rightView string
+	if m.rightTab == TabDetail {
+		rightView = m.runDetail.View()
+	} else {
+		rightView = m.logViewer.View()
+	}
 
-	listPanel := renderPanel(listView, m.focusedPanel == FocusRunList, listW, h)
-	detailPanel := renderPanel(detailView, m.focusedPanel == FocusRunDetail, detailW, h)
-	logPanel := renderPanel(logView, m.focusedPanel == FocusLogViewer, logW, h)
+	leftFocused := m.focusedPanel == FocusRunList
+	rightFocused := m.focusedPanel == FocusRightPanel
 
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, listPanel, detailPanel, logPanel)
+	leftPanel := renderPanel(listView, leftFocused, leftW, h)
+	rightPanel := renderPanel(rightView, rightFocused, rightW, h)
+
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 
 	var b strings.Builder
 	b.WriteString(header)

@@ -67,14 +67,16 @@ func (m RunListModel) View() string {
 
 	title := TitleStyle.Render("Runs")
 	b.WriteString(title)
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	if len(m.runs) == 0 {
+		b.WriteString("\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(no runs)"))
+		b.WriteString("\n")
 		return b.String()
 	}
 
-	visible := m.height - 4
+	visible := m.height - 3
 	if visible < 1 {
 		visible = 1
 	}

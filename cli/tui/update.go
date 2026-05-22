@@ -34,14 +34,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "shift+tab":
 			m.focusedPanel = m.focusPrev()
 
-		case "right", "l":
-			if m.focusedPanel == FocusRunList {
-				m.focusedPanel = FocusRunDetail
-			}
-
-		case "left", "h":
-			if m.focusedPanel == FocusRunDetail {
-				m.focusedPanel = FocusRunList
+		case "t", "T":
+			// Cycle between Detail and Logs tabs when right panel is focused
+			if m.focusedPanel == FocusRightPanel {
+				m.rightTab = m.cycleTab()
+				if m.rightTab == TabLogs && m.runDetail.SelectedRun() != nil {
+					task := m.runDetail.SelectedTask()
+					if task != nil {
+						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
+					}
+				}
 			}
 
 		case "r":
@@ -56,18 +58,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				sel := m.runList.SelectedRun()
 				if sel != nil {
 					m.runDetail.SetRun(sel)
-					m.focusedPanel = FocusRunDetail
+					m.focusedPanel = FocusRightPanel
+					m.rightTab = TabDetail
 					cmds = append(cmds, fetchRun(m.client, sel.ID))
 				}
-			} else if m.focusedPanel == FocusRunDetail {
-				var detailCmd tea.Cmd
-				m.runDetail, detailCmd = m.runDetail.Update(msg)
-				if detailCmd != nil {
-					cmds = append(cmds, detailCmd)
-				}
-				task := m.runDetail.SelectedTask()
-				if task != nil {
-					cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
+			} else if m.focusedPanel == FocusRightPanel {
+				if m.rightTab == TabDetail {
+					var detailCmd tea.Cmd
+					m.runDetail, detailCmd = m.runDetail.Update(msg)
+					if detailCmd != nil {
+						cmds = append(cmds, detailCmd)
+					}
+					task := m.runDetail.SelectedTask()
+					if task != nil {
+						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
+					}
 				}
 			}
 
@@ -91,7 +96,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if r.ID == m.targetRunID {
 						m.runList.SetCursor(i)
 						m.runDetail.SetRun(&msg.runs[i])
-						m.focusedPanel = FocusRunDetail
+						m.focusedPanel = FocusRightPanel
+						m.rightTab = TabDetail
 						cmds = append(cmds, fetchRun(m.client, r.ID))
 						m.targetRunID = ""
 						break
@@ -144,14 +150,16 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 		var cmd tea.Cmd
 		m.runList, cmd = m.runList.Update(msg)
 		return cmd
-	case FocusRunDetail:
-		var cmd tea.Cmd
-		m.runDetail, cmd = m.runDetail.Update(msg)
-		return cmd
-	case FocusLogViewer:
-		var cmd tea.Cmd
-		m.logViewer, cmd = m.logViewer.Update(msg)
-		return cmd
+	case FocusRightPanel:
+		if m.rightTab == TabDetail {
+			var cmd tea.Cmd
+			m.runDetail, cmd = m.runDetail.Update(msg)
+			return cmd
+		} else {
+			var cmd tea.Cmd
+			m.logViewer, cmd = m.logViewer.Update(msg)
+			return cmd
+		}
 	}
 	return nil
 }
@@ -177,22 +185,19 @@ func (m *Model) resizeComponents() {
 	w := m.width
 	h := availableH
 
-	listW := w * 25 / 100
-	detailW := w * 35 / 100
-	logW := w - listW - detailW - 6 // 6 = 2*3 for borders
+	// 2-panel layout: left (run list) + right (detail/logs)
+	leftW := w * 20 / 100
+	rightW := w - leftW - 2
 
-	if listW < 15 {
-		listW = 15
+	if leftW < 20 {
+		leftW = 20
 	}
-	if detailW < 20 {
-		detailW = 20
-	}
-	if logW < 20 {
-		logW = 20
+	if rightW < 30 {
+		rightW = 30
 	}
 
 	// Components get internal width (panel width minus borders)
-	m.runList.SetSize(listW-2, h-2)
-	m.runDetail.SetSize(detailW-2, h-2)
-	m.logViewer.SetSize(logW-2, h-2)
+	m.runList.SetSize(leftW-2, h-2)
+	m.runDetail.SetSize(rightW-2, h-2)
+	m.logViewer.SetSize(rightW-2, h-2)
 }

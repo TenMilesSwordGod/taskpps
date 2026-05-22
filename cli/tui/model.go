@@ -15,8 +15,14 @@ type PanelFocus int
 
 const (
 	FocusRunList PanelFocus = iota
-	FocusRunDetail
-	FocusLogViewer
+	FocusRightPanel
+)
+
+type RightPanelTab int
+
+const (
+	TabDetail RightPanelTab = iota
+	TabLogs
 )
 
 type Model struct {
@@ -25,6 +31,7 @@ type Model struct {
 	logViewer  components.LogViewerModel
 
 	focusedPanel PanelFocus
+	rightTab     RightPanelTab
 
 	client      *client.Client
 	targetRunID string
@@ -98,9 +105,7 @@ func fetchLogs(c *client.Client, runID, taskName string) tea.Cmd {
 func (m Model) focusNext() PanelFocus {
 	switch m.focusedPanel {
 	case FocusRunList:
-		return FocusRunDetail
-	case FocusRunDetail:
-		return FocusLogViewer
+		return FocusRightPanel
 	default:
 		return FocusRunList
 	}
@@ -109,25 +114,20 @@ func (m Model) focusNext() PanelFocus {
 func (m Model) focusPrev() PanelFocus {
 	switch m.focusedPanel {
 	case FocusRunList:
-		return FocusLogViewer
-	case FocusRunDetail:
-		return FocusRunList
+		return FocusRightPanel
 	default:
-		return FocusRunDetail
+		return FocusRunList
 	}
 }
 
+func (m Model) cycleTab() RightPanelTab {
+	if m.rightTab == TabDetail {
+		return TabLogs
+	}
+	return TabDetail
+}
+
 func renderPanel(panel string, focused bool, width, height int) string {
-	// Panel width includes borders, so subtract 2 for internal content
-	internalWidth := width - 2 // 2 = left and right borders
-	internalHeight := height - 2 // 2 = top and bottom borders
-	if internalWidth < 0 {
-		internalWidth = 0
-	}
-	if internalHeight < 0 {
-		internalHeight = 0
-	}
-	
 	style := components.PanelStyle.Width(width).Height(height)
 	if focused {
 		style = components.FocusedPanelStyle.Width(width).Height(height)
@@ -135,8 +135,28 @@ func renderPanel(panel string, focused bool, width, height int) string {
 	return style.Render(panel)
 }
 
+func renderTabs(activeTab RightPanelTab, width int) string {
+	detailTab := "Detail"
+	logsTab := "Logs"
+
+	if activeTab == TabDetail {
+		detailTab = components.CursorStyle.Render("> " + detailTab)
+	} else {
+		detailTab = "  " + detailTab
+	}
+
+	if activeTab == TabLogs {
+		logsTab = components.CursorStyle.Render("> " + logsTab)
+	} else {
+		logsTab = "  " + logsTab
+	}
+
+	tabs := detailTab + " | " + logsTab
+	return components.HeaderStyle.Width(width).Render(tabs)
+}
+
 func renderHeader(width int) string {
-	help := "[q]uit  [tab]focus  [↑↓/jk]navigate  [enter]expand  [r]efresh"
+	help := "[q]uit  [tab]panel  [t]abs  [↑↓/jk]nav  [enter]select  [r]efresh"
 	left := components.TitleStyle.Render(" ppsctl watch ")
 	right := lipgloss.NewStyle().Foreground(components.ColorWhite).Render(help)
 	spacer := width - lipgloss.Width(left) - lipgloss.Width(right) - 2

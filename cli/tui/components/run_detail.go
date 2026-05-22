@@ -72,10 +72,12 @@ func (m RunDetailModel) View() string {
 
 	title := TitleStyle.Render("Run Detail")
 	b.WriteString(title)
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	if m.run == nil {
+		b.WriteString("\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(select a run)"))
+		b.WriteString("\n")
 		return b.String()
 	}
 
