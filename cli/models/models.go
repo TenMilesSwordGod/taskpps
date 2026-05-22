@@ -40,7 +40,7 @@ type Run struct {
 	PipelineName string    `json:"pipeline_name"`
 	PipelineFile string    `json:"pipeline_file"`
 	Status       RunStatus `json:"status"`
-	Params       string    `json:"params"`
+	Params       map[string]interface{} `json:"params"`
 	StartedAt    *string   `json:"started_at"`
 	FinishedAt   *string   `json:"finished_at"`
 	CreatedAt    string    `json:"created_at"`
