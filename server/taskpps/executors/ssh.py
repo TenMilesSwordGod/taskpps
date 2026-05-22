@@ -9,6 +9,7 @@ import paramiko
 
 from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
+from taskpps.i18n import t
 
 
 class SSHExecutor(BaseExecutor):
@@ -83,7 +84,7 @@ class SSHExecutor(BaseExecutor):
                 self._channel.close()  # pragma: no cover
             if self._client:  # pragma: no cover
                 self._client.close()  # pragma: no cover
-            return ExecutorResult(exit_code=-1, stderr="Task cancelled")  # pragma: no cover
+            return ExecutorResult(exit_code=-1, stderr=t("Task was cancelled"))  # pragma: no cover
 
         combined = output + error
         with open(log_path, "w") as f:

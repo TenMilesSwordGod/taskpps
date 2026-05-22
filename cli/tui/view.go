@@ -36,21 +36,32 @@ func (m Model) View() string {
 	w := m.width
 	h := availableH
 
-	// 2-panel layout: left (run list) + right (detail/logs tabbed)
-	// Left panel: 20% width
-	// Right panel: remaining width
-	leftW := w * 20 / 100
-	rightW := w - leftW - 2 // 2px gap between panels
+	// Panel border (1 each side) + padding (1 each side) = 4 total
+	panelFrameW := 4
+	panelFrameH := 4
+	gap := 2
 
-	if leftW < 20 {
-		leftW = 20
+	// 2-panel layout: left (run list) + right (detail/logs tabbed)
+	// Available width for both panels' content + frames + gap
+	// leftContentW + panelFrameW + gap + rightContentW + panelFrameW = w
+	// leftContentW = 20% of remaining after frames
+	contentW := w - panelFrameW - gap - panelFrameW
+	leftContentW := contentW * 20 / 100
+	rightContentW := contentW - leftContentW
+
+	if leftContentW < 16 {
+		leftContentW = 16
 	}
-	if rightW < 30 {
-		rightW = 30
+	if rightContentW < 26 {
+		rightContentW = 26
 	}
+
+	// Panel total sizes (content + frame)
+	leftPanelW := leftContentW + panelFrameW
+	rightPanelW := rightContentW + panelFrameW
 
 	listView := m.runList.View()
-	
+
 	// Determine which content to show in right panel based on active tab
 	var rightContent string
 	if m.rightTab == TabDetail {
@@ -60,16 +71,16 @@ func (m Model) View() string {
 	}
 
 	// Add tabs to right panel content
-	tabs := renderTabs(m.rightTab, rightW-4) // subtract padding/border
+	tabs := renderTabs(m.rightTab, rightContentW)
 	rightView := tabs + "\n" + rightContent
 
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
 
-	leftPanel := renderPanel(listView, leftFocused, leftW, h)
-	rightPanel := renderPanel(rightView, rightFocused, rightW, h)
+	leftPanel := renderPanel(listView, leftFocused, leftPanelW, h)
+	rightPanel := renderPanel(rightView, rightFocused, rightPanelW, h)
 
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, strings.Repeat(" ", gap), rightPanel)
 
 	var b strings.Builder
 	b.WriteString(header)

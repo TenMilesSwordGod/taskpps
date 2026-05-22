@@ -8,6 +8,7 @@ from typing import Dict, Optional
 
 from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
+from taskpps.i18n import t
 
 _DANGEROUS_PATTERNS = re.compile(r"(\brm\s+-rf\s+/|:\(\)\{.*\}|`.*`|\$\(.*\))", re.DOTALL)
 
@@ -29,7 +30,7 @@ class LocalExecutor(BaseExecutor):
         self._cancelled = False
 
         if _DANGEROUS_PATTERNS.search(command):
-            return ExecutorResult(exit_code=1, stderr=f"Command contains dangerous pattern")
+            return ExecutorResult(exit_code=1, stderr=t("Command contains dangerous pattern"))
 
         merged_env = {**os.environ, **env}
 
@@ -68,7 +69,7 @@ class LocalExecutor(BaseExecutor):
         except asyncio.TimeoutError:
             self._process.kill()
             await self._process.wait()
-            msg = f"\n[TIMEOUT] Task exceeded timeout of {timeout}s\n"
+            msg = t("Task exceeded timeout of {timeout}s", timeout=timeout)
             output_lines.append(msg)
             with open(log_path, "a") as f:
                 f.write(msg)
@@ -77,7 +78,7 @@ class LocalExecutor(BaseExecutor):
             if self._process.returncode is None:
                 self._process.kill()
                 await self._process.wait()
-            msg = "\n[CANCELLED] Task was cancelled\n"
+            msg = t("Task was cancelled")
             output_lines.append(msg)
             with open(log_path, "a") as f:
                 f.write(msg)

@@ -176,7 +176,10 @@ func (m *RunDetailModel) updateViewportContent() {
 		}
 	}
 
+	// Save current scroll position before updating content
+	oldY := m.viewport.YPosition
 	m.viewport.SetContent(b.String())
+	m.viewport.YPosition = oldY
 }
 
 func (m RunDetailModel) View() string {

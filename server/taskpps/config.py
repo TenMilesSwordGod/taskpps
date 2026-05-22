@@ -31,6 +31,7 @@ class TriggerConfig(BaseModel):
 
 
 class Settings(BaseModel):
+    locale: str = "zh"
     server: ServerConfig = Field(default_factory=ServerConfig)
     executor: ExecutorConfig = Field(default_factory=ExecutorConfig)
     env: Dict[str, str] = Field(default_factory=dict)

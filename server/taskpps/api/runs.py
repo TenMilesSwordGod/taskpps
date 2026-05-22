@@ -10,6 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 from taskpps.config import get_logs_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
+from taskpps.i18n import t
 from taskpps.schemas.run import CreateRunRequest, RunResponse, CleanResponse, RunListResponse
 from taskpps.services.pipeline_service import PipelineService
 
@@ -41,7 +42,7 @@ async def list_runs(
 async def get_run(run_id: str):
     run = await _pipeline_service.get_run(run_id)
     if run is None:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise HTTPException(status_code=404, detail=t("Run not found"))
     return run
 
 
@@ -56,8 +57,7 @@ async def get_run_logs(
         run_repo = RunRepository(session)
         run = await run_repo.get_run(run_id)
         if run is None:
-            raise HTTPException(status_code=404, detail="Run not found")
-
+            raise HTTPException(status_code=404, detail=t("Run not found"))
         task_repo = TaskRunRepository(session)
         task_runs = await task_repo.list_task_runs(run_id)
 
@@ -135,7 +135,7 @@ async def get_run_logs(
 async def cancel_run(run_id: str):
     success = await _pipeline_service.cancel_run(run_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Run not found or cannot be cancelled")
+        raise HTTPException(status_code=404, detail=t("Run not found or cannot be cancelled"))
     return {"status": "cancelled", "run_id": run_id}
 
 

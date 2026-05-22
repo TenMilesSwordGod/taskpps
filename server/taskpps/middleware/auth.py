@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from taskpps.config import get_settings
+from taskpps.i18n import t
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -23,6 +24,6 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         provided = request.headers.get("X-API-Key")
         if provided != api_key:
-            return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
+            return JSONResponse(status_code=401, content={"detail": t("Invalid or missing API key")})
 
         return await call_next(request)

@@ -46,13 +46,13 @@ func processLines(lines []string, width int) []string {
 func (m *LogViewerModel) SetSize(w, h int) {
 	m.width = w
 	if !m.ready {
-		m.viewport = viewport.New(w, h-2)
+		m.viewport = viewport.New(w, h)
 		m.viewport.YPosition = 0
 		m.viewport.Style = lipgloss.NewStyle()
 		m.ready = true
 	} else {
 		m.viewport.Width = w
-		m.viewport.Height = h - 2
+		m.viewport.Height = h
 	}
 	processedLines := processLines(m.lines, w)
 	m.viewport.SetContent(strings.Join(processedLines, "\n"))
@@ -66,8 +66,10 @@ func (m *LogViewerModel) SetContent(content string) {
 	}
 	if m.ready {
 		processedLines := processLines(m.lines, m.width)
+		// Save scroll position before updating content
+		oldY := m.viewport.YPosition
 		m.viewport.SetContent(strings.Join(processedLines, "\n"))
-		m.viewport.GotoBottom()
+		m.viewport.YPosition = oldY
 	}
 }
 
@@ -96,10 +98,6 @@ func (m *LogViewerModel) Update(msg tea.Msg) tea.Cmd {
 
 func (m LogViewerModel) View() string {
 	var b strings.Builder
-
-	title := TitleStyle.Render("Logs")
-	b.WriteString(title)
-	b.WriteString("\n")
 
 	if len(m.lines) == 0 {
 		b.WriteString("\n")

@@ -2,6 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 
+from taskpps.i18n import t
 from taskpps.schemas.trigger import CreateTriggerRequest, TriggerResponse
 from taskpps.services.trigger_service import TriggerService
 
@@ -31,5 +32,5 @@ async def list_triggers():
 async def delete_trigger(trigger_id: str):
     success = await _trigger_service.delete_trigger(trigger_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Trigger not found")
+        raise HTTPException(status_code=404, detail=t("Trigger not found"))
     return {"status": "deleted"}

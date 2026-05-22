@@ -187,19 +187,29 @@ func (m *Model) resizeComponents() {
 	w := m.width
 	h := availableH
 
+	// Panel border (1 each side) + padding (1 each side) = 4 total
+	panelFrameW := 4
+	panelFrameH := 4
+	gap := 2
+	// Right panel has tabs which take 1 line + 1 newline
+	rightTabH := 2
+
 	// 2-panel layout: left (run list) + right (detail/logs)
-	leftW := w * 20 / 100
-	rightW := w - leftW - 2
+	// Available width for both panels' content + frames + gap
+	contentW := w - panelFrameW - gap - panelFrameW
+	leftContentW := contentW * 20 / 100
+	rightContentW := contentW - leftContentW
 
-	if leftW < 20 {
-		leftW = 20
+	if leftContentW < 16 {
+		leftContentW = 16
 	}
-	if rightW < 30 {
-		rightW = 30
+	if rightContentW < 26 {
+		rightContentW = 26
 	}
 
-	// Components get internal width/height (panel size minus borders/padding/tab)
-	m.runList.SetSize(leftW-4, h-4) // border (2) + padding (2)
-	m.runDetail.SetSize(rightW-4, h-5) // border+padding + 1 tab line
-	m.logViewer.SetSize(rightW-4, h-5) // border+padding + 1 tab line
+	// Component sizes = content area inside panel (panel total - frame)
+	// For height: panel has frame on top/bottom, and right panel also has tabs
+	m.runList.SetSize(leftContentW, h-panelFrameH)
+	m.runDetail.SetSize(rightContentW, h-panelFrameH-rightTabH)
+	m.logViewer.SetSize(rightContentW, h-panelFrameH-rightTabH)
 }

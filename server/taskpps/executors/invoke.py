@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.config import get_tasks_dir
+from taskpps.i18n import t
 
 
 class InvokeExecutor(BaseExecutor):
@@ -30,11 +31,11 @@ class InvokeExecutor(BaseExecutor):
         self._cancelled = False
 
         if not invoke_task:
-            return ExecutorResult(exit_code=1, stderr="No invoke task specified")
+            return ExecutorResult(exit_code=1, stderr=t("No invoke task specified"))
 
         parts = invoke_task.rsplit(".", 1)
         if len(parts) != 2:
-            return ExecutorResult(exit_code=1, stderr=f"Invalid invoke task format: {invoke_task}")
+            return ExecutorResult(exit_code=1, stderr=t("Invalid invoke task format: {task}", task=invoke_task))
 
         module_name, func_name = parts
         args = invoke_args or []
@@ -94,12 +95,12 @@ class InvokeExecutor(BaseExecutor):
                 result = await coro
             return result
         except asyncio.TimeoutError:
-            msg = f"[TIMEOUT] Invoke task exceeded timeout of {timeout}s\n"
+            msg = t("Invoke task exceeded timeout of {timeout}s", timeout=timeout)
             with open(log_path, "a") as f:
                 f.write(msg)
             return ExecutorResult(exit_code=-1, stderr=msg)
         except asyncio.CancelledError:
-            msg = "[CANCELLED] Invoke task was cancelled\n"
+            msg = t("Invoke task was cancelled")
             with open(log_path, "a") as f:
                 f.write(msg)
             return ExecutorResult(exit_code=-1, stderr=msg)
