@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 import paramiko
 
+from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 
 
@@ -29,11 +30,20 @@ class SSHExecutor(BaseExecutor):
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
 
+        # Build command with configured shell, cwd, and env
+        shell = get_settings().executor.shell
+        # Use double quotes and escape properly
+        full_command = f"{shell} -c \""
         if cwd:
-            command = f"cd {cwd} && {command}"
-
-        env_prefix = " ".join(f"{k}={v}" for k, v in env.items()) + " " if env else ""
-        full_command = f"{env_prefix}{command}"
+            full_command += f"cd {cwd} && "
+        for k, v in env.items():
+            # Escape double quotes in env values
+            escaped_v = v.replace('"', '\\"')
+            full_command += f"export {k}=\"{escaped_v}\" && "
+        # Escape double quotes in the main command
+        escaped_command = command.replace('"', '\\"')
+        full_command += escaped_command
+        full_command += "\""
 
         def _run_ssh():
             client = paramiko.SSHClient()

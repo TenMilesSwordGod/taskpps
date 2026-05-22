@@ -9,17 +9,43 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const maxLogLines = 5000 // Keep last 5000 lines of logs
+const maxLineLength = 1000 // Truncate lines longer than 1000 characters
+
 type LogViewerModel struct {
 	viewport viewport.Model
-	content  strings.Builder
+	lines    []string
 	ready    bool
+	width    int // Store current width for line wrapping/truncation
 }
 
 func NewLogViewerModel() LogViewerModel {
 	return LogViewerModel{}
 }
 
+// Helper to process a single line: truncate or wrap if too long
+func processLine(line string, width int) string {
+	if width <= 0 {
+		width = 80 // Default if no width set
+	}
+	// Truncate very long lines
+	if len(line) > maxLineLength {
+		return line[:maxLineLength] + "..."
+	}
+	return line
+}
+
+// Process all lines for display
+func processLines(lines []string, width int) []string {
+	processed := make([]string, len(lines))
+	for i, line := range lines {
+		processed[i] = processLine(line, width)
+	}
+	return processed
+}
+
 func (m *LogViewerModel) SetSize(w, h int) {
+	m.width = w
 	if !m.ready {
 		m.viewport = viewport.New(w, h-2)
 		m.viewport.YPosition = 0
@@ -28,29 +54,38 @@ func (m *LogViewerModel) SetSize(w, h int) {
 		m.viewport.Width = w
 		m.viewport.Height = h - 2
 	}
-	m.viewport.SetContent(m.content.String())
+	processedLines := processLines(m.lines, w)
+	m.viewport.SetContent(strings.Join(processedLines, "\n"))
 	m.viewport.GotoBottom()
 }
 
 func (m *LogViewerModel) SetContent(content string) {
-	m.content.Reset()
-	m.content.WriteString(content)
+	m.lines = strings.Split(content, "\n")
+	if len(m.lines) > maxLogLines {
+		m.lines = m.lines[len(m.lines)-maxLogLines:]
+	}
 	if m.ready {
-		m.viewport.SetContent(content)
+		processedLines := processLines(m.lines, m.width)
+		m.viewport.SetContent(strings.Join(processedLines, "\n"))
 		m.viewport.GotoBottom()
 	}
 }
 
 func (m *LogViewerModel) AppendContent(content string) {
-	m.content.WriteString(content)
+	newLines := strings.Split(content, "\n")
+	m.lines = append(m.lines, newLines...)
+	if len(m.lines) > maxLogLines {
+		m.lines = m.lines[len(m.lines)-maxLogLines:]
+	}
 	if m.ready {
-		m.viewport.SetContent(m.content.String())
+		processedLines := processLines(m.lines, m.width)
+		m.viewport.SetContent(strings.Join(processedLines, "\n"))
 		m.viewport.GotoBottom()
 	}
 }
 
 func (m *LogViewerModel) Content() string {
-	return m.content.String()
+	return strings.Join(m.lines, "\n")
 }
 
 func (m LogViewerModel) Update(msg tea.Msg) (LogViewerModel, tea.Cmd) {
@@ -82,7 +117,7 @@ func (m LogViewerModel) View() string {
 	b.WriteString(title)
 	b.WriteString("\n\n")
 
-	if m.content.Len() == 0 {
+	if len(m.lines) == 0 {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(no output)"))
 		return b.String()
 	}
@@ -91,12 +126,15 @@ func (m LogViewerModel) View() string {
 	if m.ready {
 		vpContent = fmt.Sprintf("%s\n%s", m.viewport.View(), "(scroll with PgUp/PgDown)")
 	} else {
-		lines := strings.Split(m.content.String(), "\n")
 		maxLines := 20
-		if len(lines) > maxLines {
-			lines = lines[len(lines)-maxLines:]
+		var displayLines []string
+		if len(m.lines) > maxLines {
+			displayLines = m.lines[len(m.lines)-maxLines:]
+		} else {
+			displayLines = m.lines
 		}
-		vpContent = strings.Join(lines, "\n")
+		processedLines := processLines(displayLines, m.width)
+		vpContent = strings.Join(processedLines, "\n")
 	}
 	b.WriteString(vpContent)
 

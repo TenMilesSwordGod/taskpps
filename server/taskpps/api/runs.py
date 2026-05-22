@@ -10,7 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 from taskpps.config import get_logs_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
-from taskpps.schemas.run import CreateRunRequest, RunResponse, CleanResponse
+from taskpps.schemas.run import CreateRunRequest, RunResponse, CleanResponse, RunListResponse
 from taskpps.services.pipeline_service import PipelineService
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -27,17 +27,17 @@ async def create_run(body: CreateRunRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/")
+@router.get("/", response_model=RunListResponse)
 async def list_runs(
     pipeline: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
 ):
-    runs = await _pipeline_service.list_runs(pipeline=pipeline, status=status, limit=limit)
-    return runs
+    runs_data = await _pipeline_service.list_runs(pipeline=pipeline, status=status, limit=limit)
+    return runs_data
 
 
-@router.get("/{run_id}")
+@router.get("/{run_id}", response_model=RunResponse)
 async def get_run(run_id: str):
     run = await _pipeline_service.get_run(run_id)
     if run is None:

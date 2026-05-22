@@ -20,6 +20,7 @@ for a taskpps project in the current directory.`,
 			"agents",
 			"credentials",
 			"plugins",
+			".taskpps",
 		}
 		for _, d := range dirs {
 			path := filepath.Join(".", d)
@@ -35,16 +36,18 @@ for a taskpps project in the current directory.`,
 executor:
   default_timeout: 3600
   max_workers: 10
+  shell: /bin/bash
 env:
   GLOBAL_VAR: value
 plugins:
   paths: ["plugins"]
 triggers: []
 `
-		if err := os.WriteFile("taskpps.yaml", []byte(taskppsYAML), 0644); err != nil {
-			return fmt.Errorf("failed to write taskpps.yaml: %w", err)
+		configPath := filepath.Join(".taskpps", "taskpps.yaml")
+		if err := os.WriteFile(configPath, []byte(taskppsYAML), 0644); err != nil {
+			return fmt.Errorf("failed to write %s: %w", configPath, err)
 		}
-		fmt.Println("  created taskpps.yaml")
+		fmt.Println("  created .taskpps/taskpps.yaml")
 
 		pipelineYAML := `name: example
 options:

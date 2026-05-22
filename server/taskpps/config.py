@@ -16,6 +16,7 @@ class ServerConfig(BaseModel):
 class ExecutorConfig(BaseModel):
     default_timeout: int = 3600
     max_workers: int = 10
+    shell: str = "/bin/bash"
 
 
 class PluginsConfig(BaseModel):
@@ -48,7 +49,8 @@ def find_project_root() -> Path:
         return _project_root
     current = Path.cwd()
     for _ in range(10):
-        if (current / "taskpps.yaml").exists():
+        # Check both .taskpps/taskpps.yaml (new) and taskpps.yaml (old for backwards compatibility)
+        if (current / ".taskpps" / "taskpps.yaml").exists() or (current / "taskpps.yaml").exists():
             _project_root = current
             return current
         parent = current.parent
@@ -70,7 +72,10 @@ def load_settings(config_path: Optional[str] = None) -> Settings:
         p = Path(config_path)
     else:
         root = find_project_root()
-        p = root / "taskpps.yaml"
+        # Prefer .taskpps/taskpps.yaml, fall back to taskpps.yaml
+        p = root / ".taskpps" / "taskpps.yaml"
+        if not p.exists():
+            p = root / "taskpps.yaml"
 
     if p.exists():
         with open(p) as f:

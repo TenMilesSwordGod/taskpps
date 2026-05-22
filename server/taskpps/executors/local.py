@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Dict, Optional
 
+from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 
 
@@ -26,7 +27,11 @@ class LocalExecutor(BaseExecutor):
 
         merged_env = {**os.environ, **env}
 
-        self._process = await asyncio.create_subprocess_shell(
+        # Use shell from config
+        shell = get_settings().executor.shell
+        self._process = await asyncio.create_subprocess_exec(
+            shell,
+            "-c",
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,

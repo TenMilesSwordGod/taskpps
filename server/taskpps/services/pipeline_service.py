@@ -113,13 +113,13 @@ class PipelineService:
                 ],
             }
 
-    async def list_runs(self, pipeline: Optional[str] = None, status: Optional[str] = None, limit: int = 50) -> List[dict]:
+    async def list_runs(self, pipeline: Optional[str] = None, status: Optional[str] = None, limit: int = 50) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             runs = await run_repo.list_runs(pipeline=pipeline, status=status, limit=limit)
-            result = []
+            items = []
             for run in runs:
-                result.append({
+                items.append({
                     "id": run.id,
                     "pipeline_name": run.pipeline_name,
                     "pipeline_file": run.pipeline_file,
@@ -129,7 +129,9 @@ class PipelineService:
                     "finished_at": run.finished_at,
                     "created_at": run.created_at,
                 })
-            return result
+            # Also get total count (without limit)
+            total = len(await run_repo.list_runs(pipeline=pipeline, status=status, limit=10000))
+            return {"items": items, "total": total}
 
     async def cancel_run(self, run_id: str) -> bool:
         from taskpps.engine.runner import get_active_runner
