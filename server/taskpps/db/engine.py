@@ -14,7 +14,7 @@ def get_engine() -> AsyncEngine:
         db_path = get_db_path()
         db_path.parent.mkdir(parents=True, exist_ok=True)
         url = f"sqlite+aiosqlite:///{db_path}"
-        _engine = create_async_engine(url, echo=False, connect_args={"check_same_thread": False})
+        _engine = create_async_engine(url, echo=False, connect_args={"check_same_thread": False}, pool_size=5, max_overflow=10)
     return _engine
 
 
