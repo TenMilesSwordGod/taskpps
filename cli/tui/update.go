@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/taskpps/ppsctl/logger"
 	"github.com/taskpps/ppsctl/tui/components"
 )
 
@@ -15,6 +16,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		logger.Debug("Window size changed: w=%d, h=%d", msg.Width, msg.Height)
 		m.width = msg.Width
 		m.height = msg.Height
 		if !m.ready {
@@ -85,8 +87,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case runsFetchedMsg:
 		if msg.err != nil {
+			logger.Error("Failed to fetch runs: %v", msg.err)
 			m.errMsg = msg.err.Error()
 		} else {
+			logger.Debug("Fetched %d runs", len(msg.runs))
 			m.errMsg = ""
 			m.runs = msg.runs
 			m.runList.SetRuns(msg.runs)
@@ -94,6 +98,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.targetRunID != "" {
 				for i, r := range msg.runs {
 					if r.ID == m.targetRunID {
+						logger.Debug("Target run found: %s, selecting it", m.targetRunID)
 						m.runList.SetCursor(i)
 						m.runDetail.SetRun(&msg.runs[i])
 						m.focusedPanel = FocusRightPanel
@@ -108,17 +113,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case runFetchedMsg:
 		if msg.err != nil {
+			logger.Error("Failed to fetch run details: %v", msg.err)
 			m.errMsg = msg.err.Error()
 		} else {
+			logger.Debug("Fetched run details successfully")
 			m.errMsg = ""
 			m.runDetail.SetRun(msg.run)
 		}
 
 	case logsFetchedMsg:
 		if msg.err != nil {
+			logger.Error("Failed to fetch logs: %v", msg.err)
 			m.errMsg = msg.err.Error()
 			m.logViewer.SetContent("Error: " + msg.err.Error())
 		} else {
+			logger.Debug("Fetched %d log entries", len(msg.logs))
 			m.errMsg = ""
 			var content string
 			for taskName, log := range msg.logs {
