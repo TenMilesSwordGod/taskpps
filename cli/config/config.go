@@ -22,8 +22,9 @@ type ServerConfig struct {
 }
 
 type ExecutorConfig struct {
-	DefaultTimeout int `mapstructure:"default_timeout"`
-	MaxWorkers     int `mapstructure:"max_workers"`
+	DefaultTimeout int    `mapstructure:"default_timeout"`
+	MaxWorkers     int    `mapstructure:"max_workers"`
+	Shell          string `mapstructure:"shell"`
 }
 
 func FindProjectRoot() (string, error) {
@@ -32,6 +33,11 @@ func FindProjectRoot() (string, error) {
 		return "", err
 	}
 	for i := 0; i < 10; i++ {
+		// Check .taskpps/taskpps.yaml first
+		if _, err := os.Stat(filepath.Join(dir, ".taskpps", "taskpps.yaml")); err == nil {
+			return dir, nil
+		}
+		// Fallback to root taskpps.yaml for backward compatibility
 		if _, err := os.Stat(filepath.Join(dir, "taskpps.yaml")); err == nil {
 			return dir, nil
 		}
@@ -55,13 +61,19 @@ func Load(path string) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		v.SetConfigFile(filepath.Join(root, "taskpps.yaml"))
+		// Try .taskpps/taskpps.yaml first, then root taskpps.yaml
+		configPath := filepath.Join(root, ".taskpps", "taskpps.yaml")
+		if _, err := os.Stat(configPath); err != nil {
+			configPath = filepath.Join(root, "taskpps.yaml")
+		}
+		v.SetConfigFile(configPath)
 	}
 
 	v.SetDefault("server.host", "127.0.0.1")
 	v.SetDefault("server.port", 26521)
 	v.SetDefault("executor.default_timeout", 3600)
 	v.SetDefault("executor.max_workers", 10)
+	v.SetDefault("executor.shell", "/bin/bash")
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
