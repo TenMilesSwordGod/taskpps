@@ -55,19 +55,25 @@ class InvokeExecutor(BaseExecutor):
                 from invoke import task as invoke_task_decorator
 
                 merged_env = {**os.environ, **env}
-                old_env = os.environ.copy()
-                os.environ.update(merged_env)
 
                 try:
                     if getattr(func, "_task", None) is not None:
                         from invoke import Context
-                        ctx = Context()
+                        ctx = Context(env=merged_env)
                         result = func(ctx, *args, **kwargs)
                     else:
-                        result = func(*args, **kwargs)
-                finally:
-                    os.environ.clear()
-                    os.environ.update(old_env)
+                        old_env = {}
+                        for k, v in merged_env.items():
+                            old_env[k] = os.environ.get(k)
+                            os.environ[k] = v
+                        try:
+                            result = func(*args, **kwargs)
+                        finally:
+                            for k in merged_env:
+                                if old_env[k] is None:
+                                    os.environ.pop(k, None)
+                                else:
+                                    os.environ[k] = old_env[k]
 
                 output = str(result) if result is not None else ""
                 with open(log_path, "w") as f:
