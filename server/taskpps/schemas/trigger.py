@@ -16,9 +16,22 @@ class CreateTriggerRequest(BaseModel):
 class TriggerResponse(BaseModel):
     id: str
     type: TriggerType
-    config: str = "{}"
+    config: Dict[str, Any] = {}
     pipeline_file: str
     enabled: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_orm_with_parsed_config(cls, obj):
+        import json
+        data = {
+            "id": obj.id,
+            "type": obj.type,
+            "config": json.loads(obj.config) if isinstance(obj.config, str) else obj.config,
+            "pipeline_file": obj.pipeline_file,
+            "enabled": obj.enabled,
+            "created_at": obj.created_at,
+        }
+        return cls(**data)

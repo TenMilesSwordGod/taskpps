@@ -10,7 +10,7 @@ router = APIRouter(prefix="/plugins/triggers", tags=["triggers"])
 _trigger_service = TriggerService()
 
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, response_model=TriggerResponse)
 async def create_trigger(body: CreateTriggerRequest):
     result = await _trigger_service.create_trigger(
         type=body.type,
@@ -18,13 +18,13 @@ async def create_trigger(body: CreateTriggerRequest):
         pipeline_file=body.pipeline_file,
         enabled=body.enabled,
     )
-    return result
+    return TriggerResponse.from_orm_with_parsed_config(result)
 
 
-@router.get("/")
+@router.get("/", response_model=List[TriggerResponse])
 async def list_triggers():
     triggers = await _trigger_service.list_triggers()
-    return triggers
+    return [TriggerResponse.from_orm_with_parsed_config(t) for t in triggers]
 
 
 @router.delete("/{trigger_id}")
