@@ -7,7 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/taskpps/ppsctl/client"
-	"github.com/taskpps/ppsctl/logger"
 	"github.com/taskpps/ppsctl/models"
 	"github.com/taskpps/ppsctl/tui/components"
 )

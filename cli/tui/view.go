@@ -39,7 +39,6 @@ func (m Model) View() string {
 	// Panel border (1 each side) + padding (1 each side) = 4 total
 	panelFrameW := 4
 	gap := 2
-	rightTabH := 2 // tabs take height
 
 	// Calculate actual content widths (inside panels)
 	totalFrameAndGapW := panelFrameW + gap + panelFrameW
@@ -63,9 +62,6 @@ func (m Model) View() string {
 			// if even that is too big, just use min sizes
 		}
 	}
-
-	leftPanelW := leftContentW + panelFrameW
-	rightPanelW := rightContentW + panelFrameW
 
 	listView := m.runList.View()
 
