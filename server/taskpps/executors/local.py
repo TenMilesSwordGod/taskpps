@@ -10,7 +10,18 @@ from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
 
-_DANGEROUS_PATTERNS = re.compile(r"(\brm\s+-rf\s+/|:\(\)\{.*\}|`.*`|\$\(.*\))", re.DOTALL)
+_DANGEROUS_PATTERNS = re.compile(
+    r"(\brm\s+-rf\s+/|"
+    r":\(\)\{.*\}|"
+    r"`.*`|"
+    r"\$\(.*\)|"
+    r"\bdd\s+.*\bof=/dev/|"
+    r"\bmkfs\b|"
+    r"\bchmod\s+-R\s+777\s+/|"
+    r"\bshutdown\b|\breboot\b|\bhalt\b|\bpoweroff\b|"
+    r"(?:wget|curl)\s+\S+\s*\|\s*(?:bash|sh)\b)",
+    re.DOTALL,
+)
 
 
 class LocalExecutor(BaseExecutor):
