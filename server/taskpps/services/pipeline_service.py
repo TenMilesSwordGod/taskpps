@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from taskpps.config import get_logs_dir, get_settings
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
+from taskpps.i18n import t
 from taskpps.domain.context import ExecutionContext, apply_overrides
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
@@ -27,7 +28,7 @@ class PipelineService:
         except FileNotFoundError as e:
             raise ValueError(str(e))
         except Exception as e:
-            raise ValueError(f"Failed to load pipeline: {e}")
+            raise ValueError(t("Failed to load pipeline: {error}", error=str(e)))
 
         if params:
             pipeline_data = spec.model_dump()
@@ -35,7 +36,7 @@ class PipelineService:
                 overridden = apply_overrides(pipeline_data, params)
                 spec = PipelineYAML(**overridden)
             except Exception as e:
-                raise ValueError(f"Failed to apply overrides: {e}")
+                raise ValueError(t("Failed to apply overrides: {error}", error=str(e)))
 
         resolved = ResolvedPipeline.from_yaml(spec, pipeline_file=pipeline_file)
 
@@ -83,7 +84,7 @@ class PipelineService:
             task.result()
         except Exception as e:
             import logging
-            logging.getLogger("taskpps").error(f"Pipeline run failed unexpectedly: {e}")
+            logging.getLogger("taskpps").error(t("Pipeline run failed unexpectedly: {error}", error=str(e)))
 
     async def get_run(self, run_id: str) -> Optional[dict]:
         async with get_session_factory()() as session:

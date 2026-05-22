@@ -1,23 +1,24 @@
-name: deploy
+# 部署流水线示例
+name: deploy                 # 流水线名称
 options:
-  host: staging-server
-  credential: default-cred
+  host: staging-server       # 目标主机（对应 agents 目录中的配置）
+  credential: default-cred   # 使用的凭据（对应 credentials 目录中的配置）
   env:
-    APP_ENV: staging
-  timeout: 600
-  on_failure: fail
+    APP_ENV: staging         # 环境变量
+  timeout: 600               # 超时时间（秒）
+  on_failure: fail           # 失败策略：fail（立即停止）/ continue（继续执行）
 
 tasks:
-  - name: pull-images
-    command: docker pull myapp:${TAG}
+  - name: pull-images        # 任务名称
+    command: docker pull myapp:${TAG}  # 执行命令
 
-  - name: migrate
-    invoke:
+  - name: migrate            # 数据库迁移
+    invoke:                  # 使用 Python invoke 任务
       task: deploy_tasks.migrate_db
       kwargs:
         target_version: ${MIGRATE_VERSION}
     timeout: 300
 
-  - name: restart
+  - name: restart            # 重启服务
     command: supervisorctl restart all
-    depends_on: [migrate]
+    depends_on: [migrate]    # 依赖关系：migrate 完成后执行

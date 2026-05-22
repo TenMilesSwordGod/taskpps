@@ -1,3 +1,5 @@
+# 多步骤任务流水线示例
+# 使用 steps 将多个子步骤组合到一个任务中
 name: deploy-steps
 options:
   env:
@@ -6,9 +8,9 @@ options:
   on_failure: fail
 
 tasks:
-  - name: build-and-deploy
-    cwd: /app
-    steps:
+  - name: build-and-deploy   # 构建并部署
+    cwd: /app                # 工作目录
+    steps:                   # 子步骤列表（按顺序执行）
       - cd: /tmp
         run: wget https://example.com/release.tar.gz
       - run: tar xzf /tmp/release.tar.gz -C /app
@@ -18,7 +20,7 @@ tasks:
       - run: systemctl restart myapp
     timeout: 300
 
-  - name: verify
+  - name: verify             # 验证部署结果
     steps:
       - run: curl -sf http://localhost:8000/health
       - cd: /var/log

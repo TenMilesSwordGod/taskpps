@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Set
 from taskpps.config import get_logs_dir, get_settings
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
+from taskpps.i18n import t
 from taskpps.domain.context import ExecutionContext
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
@@ -212,7 +213,7 @@ class PipelineRunner:
             step_cwd = step.cd or task.cwd
 
             with open(log_path, "a") as f:
-                f.write(f"\n--- Step {i + 1}/{len(task.steps)}: {step.run[:80]} ---\n")
+                f.write(t("Step {n}/{total}: {cmd}", n=i + 1, total=len(task.steps), cmd=step.run[:80]))
 
             result = await executor.execute(
                 command=step.run,
@@ -229,7 +230,7 @@ class PipelineRunner:
                 return ExecutorResult(
                     exit_code=result.exit_code,
                     stdout=combined_output,
-                    stderr=f"Step {i + 1} failed: {result.stderr}",
+                    stderr=t("Step {n} failed: {error}", n=i + 1, error=result.stderr),
                 )
 
         return ExecutorResult(exit_code=0, stdout=combined_output)

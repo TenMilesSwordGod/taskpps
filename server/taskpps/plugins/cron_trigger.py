@@ -8,6 +8,7 @@ from typing import Optional
 
 from croniter import croniter
 
+from taskpps.i18n import t
 from taskpps.plugins.base import TriggerPlugin
 
 logger = logging.getLogger(__name__)
@@ -36,14 +37,14 @@ class CronTrigger(TriggerPlugin):
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
-        logger.info(f"CronTrigger started: {self.name}")
+        logger.info(t("CronTrigger started: {name}", name=self.name))
 
     def stop(self) -> None:
         self._running = False
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
-        logger.info(f"CronTrigger stopped: {self.name}")
+        logger.info(t("CronTrigger stopped: {name}", name=self.name))
 
     def _run_loop(self) -> None:
         base = datetime.now(timezone.utc)
@@ -64,6 +65,6 @@ class CronTrigger(TriggerPlugin):
                 try:  # pragma: no cover
                     self._callback(self._pipeline_file)  # pragma: no cover
                 except Exception as e:  # pragma: no cover
-                    logger.error(f"CronTrigger callback error: {e}")  # pragma: no cover
+                    logger.error(t("CronTrigger callback error: {error}", error=str(e)))  # pragma: no cover
 
             cron = croniter(self._expression, datetime.now(timezone.utc))  # pragma: no cover

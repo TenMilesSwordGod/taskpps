@@ -30,7 +30,9 @@ for a taskpps project in the current directory.`,
 			fmt.Printf("  created %s/\n", d)
 		}
 
-		taskppsYAML := `server:
+		taskppsYAML := `locale: zh
+
+server:
   host: 127.0.0.1
   port: 26521
 executor:
@@ -49,7 +51,8 @@ triggers: []
 		}
 		fmt.Println("  created .taskpps/taskpps.yaml")
 
-		pipelineYAML := `name: example
+		pipelineYAML := `# 示例流水线 - 构建 → 测试 → 部署
+name: example
 options:
   host: localhost
   env:

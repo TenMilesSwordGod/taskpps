@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 import yaml
 
 from taskpps.config import get_credentials_dir
+from taskpps.i18n import t
 
 
 class CredentialLoader:
@@ -21,9 +22,9 @@ class CredentialLoader:
                 with open(path) as f:
                     data = yaml.safe_load(f)
                 if data is None:
-                    raise ValueError(f"Credential file is empty: {credential_name}")
+                    raise ValueError(t("Credential file is empty: {name}", name=credential_name))
                 return data
-        raise FileNotFoundError(f"Credential file not found: {credential_name}")
+        raise FileNotFoundError(t("Credential file not found: {name}", name=credential_name))
 
     def load_all(self) -> Dict[str, Dict[str, Any]]:
         result = {}

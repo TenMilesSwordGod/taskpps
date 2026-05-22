@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 import yaml
 
 from taskpps.config import get_agents_dir
+from taskpps.i18n import t
 
 
 class AgentLoader:
@@ -21,9 +22,9 @@ class AgentLoader:
                 with open(path) as f:
                     data = yaml.safe_load(f)
                 if data is None:
-                    raise ValueError(f"Agent file is empty: {agent_name}")
+                    raise ValueError(t("Agent file is empty: {name}", name=agent_name))
                 return data
-        raise FileNotFoundError(f"Agent file not found: {agent_name}")
+        raise FileNotFoundError(t("Agent file not found: {name}", name=agent_name))
 
     def load_all(self) -> Dict[str, Dict[str, Any]]:
         result = {}

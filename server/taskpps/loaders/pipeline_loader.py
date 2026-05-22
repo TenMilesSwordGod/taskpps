@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 import yaml
 
 from taskpps.config import get_pipelines_dir
+from taskpps.i18n import t
 from taskpps.schemas.pipeline import PipelineYAML
 
 
@@ -40,18 +41,18 @@ class PipelineLoader:
         try:
             resolved = path.resolve()
             if not str(resolved).startswith(str(self.base_dir.resolve())):
-                raise FileNotFoundError(f"Path traversal not allowed: {pipeline_file}")
+                raise FileNotFoundError(t("Path traversal not allowed: {path}", path=pipeline_file))
         except (OSError, ValueError):
-            raise FileNotFoundError(f"Invalid pipeline file path: {pipeline_file}")
+            raise FileNotFoundError(t("Invalid pipeline file path: {path}", path=pipeline_file))
 
         if not path.exists():
-            raise FileNotFoundError(f"Pipeline file not found: {pipeline_file}")
+            raise FileNotFoundError(t("Pipeline file not found: {path}", path=pipeline_file))
 
         with open(path) as f:
             data = yaml.safe_load(f)
 
         if data is None:
-            raise ValueError(f"Pipeline file is empty: {pipeline_file}")
+            raise ValueError(t("Pipeline file is empty: {path}", path=pipeline_file))
 
         if env:
             data = substitute_env_vars(data, env)

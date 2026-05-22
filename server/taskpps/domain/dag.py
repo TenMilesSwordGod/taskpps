@@ -4,6 +4,7 @@ from collections import deque
 from typing import Dict, List, Set
 
 from taskpps.domain.pipeline import ResolvedTask
+from taskpps.i18n import t
 
 
 class DAGCycleError(Exception):
@@ -25,7 +26,7 @@ class DAG:
         for name, task in self.tasks.items():
             for dep in task.depends_on:
                 if dep not in self.tasks:
-                    raise ValueError(f"Task '{name}' depends on unknown task '{dep}'")
+                    raise ValueError(t("Task '{task}' depends on unknown task '{dep}'", task=name, dep=dep))
                 self.adjacency[dep].append(name)
                 self.reverse_adjacency[name].append(dep)
 
@@ -48,7 +49,7 @@ class DAG:
 
         if len(result) != len(self.tasks):
             remaining = set(self.tasks.keys()) - set(result)
-            raise DAGCycleError(f"Cycle detected among tasks: {remaining}")
+            raise DAGCycleError(t("Cycle detected among tasks: {tasks}", tasks=remaining))
 
         return result
 
@@ -60,7 +61,7 @@ class DAG:
         while remaining:
             level = [name for name in remaining if in_degree[name] == 0]
             if not level:
-                raise DAGCycleError(f"Cycle detected among tasks: {remaining}")
+                raise DAGCycleError(t("Cycle detected among tasks: {tasks}", tasks=remaining))
             levels.append(level)
             for name in level:
                 remaining.remove(name)
