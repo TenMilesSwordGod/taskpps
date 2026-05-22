@@ -1,249 +1,84 @@
 # Taskpps
 
-Taskpps (Task Pipelines) — 轻量级、可扩展的任务编排系统，用于替代 Jenkins 等重量级 CI/CD 工具在小型项目中的使用。
-
-## 架构
+轻量级、可扩展的任务编排系统，替代 Jenkins 等重量级 CI/CD 工具用于小型项目。
 
 ```
 ┌─────────────┐     REST API     ┌──────────────────┐
 │  ppsctl (Go) │ ◄──────────────► │  Backend (Python) │
 └─────────────┘                  └──────────────────┘
                                         │
-                          ┌─────────────┼─────────────┐
-                          │             │             │
-                     ┌────┴────┐  ┌─────┴────┐  ┌────┴────┐
-                     │ SQLite  │  │ Executors │  │ Plugins │
-                     │ (state) │  │ Local/SSH │  │ Cron... │
-                     └─────────┘  │ Invoke    │  └─────────┘
-                                  └───────────┘
-```
-
-## 项目结构
-
-这是一个 monorepo，包含两个独立的子模块：
-
-```
-taskpps/
-├── cli/                 # Go CLI 工具 (ppsctl)
-│   ├── go.mod
-│   ├── main.go
-│   ├── cmd/
-│   ├── client/
-│   ├── config/
-│   ├── models/
-│   └── tui/
-├── server/              # Python 后端服务
-│   ├── pyproject.toml
-│   ├── taskpps/
-│   └── tests/
-├── examples/            # 示例配置文件
-├── .gitignore
-└── README.md
+                           ┌─────────────┼─────────────┐
+                           │             │             │
+                      ┌────┴────┐  ┌─────┴────┐  ┌────┴────┐
+                      │ SQLite  │  │ Executors │  │ Plugins │
+                      │ (state) │  │ Local/SSH │  │ Cron... │
+                      └─────────┘  │ Invoke    │  └─────────┘
+                                   └───────────┘
 ```
 
 ## 特性
 
-- **极简配置** — YAML 定义流水线，全局默认值 + 任务级覆盖
-- **可编程任务** — 支持 Python invoke 任务函数，实现复杂逻辑复用
-- **轻量无依赖** — 后端仅需 Python 环境，CLI 为单二进制文件
-- **动态参数化** — CLI 运行时覆盖流水线配置
-- **插件化扩展** — 触发器、通知器、执行器均可通过插件机制集成
-- **状态可观测** — 实时日志、运行历史、任务进度查询
-- **可配置 Shell** — 通过配置文件自定义执行器使用的 Shell
-- **整洁的项目结构** — 配置文件统一放置在 .taskpps 目录
+- **YAML 定义流水线** — 全局默认值 + 任务级覆盖，极简配置
+- **三种任务类型** — Shell 命令 / SSH 远程 / Python invoke 函数
+- **DAG 依赖编排** — 拓扑排序、并发执行、失败策略（fail/continue）
+- **插件化** — 触发器（Cron）、通知器、执行器均可扩展
+- **可观测** — SSE 实时日志流、运行历史、任务状态跟踪
+- **API 密钥认证** — 可选中间件保护
+- **国际化** — 内建中文 / 英文支持
 
 ## 快速开始
 
-### 1. 安装后端
-
 ```bash
-cd server
-uv sync
-```
+# 1. 安装后端
+cd server && uv sync
 
-### 2. 初始化项目
+# 2. 安装 CLI
+cd cli && go build -o bin/ppsctl main.go
 
-```bash
-mkdir my-project && cd my-project
+# 3. 初始化项目
 ppsctl init
-```
 
-这将创建以下结构：
-```
-my-project/
-├── .taskpps/
-│   └── taskpps.yaml
-├── pipelines/
-├── tasks/
-├── agents/
-├── credentials/
-└── plugins/
-```
-
-### 3. 定义流水线
-
-在 `pipelines/` 目录创建 YAML 文件：
-
-```yaml
-name: deploy
-options:
-  host: staging-server
-  credential: default-cred
-  env:
-    APP_ENV: staging
-  timeout: 600
-  on_failure: fail
-
-tasks:
-  - name: pull-images
-    command: docker pull myapp:${TAG}
-  - name: migrate
-    invoke:
-      task: deploy_tasks.migrate_db
-      kwargs:
-        target_version: ${MIGRATE_VERSION}
-    timeout: 300
-  - name: restart
-    command: supervisorctl restart all
-    depends_on: [migrate]
-```
-
-### 4. 配置 Shell（可选）
-
-在 `.taskpps/taskpps.yaml` 中配置执行器使用的 Shell：
-
-```yaml
-executor:
-  shell: /bin/bash  # 或 /bin/zsh, /bin/sh 等
-  default_timeout: 3600
-  max_workers: 10
-```
-
-### 5. 启动服务
-
-```bash
-cd server
+# 4. 在 pipelines/ 中编写 YAML 流水线，启动服务
 uv run taskpps-server
-# 或
-uv run python -m taskpps
-```
 
-### 6. 运行流水线
-
-```bash
-# 使用 ppsctl
-ppsctl run deploy.yaml
-
-# 带参数覆盖
+# 5. 运行
 ppsctl run deploy.yaml TAG=latest
-
-# 使用 API
-curl -X POST http://127.0.0.1:26521/api/runs/ \
-  -H "Content-Type: application/json" \
-  -d '{"pipeline": "deploy.yaml"}'
 ```
 
-## API 端点
+## 项目结构
 
-| 端点 | 方法 | 功能 |
-|:--|:--|:--|
-| `/api/health` | GET | 健康检查 |
-| `/api/runs` | POST | 创建流水线运行 |
-| `/api/runs` | GET | 列表查询（返回 `{"items": [...], "total": N}`） |
-| `/api/runs/{run_id}` | GET | 运行详情 |
-| `/api/runs/{run_id}/logs` | GET | 日志查询（支持 SSE 流式） |
-| `/api/runs/{run_id}/cancel` | POST | 取消运行 |
-| `/api/runs` | DELETE | 清理历史 |
-| `/api/plugins/triggers` | POST | 注册触发器 |
-
-## 任务类型
-
-### 命令任务
-
-本地或 SSH 远程执行 shell 命令：
-
-```yaml
-tasks:
-  - name: build
-    command: make build
-  - name: deploy-remote
-    command: systemctl restart myapp
-    host: prod-server
 ```
-
-### Invoke 任务
-
-调用 Python invoke 函数，支持参数传递：
-
-```yaml
-tasks:
-  - name: migrate
-    invoke:
-      task: deploy_tasks.migrate_db
-      args: ["--verbose"]
-      kwargs:
-        target_version: "3.0"
-```
-
-## 参数覆盖
-
-通过 API 传递 `params` 字段，支持点路径和任务名称索引：
-
-```json
-{
-  "pipeline": "deploy.yaml",
-  "params": {
-    "options.host": "prod-server",
-    "tasks[\"migrate\"].timeout": 600
-  }
-}
-```
-
-环境变量优先级（从高到低）：
-1. CLI 参数覆盖
-2. 任务 `env` 定义
-3. Pipeline `options.env` 定义
-4. 全局配置 `.taskpps/taskpps.yaml` 中的 `env`
-5. 系统环境变量
-
-## 失败策略
-
-- `on_failure: fail`（默认）— 任务失败则终止后续未开始的任务
-- `on_failure: continue` — 任务失败不影响独立下游任务，流水线最终状态为 partial
-
-## 触发器
-
-在 `.taskpps/taskpps.yaml` 中配置 Cron 触发器：
-
-```yaml
-triggers:
-  - type: cron
-    schedule: "0 2 * * *"
-    pipeline: nightly.yaml
+taskpps/
+├── cli/           # Go CLI (ppsctl) — Cobra + Bubble Tea TUI
+├── server/        # Python 后端 — FastAPI + SQLModel + aiosqlite
+│   ├── taskpps/   #  核心包：api/ db/ domain/ engine/ executors/ ...
+│   └── tests/     #  测试套件（目标 100% 覆盖）
+├── examples/      # 示例配置
+└── docs/          # (用户项目运行时目录，gitignored)
 ```
 
 ## 开发
 
-### 后端开发
-
 ```bash
 cd server
 uv sync --dev
-uv run pytest tests/ -v
-uv run pytest tests/ --cov=taskpps --cov-report=term-missing  # 100% coverage
+uv run pytest tests/ -v                           # 运行测试
+uv run pytest tests/ --cov=taskpps --cov-report=term-missing  # 覆盖率
+cd cli && go build -o bin/ppsctl main.go
 ```
 
-### CLI 开发
+## 详细文档
 
-```bash
-cd cli
-go build -o bin/ppsctl main.go
-./bin/ppsctl --help
-```
-
-## 技术栈
-
-- **后端**: Python 3.10+, FastAPI, SQLModel, aiosqlite, Pydantic, paramiko, invoke, blinker, croniter
-- **CLI**: Go 1.19+, Cobra, Bubble Tea
-- **数据库**: SQLite (异步)
-- **包管理**: uv (Python), go mod (Go)
+| 模块 | 文档 |
+|:--|:--|
+| 架构设计 | `server/docs/arch.md` |
+| 流水线配置 | `server/docs/pipeline.md` |
+| 任务类型 | `server/docs/tasks.md` |
+| API 参考 | `server/docs/api.md` |
+| 执行器 | `server/docs/executors.md` |
+| 触发器 | `server/docs/triggers.md` |
+| 开发指南 | `server/docs/development.md` |
+| CLI 概述 | `cli/docs/overview.md` |
+| CLI 命令 | `cli/docs/commands.md` |
+| TUI 界面 | `cli/docs/tui.md` |
+| CLI 配置 | `cli/docs/config.md` |
