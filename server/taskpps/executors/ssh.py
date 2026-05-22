@@ -56,7 +56,7 @@ class SSHExecutor(BaseExecutor):
             elif self.password:
                 connect_kwargs["password"] = self.password
 
-            client.connect(**connect_kwargs)
+            client.connect(timeout=30, **connect_kwargs)
 
             stdin, stdout, stderr = client.exec_command(full_command, timeout=timeout)  # pragma: no cover
             self._channel = stdout.channel  # pragma: no cover
