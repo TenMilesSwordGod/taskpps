@@ -82,6 +82,9 @@ class PipelineService:
     def _handle_run_error(task: asyncio.Task):
         try:
             task.result()
+        except asyncio.CancelledError:
+            import logging
+            logging.getLogger("taskpps").info(t("Pipeline run was cancelled"))
         except Exception as e:
             import logging
             logging.getLogger("taskpps").error(t("Pipeline run failed unexpectedly: {error}", error=str(e)))
