@@ -16,7 +16,9 @@ def substitute_env_vars(value: Any, env: Dict[str, str]) -> Any:
     if isinstance(value, str):
         def _replace(match):
             var_name = match.group(1)
-            return env.get(var_name, os.environ.get(var_name, match.group(0)))
+            if var_name in env:
+                return env[var_name]
+            return match.group(0)
         return _ENV_PATTERN.sub(_replace, value)
     if isinstance(value, dict):
         return {k: substitute_env_vars(v, env) for k, v in value.items()}
