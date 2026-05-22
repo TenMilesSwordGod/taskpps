@@ -9,10 +9,18 @@ class InvokeSpec(BaseModel):
     kwargs: Dict[str, Any] = Field(default_factory=dict)
 
 
+class TaskStep(BaseModel):
+    run: str
+    cd: Optional[str] = None
+    env: Dict[str, str] = Field(default_factory=dict)
+
+
 class TaskYAML(BaseModel):
     name: str
     command: Optional[str] = None
     invoke: Optional[InvokeSpec] = None
+    steps: Optional[List[TaskStep]] = None
+    cwd: Optional[str] = None
     host: Optional[str] = None
     credential: Optional[str] = None
     env: Dict[str, str] = Field(default_factory=dict)
@@ -23,6 +31,8 @@ class TaskYAML(BaseModel):
     def get_task_type(self) -> str:
         if self.invoke is not None:
             return "invoke"
+        if self.steps is not None:
+            return "steps"
         return "command"
 
 

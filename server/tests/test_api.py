@@ -49,8 +49,10 @@ async def test_list_runs(client, setup_project, tmp_project):
     response = await client.get("/api/runs/")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) >= 1
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "total" in data
+    assert len(data["items"]) >= 1
 
 
 @pytest.mark.asyncio

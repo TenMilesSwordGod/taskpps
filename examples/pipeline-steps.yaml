@@ -1,0 +1,26 @@
+name: deploy-steps
+options:
+  env:
+    APP_ENV: staging
+  timeout: 600
+  on_failure: fail
+
+tasks:
+  - name: build-and-deploy
+    cwd: /app
+    steps:
+      - cd: /tmp
+        run: wget https://example.com/release.tar.gz
+      - run: tar xzf /tmp/release.tar.gz -C /app
+      - cd: /app
+        run: make build
+      - run: make migrate
+      - run: systemctl restart myapp
+    timeout: 300
+
+  - name: verify
+    steps:
+      - run: curl -sf http://localhost:8000/health
+      - cd: /var/log
+        run: tail -20 app.log
+    depends_on: [build-and-deploy]

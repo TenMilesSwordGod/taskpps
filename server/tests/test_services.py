@@ -53,17 +53,18 @@ async def test_pipeline_service_create_cycle(setup_project, tmp_project, db_engi
 async def test_pipeline_service_list_runs(setup_project, tmp_project, db_engine):
     svc = PipelineService()
     await svc.create_run("deploy.yaml")
-    runs = await svc.list_runs()
-    assert len(runs) >= 1
+    result = await svc.list_runs()
+    assert result["total"] >= 1
 
 
 @pytest.mark.asyncio
 async def test_pipeline_service_list_runs_filter(setup_project, tmp_project, db_engine):
     svc = PipelineService()
     await svc.create_run("deploy.yaml")
-    runs = await svc.list_runs(pipeline="deploy")
-    assert len(runs) >= 1
-    for r in runs:
+    result = await svc.list_runs(pipeline="deploy")
+    items = result["items"]
+    assert len(items) >= 1
+    for r in items:
         assert r["pipeline_name"] == "deploy"
 
 

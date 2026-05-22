@@ -152,12 +152,15 @@ class PipelineRunner:
                     invoke_args=task.invoke_args,
                     invoke_kwargs=task.invoke_kwargs,
                 )
+            elif task.task_type == "steps" and task.steps:
+                result = await self._execute_steps(executor, task, env, log_path, timeout)
             else:
                 result = await executor.execute(
                     command=task.command or "",
                     env=env,
                     log_path=log_path,
                     timeout=timeout,
+                    cwd=task.cwd,
                 )
         except Exception as e:
             result = ExecutorResult(exit_code=1, stderr=str(e))
@@ -178,6 +181,48 @@ class PipelineRunner:
         event_bus.emit(SIGNAL_TASK_FINISHED, sender=self, run_id=self.run_id, task=task.name, status=task_status)
 
         return result
+
+    async def _execute_steps(
+        self,
+        executor: BaseExecutor,
+        task: ResolvedTask,
+        env: Dict[str, str],
+        log_path: Path,
+        timeout: Optional[int],
+    ) -> ExecutorResult:
+        combined_output = ""
+        step_timeout = None
+        if timeout and task.steps:
+            step_timeout = timeout // max(len(task.steps), 1)
+            if step_timeout < 1:
+                step_timeout = 1
+
+        for i, step in enumerate(task.steps):
+            step_env = {**env, **step.env}
+            step_cwd = step.cd or task.cwd
+
+            with open(log_path, "a") as f:
+                f.write(f"\n--- Step {i + 1}/{len(task.steps)}: {step.run[:80]} ---\n")
+
+            result = await executor.execute(
+                command=step.run,
+                env=step_env,
+                log_path=log_path,
+                timeout=step_timeout,
+                cwd=step_cwd,
+            )
+
+            combined_output += result.stdout or ""
+
+            if not result.success:
+                combined_output += result.stderr or ""
+                return ExecutorResult(
+                    exit_code=result.exit_code,
+                    stdout=combined_output,
+                    stderr=f"Step {i + 1} failed: {result.stderr}",
+                )
+
+        return ExecutorResult(exit_code=0, stdout=combined_output)
 
     async def cancel(self) -> None:
         self._cancelled = True

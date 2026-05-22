@@ -15,6 +15,7 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
     if task.task_type == "invoke":
         return InvokeExecutor()
 
+    # steps task type uses the same executor as command (LocalExecutor or SSHExecutor)
     if task.host:
         agent_loader = AgentLoader()
         try:
