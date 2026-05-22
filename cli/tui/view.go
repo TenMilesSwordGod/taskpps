@@ -39,23 +39,31 @@ func (m Model) View() string {
 	// Panel border (1 each side) + padding (1 each side) = 4 total
 	panelFrameW := 4
 	gap := 2
+	rightTabH := 2 // tabs take height
 
-	// 2-panel layout: left (run list) + right (detail/logs tabbed)
-	// Available width for both panels' content + frames + gap
-	// leftContentW + panelFrameW + gap + rightContentW + panelFrameW = w
-	// leftContentW = 20% of remaining after frames
-	contentW := w - panelFrameW - gap - panelFrameW
+	// Calculate actual content widths (inside panels)
+	totalFrameAndGapW := panelFrameW + gap + panelFrameW
+	contentW := w - totalFrameAndGapW
+	if contentW < 42 { // 16 +26 =42 min content width
+		contentW = 42
+	}
 	leftContentW := contentW * 20 / 100
 	rightContentW := contentW - leftContentW
 
 	if leftContentW < 16 {
 		leftContentW = 16
+		rightContentW = contentW - leftContentW
 	}
 	if rightContentW < 26 {
 		rightContentW = 26
+		leftContentW = contentW - rightContentW
+		if leftContentW < 16 {
+			leftContentW =16
+			rightContentW =26
+			// if even that is too big, just use min sizes
+		}
 	}
 
-	// Panel total sizes (content + frame)
 	leftPanelW := leftContentW + panelFrameW
 	rightPanelW := rightContentW + panelFrameW
 
@@ -76,8 +84,8 @@ func (m Model) View() string {
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
 
-	leftPanel := renderPanel(listView, leftFocused, leftPanelW, h)
-	rightPanel := renderPanel(rightView, rightFocused, rightPanelW, h)
+	leftPanel := renderPanel(listView, leftFocused, leftContentW, h)
+	rightPanel := renderPanel(rightView, rightFocused, rightContentW, h)
 
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, strings.Repeat(" ", gap), rightPanel)
 

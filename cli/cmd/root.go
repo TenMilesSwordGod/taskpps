@@ -22,7 +22,7 @@ var RootCmd = &cobra.Command{
 task pipeline orchestration system. It communicates with the taskpps 
 backend server via REST API.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Name() == "init" {
+		if cmd.Name() == "init" || cmd.Name() == "version" {
 			return nil
 		}
 		var err error
@@ -31,6 +31,13 @@ backend server via REST API.`,
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 		apiClient = client.New(appConfig)
+		
+		// 检查版本匹配
+		health, err := apiClient.HealthCheck()
+		if err == nil && health != nil {
+			CheckVersionMismatch(health.Version)
+		}
+		
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {

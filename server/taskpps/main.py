@@ -10,6 +10,7 @@ from taskpps.db.engine import init_db, close_db, get_engine, reset_engine
 from taskpps.i18n import t, set_locale
 from taskpps.middleware.auth import APIKeyMiddleware
 from taskpps.services.plugin_manager import PluginManager
+from taskpps.version import __version__
 
 
 _plugin_manager: PluginManager | None = None
@@ -43,7 +44,7 @@ async def lifespan(app: FastAPI):
         await close_db()
 
 
-app = FastAPI(title=t("Taskpps API"), version="0.1.0", lifespan=lifespan)
+app = FastAPI(title=t("Taskpps API"), version=__version__, lifespan=lifespan)
 
 app.add_middleware(APIKeyMiddleware)
 
