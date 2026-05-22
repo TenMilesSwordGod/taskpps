@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 )
@@ -22,13 +23,37 @@ var (
 	infoLogger  *log.Logger
 	warnLogger  *log.Logger
 	errorLogger *log.Logger
+	logFile     *os.File
 )
 
 func init() {
-	debugLogger = log.New(os.Stderr, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
-	infoLogger = log.New(os.Stderr, "[INFO]  ", log.LstdFlags|log.Lshortfile)
-	warnLogger = log.New(os.Stderr, "[WARN]  ", log.LstdFlags|log.Lshortfile)
-	errorLogger = log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
+	// Default to no output at all (io.Discard)
+	debugLogger = log.New(io.Discard, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
+	infoLogger = log.New(io.Discard, "[INFO]  ", log.LstdFlags|log.Lshortfile)
+	warnLogger = log.New(io.Discard, "[WARN]  ", log.LstdFlags|log.Lshortfile)
+	errorLogger = log.New(io.Discard, "[ERROR] ", log.LstdFlags|log.Lshortfile)
+}
+
+// SetOutput sets the log output destination (file or os.Stderr etc.)
+func SetOutput(w io.Writer) {
+	debugLogger.SetOutput(w)
+	infoLogger.SetOutput(w)
+	warnLogger.SetOutput(w)
+	errorLogger.SetOutput(w)
+}
+
+// SetLogFile sets the log output to a file
+func SetLogFile(filename string) error {
+	if logFile != nil {
+		logFile.Close()
+	}
+	var err error
+	logFile, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	SetOutput(logFile)
+	return nil
 }
 
 func SetLevel(v int) {
@@ -50,6 +75,11 @@ func SetLevel(v int) {
 			currentLevel = LevelDebug
 		}
 	}
+}
+
+// EnableVerboseOutput enables output to stderr (for when verbose flag is set)
+func EnableVerboseOutput() {
+	SetOutput(os.Stderr)
 }
 
 func Debug(format string, v ...interface{}) {

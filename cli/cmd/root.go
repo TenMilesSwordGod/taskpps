@@ -25,7 +25,7 @@ task pipeline orchestration system. It communicates with the taskpps
 backend server via REST API.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Map verbose count (-v) to our log levels:
-		// 0: LevelNone (no logs)
+		// 0: LevelNone (no logs anywhere)
 		// 1: LevelError
 		// 2: LevelWarn
 		// 3: LevelInfo
@@ -41,6 +41,12 @@ backend server via REST API.`,
 			logLevel = 4
 		}
 		logger.SetLevel(logLevel)
+		
+		// Only enable console output when verbose flag is set
+		if verbose > 0 {
+			logger.EnableVerboseOutput()
+		}
+
 		if logLevel >= 4 {
 			logger.Debug("Verbose level set to %d (logLevel: %d)", verbose, logLevel)
 			logger.Debug("Command: %s", cmd.Name())
