@@ -205,7 +205,7 @@ triggers:
 cd server
 uv sync --dev
 uv run pytest tests/ -v
-uv run pytest tests/ --cov=taskpps --cov-report=term-missing
+uv run pytest tests/ --cov=taskpps --cov-report=term-missing  # 100% coverage
 ```
 
 ### CLI 开发
