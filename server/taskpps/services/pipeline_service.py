@@ -96,13 +96,23 @@ class PipelineService:
                 return None
 
             tasks = await task_repo.list_task_runs(run_id)
+            
+            # Parse params from JSON string
+            params = {}
+            if isinstance(run.params, str):
+                try:
+                    params = json.loads(run.params)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            elif isinstance(run.params, dict):
+                params = run.params
 
             return {
                 "id": run.id,
                 "pipeline_name": run.pipeline_name,
                 "pipeline_file": run.pipeline_file,
                 "status": run.status,
-                "params": run.params,
+                "params": params,
                 "started_at": run.started_at,
                 "finished_at": run.finished_at,
                 "created_at": run.created_at,
@@ -129,15 +139,26 @@ class PipelineService:
             runs = await run_repo.list_runs(pipeline=pipeline, status=status, limit=limit)
             items = []
             for run in runs:
+                # Parse params from JSON string
+                params = {}
+                if isinstance(run.params, str):
+                    try:
+                        params = json.loads(run.params)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                elif isinstance(run.params, dict):
+                    params = run.params
+                
                 items.append({
                     "id": run.id,
                     "pipeline_name": run.pipeline_name,
                     "pipeline_file": run.pipeline_file,
                     "status": run.status,
-                    "params": run.params,
+                    "params": params,
                     "started_at": run.started_at,
                     "finished_at": run.finished_at,
                     "created_at": run.created_at,
+                    "tasks": []  # Empty tasks for list view
                 })
             # Also get total count (without limit)
             total = await run_repo.count_runs(pipeline=pipeline, status=status)
