@@ -52,12 +52,16 @@ func (m Model) View() string {
 	listView := m.runList.View()
 	
 	// Determine which content to show in right panel based on active tab
-	var rightView string
+	var rightContent string
 	if m.rightTab == TabDetail {
-		rightView = m.runDetail.View()
+		rightContent = m.runDetail.View()
 	} else {
-		rightView = m.logViewer.View()
+		rightContent = m.logViewer.View()
 	}
+
+	// Add tabs to right panel content
+	tabs := renderTabs(m.rightTab, rightW-4) // subtract padding/border
+	rightView := tabs + "\n" + rightContent
 
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
@@ -65,7 +69,7 @@ func (m Model) View() string {
 	leftPanel := renderPanel(listView, leftFocused, leftW, h)
 	rightPanel := renderPanel(rightView, rightFocused, rightW, h)
 
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
 
 	var b strings.Builder
 	b.WriteString(header)

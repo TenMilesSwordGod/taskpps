@@ -201,8 +201,8 @@ func (m *Model) resizeComponents() {
 		rightW = 30
 	}
 
-	// Components get internal width (panel width minus borders)
-	m.runList.SetSize(leftW-2, h-2)
-	m.runDetail.SetSize(rightW-2, h-2)
-	m.logViewer.SetSize(rightW-2, h-2)
+	// Components get internal width/height (panel size minus borders/padding/tab)
+	m.runList.SetSize(leftW-4, h-4) // border (2) + padding (2)
+	m.runDetail.SetSize(rightW-4, h-5) // border+padding + 1 tab line
+	m.logViewer.SetSize(rightW-4, h-5) // border+padding + 1 tab line
 }
