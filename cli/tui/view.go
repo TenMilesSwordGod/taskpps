@@ -36,16 +36,12 @@ func (m Model) View() string {
 	totalW := m.width
 	totalH := availableH
 
-	// Panel has border (1) + padding (1) on all sides = 2x4
-	borderPaddingW := 4 // left and right
-	borderPaddingH := 4 // top and bottom
-	gap := 2 // between panels
+	// Must match resizeComponents calculations
+	borderOverheadW := 4 // border(2) + padding(2)
+	borderOverheadH := 2 // border(2) only
+	gap := 2             // between panels
 
-	// Right panel has an extra line for tabs
-	rightExtraH := 2
-
-	// Calculate available content area for both panels
-	totalFrameAndGapW := borderPaddingW + gap + borderPaddingW
+	totalFrameAndGapW := borderOverheadW + gap + borderOverheadW
 	contentW := totalW - totalFrameAndGapW
 	if contentW < 42 {
 		contentW = 42
@@ -61,7 +57,7 @@ func (m Model) View() string {
 	if rightContentW < 26 {
 		rightContentW = 26
 		leftContentW = contentW - rightContentW
-		if leftContentW <16 {
+		if leftContentW < 16 {
 			leftContentW = 16
 			rightContentW = 26
 		}
@@ -82,19 +78,8 @@ func (m Model) View() string {
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
 
-	// Calculate the actual component sizes (content area)
-	leftComponentH := totalH - borderPaddingH
-	rightComponentH := totalH - borderPaddingH - rightExtraH
-	if rightComponentH < 3 {
-		rightComponentH =3
-	}
-	if leftComponentH <3 {
-		leftComponentH=3
-	}
-
-	// Set components with the calculated sizes (this is handled by resizeComponents, but just in case)
-	leftPanel := renderPanel(listView, leftFocused, leftContentW, totalH)
-	rightPanel := renderPanel(rightView, rightFocused, rightContentW, totalH)
+	leftPanel := renderPanel(listView, leftFocused, leftContentW, totalH-borderOverheadH)
+	rightPanel := renderPanel(rightView, rightFocused, rightContentW, totalH-borderOverheadH)
 
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, strings.Repeat(" ", gap), rightPanel)
 

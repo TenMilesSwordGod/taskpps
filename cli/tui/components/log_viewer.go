@@ -9,7 +9,6 @@ import (
 )
 
 const maxLogLines = 5000 // Keep last 5000 lines of logs
-const maxLineLength = 1000 // Truncate lines longer than 1000 characters
 
 type LogViewerModel struct {
 	viewport viewport.Model
@@ -22,14 +21,16 @@ func NewLogViewerModel() LogViewerModel {
 	return LogViewerModel{}
 }
 
-// Helper to process a single line: truncate or wrap if too long
+// Helper to process a single line: truncate if too long for the given width
 func processLine(line string, width int) string {
 	if width <= 0 {
 		width = 80 // Default if no width set
 	}
-	// Truncate very long lines
-	if len(line) > maxLineLength {
-		return line[:maxLineLength] + "..."
+	if len(line) > width {
+		if width > 3 {
+			return line[:width-3] + "..."
+		}
+		return line[:width]
 	}
 	return line
 }

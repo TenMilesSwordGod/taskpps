@@ -187,15 +187,14 @@ func (m *Model) resizeComponents() {
 	totalW := m.width
 	totalH := availableH
 
-	// Panel border only is 2 on each side (left and right: total 4)
-	// No padding, padding should be handled by components if needed
-	borderW := 2 // left + right border
-	borderH := 2 // top + bottom border
-	gap := 2     // between panels
-	rightTabH :=2
+	// Panel: border(2) + padding(2) = 4 horizontal, border(2) only vertical
+	borderOverheadW := 4
+	borderOverheadH := 2
+	gap := 2       // gap between panels
+	rightTabH := 2 // tab row + newline
 
-	// Calculate total available content width
-	totalFrameAndGapW := borderW + gap + borderW
+	// Total width available for content inside panels
+	totalFrameAndGapW := borderOverheadW + gap + borderOverheadW
 	contentW := totalW - totalFrameAndGapW
 	if contentW < 42 {
 		contentW = 42
@@ -204,29 +203,29 @@ func (m *Model) resizeComponents() {
 	leftContentW := contentW * 20 / 100
 	rightContentW := contentW - leftContentW
 
-	if leftContentW <16 {
-		leftContentW =16
+	if leftContentW < 16 {
+		leftContentW = 16
 		rightContentW = contentW - leftContentW
 	}
-	if rightContentW <26 {
-		rightContentW =26
+	if rightContentW < 26 {
+		rightContentW = 26
 		leftContentW = contentW - rightContentW
-		if leftContentW <16 {
-			leftContentW =16
-			rightContentW =26
+		if leftContentW < 16 {
+			leftContentW = 16
+			rightContentW = 26
 		}
 	}
 
-	leftComponentH := totalH - borderH
-	rightComponentH := totalH - borderH - rightTabH
-	if leftComponentH <3 {
-		leftComponentH =3
+	leftContentH := totalH - borderOverheadH
+	rightContentH := totalH - borderOverheadH - rightTabH
+	if leftContentH < 3 {
+		leftContentH = 3
 	}
-	if rightComponentH <3 {
-		rightComponentH =3
+	if rightContentH < 3 {
+		rightContentH = 3
 	}
 
-	m.runList.SetSize(leftContentW, leftComponentH)
-	m.runDetail.SetSize(rightContentW, rightComponentH)
-	m.logViewer.SetSize(rightContentW, rightComponentH)
+	m.runList.SetSize(leftContentW, leftContentH)
+	m.runDetail.SetSize(rightContentW, rightContentH)
+	m.logViewer.SetSize(rightContentW, rightContentH)
 }

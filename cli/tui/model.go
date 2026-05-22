@@ -128,9 +128,14 @@ func (m Model) cycleTab() RightPanelTab {
 }
 
 func renderPanel(panelContent string, focused bool, contentWidth, contentHeight int) string {
-	style := components.PanelStyle.Width(contentWidth).Height(contentHeight)
+	// contentWidth/contentHeight are content area dimensions; add border + padding for total
+	style := components.PanelStyle.
+		Width(contentWidth + 4).   // border(2) + padding(2)
+		Height(contentHeight + 2)  // border(2)
 	if focused {
-		style = components.FocusedPanelStyle.Width(contentWidth).Height(contentHeight)
+		style = components.FocusedPanelStyle.
+			Width(contentWidth + 4).
+			Height(contentHeight + 2)
 	}
 	return style.Render(panelContent)
 }
