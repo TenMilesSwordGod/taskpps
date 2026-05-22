@@ -31,13 +31,29 @@ class RunResponse(BaseModel):
     pipeline_name: str
     pipeline_file: str = ""
     status: RunStatus
-    params: str = "{}"
+    params: Dict[str, Any] = {}
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     created_at: datetime
     tasks: List[TaskRunResponse] = []
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_orm_with_parsed_params(cls, obj):
+        import json
+        data = {
+            "id": obj.id,
+            "pipeline_name": obj.pipeline_name,
+            "pipeline_file": obj.pipeline_file,
+            "status": obj.status,
+            "params": json.loads(obj.params) if isinstance(obj.params, str) else (obj.params or {}),
+            "started_at": obj.started_at,
+            "finished_at": obj.finished_at,
+            "created_at": obj.created_at,
+            "tasks": obj.tasks if hasattr(obj, '_tasks_loaded') else [],
+        }
+        return cls(**data)
 
 
 class RunListResponse(BaseModel):
