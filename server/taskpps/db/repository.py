@@ -30,6 +30,20 @@ class RunRepository:
         result = await self.session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
         return result.scalar_one_or_none()
 
+    async def count_runs(
+        self,
+        pipeline: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> int:
+        from sqlalchemy import func
+        stmt = select(func.count(PipelineRun.id))
+        if pipeline:
+            stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
+        if status:
+            stmt = stmt.where(PipelineRun.status == status)
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
     async def list_runs(
         self,
         pipeline: Optional[str] = None,

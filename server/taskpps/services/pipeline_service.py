@@ -139,7 +139,7 @@ class PipelineService:
                     "created_at": run.created_at,
                 })
             # Also get total count (without limit)
-            total = len(await run_repo.list_runs(pipeline=pipeline, status=status, limit=10000))
+            total = await run_repo.count_runs(pipeline=pipeline, status=status)
             return {"items": items, "total": total}
 
     async def cancel_run(self, run_id: str) -> bool:
