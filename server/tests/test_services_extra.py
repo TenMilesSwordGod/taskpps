@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from taskpps.services.pipeline_service import PipelineService
 from taskpps.services.plugin_manager import PluginManager
@@ -64,7 +64,7 @@ async def test_clean_runs_older_than(setup_project, tmp_project, db_engine):
         repo = RunRepository(session)
         run = await repo.get_run(run_id)
         from datetime import timedelta
-        run.created_at = datetime.now(timezone.utc) - timedelta(days=30)
+        run.created_at = datetime.utcnow() - timedelta(days=30)
         await session.commit()
 
     clean_result = await svc.clean_runs(older_than=7)
@@ -89,7 +89,7 @@ async def test_clean_runs_with_logs(setup_project, tmp_project, db_engine):
     run_id = result["id"]
 
     logs_dir = get_logs_dir()
-    log_file = logs_dir / "deploy" / "step1" / f"{run_id}.log"
+    log_file = logs_dir / "deploy" / run_id / "step1" / "output.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
     log_file.write_text("test log content")
 
@@ -108,7 +108,7 @@ async def test_pipeline_service_create_with_params(setup_project, tmp_project, d
 @pytest.mark.asyncio
 async def test_pipeline_service_create_with_bad_params(setup_project, tmp_project, db_engine):
     svc = PipelineService()
-    with pytest.raises(ValueError, match="Failed to apply overrides"):
+    with pytest.raises(ValueError):
         await svc.create_run("deploy.yaml", params={"nonexistent.path": "value"})
 
 

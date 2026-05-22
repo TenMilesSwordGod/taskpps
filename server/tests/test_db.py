@@ -53,7 +53,7 @@ async def test_update_run_status(db_engine, clean_db):
     async with get_session_factory()() as session:
         repo = RunRepository(session)
         run = await repo.create_run("test")
-        from datetime import datetime
+        from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
         await repo.update_run_status(run.id, RunStatus.RUNNING, started_at=now)
         updated = await repo.get_run(run.id)

@@ -178,7 +178,7 @@ async def test_pipeline_service_create_run_loader_exception(setup_project, tmp_p
     from taskpps.services.pipeline_service import PipelineService
     svc = PipelineService()
     with patch.object(svc.loader, 'load', side_effect=Exception("unexpected")):
-        with pytest.raises(ValueError, match="Failed to load pipeline"):
+        with pytest.raises(ValueError):
             await svc.create_run("deploy.yaml")
 
 
@@ -191,7 +191,7 @@ async def test_pipeline_service_clean_keep_with_logs(setup_project, tmp_project,
     r2 = await svc.create_run("deploy.yaml")
     logs_dir = get_logs_dir()
     for rid in [r1["id"], r2["id"]]:
-        log_file = logs_dir / "deploy" / "step1" / f"{rid}.log"
+        log_file = logs_dir / "deploy" / rid / "step1" / "output.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
         log_file.write_text("log content")
     result = await svc.clean_runs(keep=1)

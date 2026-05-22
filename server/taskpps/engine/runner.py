@@ -137,7 +137,11 @@ class PipelineRunner:
     async def _execute_task(self, task: ResolvedTask) -> ExecutorResult:
         event_bus = get_event_bus()
         logs_dir = get_logs_dir()
-        log_path = logs_dir / self.pipeline.name / task.name / f"{self.run_id}.log"
+        if self.pipeline.pipeline_file:
+            log_rel_dir = Path(self.pipeline.pipeline_file).with_suffix('')
+        else:
+            log_rel_dir = Path(self.pipeline.name)
+        log_path = logs_dir / log_rel_dir / self.run_id / task.name / "output.log"
 
         task_run_id = self._task_run_ids.get(task.name, "")
 

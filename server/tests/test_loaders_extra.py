@@ -42,16 +42,18 @@ def test_pipeline_loader_load_with_env_subst(tmp_path):
 
 
 def test_pipeline_loader_load_absolute_path(tmp_path):
-    abs_path = tmp_path / "absolute.yaml"
-    abs_path.write_text(
+    pipelines_dir = tmp_path / "pipelines"
+    pipelines_dir.mkdir(parents=True, exist_ok=True)
+    yaml_file = pipelines_dir / "absolute.yaml"
+    yaml_file.write_text(
         "name: absolute\n"
         "options: {}\n"
         "tasks:\n"
         "  - name: t1\n"
         "    command: echo abs\n"
     )
-    loader = PipelineLoader(tmp_path / "pipelines")
-    spec = loader.load(str(abs_path))
+    loader = PipelineLoader(pipelines_dir)
+    spec = loader.load("absolute.yaml")
     assert spec.name == "absolute"
 
 

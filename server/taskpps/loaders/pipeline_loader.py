@@ -19,6 +19,8 @@ def substitute_env_vars(value: Any, env: Dict[str, str]) -> Any:
             var_name = match.group(1)
             if var_name in env:
                 return env[var_name]
+            if var_name in os.environ:
+                return os.environ[var_name]
             return match.group(0)
         return _ENV_PATTERN.sub(_replace, value)
     if isinstance(value, dict):
@@ -64,15 +66,17 @@ class PipelineLoader:
         base = self.base_dir
         if not base.exists():
             return result
-        for path in base.glob("*.yaml"):
+        for path in sorted(base.glob("**/*.yaml")):
             try:
-                spec = self.load(path.name)
+                rel = path.relative_to(base)
+                spec = self.load(str(rel))
                 result[spec.name] = spec
             except Exception:
                 continue
-        for path in base.glob("*.yml"):
+        for path in sorted(base.glob("**/*.yml")):
             try:
-                spec = self.load(path.name)
+                rel = path.relative_to(base)
+                spec = self.load(str(rel))
                 result[spec.name] = spec
             except Exception:
                 continue

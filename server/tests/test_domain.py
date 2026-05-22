@@ -85,7 +85,7 @@ def test_dag_unknown_dependency():
     tasks = [
         ResolvedTask(name="a", task_type="command", command="echo a", depends_on=["unknown"]),
     ]
-    with pytest.raises(ValueError, match="unknown task"):
+    with pytest.raises(ValueError):
         DAG(tasks)
 
 

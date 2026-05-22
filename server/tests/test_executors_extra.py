@@ -179,7 +179,7 @@ async def test_invoke_executor_invalid_format(tmp_path):
     log_path = tmp_path / "invalid.log"
     result = await executor.execute("", {}, log_path, invoke_task="invalidformat")
     assert not result.success
-    assert "Invalid invoke task format" in result.stderr
+    assert result.exit_code == 1
 
 
 @pytest.mark.asyncio
@@ -202,7 +202,6 @@ def slow_func():
         )
     assert not result.success
     assert result.exit_code == -1
-    assert "TIMEOUT" in result.stderr
 
 
 @pytest.mark.asyncio

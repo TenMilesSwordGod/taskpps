@@ -59,7 +59,8 @@ class PipelineService:
             logs_dir = get_logs_dir()
             task_run_ids = {}
             for task in resolved.tasks:
-                log_path = str(logs_dir / resolved.name / task.name / f"{run.id}.log")
+                log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path(resolved.name)
+                log_path = str(logs_dir / log_rel_dir / run.id / task.name / "output.log")
                 task_run = await task_repo.create_task_run(
                     run_id=run.id,
                     task_name=task.name,
@@ -200,15 +201,15 @@ class PipelineService:
             if force:
                 runs = await run_repo.list_runs(limit=10000)
                 for run in runs:
-                    deleted_logs += self._delete_run_logs(run.pipeline_name, run.id)
+                    deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
                 deleted_runs = await run_repo.delete_all_runs()
             elif older_than:
                 runs = await run_repo.list_runs(limit=10000)
                 from datetime import datetime, timedelta
-                cutoff = datetime.now(timezone.utc) - timedelta(days=older_than)
+                cutoff = datetime.utcnow() - timedelta(days=older_than)
                 for run in runs:
                     if run.created_at and run.created_at < cutoff:
-                        deleted_logs += self._delete_run_logs(run.pipeline_name, run.id)
+                        deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
                 deleted_runs = await run_repo.delete_runs_older_than(older_than)
             elif keep:
                 runs = await run_repo.list_runs(limit=10000)
@@ -216,24 +217,26 @@ class PipelineService:
                 for run in runs[:keep]:
                     runs_to_keep.add(run.id)
                 for run in runs[keep:]:
-                    deleted_logs += self._delete_run_logs(run.pipeline_name, run.id)
+                    deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
                 deleted_runs = await run_repo.delete_runs_keep(keep)
             else:
                 return {"deleted_runs": 0, "deleted_logs": 0}
 
             return {"deleted_runs": deleted_runs, "deleted_logs": deleted_logs}
 
-    def _delete_run_logs(self, pipeline_name: str, run_id: str) -> int:
+    def _delete_run_logs(self, pipeline_file: str, run_id: str) -> int:
+        import shutil
         logs_dir = get_logs_dir()
-        pipeline_logs = logs_dir / pipeline_name
+        log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path('unknown')
+        run_dir = logs_dir / log_rel_dir / run_id
         count = 0
-        if pipeline_logs.exists():
-            for task_dir in pipeline_logs.iterdir():
+        if run_dir.exists():
+            for task_dir in run_dir.iterdir():
                 if task_dir.is_dir():
-                    log_file = task_dir / f"{run_id}.log"
+                    log_file = task_dir / "output.log"
                     if log_file.exists():
-                        log_file.unlink()
                         count += 1
+            shutil.rmtree(run_dir)
         return count
 
     def list_pipelines(self) -> List[str]:
