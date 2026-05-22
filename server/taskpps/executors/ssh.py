@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shlex
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -30,20 +31,15 @@ class SSHExecutor(BaseExecutor):
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
 
-        # Build command with configured shell, cwd, and env
         shell = get_settings().executor.shell
-        # Use double quotes and escape properly
-        full_command = f"{shell} -c \""
+        parts = []
         if cwd:
-            full_command += f"cd {cwd} && "
+            parts.append(f"cd {shlex.quote(cwd)}")
         for k, v in env.items():
-            # Escape double quotes in env values
-            escaped_v = v.replace('"', '\\"')
-            full_command += f"export {k}=\"{escaped_v}\" && "
-        # Escape double quotes in the main command
-        escaped_command = command.replace('"', '\\"')
-        full_command += escaped_command
-        full_command += "\""
+            parts.append(f"export {shlex.quote(k)}={shlex.quote(v)}")
+        parts.append(command)
+        inner_script = " && ".join(parts)
+        full_command = f"{shell} -c {shlex.quote(inner_script)}"
 
         def _run_ssh():
             client = paramiko.SSHClient()
