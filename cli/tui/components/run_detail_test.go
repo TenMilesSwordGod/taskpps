@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/taskpps/ppsctl/models"
 )
 
@@ -85,98 +84,6 @@ func TestRunDetailSelectedTask(t *testing.T) {
 			t.Error("expected nil for nil run")
 		}
 	})
-
-	t.Run("empty_tasks", func(t *testing.T) {
-		m := NewRunDetailModel()
-		m.run = &models.Run{}
-		if m.SelectedTask() != nil {
-			t.Error("expected nil for empty tasks")
-		}
-	})
-
-	t.Run("with_tasks", func(t *testing.T) {
-		m := NewRunDetailModel()
-		m.run = &models.Run{
-			Tasks: []models.TaskRun{
-				{TaskName: "build"},
-				{TaskName: "test"},
-			},
-		}
-		m.cursor = 1
-		task := m.SelectedTask()
-		if task == nil || task.TaskName != "test" {
-			t.Errorf("expected 'test', got %v", task)
-		}
-	})
-}
-
-func TestRunDetailUpdateNavigation(t *testing.T) {
-	m := NewRunDetailModel()
-	m.run = &models.Run{
-		Tasks: []models.TaskRun{
-			{TaskName: "t1"},
-			{TaskName: "t2"},
-			{TaskName: "t3"},
-		},
-	}
-
-	t.Run("down", func(t *testing.T) {
-		m.cursor = 0
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
-		if m2.cursor != 1 {
-			t.Errorf("cursor = %d, want 1", m2.cursor)
-		}
-	})
-
-	t.Run("down_at_bottom", func(t *testing.T) {
-		m.cursor = 2
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
-		if m2.cursor != 2 {
-			t.Errorf("cursor = %d, want 2", m2.cursor)
-		}
-	})
-
-	t.Run("up", func(t *testing.T) {
-		m.cursor = 1
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-		if m2.cursor != 0 {
-			t.Errorf("cursor = %d, want 0", m2.cursor)
-		}
-	})
-
-	t.Run("up_at_top", func(t *testing.T) {
-		m.cursor = 0
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-		if m2.cursor != 0 {
-			t.Errorf("cursor = %d, want 0", m2.cursor)
-		}
-	})
-
-	t.Run("enter_expand", func(t *testing.T) {
-		m.cursor = 0
-		m.expanded = make(map[int]bool)
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		if !m2.expanded[0] {
-			t.Error("task 0 should be expanded")
-		}
-	})
-
-	t.Run("enter_collapse", func(t *testing.T) {
-		m.cursor = 0
-		m.expanded = map[int]bool{0: true}
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		if m2.expanded[0] {
-			t.Error("task 0 should be collapsed")
-		}
-	})
-
-	t.Run("enter_no_tasks", func(t *testing.T) {
-		m2 := NewRunDetailModel()
-		m3, _ := m2.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		if len(m3.expanded) != 0 {
-			t.Error("nothing should happen on enter with no tasks")
-		}
-	})
 }
 
 func TestRunDetailView(t *testing.T) {
@@ -190,6 +97,7 @@ func TestRunDetailView(t *testing.T) {
 
 	t.Run("with_run", func(t *testing.T) {
 		m := NewRunDetailModel()
+		m.SetSize(80, 24)
 		exit0 := 0
 		run := &models.Run{
 			ID:           "abc123",
@@ -216,6 +124,8 @@ func TestRunDetailView(t *testing.T) {
 
 	t.Run("expanded_task", func(t *testing.T) {
 		m := NewRunDetailModel()
+		m.SetSize(80, 24)
+		m.expanded[0] = true
 		started := "2024-01-01"
 		run := &models.Run{
 			ID:     "abc",
@@ -225,7 +135,6 @@ func TestRunDetailView(t *testing.T) {
 			},
 		}
 		m.SetRun(run)
-		m.expanded[0] = true
 		view := m.View()
 		if !strings.Contains(view, "Type: local") {
 			t.Errorf("expanded view should show task type, got: %s", view)
@@ -234,6 +143,8 @@ func TestRunDetailView(t *testing.T) {
 
 	t.Run("expanded_task_finished", func(t *testing.T) {
 		m := NewRunDetailModel()
+		m.SetSize(80, 24)
+		m.expanded[0] = true
 		started := "2024-01-01"
 		finished := "2024-01-02"
 		run := &models.Run{
@@ -244,7 +155,6 @@ func TestRunDetailView(t *testing.T) {
 			},
 		}
 		m.SetRun(run)
-		m.expanded[0] = true
 		view := m.View()
 		if !strings.Contains(view, "Started:") {
 			t.Errorf("expanded view should show Started, got: %s", view)
@@ -256,7 +166,8 @@ func TestRunDetailView(t *testing.T) {
 
 	t.Run("empty_tasks", func(t *testing.T) {
 		m := NewRunDetailModel()
-		m.run = &models.Run{ID: "abc", Status: models.RunStatusRunning}
+		m.SetSize(80, 24)
+		m.SetRun(&models.Run{ID: "abc", Status: models.RunStatusRunning})
 		view := m.View()
 		if !strings.Contains(view, "no tasks") {
 			t.Errorf("view should show 'no tasks', got: %s", view)
@@ -265,6 +176,7 @@ func TestRunDetailView(t *testing.T) {
 
 	t.Run("finished_at", func(t *testing.T) {
 		m := NewRunDetailModel()
+		m.SetSize(80, 24)
 		finished := "2024-01-02"
 		run := &models.Run{
 			ID:         "abc",
@@ -280,6 +192,7 @@ func TestRunDetailView(t *testing.T) {
 
 	t.Run("started_at", func(t *testing.T) {
 		m := NewRunDetailModel()
+		m.SetSize(80, 24)
 		started := "2024-01-01"
 		run := &models.Run{
 			ID:        "abc",

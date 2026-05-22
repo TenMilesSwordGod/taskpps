@@ -101,18 +101,18 @@ func TestViewPanelFocus(t *testing.T) {
 	})
 
 	t.Run("focus_rundetail", func(t *testing.T) {
-		m.focusedPanel = FocusRunDetail
+		m.focusedPanel = FocusRightPanel
 		view := m.View()
 		if view == "" {
-			t.Error("view should not be empty with RunDetail focus")
+			t.Error("view should not be empty with RightPanel focus")
 		}
 	})
 
 	t.Run("focus_logviewer", func(t *testing.T) {
-		m.focusedPanel = FocusLogViewer
+		m.focusedPanel = FocusRightPanel
 		view := m.View()
 		if view == "" {
-			t.Error("view should not be empty with LogViewer focus")
+			t.Error("view should not be empty with RightPanel focus")
 		}
 	})
 }

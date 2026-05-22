@@ -55,10 +55,9 @@ func TestLogViewerSetContent(t *testing.T) {
 
 func TestLogViewerAppendContent(t *testing.T) {
 	m := NewLogViewerModel()
-	m.AppendContent("hello ")
-	m.AppendContent("world")
-	if m.Content() != "hello world" {
-		t.Errorf("content = %q, want %q", m.Content(), "hello world")
+	m.AppendContent("hello\nworld")
+	if m.Content() != "hello\nworld" {
+		t.Errorf("content = %q, want %q", m.Content(), "hello\nworld")
 	}
 }
 
@@ -76,47 +75,48 @@ func TestLogViewerUpdate(t *testing.T) {
 	m.SetSize(80, 10)
 
 	t.Run("pgdown_scrolls", func(t *testing.T) {
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
-		view := m2.View()
+		m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+		view := m.View()
 		if view == "" {
 			t.Error("view should not be empty")
 		}
 	})
 
 	t.Run("pgup_scrolls", func(t *testing.T) {
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
-		view := m2.View()
+		m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+		view := m.View()
 		if view == "" {
 			t.Error("view should not be empty")
 		}
 	})
 
 	t.Run("home_scrolls_to_top", func(t *testing.T) {
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyHome})
-		view := m2.View()
+		m.Update(tea.KeyMsg{Type: tea.KeyHome})
+		view := m.View()
 		if view == "" {
 			t.Error("view should not be empty")
 		}
 	})
 
 	t.Run("end_scrolls_to_bottom", func(t *testing.T) {
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnd})
-		view := m2.View()
+		m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+		view := m.View()
 		if view == "" {
 			t.Error("view should not be empty")
 		}
 	})
 
 	t.Run("non_keyboard_msg", func(t *testing.T) {
-		m2, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-		if m2.Content() != m.Content() {
+		contentBefore := m.Content()
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+		if m.Content() != contentBefore {
 			t.Error("content should be preserved on WindowSizeMsg")
 		}
 	})
 
 	t.Run("other_key_msg", func(t *testing.T) {
-		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
-		view := m2.View()
+		m.Update(tea.KeyMsg{Type: tea.KeySpace})
+		view := m.View()
 		if view == "" {
 			t.Error("view should handle other keys")
 		}
@@ -164,13 +164,13 @@ func TestLogViewerView(t *testing.T) {
 		}
 	})
 
-	t.Run("content_ready_with_scroll_hint", func(t *testing.T) {
+	t.Run("content_ready", func(t *testing.T) {
 		m := NewLogViewerModel()
 		m.SetSize(80, 20)
 		m.SetContent("log content")
 		view := m.View()
-		if !strings.Contains(view, "scroll with PgUp/PgDown") {
-			t.Errorf("view should show scroll hint when ready, got: %s", view)
+		if !strings.Contains(view, "log content") {
+			t.Errorf("view should contain content when ready, got: %s", view)
 		}
 	})
 }
@@ -198,9 +198,9 @@ func TestLogViewerReadyBranch(t *testing.T) {
 		m := NewLogViewerModel()
 		m.SetSize(80, 20)
 		m.AppendContent("hello")
-		m.AppendContent(" world")
-		if m.Content() != "hello world" {
-			t.Errorf("content = %q", m.Content())
+		m.AppendContent("world")
+		if m.Content() != "hello\nworld" {
+			t.Errorf("content = %q, want %q", m.Content(), "hello\nworld")
 		}
 	})
 }

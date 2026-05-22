@@ -42,35 +42,25 @@ func TestNewModelWithTargetRun(t *testing.T) {
 func TestPanelFocus(t *testing.T) {
 	t.Run("focusNext", func(t *testing.T) {
 		m := Model{focusedPanel: FocusRunList}
-		if m.focusNext() != FocusRunDetail {
-			t.Error("focusNext from RunList should go to RunDetail")
+		if m.focusNext() != FocusRightPanel {
+			t.Error("focusNext from RunList should go to RightPanel")
 		}
 
-		m.focusedPanel = FocusRunDetail
-		if m.focusNext() != FocusLogViewer {
-			t.Error("focusNext from RunDetail should go to LogViewer")
-		}
-
-		m.focusedPanel = FocusLogViewer
+		m.focusedPanel = FocusRightPanel
 		if m.focusNext() != FocusRunList {
-			t.Error("focusNext from LogViewer should go to RunList")
+			t.Error("focusNext from RightPanel should go to RunList")
 		}
 	})
 
 	t.Run("focusPrev", func(t *testing.T) {
 		m := Model{focusedPanel: FocusRunList}
-		if m.focusPrev() != FocusLogViewer {
-			t.Error("focusPrev from RunList should go to LogViewer")
+		if m.focusPrev() != FocusRightPanel {
+			t.Error("focusPrev from RunList should go to RightPanel")
 		}
 
-		m.focusedPanel = FocusRunDetail
+		m.focusedPanel = FocusRightPanel
 		if m.focusPrev() != FocusRunList {
-			t.Error("focusPrev from RunDetail should go to RunList")
-		}
-
-		m.focusedPanel = FocusLogViewer
-		if m.focusPrev() != FocusRunDetail {
-			t.Error("focusPrev from LogViewer should go to RunDetail")
+			t.Error("focusPrev from RightPanel should go to RunList")
 		}
 	})
 }

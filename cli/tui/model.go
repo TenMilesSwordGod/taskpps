@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -141,34 +142,59 @@ func renderPanel(panelContent string, focused bool, contentWidth, contentHeight 
 }
 
 func renderTabs(activeTab RightPanelTab, width int) string {
-	detailTab := "Detail"
-	logsTab := "Logs"
+	var detailTab, logsTab string
 
 	if activeTab == TabDetail {
-		detailTab = components.CursorStyle.Render("> " + detailTab)
+		detailTab = components.TabBarStyle.Copy().
+			Bold(true).Foreground(components.ColorCyan).
+			Render("> Detail")
 	} else {
-		detailTab = "  " + detailTab
+		detailTab = components.TabBarStyle.Render("  Detail")
 	}
+
+	sep := components.TabBarStyle.Render(" | ")
 
 	if activeTab == TabLogs {
-		logsTab = components.CursorStyle.Render("> " + logsTab)
+		logsTab = components.TabBarStyle.Copy().
+			Bold(true).Foreground(components.ColorCyan).
+			Render("> Logs")
 	} else {
-		logsTab = "  " + logsTab
+		logsTab = components.TabBarStyle.Render("  Logs")
 	}
 
-	tabs := detailTab + " | " + logsTab
-	return components.TabBarStyle.Width(width).Render(tabs)
+	tabs := detailTab + sep + logsTab
+
+	textWidth := lipgloss.Width(tabs)
+	if textWidth < width {
+		pad := components.TabBarStyle.Render(strings.Repeat(" ", width-textWidth))
+		tabs += pad
+	}
+
+	return tabs
 }
 
 func renderHeader(width int) string {
 	help := "[q]uit  [tab]panel  [t]abs  [↑↓/jk]nav  [enter]select  [r]efresh"
-	left := components.TitleStyle.Render(" ppsctl watch ")
-	right := lipgloss.NewStyle().Foreground(components.ColorWhite).Render(help)
-	spacer := width - lipgloss.Width(left) - lipgloss.Width(right) - 2
-	if spacer < 1 {
-		spacer = 1
+
+	headerBg := lipgloss.NewStyle().Background(lipgloss.Color("#333333"))
+
+	left := headerBg.Copy().
+		Foreground(components.ColorCyan).Bold(true).
+		Render(" ppsctl watch ")
+
+	right := headerBg.Copy().
+		Foreground(components.ColorWhite).
+		Render(help)
+
+	spacerLen := width - lipgloss.Width(" ppsctl watch ") - lipgloss.Width(help) - 2
+	if spacerLen < 1 {
+		spacerLen = 1
 	}
-	return components.HeaderStyle.Width(width).Render(left + fmt.Sprintf("%*s", spacer, "") + right)
+	spacer := headerBg.Render(strings.Repeat(" ", spacerLen))
+
+	margin := headerBg.Render(" ")
+
+	return margin + left + spacer + right + margin
 }
 
 func renderFooter(width int, m Model) string {
