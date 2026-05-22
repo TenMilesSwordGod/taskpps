@@ -1,6 +1,0 @@
-[submodule "cli"]
-	path = cli
-	url = https://github.com/TenMilesSwordGod/taskpps-cli.git
-[submodule "server"]
-	path = server
-	url = https://github.com/TenMilesSwordGod/taskpps-server.git
