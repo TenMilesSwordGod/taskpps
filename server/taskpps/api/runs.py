@@ -139,10 +139,10 @@ async def cancel_run(run_id: str):
     return {"status": "cancelled", "run_id": run_id}
 
 
-@router.delete("/")
+@router.delete("/", response_model=CleanResponse)
 async def clean_runs(
-    older_than: Optional[int] = Query(None, description="Delete runs older than N days"),
-    keep: Optional[int] = Query(None, description="Keep only N most recent runs"),
+    older_than: Optional[int] = Query(None, description="Delete runs older than N days", ge=1),
+    keep: Optional[int] = Query(None, description="Keep only N most recent runs", ge=0),
     force: bool = Query(False, description="Delete all runs"),
 ):
     result = await _pipeline_service.clean_runs(older_than=older_than, keep=keep, force=force)
