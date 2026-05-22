@@ -30,6 +30,10 @@ var (
 			Foreground(ColorWhite).
 			Padding(0, 1)
 
+	TabBarStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#333333")).
+			Foreground(ColorWhite)
+
 	FooterStyle = lipgloss.NewStyle().
 			Background(lipgloss.Color("#333333")).
 			Foreground(ColorWhite).

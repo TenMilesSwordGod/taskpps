@@ -157,7 +157,7 @@ func renderTabs(activeTab RightPanelTab, width int) string {
 	}
 
 	tabs := detailTab + " | " + logsTab
-	return components.HeaderStyle.Width(width).Render(tabs)
+	return components.TabBarStyle.Width(width).Render(tabs)
 }
 
 func renderHeader(width int) string {
