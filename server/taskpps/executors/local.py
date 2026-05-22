@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from pathlib import Path
 from typing import Dict, Optional
 
 from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
+
+_DANGEROUS_PATTERNS = re.compile(r"(\brm\s+-rf\s+/|:\(\)\{.*\}|`.*`|\$\(.*\))", re.DOTALL)
 
 
 class LocalExecutor(BaseExecutor):
@@ -24,6 +27,9 @@ class LocalExecutor(BaseExecutor):
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
         self._cancelled = False
+
+        if _DANGEROUS_PATTERNS.search(command):
+            return ExecutorResult(exit_code=1, stderr=f"Command contains dangerous pattern")
 
         merged_env = {**os.environ, **env}
 
