@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from taskpps.api import health, runs, triggers
 from taskpps.config import get_settings, load_settings
 from taskpps.db.engine import init_db, close_db, get_engine, reset_engine
+from taskpps.middleware.auth import APIKeyMiddleware
 from taskpps.services.plugin_manager import PluginManager
 
 
@@ -41,10 +42,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Taskpps API", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(APIKeyMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

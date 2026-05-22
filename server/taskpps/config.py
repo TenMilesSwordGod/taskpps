@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class ServerConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 26521
+    api_key: Optional[str] = None
 
 
 class ExecutorConfig(BaseModel):
