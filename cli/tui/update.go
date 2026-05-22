@@ -154,12 +154,29 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) resizeComponents() {
+	// Calculate available height properly
+	header := renderHeader(m.width)
+	footer := renderFooter(m.width, *m)
+	
+	errLine := ""
+	if m.errMsg != "" {
+		errLine = components.ErrorStyle.Render(fmt.Sprintf(" ERROR: %s ", m.errMsg))
+	}
+
+	headerH := lipgloss.Height(header)
+	footerH := lipgloss.Height(footer)
+	errH := lipgloss.Height(errLine)
+	availableH := m.height - headerH - footerH - errH
+	if availableH < 5 {
+		availableH = 5
+	}
+
 	w := m.width
-	h := m.height - 3
+	h := availableH
 
 	listW := w * 25 / 100
 	detailW := w * 35 / 100
-	logW := w - listW - detailW - 6
+	logW := w - listW - detailW - 6 // 6 = 2*3 for borders
 
 	if listW < 15 {
 		listW = 15
@@ -171,7 +188,8 @@ func (m *Model) resizeComponents() {
 		logW = 20
 	}
 
-	m.runList.SetSize(listW, h)
-	m.runDetail.SetSize(detailW, h)
-	m.logViewer.SetSize(logW, h)
+	// Components get internal width (panel width minus borders)
+	m.runList.SetSize(listW-2, h-2)
+	m.runDetail.SetSize(detailW-2, h-2)
+	m.logViewer.SetSize(logW-2, h-2)
 }

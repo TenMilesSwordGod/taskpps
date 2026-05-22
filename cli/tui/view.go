@@ -33,38 +33,31 @@ func (m Model) View() string {
 		availableH = 5
 	}
 
-	borderW := 2
-	paddingW := 2
-	panelOverhead := borderW + paddingW
-	totalOverhead := panelOverhead * 3
+	// Get panel sizes from resizeComponents logic (consistent)
+	w := m.width
+	h := availableH
 
-	availableW := m.width - totalOverhead
-	if availableW < 30 {
-		availableW = 30
+	listW := w * 25 / 100
+	detailW := w * 35 / 100
+	logW := w - listW - detailW - 6 // 6 = 2*3 for borders
+
+	if listW < 15 {
+		listW = 15
 	}
-
-	listContentW := availableW * 25 / 100
-	detailContentW := availableW * 35 / 100
-	logContentW := availableW - listContentW - detailContentW
-
-	if listContentW < 10 {
-		listContentW = 10
-		detailContentW = availableW * 40 / 100
-		logContentW = availableW - listContentW - detailContentW
+	if detailW < 20 {
+		detailW = 20
 	}
-	if logContentW < 10 {
-		logContentW = 10
+	if logW < 20 {
+		logW = 20
 	}
-
-	contentH := availableH - borderW
 
 	listView := m.runList.View()
 	detailView := m.runDetail.View()
 	logView := m.logViewer.View()
 
-	listPanel := renderPanel(listView, m.focusedPanel == FocusRunList, listContentW, contentH)
-	detailPanel := renderPanel(detailView, m.focusedPanel == FocusRunDetail, detailContentW, contentH)
-	logPanel := renderPanel(logView, m.focusedPanel == FocusLogViewer, logContentW, contentH)
+	listPanel := renderPanel(listView, m.focusedPanel == FocusRunList, listW, h)
+	detailPanel := renderPanel(detailView, m.focusedPanel == FocusRunDetail, detailW, h)
+	logPanel := renderPanel(logView, m.focusedPanel == FocusLogViewer, logW, h)
 
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, listPanel, detailPanel, logPanel)
 

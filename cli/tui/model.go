@@ -118,6 +118,16 @@ func (m Model) focusPrev() PanelFocus {
 }
 
 func renderPanel(panel string, focused bool, width, height int) string {
+	// Panel width includes borders, so subtract 2 for internal content
+	internalWidth := width - 2 // 2 = left and right borders
+	internalHeight := height - 2 // 2 = top and bottom borders
+	if internalWidth < 0 {
+		internalWidth = 0
+	}
+	if internalHeight < 0 {
+		internalHeight = 0
+	}
+	
 	style := components.PanelStyle.Width(width).Height(height)
 	if focused {
 		style = components.FocusedPanelStyle.Width(width).Height(height)

@@ -79,17 +79,33 @@ func (m RunDetailModel) View() string {
 		return b.String()
 	}
 
-	b.WriteString(fmt.Sprintf("ID: %s\n", m.run.ID))
-	b.WriteString(fmt.Sprintf("Pipeline: %s\n", m.run.PipelineName))
+	// Helper to truncate lines
+	truncateLine := func(line string) string {
+		if m.width > 0 && lipgloss.Width(line) > m.width {
+			for lipgloss.Width(line) > m.width-3 && len(line) > 3 {
+				line = line[:len(line)-1]
+			}
+			line = line + "..."
+		}
+		return line
+	}
+
+	b.WriteString(truncateLine(fmt.Sprintf("ID: %s", m.run.ID)))
+	b.WriteString("\n")
+	b.WriteString(truncateLine(fmt.Sprintf("Pipeline: %s", m.run.PipelineName)))
+	b.WriteString("\n")
 
 	statusStyle := StatusStyle(string(m.run.Status))
-	b.WriteString(fmt.Sprintf("Status: %s\n", statusStyle.Render(string(m.run.Status))))
+	b.WriteString(truncateLine(fmt.Sprintf("Status: %s", statusStyle.Render(string(m.run.Status)))))
+	b.WriteString("\n")
 
 	if m.run.StartedAt != nil {
-		b.WriteString(fmt.Sprintf("Started: %s\n", *m.run.StartedAt))
+		b.WriteString(truncateLine(fmt.Sprintf("Started: %s", *m.run.StartedAt)))
+		b.WriteString("\n")
 	}
 	if m.run.FinishedAt != nil {
-		b.WriteString(fmt.Sprintf("Finished: %s\n", *m.run.FinishedAt))
+		b.WriteString(truncateLine(fmt.Sprintf("Finished: %s", *m.run.FinishedAt)))
+		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 	b.WriteString(TitleStyle.Render("Tasks"))
@@ -116,16 +132,19 @@ func (m RunDetailModel) View() string {
 				line = CursorStyle.Render(">") + line[1:]
 			}
 
-			b.WriteString(line)
+			b.WriteString(truncateLine(line))
 			b.WriteString("\n")
 
 			if m.expanded[i] {
-				b.WriteString(fmt.Sprintf("    Type: %s\n", task.TaskType))
+				b.WriteString(truncateLine(fmt.Sprintf("    Type: %s", task.TaskType)))
+				b.WriteString("\n")
 				if task.StartedAt != nil {
-					b.WriteString(fmt.Sprintf("    Started: %s\n", *task.StartedAt))
+					b.WriteString(truncateLine(fmt.Sprintf("    Started: %s", *task.StartedAt)))
+					b.WriteString("\n")
 				}
 				if task.FinishedAt != nil {
-					b.WriteString(fmt.Sprintf("    Finished: %s\n", *task.FinishedAt))
+					b.WriteString(truncateLine(fmt.Sprintf("    Finished: %s", *task.FinishedAt)))
+					b.WriteString("\n")
 				}
 				b.WriteString("\n")
 			}

@@ -104,8 +104,13 @@ func (m RunListModel) View() string {
 			line = "  " + style.Render(line)
 		}
 
-		if m.width > 0 && len(line) > m.width {
-			line = line[:m.width-1]
+		// Use lipgloss.Width instead of len() for visible width
+		if m.width > 0 && lipgloss.Width(line) > m.width {
+			// Truncate but keep it visible
+			for lipgloss.Width(line) > m.width-3 && len(line) > 3 {
+				line = line[:len(line)-1]
+			}
+			line = line + "..."
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
