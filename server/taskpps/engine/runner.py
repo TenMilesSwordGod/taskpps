@@ -100,6 +100,16 @@ class PipelineRunner:
                         else:
                             completed_tasks.add(task.name)
 
+                    # Update run status after each level for real-time monitoring
+                    async with get_session_factory()() as session:
+                        run_repo = RunRepository(session)
+                        if failed_tasks and not completed_tasks:
+                            await run_repo.update_run_status(self.run_id, RunStatus.FAILED)
+                        elif failed_tasks and completed_tasks:
+                            await run_repo.update_run_status(self.run_id, RunStatus.PARTIAL)
+                        else:
+                            await run_repo.update_run_status(self.run_id, RunStatus.RUNNING)
+
         except Exception:
             pass
 
