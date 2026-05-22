@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from croniter import croniter
@@ -46,18 +46,18 @@ class CronTrigger(TriggerPlugin):
         logger.info(f"CronTrigger stopped: {self.name}")
 
     def _run_loop(self) -> None:
-        base = datetime.utcnow()
+        base = datetime.now(timezone.utc)
         cron = croniter(self._expression, base)
 
         while not self._stop_event.is_set():
             next_time = cron.get_next(datetime)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             delay = (next_time - now).total_seconds()
 
             if delay > 0:
                 if self._stop_event.wait(timeout=min(delay, 60)):
                     break
-                if datetime.utcnow() < next_time:  # pragma: no cover
+                if datetime.now(timezone.utc) < next_time:  # pragma: no cover
                     continue  # pragma: no cover
 
             if self._callback:  # pragma: no cover
@@ -66,4 +66,4 @@ class CronTrigger(TriggerPlugin):
                 except Exception as e:  # pragma: no cover
                     logger.error(f"CronTrigger callback error: {e}")  # pragma: no cover
 
-            cron = croniter(self._expression, datetime.utcnow())  # pragma: no cover
+            cron = croniter(self._expression, datetime.now(timezone.utc))  # pragma: no cover

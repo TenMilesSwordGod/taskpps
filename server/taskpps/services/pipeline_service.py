@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -159,7 +159,7 @@ class PipelineService:
                 return False
 
             if run.status in ("pending", "running"):
-                await run_repo.update_run_status(run_id, "cancelled", finished_at=datetime.utcnow())
+                await run_repo.update_run_status(run_id, "cancelled", finished_at=datetime.now(timezone.utc))
                 await task_repo.cancel_pending_tasks(run_id)
                 return True
 
@@ -180,7 +180,7 @@ class PipelineService:
             elif older_than:
                 runs = await run_repo.list_runs(limit=10000)
                 from datetime import datetime, timedelta
-                cutoff = datetime.utcnow() - timedelta(days=older_than)
+                cutoff = datetime.now(timezone.utc) - timedelta(days=older_than)
                 for run in runs:
                     if run.created_at and run.created_at < cutoff:
                         deleted_logs += self._delete_run_logs(run.pipeline_name, run.id)

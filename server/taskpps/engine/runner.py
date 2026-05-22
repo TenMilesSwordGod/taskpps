@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -40,7 +40,7 @@ class PipelineRunner:
         except (DAGCycleError, ValueError) as e:
             async with get_session_factory()() as session:
                 run_repo = RunRepository(session)
-                await run_repo.update_run_status(self.run_id, RunStatus.FAILED, finished_at=datetime.utcnow())
+                await run_repo.update_run_status(self.run_id, RunStatus.FAILED, finished_at=datetime.now(timezone.utc))
             return
 
         event_bus = get_event_bus()
@@ -49,7 +49,7 @@ class PipelineRunner:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
-            await run_repo.update_run_status(self.run_id, RunStatus.RUNNING, started_at=datetime.utcnow())
+            await run_repo.update_run_status(self.run_id, RunStatus.RUNNING, started_at=datetime.now(timezone.utc))
 
         failed_tasks: Set[str] = set()
         completed_tasks: Set[str] = set()
@@ -116,7 +116,7 @@ class PipelineRunner:
             else:
                 final_status = RunStatus.SUCCESS
 
-            await run_repo.update_run_status(self.run_id, final_status, finished_at=datetime.utcnow())
+            await run_repo.update_run_status(self.run_id, final_status, finished_at=datetime.now(timezone.utc))
 
         event_bus.emit(SIGNAL_RUN_COMPLETED, sender=self, run_id=self.run_id, status=final_status)
 
@@ -131,7 +131,7 @@ class PipelineRunner:
 
         async with get_session_factory()() as session:
             task_repo = TaskRunRepository(session)
-            await task_repo.update_task_status(task_run_id, TaskStatus.RUNNING, started_at=datetime.utcnow())
+            await task_repo.update_task_status(task_run_id, TaskStatus.RUNNING, started_at=datetime.now(timezone.utc))
 
         event_bus.emit(SIGNAL_TASK_STARTED, sender=self, run_id=self.run_id, task=task.name)
 
@@ -175,7 +175,7 @@ class PipelineRunner:
                 task_run_id,
                 task_status,
                 exit_code=result.exit_code,
-                finished_at=datetime.utcnow(),
+                finished_at=datetime.now(timezone.utc),
             )
 
         event_bus.emit(SIGNAL_TASK_FINISHED, sender=self, run_id=self.run_id, task=task.name, status=task_status)

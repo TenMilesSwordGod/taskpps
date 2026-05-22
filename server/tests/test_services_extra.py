@@ -45,7 +45,7 @@ async def test_cancel_run_completed_status(setup_project, tmp_project, db_engine
 
     async with get_session_factory()() as session:
         repo = RunRepository(session)
-        await repo.update_run_status(run_id, RunStatus.SUCCESS, finished_at=datetime.utcnow())
+        await repo.update_run_status(run_id, RunStatus.SUCCESS, finished_at=datetime.now(timezone.utc))
 
     cancel_result = await svc.cancel_run(run_id)
     assert cancel_result is False
@@ -64,7 +64,7 @@ async def test_clean_runs_older_than(setup_project, tmp_project, db_engine):
         repo = RunRepository(session)
         run = await repo.get_run(run_id)
         from datetime import timedelta
-        run.created_at = datetime.utcnow() - timedelta(days=30)
+        run.created_at = datetime.now(timezone.utc) - timedelta(days=30)
         await session.commit()
 
     clean_result = await svc.clean_runs(older_than=7)
