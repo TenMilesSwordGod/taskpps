@@ -112,7 +112,7 @@ _ALLOWED_OVERRIDE_PATHS = {
 }
 
 _ALLOWED_TASK_OVERRIDE_KEYS = {
-    "command", "timeout", "on_failure", "env", "cwd", "host", "credential",
+    "timeout", "on_failure", "env", "cwd", "host", "credential",
 }
 
 
