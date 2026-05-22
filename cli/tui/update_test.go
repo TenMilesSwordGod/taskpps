@@ -1,0 +1,443 @@
+package tui
+
+import (
+	"errors"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/taskpps/ppsctl/client"
+	"github.com/taskpps/ppsctl/config"
+	"github.com/taskpps/ppsctl/models"
+)
+
+func makeTestModel() Model {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Host: "localhost", Port: 8080},
+	}
+	c := client.New(cfg)
+	return NewModel(c, "")
+}
+
+func TestUpdateKeyQuit(t *testing.T) {
+	keys := []string{"q", "esc", "ctrl+c"}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			m := makeTestModel()
+			msg := tea.KeyMsg{}
+			switch key {
+			case "q":
+				msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+			case "esc":
+				msg = tea.KeyMsg{Type: tea.KeyEsc}
+			case "ctrl+c":
+				msg = tea.KeyMsg{Type: tea.KeyCtrlC}
+			}
+			m2, _ := m.Update(msg)
+			model := m2.(Model)
+			if !model.quit {
+				t.Errorf("quit should be true after %s", key)
+			}
+		})
+	}
+}
+
+func TestUpdateTabFocus(t *testing.T) {
+	m := makeTestModel()
+
+	t.Run("tab_forward", func(t *testing.T) {
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyTab}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunDetail {
+			t.Errorf("focus should be RunDetail after tab, got %v", model.focusedPanel)
+		}
+
+		msg = tea.KeyMsg{Type: tea.KeyTab}
+		m3, _ := model.Update(msg)
+		model2 := m3.(Model)
+		if model2.focusedPanel != FocusLogViewer {
+			t.Errorf("focus should be LogViewer after 2nd tab, got %v", model2.focusedPanel)
+		}
+
+		msg = tea.KeyMsg{Type: tea.KeyTab}
+		m4, _ := model2.Update(msg)
+		model3 := m4.(Model)
+		if model3.focusedPanel != FocusRunList {
+			t.Errorf("focus should be RunList after 3rd tab, got %v", model3.focusedPanel)
+		}
+	})
+
+	t.Run("shift_tab_backward", func(t *testing.T) {
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyShiftTab}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusLogViewer {
+			t.Errorf("focus should be LogViewer after shift+tab, got %v", model.focusedPanel)
+		}
+	})
+}
+
+func TestUpdateArrowKeys(t *testing.T) {
+	m := makeTestModel()
+
+	t.Run("right_from_runlist", func(t *testing.T) {
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyRight}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunDetail {
+			t.Errorf("focus should be RunDetail after right, got %v", model.focusedPanel)
+		}
+	})
+
+	t.Run("right_not_from_runlist", func(t *testing.T) {
+		m.focusedPanel = FocusRunDetail
+		msg := tea.KeyMsg{Type: tea.KeyRight}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunDetail {
+			t.Errorf("focus should stay RunDetail, got %v", model.focusedPanel)
+		}
+	})
+
+	t.Run("left_from_rundetail", func(t *testing.T) {
+		m.focusedPanel = FocusRunDetail
+		msg := tea.KeyMsg{Type: tea.KeyLeft}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunList {
+			t.Errorf("focus should be RunList after left, got %v", model.focusedPanel)
+		}
+	})
+
+	t.Run("left_not_from_rundetail", func(t *testing.T) {
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyLeft}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunList {
+			t.Errorf("focus should stay RunList, got %v", model.focusedPanel)
+		}
+	})
+
+	t.Run("vim_l_from_runlist", func(t *testing.T) {
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunDetail {
+			t.Errorf("focus should be RunDetail after l, got %v", model.focusedPanel)
+		}
+	})
+
+	t.Run("vim_h_from_rundetail", func(t *testing.T) {
+		m.focusedPanel = FocusRunDetail
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunList {
+			t.Errorf("focus should be RunList after h, got %v", model.focusedPanel)
+		}
+	})
+}
+
+func TestUpdateRefreshKey(t *testing.T) {
+	m := makeTestModel()
+	m.ready = true
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	m2, cmd := m.Update(msg)
+	model := m2.(Model)
+	_ = model
+	if cmd == nil {
+		t.Error("r key should return commands to refresh")
+	}
+}
+
+func TestUpdateEnterKey(t *testing.T) {
+	t.Run("enter_on_runlist_with_run", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.runs = []models.Run{
+			{ID: "abc123", PipelineName: "deploy", Status: models.RunStatusRunning},
+		}
+		m.runList.SetRuns(m.runs)
+		m.runList.SetCursor(0)
+		m.focusedPanel = FocusRunList
+
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		m2, cmd := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunDetail {
+			t.Errorf("focus should move to RunDetail, got %v", model.focusedPanel)
+		}
+		if cmd == nil {
+			t.Error("enter on run should dispatch fetchRun")
+		}
+	})
+
+	t.Run("enter_on_runlist_empty", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRunList
+
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		_ = model
+	})
+
+	t.Run("enter_on_rundetail", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRunDetail
+		m.runDetail.SetRun(&models.Run{
+			ID:     "abc",
+			Status: models.RunStatusRunning,
+			Tasks: []models.TaskRun{
+				{TaskName: "test", Status: models.TaskStatusRunning},
+			},
+		})
+
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		_, cmd := m.Update(msg)
+		if cmd == nil {
+			t.Error("enter on RunDetail should dispatch command")
+		}
+	})
+
+	t.Run("enter_on_rundetail_no_task", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRunDetail
+		m.runDetail.SetRun(&models.Run{
+			ID:     "abc",
+			Status: models.RunStatusRunning,
+			Tasks: []models.TaskRun{},
+		})
+
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		_, _ = m.Update(msg)
+	})
+
+	t.Run("enter_on_logviewer", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusLogViewer
+
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		_, _ = m.Update(msg)
+	})
+}
+
+func TestUpdateRunsFetched(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		m := makeTestModel()
+		runs := []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
+			{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
+		}
+		msg := runsFetchedMsg{runs: runs}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if len(model.runs) != 2 {
+			t.Errorf("runs length = %d, want 2", len(model.runs))
+		}
+		if model.errMsg != "" {
+			t.Errorf("errMsg = %q, want empty", model.errMsg)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		m := makeTestModel()
+		msg := runsFetchedMsg{err: errors.New("connection refused")}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.errMsg == "" {
+			t.Error("errMsg should be set on error")
+		}
+	})
+
+	t.Run("with_target_run", func(t *testing.T) {
+		m := makeTestModel()
+		m.targetRunID = "r2"
+		runs := []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusPending},
+			{ID: "r2", PipelineName: "build", Status: models.RunStatusRunning},
+		}
+		msg := runsFetchedMsg{runs: runs}
+		m2, cmd := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunDetail {
+			t.Errorf("should auto-focus on matching run, got %v", model.focusedPanel)
+		}
+		if cmd == nil {
+			t.Error("should dispatch fetchRun for matched run")
+		}
+		if model.targetRunID != "" {
+			t.Errorf("targetRunID should be cleared, got %q", model.targetRunID)
+		}
+	})
+
+	t.Run("target_run_not_found", func(t *testing.T) {
+		m := makeTestModel()
+		m.targetRunID = "nonexistent"
+		runs := []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
+		}
+		msg := runsFetchedMsg{runs: runs}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.targetRunID != "nonexistent" {
+			t.Error("targetRunID should not be cleared if not found")
+		}
+	})
+}
+
+func TestUpdateRunFetched(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		m := makeTestModel()
+		run := &models.Run{ID: "abc", PipelineName: "deploy", Status: models.RunStatusRunning}
+		msg := runFetchedMsg{run: run}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.errMsg != "" {
+			t.Errorf("errMsg = %q, want empty", model.errMsg)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		m := makeTestModel()
+		msg := runFetchedMsg{err: errors.New("not found")}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.errMsg == "" {
+			t.Error("errMsg should be set on error")
+		}
+	})
+}
+
+func TestUpdateLogsFetched(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		m := makeTestModel()
+		logs := map[string]string{"task1": "line1\nline2"}
+		msg := logsFetchedMsg{logs: logs}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.errMsg != "" {
+			t.Errorf("errMsg = %q, want empty", model.errMsg)
+		}
+		content := model.logViewer.Content()
+		if content == "" {
+			t.Error("logViewer content should be set")
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		m := makeTestModel()
+		msg := logsFetchedMsg{err: errors.New("timeout")}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		content := model.logViewer.Content()
+		if content == "" {
+			t.Error("logViewer should show error content")
+		}
+	})
+}
+
+func TestUpdateTickMsg(t *testing.T) {
+	m := makeTestModel()
+	m.ready = true
+	msg := tickMsg{}
+	m2, cmd := m.Update(msg)
+	model := m2.(Model)
+	_ = model
+	if cmd == nil {
+		t.Error("tick should return refresh commands")
+	}
+}
+
+func TestUpdateWindowSize(t *testing.T) {
+	m := makeTestModel()
+	msg := tea.WindowSizeMsg{Width: 120, Height: 40}
+	m2, _ := m.Update(msg)
+	model := m2.(Model)
+	if model.width != 120 {
+		t.Errorf("width = %d, want 120", model.width)
+	}
+	if model.height != 40 {
+		t.Errorf("height = %d, want 40", model.height)
+	}
+	if !model.ready {
+		t.Error("model should be ready after WindowSizeMsg")
+	}
+}
+
+func TestDispatchKey(t *testing.T) {
+	m := makeTestModel()
+
+	t.Run("runlist_up", func(t *testing.T) {
+		m.focusedPanel = FocusRunList
+		m.runList.SetRuns([]models.Run{{ID: "1"}, {ID: "2"}})
+		m.runList.SetCursor(1)
+		m.dispatchKey(tea.KeyMsg{Type: tea.KeyUp})
+		if m.runList.SelectedRun() == nil {
+			t.Error("RunList should have selection")
+		}
+	})
+
+	t.Run("rundetail_down", func(t *testing.T) {
+		m.focusedPanel = FocusRunDetail
+		m.runDetail.SetRun(&models.Run{
+			Tasks: []models.TaskRun{
+				{TaskName: "t1"}, {TaskName: "t2"},
+			},
+		})
+		m.dispatchKey(tea.KeyMsg{Type: tea.KeyDown})
+	})
+
+	t.Run("logviewer_key", func(t *testing.T) {
+		m.focusedPanel = FocusLogViewer
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+		cmd := m.dispatchKey(msg)
+		_ = cmd
+	})
+
+	t.Run("logviewer_pgdown", func(t *testing.T) {
+		m.focusedPanel = FocusLogViewer
+		m.logViewer.SetContent("line1\nline2")
+		m.logViewer.SetSize(80, 10)
+		m.dispatchKey(tea.KeyMsg{Type: tea.KeyPgDown})
+	})
+
+	t.Run("rundetail_j_vim", func(t *testing.T) {
+		m.focusedPanel = FocusRunDetail
+		m.runDetail.SetRun(&models.Run{
+			Tasks: []models.TaskRun{
+				{TaskName: "t1"}, {TaskName: "t2"},
+			},
+		})
+		m.dispatchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	})
+}
+
+func TestResizeSmallWidths(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Host: "localhost", Port: 8080},
+	}
+	c := client.New(cfg)
+	m := NewModel(c, "")
+
+	t.Run("small_width_triggers_min", func(t *testing.T) {
+		m.width = 50
+		m.height = 30
+		m.resizeComponents()
+	})
+
+	t.Run("very_small_width", func(t *testing.T) {
+		m.width = 30
+		m.height = 20
+		m.resizeComponents()
+	})
+}
