@@ -40,7 +40,6 @@ ppsctl
 # Trae IDE
 .agents/
 skills-lock.json
-agent.md
 
 # Local configuration
 taskpps.yaml
