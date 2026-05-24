@@ -43,6 +43,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # Gracefully shutdown active pipeline runners
+    from taskpps.engine.runner import _active_runs
+    if _active_runs:
+        logger.info(f"Gracefully shutting down {len(_active_runs)} active pipeline runners")
+        for runner in _active_runs.values():
+            await runner.cancel()
     if _plugin_manager:
         _plugin_manager.stop_all()
     if not _external_engine:
