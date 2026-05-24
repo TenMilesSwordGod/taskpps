@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -39,7 +39,7 @@ class PipelineRun(SQLModel, table=True):
     params: str = "{}"
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class TaskRun(SQLModel, table=True):
@@ -54,4 +54,4 @@ class TaskRun(SQLModel, table=True):
     log_path: str = ""
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

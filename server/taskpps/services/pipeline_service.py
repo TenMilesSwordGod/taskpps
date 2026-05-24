@@ -206,7 +206,7 @@ class PipelineService:
             elif older_than:
                 runs = await run_repo.list_runs(limit=10000)
                 from datetime import datetime, timedelta
-                cutoff = datetime.utcnow() - timedelta(days=older_than)
+                cutoff = datetime.now(timezone.utc) - timedelta(days=older_than)
                 for run in runs:
                     if run.created_at and run.created_at < cutoff:
                         deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
