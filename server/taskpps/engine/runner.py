@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -20,6 +21,7 @@ from taskpps.executors.invoke import InvokeExecutor
 from taskpps.models.run import RunStatus, TaskStatus
 
 
+logger = logging.getLogger(__name__)
 _active_runs: Dict[str, "PipelineRunner"] = {}
 
 
@@ -112,8 +114,8 @@ class PipelineRunner:
                             else:
                                 await run_repo.update_run_status(self.run_id, RunStatus.RUNNING)
 
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Pipeline runner {self.run_id} encountered an unexpected error")
 
             async with get_session_factory()() as session:
                 run_repo = RunRepository(session)
