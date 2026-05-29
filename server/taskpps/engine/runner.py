@@ -20,6 +20,8 @@ from taskpps.events.bus import get_event_bus, SIGNAL_PIPELINE_STARTED, SIGNAL_TA
 from taskpps.executors import create_executor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.git import GitExecutor
+from taskpps.executors.nexus import NexusExecutor
 from taskpps.models.run import RunStatus, TaskStatus
 
 
@@ -305,6 +307,13 @@ class PipelineRunner:
                         invoke_task=task.invoke_task,
                         invoke_args=task.invoke_args,
                         invoke_kwargs=task.invoke_kwargs,
+                    )
+                elif isinstance(executor, (GitExecutor, NexusExecutor)):
+                    result = await executor.execute(
+                        command="",
+                        env=env,
+                        log_path=log_path,
+                        timeout=timeout,
                     )
                 elif task.task_type == "steps" and task.steps:
                     result = await self._execute_steps(executor, task, env, log_path, timeout)

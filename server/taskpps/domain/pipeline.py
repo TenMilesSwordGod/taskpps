@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Union
 
 from taskpps.schemas.pipeline import (
+    GitSpec,
+    NexusSpec,
     OptionsYAML,
     PipelineConfig,
     PipelineYAML,
@@ -34,6 +36,8 @@ class ResolvedTask:
         invoke_args: Optional[List[Any]] = None,
         invoke_kwargs: Optional[Dict[str, Any]] = None,
         steps: Optional[List[ResolvedStep]] = None,
+        git: Optional[Dict[str, Any]] = None,
+        nexus: Optional[Dict[str, Any]] = None,
         cwd: Optional[str] = None,
         host: Optional[str] = None,
         credential: Optional[str] = None,
@@ -52,6 +56,8 @@ class ResolvedTask:
         self.invoke_args = invoke_args or []
         self.invoke_kwargs = invoke_kwargs or {}
         self.steps = steps
+        self.git = git or {}
+        self.nexus = nexus or {}
         self.cwd = cwd
         self.host = host
         self.credential = credential
@@ -72,6 +78,14 @@ class ResolvedTask:
         if task_yaml.steps:
             resolved_steps = [ResolvedStep.from_yaml(s) for s in task_yaml.steps]
 
+        resolved_git = None
+        if task_yaml.git:
+            resolved_git = task_yaml.git.model_dump()
+
+        resolved_nexus = None
+        if task_yaml.nexus:
+            resolved_nexus = task_yaml.nexus.model_dump()
+
         return cls(
             name=task_yaml.name,
             task_type=task_yaml.get_task_type(),
@@ -81,6 +95,8 @@ class ResolvedTask:
             invoke_args=task_yaml.invoke.args if task_yaml.invoke else [],
             invoke_kwargs=task_yaml.invoke.kwargs if task_yaml.invoke else {},
             steps=resolved_steps,
+            git=resolved_git,
+            nexus=resolved_nexus,
             cwd=task_yaml.cwd,
             host=task_yaml.host or config.host,
             credential=task_yaml.credential or config.credential,

@@ -8,6 +8,8 @@ from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.executors.local import LocalExecutor
 from taskpps.executors.ssh import SSHExecutor
 from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.git import GitExecutor
+from taskpps.executors.nexus import NexusExecutor
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
 
@@ -17,6 +19,34 @@ logger = logging.getLogger(__name__)
 def create_executor(task: ResolvedTask) -> BaseExecutor:
     if task.task_type == "invoke":
         return InvokeExecutor()
+
+    if task.task_type == "git" and task.git:
+        return GitExecutor(
+            repo=task.git.get("repo", ""),
+            ref=task.git.get("ref"),
+            credential=task.git.get("credential"),
+            dest=task.git.get("dest", "/workspace/repo"),
+            depth=task.git.get("depth", 1),
+            submodules=task.git.get("submodules", False),
+        )
+
+    if task.task_type == "nexus" and task.nexus:
+        return NexusExecutor(
+            action=task.nexus.get("action", "upload"),
+            url=task.nexus.get("url", ""),
+            repository=task.nexus.get("repository", ""),
+            credential=task.nexus.get("credential"),
+            group_id=task.nexus.get("group_id"),
+            artifact_id=task.nexus.get("artifact_id"),
+            version=task.nexus.get("version"),
+            packaging=task.nexus.get("packaging", "jar"),
+            classifier=task.nexus.get("classifier"),
+            files=task.nexus.get("files"),
+            dest=task.nexus.get("dest"),
+            query=task.nexus.get("query"),
+            source_repo=task.nexus.get("source_repo"),
+            target_repo=task.nexus.get("target_repo"),
+        )
 
     if task.host:
         agent_loader = AgentLoader()

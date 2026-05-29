@@ -15,12 +15,40 @@ class TaskStep(BaseModel):
     env: Dict[str, str] = Field(default_factory=dict)
 
 
+class GitSpec(BaseModel):
+    repo: str
+    ref: Optional[str] = None
+    credential: Optional[str] = None
+    dest: str = "/workspace/repo"
+    depth: int = 1
+    submodules: bool = False
+
+
+class NexusSpec(BaseModel):
+    action: str
+    url: str
+    repository: str
+    credential: Optional[str] = None
+    group_id: Optional[str] = None
+    artifact_id: Optional[str] = None
+    version: Optional[str] = None
+    packaging: str = "jar"
+    classifier: Optional[str] = None
+    files: Optional[List[str]] = None
+    dest: Optional[str] = None
+    query: Optional[str] = None
+    source_repo: Optional[str] = None
+    target_repo: Optional[str] = None
+
+
 class TaskYAML(BaseModel):
     name: str
     command: Optional[str] = None
     commands: Optional[List[str]] = None
     invoke: Optional[InvokeSpec] = None
     steps: Optional[List[TaskStep]] = None
+    git: Optional[GitSpec] = None
+    nexus: Optional[NexusSpec] = None
     cwd: Optional[str] = None
     host: Optional[str] = None
     credential: Optional[str] = None
@@ -36,6 +64,10 @@ class TaskYAML(BaseModel):
             return "invoke"
         if self.steps is not None:
             return "steps"
+        if self.git is not None:
+            return "git"
+        if self.nexus is not None:
+            return "nexus"
         return "command"
 
     def get_effective_command(self) -> Optional[str]:
