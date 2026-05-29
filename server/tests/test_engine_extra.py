@@ -191,3 +191,33 @@ async def test_runner_run_cancelled_during_execution(mock_session_factory):
 
 def test_get_active_runner_returns_none():
     assert get_active_runner("nonexistent") is None
+
+
+@pytest.mark.asyncio
+async def test_runner_unexpected_error_init(mock_session_factory):
+    """Runner 应初始化 _unexpected_error 为 False"""
+    tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
+    pipeline = make_pipeline(tasks=tasks)
+    ctx = ExecutionContext(pipeline=pipeline, run_id="test8")
+    runner = PipelineRunner(run_id="test8", pipeline=pipeline, context=ctx)
+    assert runner._unexpected_error is False
+
+
+@pytest.mark.asyncio
+async def test_runner_unexpected_error_sets_failed_status(mock_session_factory):
+    """内层 try 意外异常应标记 run 为 FAILED 而非 SUCCESS"""
+    run_repo, task_repo = mock_session_factory
+    tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
+    pipeline = make_pipeline(tasks=tasks)
+    ctx = ExecutionContext(pipeline=pipeline, run_id="test9")
+    runner = PipelineRunner(run_id="test9", pipeline=pipeline, context=ctx)
+    runner._task_run_ids = {"t1": "tr1"}
+
+    with patch("taskpps.domain.dag.DAG.get_execution_levels", side_effect=RuntimeError("dag crash")), \
+         patch("taskpps.engine.runner.get_event_bus"), \
+         patch("taskpps.engine.runner.get_logs_dir"), \
+         patch("taskpps.engine.runner.get_settings"):
+        await runner.run()
+
+    assert runner._unexpected_error is True
+    assert run_repo.update_run_status.call_args[0][1] == "failed"

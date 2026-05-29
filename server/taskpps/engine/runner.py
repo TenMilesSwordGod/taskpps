@@ -32,6 +32,7 @@ class PipelineRunner:
         self.context = context
         self.dag: Optional[DAG] = None
         self._cancelled = False
+        self._unexpected_error = False
         self._running_executors: Dict[str, Any] = {}
         self._task_run_ids: Dict[str, str] = {}
 
@@ -116,12 +117,15 @@ class PipelineRunner:
 
             except Exception as e:
                 logger.exception(f"Pipeline runner {self.run_id} encountered an unexpected error")
+                self._unexpected_error = True
 
             async with get_session_factory()() as session:
                 run_repo = RunRepository(session)
 
                 if self._cancelled:
                     final_status = RunStatus.CANCELLED
+                elif self._unexpected_error:
+                    final_status = RunStatus.FAILED
                 elif failed_tasks:
                     if completed_tasks:
                         final_status = RunStatus.PARTIAL
