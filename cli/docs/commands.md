@@ -7,7 +7,7 @@
 | 标志 | 默认值 | 说明 |
 |:--|:--|:--|
 | `--server` | `http://127.0.0.1:26521` | 后端服务地址 |
-| `--api-key` | — | API 密钥（如服务端启用了认证） |
+| `--api-key` | — | API 密钥(如服务端启用了认证) |
 
 ## 命令列表
 
@@ -30,7 +30,7 @@ ppsctl run deploy.yaml TAG=latest
 ppsctl run nightly.yaml TAG=stable HOST=prod
 ```
 
-参数 `key=value` 会作为 `params` 传递给流水线，支持点路径覆盖。
+参数 `key=value` 会作为 `params` 传递给流水线,支持点路径覆盖。
 
 ### `list` — 列出运行记录
 
@@ -61,7 +61,7 @@ ppsctl logs <run-id> [flags]
 ppsctl logs <run-id>                 # 全部日志
 ppsctl logs <run-id> --tail 100      # 仅最后 100 行
 ppsctl logs <run-id> --task migrate  # 按任务名过滤
-ppsctl logs <run-id> --follow        # 实时跟踪（类似 tail -f）
+ppsctl logs <run-id> --follow        # 实时跟踪(类似 tail -f)
 ```
 
 `--follow` 基于 SSE 实现实时日志流。
@@ -72,7 +72,7 @@ ppsctl logs <run-id> --follow        # 实时跟踪（类似 tail -f）
 ppsctl watch
 ```
 
-启动终端交互界面，实时展示运行列表和任务状态。详见 `cli/docs/tui.md`。
+启动终端交互界面,实时展示运行列表和任务状态。详见 `cli/docs/tui.md`。
 
 ### `cancel` — 取消运行
 
@@ -80,7 +80,7 @@ ppsctl watch
 ppsctl cancel <run-id>
 ```
 
-取消正在执行的流水线。已完成任务不受影响，未开始任务被标记为 `cancelled`。
+取消正在执行的流水线。已完成任务不受影响,未开始任务被标记为 `cancelled`。
 
 ### `clean` — 清理历史
 
@@ -107,7 +107,7 @@ ppsctl trigger delete <trigger-id>
 ppsctl start-server
 ```
 
-自动启动 Python 后端服务（需要 `uv` 在 PATH 中）。
+自动启动 Python 后端服务(需要 `uv` 在 PATH 中)。
 
 ### `server-info` — 服务信息
 

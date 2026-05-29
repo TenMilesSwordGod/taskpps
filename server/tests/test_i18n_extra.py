@@ -28,7 +28,7 @@ def test_translator_t_missing():
 def test_translator_t_with_params():
     tr = Translator(locale="zh")
     result = tr.t("Task exceeded timeout of {timeout}s", timeout=30)
-    assert result == "任务超时（30秒）"
+    assert result == "任务超时(30秒)"
 
 
 def test_translator_t_extra_kwargs():
@@ -82,4 +82,4 @@ def test_t_shortcut():
 def test_t_shortcut_with_params():
     set_locale("zh")
     result = t("Task exceeded timeout of {timeout}s", timeout=60)
-    assert result == "任务超时（60秒）"
+    assert result == "任务超时(60秒)"

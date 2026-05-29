@@ -5,7 +5,7 @@
 ```bash
 # Python 后端
 cd server
-uv sync --dev                # 安装所有依赖（含开发依赖）
+uv sync --dev                # 安装所有依赖(含开发依赖)
 
 # Go CLI
 cd cli
@@ -35,11 +35,11 @@ uv run pytest tests/test_engine.py::test_pipeline_success -v
 ## 项目约定
 
 ### 代码规范
-- Python 3.10+ 类型注解，async-first
+- Python 3.10+ 类型注解,async-first
 - Pydantic v2 校验
 - SQLModel 数据模型
 - 函数/方法不超过 80 行
-- 禁止在代码中添加注释（代码即文档）
+- 禁止在代码中添加注释(代码即文档)
 
 ### 包结构
 
@@ -94,7 +94,7 @@ taskpps/
 ```
 
 ### 测试规范
-- 测试文件命名：`test_<module>.py`
+- 测试文件命名:`test_<module>.py`
 - fixture 集中在 `conftest.py`
 - 使用临时目录和 SQLite 内存数据库
-- 每个模块一个测试文件（复杂模块可拆分 `test_<module>_extra.py`）
+- 每个模块一个测试文件(复杂模块可拆分 `test_<module>_extra.py`)

@@ -1,6 +1,6 @@
 # CLI 概述
 
-`ppsctl` 是 Taskpps 的命令行工具，使用 Go 编写，提供完整的流水线管理功能。
+`ppsctl` 是 Taskpps 的命令行工具,使用 Go 编写,提供完整的流水线管理功能。
 
 ## 安装
 
@@ -8,7 +8,7 @@
 cd cli
 go build -o bin/ppsctl main.go
 
-# 可选：移动到 PATH
+# 可选:移动到 PATH
 sudo mv bin/ppsctl /usr/local/bin/
 ```
 
@@ -18,7 +18,7 @@ sudo mv bin/ppsctl /usr/local/bin/
 ppsctl init
 ```
 
-在空白目录中执行，创建以下结构：
+在空白目录中执行,创建以下结构:
 
 ```
 my-project/
@@ -34,7 +34,7 @@ my-project/
 ## 服务管理
 
 ```bash
-# 启动后端服务（自动检测后端进程）
+# 启动后端服务(自动检测后端进程)
 ppsctl start-server
 
 # 查看服务状态和信息
@@ -44,7 +44,7 @@ ppsctl server-info
 ## 基本工作流
 
 ```bash
-# 1. 编写流水线（在 pipelines/ 目录下创建 YAML）
+# 1. 编写流水线(在 pipelines/ 目录下创建 YAML)
 # 2. 运行
 ppsctl run deploy.yaml
 

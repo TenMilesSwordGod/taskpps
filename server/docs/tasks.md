@@ -1,10 +1,10 @@
 # 任务类型
 
-Taskpps 支持三种任务类型，通过工厂函数 `create_executor()` 统一创建。
+Taskpps 支持三种任务类型,通过工厂函数 `create_executor()` 统一创建。
 
 ## Command 任务
 
-在本地或远程执行 Shell 命令：
+在本地或远程执行 Shell 命令:
 
 ```yaml
 tasks:
@@ -13,7 +13,7 @@ tasks:
 
   - name: deploy-remote
     command: systemctl restart myapp
-    host: prod-server          # 指定远程主机（需配置 agent）
+    host: prod-server          # 指定远程主机(需配置 agent)
 
   - name: with-shell
     command: echo "hello" && ls -la
@@ -21,9 +21,9 @@ tasks:
 
 ### 安全机制
 
-`LocalExecutor` 内置危险命令检测，匹配以下模式将拒绝执行：
+`LocalExecutor` 内置危险命令检测,匹配以下模式将拒绝执行:
 - `rm -rf /` / `rm -rf /*`
-- `:(){ :|:& };:`（fork 炸弹）
+- `:(){ :|:& };:`(fork 炸弹)
 - `dd if=/dev/zero of=/dev/sda`
 - `mkfs.*` / `format` / `fdisk`
 - `> /dev/sda` / 直接写入块设备
@@ -31,7 +31,7 @@ tasks:
 
 ## Invoke 任务
 
-调用 Python 函数，支持参数传递。任务文件放置在 `tasks/` 目录。
+调用 Python 函数,支持参数传递。任务文件放置在 `tasks/` 目录。
 
 ```yaml
 tasks:
@@ -43,10 +43,10 @@ tasks:
         target_version: "3.0"
 ```
 
-Python 任务函数示例（`tasks/deploy_tasks.py`）：
+Python 任务函数示例(`tasks/deploy_tasks.py`):
 
 ```python
-# 使用 @invoke_task 装饰器（推荐）
+# 使用 @invoke_task 装饰器(推荐)
 from taskpps.executors.invoke import invoke_task
 
 @invoke_task
@@ -61,7 +61,7 @@ def hello(name: str):
 
 ## Steps 任务
 
-将多个子步骤组合为一个逻辑任务：
+将多个子步骤组合为一个逻辑任务:
 
 ```yaml
 tasks:
@@ -75,4 +75,4 @@ tasks:
             status: "done"
 ```
 
-Steps 按顺序依次执行，任何一个步骤失败则整个任务失败。
+Steps 按顺序依次执行,任何一个步骤失败则整个任务失败。

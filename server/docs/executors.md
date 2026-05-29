@@ -4,7 +4,7 @@
 
 ## Local 执行器
 
-在本地运行 Shell 命令，基于 `asyncio.create_subprocess_exec`：
+在本地运行 Shell 命令,基于 `asyncio.create_subprocess_exec`:
 
 ```yaml
 # pipeline.yaml 中默认使用 local
@@ -15,26 +15,26 @@ tasks:
 
 ### 配置
 
-在 `.taskpps/taskpps.yaml` 中：
+在 `.taskpps/taskpps.yaml` 中:
 
 ```yaml
 executor:
-  shell: /bin/bash        # 默认 shell，可选 /bin/zsh /bin/sh 等
-  default_timeout: 3600   # 默认超时（秒）
+  shell: /bin/bash        # 默认 shell,可选 /bin/zsh /bin/sh 等
+  default_timeout: 3600   # 默认超时(秒)
   max_workers: 10         # 最大并发任务数
 ```
 
 ### 安全机制
 
-检测并阻止以下危险命令模式：
-- 递归删除根目录：`rm -rf /` / `rm -rf /*`
-- Fork 炸弹：`:(){ :|:& };:`
-- 直接写入块设备：`dd if=/dev/zero of=/dev/sda` / `> /dev/sda` / `mkfs.*` / `format`
-- 破坏性权限变更：`chmod -R 777 /` / `chmod 000 /`
+检测并阻止以下危险命令模式:
+- 递归删除根目录:`rm -rf /` / `rm -rf /*`
+- Fork 炸弹:`:(){ :|:& };:`
+- 直接写入块设备:`dd if=/dev/zero of=/dev/sda` / `> /dev/sda` / `mkfs.*` / `format`
+- 破坏性权限变更:`chmod -R 777 /` / `chmod 000 /`
 
 ## SSH 执行器
 
-通过 paramiko 在远程主机执行命令：
+通过 paramiko 在远程主机执行命令:
 
 ```yaml
 tasks:
@@ -43,9 +43,9 @@ tasks:
     host: prod-server
 ```
 
-### 主机配置（Agent）
+### 主机配置(Agent)
 
-在 `agents/` 目录下创建 YAML 文件：
+在 `agents/` 目录下创建 YAML 文件:
 
 ```yaml
 # agents/prod.yaml
@@ -55,23 +55,23 @@ username: deploy
 credential: prod-cred     # 引用凭据名称
 ```
 
-### 凭据配置（Credential）
+### 凭据配置(Credential)
 
-在 `credentials/` 目录下创建 YAML 文件：
+在 `credentials/` 目录下创建 YAML 文件:
 
 ```yaml
 # credentials/prod-cred.yaml
-# 方式一：密钥文件
+# 方式一:密钥文件
 key_file: ~/.ssh/id_rsa
 passphrase: ""
 
-# 方式二：密码
+# 方式二:密码
 password: "your-password"
 ```
 
 ## Invoke 执行器
 
-动态导入 `tasks/` 目录下的 Python 模块，调用指定函数：
+动态导入 `tasks/` 目录下的 Python 模块,调用指定函数:
 
 ```yaml
 tasks:
@@ -83,7 +83,7 @@ tasks:
         target_version: "3.0"
 ```
 
-任务函数示例（`tasks/deploy_tasks.py`）：
+任务函数示例(`tasks/deploy_tasks.py`):
 
 ```python
 from taskpps.executors.invoke import invoke_task

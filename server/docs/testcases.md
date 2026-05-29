@@ -43,7 +43,7 @@
 
 ### 2. 国际化 — `i18n.py`
 - `Translator.__init__()` 构造
-- `Translator.t()` 翻译方法（含参数替换）
+- `Translator.t()` 翻译方法(含参数替换)
 - `get_translator()` 单例获取
 - `set_locale()` 区域设置
 - `t()` 快捷翻译函数
@@ -59,7 +59,7 @@
 ### 4. 危险命令检测 — `executors/local.py:13-24, 43-44`
 - `_DANGEROUS_PATTERNS` 正则表达式
 - 检测到危险模式时返回 `exit_code=1`
-- 各种危险模式的触发（rm -rf /, fork bomb, shutdown等）
+- 各种危险模式的触发(rm -rf /, fork bomb, shutdown等)
 
 ### 5. PipelineService 任务回调错误处理 — `services/pipeline_service.py:81-90`
 - `_handle_run_error()` 静态方法
@@ -76,23 +76,23 @@
 
 ---
 
-## 已有测试覆盖的关键场景（摘要）
+## 已有测试覆盖的关键场景(摘要)
 
 ### API 层
-- POST /api/runs/ — 创建运行（含参数、文件不存在、循环依赖）
-- GET /api/runs/ — 列表运行（含过滤 pipeline/status/limit）
-- GET /api/runs/{id} — 获取运行详情（含不存在）
-- GET /api/runs/{id}/logs — 获取日志（含 task/tail/follow/SSE/不存在）
-- POST /api/runs/{id}/cancel — 取消运行（含不存在）
-- DELETE /api/runs/ — 清理运行（force/keep/older_than）
+- POST /api/runs/ — 创建运行(含参数、文件不存在、循环依赖)
+- GET /api/runs/ — 列表运行(含过滤 pipeline/status/limit)
+- GET /api/runs/{id} — 获取运行详情(含不存在)
+- GET /api/runs/{id}/logs — 获取日志(含 task/tail/follow/SSE/不存在)
+- POST /api/runs/{id}/cancel — 取消运行(含不存在)
+- DELETE /api/runs/ — 清理运行(force/keep/older_than)
 - POST /api/plugins/triggers/ — 创建触发器
 - GET /api/plugins/triggers/ — 列表触发器
-- DELETE /api/plugins/triggers/{id} — 删除触发器（含不存在）
+- DELETE /api/plugins/triggers/{id} — 删除触发器(含不存在)
 
 ### 领域层
 - DAG 拓扑排序、执行层级、环检测、未知依赖、级联依赖
 - 上下文环境变量构建与优先级
-- 参数覆盖（options/tasks name index/numeric index）
+- 参数覆盖(options/tasks name index/numeric index)
 - dot path 读写
 
 ### 执行器层

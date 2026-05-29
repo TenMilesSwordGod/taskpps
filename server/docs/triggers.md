@@ -1,10 +1,10 @@
 # 触发器
 
-触发器使流水线能够按计划自动运行，无需手动调用。
+触发器使流水线能够按计划自动运行,无需手动调用。
 
 ## Cron 触发器
 
-在 `.taskpps/taskpps.yaml` 中配置：
+在 `.taskpps/taskpps.yaml` 中配置:
 
 ```yaml
 triggers:
@@ -16,12 +16,12 @@ triggers:
   - type: cron
     schedule: "*/30 * * * *"    # 每 30 分钟
     pipeline: healthcheck.yaml
-    enabled: false               # 禁用，不触发执行
+    enabled: false               # 禁用,不触发执行
 ```
 
 ### 调度语法
 
-标准 5 位 cron 表达式：
+标准 5 位 cron 表达式:
 
 ```
 ┌───────── 分钟 (0-59)
@@ -33,19 +33,19 @@ triggers:
 * * * * *
 ```
 
-支持的运算符：`,`（列举）、`-`（范围）、`*`（所有）、`/`（步进）、`L`（最后）、`W`（工作日）、`#`（第 N 个星期几）。
+支持的运算符:`,`(列举)、`-`(范围)、`*`(所有)、`/`(步进)、`L`(最后)、`W`(工作日)、`#`(第 N 个星期几)。
 
 ### 实现机制
 
-`CronTrigger` 在 `PluginManager` 启动时加载，每个触发器在独立守护线程中运行。每秒检查当前时间是否匹配 cron 表达式，匹配时通过 API 内部调用创建流水线运行。
+`CronTrigger` 在 `PluginManager` 启动时加载,每个触发器在独立守护线程中运行。每秒检查当前时间是否匹配 cron 表达式,匹配时通过 API 内部调用创建流水线运行。
 
-## Webhook 触发器（规划中）
+## Webhook 触发器(规划中)
 
-预留了框架能力，后续可按 `plugins/base.py` 的 `TriggerPlugin` 基类实现。
+预留了框架能力,后续可按 `plugins/base.py` 的 `TriggerPlugin` 基类实现。
 
 ## 管理命令
 
-通过 ppsctl 管理触发器：
+通过 ppsctl 管理触发器:
 
 ```bash
 ppsctl trigger list              # 查看所有触发器
@@ -53,7 +53,7 @@ ppsctl trigger add cron ...      # 添加触发器
 ppsctl trigger delete <id>       # 删除触发器
 ```
 
-也可通过 API 管理：
+也可通过 API 管理:
 
 ```bash
 curl -X POST http://127.0.0.1:26521/api/plugins/triggers/ \
