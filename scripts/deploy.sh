@@ -124,7 +124,10 @@ install_project_deps() {
 
     cd /opt/taskpps/server
 
-    # Create virtual environment and install dependencies
+    # Ensure taskpps owns the directory for uv to create .venv
+    chown -R taskpps:taskpps /opt/taskpps
+
+    # Create virtual environment and install dependencies as taskpps user
     su -s /bin/bash taskpps -c "
         cd /opt/taskpps/server
         uv sync --no-dev
