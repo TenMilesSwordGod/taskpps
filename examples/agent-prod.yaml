@@ -1,5 +1,21 @@
-# 生产环境代理配置示例
-# 文件名为 agent-prod.yaml,流水线中通过 host: prod 引用
-host: 10.0.0.50             # 服务器地址
-port: 22                    # SSH 端口
-username: admin             # 登录用户名
+# Agent 文件 — 生产环境 Agent
+
+agents:
+  - id: prod-server
+    name: "生产环境服务器"
+    description: "生产环境主服务器"
+    type: ssh-key
+    host: 10.0.0.50
+    port: 22
+    username: admin
+    credential_id: prod-cred
+    max_parallel: 1
+
+  - id: prod-worker-01
+    name: "生产 Worker 01"
+    description: "生产环境 Worker 节点"
+    type: ssh-key
+    host: 10.0.0.51
+    port: 22
+    username: admin
+    credential_id: prod-cred

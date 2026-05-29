@@ -1,26 +1,35 @@
-# 夜间定时任务流水线示例
+# 夜间定时任务流水线示例 — 新格式
 name: nightly
-options:
-  host: prod-server          # 生产服务器
-  credential: prod-cred      # 生产环境凭据
+
+config:
+  host: prod-server              # Agent ID
+  credential: prod-cred          # Credential ID
   env:
-    APP_ENV: production      # 生产环境
-  timeout: 1800              # 总超时 30 分钟
-  on_failure: continue       # 某个任务失败后继续执行其他任务
+    APP_ENV: production
+  timeout: 1800
+  retry: 1
+  on_failure: continue
+  execution_strategy: parallel
 
-tasks:
-  - name: backup-db          # 数据库备份
-    command: pg_dump -U admin mydb > /backup/db_$(date +%Y%m%d).sql
-    timeout: 600
+pipelines:
+  - name: nightly-tasks
+    tasks:
+      - name: backup-db
+        command: pg_dump -U admin mydb > /backup/db_$(date +%Y%m%d).sql
+        timeout: 600
 
-  - name: run-reports        # 生成报表
-    command: python /app/generate_reports.py
-    timeout: 1200
+      - name: run-reports
+        commands:
+          - cd /app
+          - python generate_reports.py
+          - echo "reports done"
+        timeout: 1200
 
-  - name: cleanup-logs       # 清理过期日志(依赖 backup-db)
-    command: find /var/log/app -name "*.log" -mtime +30 -delete
-    depends_on: [backup-db]
+      - name: cleanup-logs
+        command: find /var/log/app -name "*.log" -mtime +30 -delete
+        depends_on: [backup-db]
 
-  - name: notify             # 发送通知(依赖 run-reports 和 cleanup-logs)
-    command: curl -X POST https://hooks.example.com/notify -d 'nightly done'
-    depends_on: [run-reports, cleanup-logs]
+      - name: notify
+        command: curl -X POST https://hooks.example.com/notify -d 'nightly done'
+        depends_on: [run-reports, cleanup-logs]
+        retry: 2

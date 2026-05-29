@@ -37,7 +37,8 @@ def _resolve_variable_match(match, env: Dict[str, str]) -> str:
 
     if ref.startswith("credential:"):
         try:
-            _, cred_id, field = ref.split(":", 2)
+            rest = ref.split(":", 1)[1]
+            cred_id, field = rest.split(".", 1)
             cred_loader = _get_credential_loader()
             return str(cred_loader.get_field(cred_id, field))
         except (ValueError, KeyError) as e:
@@ -49,7 +50,8 @@ def _resolve_variable_match(match, env: Dict[str, str]) -> str:
 
     elif ref.startswith("agent:"):
         try:
-            _, agent_id, field = ref.split(":", 2)
+            rest = ref.split(":", 1)[1]
+            agent_id, field = rest.split(".", 1)
             agent_loader = _get_agent_loader()
             return str(agent_loader.get_field(agent_id, field))
         except (ValueError, KeyError) as e:

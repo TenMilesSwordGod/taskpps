@@ -1,28 +1,32 @@
-# 多步骤任务流水线示例
-# 使用 steps 将多个子步骤组合到一个任务中
+# 多步骤任务流水线示例 — 新格式
 name: deploy-steps
-options:
+
+config:
   env:
     APP_ENV: staging
   timeout: 600
   on_failure: fail
+  execution_strategy: sequential
 
-tasks:
-  - name: build-and-deploy   # 构建并部署
-    cwd: /app                # 工作目录
-    steps:                   # 子步骤列表(按顺序执行)
-      - cd: /tmp
-        run: wget https://example.com/release.tar.gz
-      - run: tar xzf /tmp/release.tar.gz -C /app
-      - cd: /app
-        run: make build
-      - run: make migrate
-      - run: systemctl restart myapp
-    timeout: 300
+pipelines:
+  - name: steps-pipeline
+    tasks:
+      - name: build-and-deploy
+        cwd: /app
+        steps:
+          - cd: /tmp
+            run: wget https://example.com/release.tar.gz
+          - run: tar xzf /tmp/release.tar.gz -C /app
+          - cd: /app
+            run: make build
+          - run: make migrate
+          - run: systemctl restart myapp
+        timeout: 300
 
-  - name: verify             # 验证部署结果
-    steps:
-      - run: curl -sf http://localhost:8000/health
-      - cd: /var/log
-        run: tail -20 app.log
-    depends_on: [build-and-deploy]
+      - name: verify
+        steps:
+          - run: curl -sf http://localhost:8000/health
+          - cd: /var/log
+            run: tail -20 app.log
+        depends_on: [build-and-deploy]
+        when: ${env.APP_ENV} != "production"
