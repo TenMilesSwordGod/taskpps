@@ -131,6 +131,11 @@ install_project_deps() {
     mkdir -p /var/lib/taskpps
     chown taskpps:taskpps /var/lib/taskpps
 
+    # Remove broken .venv that points to vncuser's Python
+    if [[ -d /opt/taskpps/server/.venv ]]; then
+        rm -rf /opt/taskpps/server/.venv
+    fi
+
     # Install Python and dependencies as taskpps user with proper HOME
     su -s /bin/bash taskpps -c "
         export HOME=/var/lib/taskpps
