@@ -60,13 +60,17 @@ class PipelineService:
             task_run_ids = {}
             for task in resolved.tasks:
                 log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path(resolved.name)
-                log_path = str(logs_dir / log_rel_dir / run.id / task.name / "output.log")
+                # Create task_run first without log_path (we'll update it after getting the id)
                 task_run = await task_repo.create_task_run(
                     run_id=run.id,
                     task_name=task.name,
                     task_type=task.task_type,
-                    log_path=log_path,
                 )
+                # Now update log_path with the task_run.id
+                log_path = str(logs_dir / log_rel_dir / run.id / task_run.id / "output.log")
+                task_run.log_path = log_path
+                await self.session.commit()
+                await self.session.refresh(task_run)
                 task_run_ids[task.name] = task_run.id
 
         context = ExecutionContext(pipeline=resolved, run_id=run.id, env=params)

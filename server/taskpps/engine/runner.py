@@ -147,9 +147,9 @@ class PipelineRunner:
             log_rel_dir = Path(self.pipeline.pipeline_file).with_suffix('')
         else:
             log_rel_dir = Path(self.pipeline.name)
-        log_path = logs_dir / log_rel_dir / self.run_id / task.name / "output.log"
-
+        
         task_run_id = self._task_run_ids.get(task.name, "")
+        log_path = logs_dir / log_rel_dir / self.run_id / task_run_id / "output.log"
 
         async with get_session_factory()() as session:
             task_repo = TaskRunRepository(session)
