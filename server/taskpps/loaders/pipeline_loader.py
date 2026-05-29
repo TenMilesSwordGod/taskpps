@@ -10,19 +10,70 @@ from taskpps.i18n import t
 from taskpps.schemas.pipeline import PipelineYAML
 
 
-_ENV_PATTERN = re.compile(r"\$\{([^}]+)\}")
+_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}")
+
+_credential_loader = None
+_agent_loader = None
+
+
+def _get_credential_loader():
+    global _credential_loader
+    if _credential_loader is None:
+        from taskpps.loaders.credential_loader import CredentialLoader
+        _credential_loader = CredentialLoader()
+    return _credential_loader
+
+
+def _get_agent_loader():
+    global _agent_loader
+    if _agent_loader is None:
+        from taskpps.loaders.agent_loader import AgentLoader
+        _agent_loader = AgentLoader()
+    return _agent_loader
+
+
+def _resolve_variable_match(match, env: Dict[str, str]) -> str:
+    ref = match.group(1)
+
+    if ref.startswith("credential:"):
+        try:
+            _, cred_id, field = ref.split(":", 2)
+            cred_loader = _get_credential_loader()
+            return str(cred_loader.get_field(cred_id, field))
+        except (ValueError, KeyError) as e:
+            import logging
+            logging.getLogger("taskpps.pipelines").warning(
+                t("Failed to resolve variable '{ref}': {error}", ref=ref, error=str(e))
+            )
+            return match.group(0)
+
+    elif ref.startswith("agent:"):
+        try:
+            _, agent_id, field = ref.split(":", 2)
+            agent_loader = _get_agent_loader()
+            return str(agent_loader.get_field(agent_id, field))
+        except (ValueError, KeyError) as e:
+            import logging
+            logging.getLogger("taskpps.pipelines").warning(
+                t("Failed to resolve variable '{ref}': {error}", ref=ref, error=str(e))
+            )
+            return match.group(0)
+
+    elif ref.startswith("env."):
+        key = ref[4:]
+        return os.environ.get(key, env.get(key, match.group(0)))
+
+    else:
+        if ref in env:
+            return env[ref]
+        if ref in os.environ:
+            return os.environ[ref]
+        return match.group(0)
 
 
 def substitute_env_vars(value: Any, env: Dict[str, str]) -> Any:
     if isinstance(value, str):
-        def _replace(match):
-            var_name = match.group(1)
-            if var_name in env:
-                return env[var_name]
-            if var_name in os.environ:
-                return os.environ[var_name]
-            return match.group(0)
-        return _ENV_PATTERN.sub(_replace, value)
+        return _VAR_PATTERN.sub(lambda m: _resolve_variable_match(m, env), value)
     if isinstance(value, dict):
         return {k: substitute_env_vars(v, env) for k, v in value.items()}
     if isinstance(value, list):

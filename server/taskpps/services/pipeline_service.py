@@ -40,11 +40,12 @@ class PipelineService:
 
         resolved = ResolvedPipeline.from_yaml(spec, pipeline_file=pipeline_file)
 
-        try:
-            dag = DAG(resolved.tasks)
-            dag.topological_sort()
-        except (DAGCycleError, ValueError) as e:
-            raise ValueError(str(e))
+        for sub in resolved.subpipelines:
+            try:
+                dag = DAG(sub.tasks)
+                dag.topological_sort()
+            except (DAGCycleError, ValueError) as e:
+                raise ValueError(t("SubPipeline '{name}': {error}", name=sub.name, error=str(e)))
 
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -57,29 +58,29 @@ class PipelineService:
             )
 
             logs_dir = get_logs_dir()
+            log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path(resolved.name)
             task_run_ids = {}
-            for task in resolved.tasks:
-                log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path(resolved.name)
-                # Create task_run first without log_path (we'll update it after getting the id)
-                task_run = await task_repo.create_task_run(
-                    run_id=run.id,
-                    task_name=task.name,
-                    task_type=task.task_type,
-                )
-                # Now update log_path with the task_run.id
-                log_path = str(logs_dir / log_rel_dir / run.id / task_run.id / "output.log")
-                task_run.log_path = log_path
-                await self.session.commit()
-                await self.session.refresh(task_run)
-                task_run_ids[task.name] = task_run.id
+
+            for sub in resolved.subpipelines:
+                for task in sub.tasks:
+                    task_run = await task_repo.create_task_run(
+                        run_id=run.id,
+                        task_name=task.name,
+                        task_type=task.task_type,
+                    )
+                    log_path = str(logs_dir / log_rel_dir / run.id / task_run.id / "output.log")
+                    task_run.log_path = log_path
+                    await session.commit()
+                    await session.refresh(task_run)
+                    task_run_ids[task.name] = task_run.id
 
         context = ExecutionContext(pipeline=resolved, run_id=run.id, env=params)
 
         runner = PipelineRunner(run_id=run.id, pipeline=resolved, context=context)
         runner._task_run_ids = task_run_ids
 
-        task = asyncio.create_task(runner.run())
-        task.add_done_callback(self._handle_run_error)
+        asyncio_task = asyncio.create_task(runner.run())
+        asyncio_task.add_done_callback(self._handle_run_error)
 
         return {"id": run.id, "pipeline_name": run.pipeline_name, "status": run.status}
 
@@ -104,8 +105,7 @@ class PipelineService:
                 return None
 
             tasks = await task_repo.list_task_runs(run_id)
-            
-            # Parse params from JSON string
+
             params = {}
             if isinstance(run.params, str):
                 try:
@@ -147,7 +147,6 @@ class PipelineService:
             runs = await run_repo.list_runs(pipeline=pipeline, status=status, limit=limit)
             items = []
             for run in runs:
-                # Parse params from JSON string
                 params = {}
                 if isinstance(run.params, str):
                     try:
@@ -156,7 +155,7 @@ class PipelineService:
                         pass
                 elif isinstance(run.params, dict):
                     params = run.params
-                
+
                 items.append({
                     "id": run.id,
                     "pipeline_name": run.pipeline_name,
@@ -166,9 +165,8 @@ class PipelineService:
                     "started_at": run.started_at,
                     "finished_at": run.finished_at,
                     "created_at": run.created_at,
-                    "tasks": []  # Empty tasks for list view
+                    "tasks": [],
                 })
-            # Also get total count (without limit)
             total = await run_repo.count_runs(pipeline=pipeline, status=status)
             return {"items": items, "total": total}
 

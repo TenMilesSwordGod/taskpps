@@ -13,6 +13,7 @@ logger = logging.getLogger("taskpps.credentials")
 class CredentialLoader:
     def __init__(self, base_dir: Optional[Path] = None):
         self._base_dir = base_dir
+        self._cache: Optional[Dict[str, Dict[str, Any]]] = None
 
     @property
     def base_dir(self) -> Path:
@@ -31,27 +32,50 @@ class CredentialLoader:
                 return data
         raise FileNotFoundError(t("Credential file not found: {name}", name=credential_name))
 
-    def load_all(self) -> Dict[str, Dict[str, Any]]:
+    def _load_yaml_files(self) -> Dict[str, Dict[str, Any]]:
         result = {}
         base = self.base_dir
         if not base.exists():
             return result
-        for path in base.glob("*.yaml"):
-            try:
-                with open(path) as f:
-                    data = yaml.safe_load(f)
-                name = path.stem
-                if data:
-                    result[name] = data
-            except Exception:
-                continue
-        for path in base.glob("*.yml"):
-            try:
-                with open(path) as f:
-                    data = yaml.safe_load(f)
-                name = path.stem
-                if data:
-                    result[name] = data
-            except Exception:
-                continue
+        for pattern in ("*.yaml", "*.yml"):
+            for path in base.glob(pattern):
+                try:
+                    with open(path) as f:
+                        data = yaml.safe_load(f)
+                    if not data:
+                        continue
+                    filename = path.stem
+
+                    if isinstance(data, dict) and "credentials" in data and isinstance(data["credentials"], list):
+                        for item in data["credentials"]:
+                            if isinstance(item, dict) and "id" in item:
+                                cred_id = item["id"]
+                                result[cred_id] = item
+                            else:
+                                logger.warning(t("Credential entry in '{name}' missing 'id', skipped", name=filename))
+                    else:
+                        result[filename] = data
+                except Exception:
+                    continue
         return result
+
+    def load_all(self) -> Dict[str, Dict[str, Any]]:
+        if self._cache is None:
+            self._cache = self._load_yaml_files()
+        return dict(self._cache)
+
+    def get(self, credential_id: str) -> Optional[Dict[str, Any]]:
+        if self._cache is None:
+            self._cache = self._load_yaml_files()
+        return self._cache.get(credential_id)
+
+    def get_field(self, credential_id: str, field: str) -> Any:
+        cred = self.get(credential_id)
+        if cred is None:
+            raise KeyError(t("Credential not found: {id}", id=credential_id))
+        if field not in cred:
+            raise KeyError(t("Field '{field}' not found in credential '{id}'", field=field, id=credential_id))
+        return cred[field]
+
+    def clear_cache(self) -> None:
+        self._cache = None

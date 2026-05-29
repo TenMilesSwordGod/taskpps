@@ -5,7 +5,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from taskpps.config import get_settings
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask, ResolvedSubPipeline
 
 
 _NAME_INDEX_PATTERN = re.compile(r'^(\w+)\["([^"]+)"\]$')
@@ -31,7 +31,7 @@ def _navigate_to_key(current: Any, key: str) -> Any:
         container = current[field] if isinstance(current, dict) else current
         if isinstance(container, list):
             return container[idx]
-        return container  # pragma: no cover
+        return container
     elif isinstance(current, dict):
         return current[key]
     elif isinstance(current, list):
@@ -49,9 +49,9 @@ def _set_key(current: Any, key: str, value: Any) -> None:
         container = current[field] if isinstance(current, dict) else current
         if isinstance(container, list):
             for item in container:
-                if isinstance(item, dict) and item.get("name") == name:  # pragma: no cover
-                    item[key.split(".")[-1] if "." in key else list(item.keys())[-1]] = value  # pragma: no cover
-                    return  # pragma: no cover
+                if isinstance(item, dict) and item.get("name") == name:
+                    item[key.split(".")[-1] if "." in key else list(item.keys())[-1]] = value
+                    return
             raise KeyError(f"Item with name '{name}' not found in '{field}'")
     elif m2:
         field = m2.group(1)
@@ -83,15 +83,15 @@ def set_dot_path(data: dict, path: str, value: Any) -> None:
     m = _NAME_INDEX_PATTERN.match(last_key)
     m2 = _NUMERIC_INDEX_PATTERN.match(last_key)
 
-    if m:  # pragma: no cover
-        field = m.group(1)  # pragma: no cover
-        name = m.group(2)  # pragma: no cover
-        container = current.get(field) if isinstance(current, dict) else current  # pragma: no cover
-        if isinstance(container, list):  # pragma: no cover
-            for item in container:  # pragma: no cover
-                if isinstance(item, dict) and item.get("name") == name:  # pragma: no cover
-                    return  # pragma: no cover
-            raise KeyError(f"Item with name '{name}' not found in '{field}'")  # pragma: no cover
+    if m:
+        field = m.group(1)
+        name = m.group(2)
+        container = current.get(field) if isinstance(current, dict) else current
+        if isinstance(container, list):
+            for item in container:
+                if isinstance(item, dict) and item.get("name") == name:
+                    return
+            raise KeyError(f"Item with name '{name}' not found in '{field}'")
     elif m2:
         field = m2.group(1)
         idx = int(m2.group(2))
@@ -109,10 +109,12 @@ def set_dot_path(data: dict, path: str, value: Any) -> None:
 _ALLOWED_OVERRIDE_PATHS = {
     "options.host", "options.credential", "options.timeout", "options.on_failure",
     "options.env",
+    "config.host", "config.credential", "config.timeout", "config.on_failure",
+    "config.env", "config.retry", "config.execution_strategy",
 }
 
 _ALLOWED_TASK_OVERRIDE_KEYS = {
-    "timeout", "on_failure", "env", "cwd", "host", "credential",
+    "timeout", "on_failure", "env", "cwd", "host", "credential", "retry", "when",
 }
 
 
@@ -121,7 +123,7 @@ def apply_overrides(pipeline_data: dict, overrides: Dict[str, Any]) -> dict:
     data = copy.deepcopy(pipeline_data)
     for path, value in overrides.items():
         keys = path.split(".")
-        if len(keys) >= 2 and keys[0] == "options":
+        if len(keys) >= 2 and keys[0] in ("options", "config"):
             if path not in _ALLOWED_OVERRIDE_PATHS:
                 raise ValueError(f"Override path not allowed: {path}")
         elif len(keys) >= 2 and keys[0] == "tasks":
@@ -178,7 +180,15 @@ class ExecutionContext:
         settings = get_settings()
         return build_env(
             global_env=settings.env,
-            pipeline_env=self.pipeline.options.env,
+            pipeline_env=self.pipeline.top_config.env,
             task_env=task.env,
+            cli_env=self.env,
+        )
+
+    def get_subpipeline_env(self, sub: ResolvedSubPipeline) -> Dict[str, str]:
+        settings = get_settings()
+        return build_env(
+            global_env=settings.env,
+            pipeline_env=sub.config.env,
             cli_env=self.env,
         )
