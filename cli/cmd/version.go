@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	// 版本信息，编译时可以通过 ldflags 注入
+	// 版本信息,编译时可以通过 ldflags 注入
 	Version = "0.1.0"
 )
 

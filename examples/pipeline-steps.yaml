@@ -10,7 +10,7 @@ options:
 tasks:
   - name: build-and-deploy   # 构建并部署
     cwd: /app                # 工作目录
-    steps:                   # 子步骤列表（按顺序执行）
+    steps:                   # 子步骤列表(按顺序执行)
       - cd: /tmp
         run: wget https://example.com/release.tar.gz
       - run: tar xzf /tmp/release.tar.gz -C /app

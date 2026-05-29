@@ -1,4 +1,4 @@
-# 预发（Staging）环境代理配置示例
+# 预发(Staging)环境代理配置示例
 host: 192.168.1.100
 port: 22
 username: deploy

@@ -17,10 +17,10 @@ tasks:
     command: python /app/generate_reports.py
     timeout: 1200
 
-  - name: cleanup-logs       # 清理过期日志（依赖 backup-db）
+  - name: cleanup-logs       # 清理过期日志(依赖 backup-db)
     command: find /var/log/app -name "*.log" -mtime +30 -delete
     depends_on: [backup-db]
 
-  - name: notify             # 发送通知（依赖 run-reports 和 cleanup-logs）
+  - name: notify             # 发送通知(依赖 run-reports 和 cleanup-logs)
     command: curl -X POST https://hooks.example.com/notify -d 'nightly done'
     depends_on: [run-reports, cleanup-logs]

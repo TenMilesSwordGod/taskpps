@@ -1,13 +1,13 @@
 """Invoke 任务定义示例
 
-这些函数可以在流水线的 invoke 任务中引用，例如：
+这些函数可以在流水线的 invoke 任务中引用,例如:
   - name: migrate
     invoke:
       task: deploy_tasks.migrate_db
       kwargs:
         target_version: latest
 
-需要在 taskpps.yaml 中配置 tasks 目录，或使用默认的 tasks/ 目录。
+需要在 taskpps.yaml 中配置 tasks 目录,或使用默认的 tasks/ 目录。
 """
 
 from invoke import task

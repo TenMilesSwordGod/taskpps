@@ -1,5 +1,5 @@
 # 生产环境代理配置示例
-# 文件名为 agent-prod.yaml，流水线中通过 host: prod 引用
+# 文件名为 agent-prod.yaml,流水线中通过 host: prod 引用
 host: 10.0.0.50             # 服务器地址
 port: 22                    # SSH 端口
 username: admin             # 登录用户名
