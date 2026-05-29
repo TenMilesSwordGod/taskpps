@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -5,6 +6,8 @@ import yaml
 
 from taskpps.config import get_credentials_dir
 from taskpps.i18n import t
+
+logger = logging.getLogger("taskpps.credentials")
 
 
 class CredentialLoader:
@@ -23,6 +26,8 @@ class CredentialLoader:
                     data = yaml.safe_load(f)
                 if data is None:
                     raise ValueError(t("Credential file is empty: {name}", name=credential_name))
+                if "password" in data:
+                    logger.warning(t("Credential '{name}' contains plaintext password. Consider using key_path (SSH key) instead.", name=credential_name))
                 return data
         raise FileNotFoundError(t("Credential file not found: {name}", name=credential_name))
 

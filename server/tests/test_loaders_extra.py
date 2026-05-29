@@ -1,3 +1,4 @@
+import logging
 import pytest
 from pathlib import Path
 
@@ -163,6 +164,30 @@ def test_credential_loader_load_yml_extension(tmp_path):
     loader = CredentialLoader(creds_dir)
     data = loader.load("test-cred")
     assert data["password"] == "secret"
+
+
+def test_credential_loader_password_warning(tmp_path, caplog):
+    creds_dir = tmp_path / "credentials"
+    creds_dir.mkdir()
+    yml_file = creds_dir / "test-cred.yaml"
+    yml_file.write_text("password: changeme\n")
+    loader = CredentialLoader(creds_dir)
+    with caplog.at_level(logging.WARNING):
+        data = loader.load("test-cred")
+    assert data["password"] == "changeme"
+    assert "plaintext password" in caplog.text
+
+
+def test_credential_loader_key_path_no_warning(tmp_path, caplog):
+    creds_dir = tmp_path / "credentials"
+    creds_dir.mkdir()
+    yml_file = creds_dir / "key-cred.yaml"
+    yml_file.write_text("key_path: ~/.ssh/deploy_key\n")
+    loader = CredentialLoader(creds_dir)
+    with caplog.at_level(logging.WARNING):
+        data = loader.load("key-cred")
+    assert data["key_path"] == "~/.ssh/deploy_key"
+    assert "plaintext password" not in caplog.text
 
 
 def test_substitute_env_vars_no_match():
