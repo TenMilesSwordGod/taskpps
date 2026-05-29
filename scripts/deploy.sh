@@ -57,20 +57,20 @@ install_python_deps() {
     case $os_type in
         debian)
             apt-get update -qq
-            apt-get install -y -qq python3 python3-pip python3-venv uv curl
+            apt-get install -y -qq python3 python3-pip python3-venv curl rsync
             ;;
         rhel)
-            yum install -y python3 python3-pip curl
+            yum install -y python3 python3-pip curl rsync
             ;;
         arch)
-            pacman -Sy --noconfirm python python-pip curl
+            pacman -Sy --noconfirm python python-pip curl rsync
             ;;
         *)
             log_warn "Unknown OS, assuming Python 3 and uv are already installed"
             ;;
     esac
 
-    # Install uv if not present
+    # Install uv if not present (uv is not available in standard package repos)
     if ! command -v uv &>/dev/null; then
         log_step "Installing uv package manager..."
         curl -LsSf https://astral.sh/uv/install.sh | sh
