@@ -127,9 +127,16 @@ install_project_deps() {
     # Ensure taskpps owns the directory for uv to create .venv
     chown -R taskpps:taskpps /opt/taskpps
 
-    # Create virtual environment and install dependencies as taskpps user
+    # Ensure taskpps has a proper home directory for uv to install Python
+    mkdir -p /var/lib/taskpps
+    chown taskpps:taskpps /var/lib/taskpps
+
+    # Install Python and dependencies as taskpps user with proper HOME
     su -s /bin/bash taskpps -c "
+        export HOME=/var/lib/taskpps
+        export PATH=\$HOME/.local/bin:\$PATH
         cd /opt/taskpps/server
+        uv python install 3.11 || true
         uv sync --no-dev
     "
 }
