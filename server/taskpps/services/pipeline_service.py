@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -194,7 +194,6 @@ class PipelineService:
     async def clean_runs(self, older_than: Optional[int] = None, keep: Optional[int] = None, force: bool = False) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
-            task_repo = TaskRunRepository(session)
 
             deleted_logs = 0
 
@@ -204,18 +203,14 @@ class PipelineService:
                     deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
                 deleted_runs = await run_repo.delete_all_runs()
             elif older_than:
+                cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=older_than)
                 runs = await run_repo.list_runs(limit=10000)
-                from datetime import datetime, timedelta
-                cutoff = datetime.now(timezone.utc) - timedelta(days=older_than)
                 for run in runs:
                     if run.created_at and run.created_at < cutoff:
                         deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
                 deleted_runs = await run_repo.delete_runs_older_than(older_than)
             elif keep:
                 runs = await run_repo.list_runs(limit=10000)
-                runs_to_keep = set()
-                for run in runs[:keep]:
-                    runs_to_keep.add(run.id)
                 for run in runs[keep:]:
                     deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
                 deleted_runs = await run_repo.delete_runs_keep(keep)

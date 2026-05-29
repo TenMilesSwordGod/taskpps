@@ -63,8 +63,7 @@ async def test_clean_runs_older_than(setup_project, tmp_project, db_engine):
     async with get_session_factory()() as session:
         repo = RunRepository(session)
         run = await repo.get_run(run_id)
-        from datetime import timedelta
-        run.created_at = datetime.utcnow() - timedelta(days=30)
+        run.created_at = datetime.now(timezone.utc) - timedelta(days=30)
         await session.commit()
 
     clean_result = await svc.clean_runs(older_than=7)

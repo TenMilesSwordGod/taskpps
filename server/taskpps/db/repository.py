@@ -71,7 +71,7 @@ class RunRepository:
         await self.session.commit()
 
     async def delete_runs_older_than(self, days: int) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         stmt = delete(PipelineRun).where(PipelineRun.created_at < cutoff)
         result = await self.session.execute(stmt)
         await self.session.commit()
