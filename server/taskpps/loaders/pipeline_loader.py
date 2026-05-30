@@ -92,6 +92,10 @@ class PipelineLoader:
         return self._base_dir or get_pipelines_dir()
 
     def load(self, pipeline_file: str, env: Optional[Dict[str, str]] = None) -> PipelineYAML:
+        p = Path(pipeline_file)
+        if len(p.parts) > 0 and p.parts[0] == self.base_dir.name:
+            p = Path(*p.parts[1:])
+            pipeline_file = str(p)
         path = self.base_dir / pipeline_file
         try:
             resolved = path.resolve()

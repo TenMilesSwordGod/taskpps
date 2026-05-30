@@ -145,6 +145,10 @@ def compute_pipeline_id(pipeline_file: str) -> str:
 
 def compute_pipeline_version(pipeline_file: str) -> str:
     pipelines_dir = get_pipelines_dir()
+    p = Path(pipeline_file)
+    if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:
+        p = Path(*p.parts[1:])
+        pipeline_file = str(p)
     path = pipelines_dir / pipeline_file
     if not path.exists():
         return ""

@@ -115,7 +115,10 @@ class PipelineService:
     @staticmethod
     def _save_pipeline_snapshot(pipeline_file: str, pipeline_id: str, pipeline_version: str, run_id: str) -> None:
         pipelines_dir = get_pipelines_dir()
-        src = pipelines_dir / pipeline_file
+        p = Path(pipeline_file)
+        if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:
+            p = Path(*p.parts[1:])
+        src = pipelines_dir / p
         if not src.exists():
             return
         snapshot_dir = get_logs_dir() / pipeline_id / f"v_{pipeline_version}" / "builds" / run_id
