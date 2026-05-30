@@ -40,6 +40,39 @@ def test_pipeline_loader_load(setup_project, tmp_project):
     assert spec.tasks[1].depends_on == ["step1"]
 
 
+def test_pipeline_loader_load_with_pipelines_prefix(setup_project, tmp_project):
+    """fix: ppsctl run pipelines/deploy.yaml 不应报 流水线文件未找到"""
+    loader = PipelineLoader(tmp_project / "pipelines")
+    spec = loader.load("pipelines/deploy.yaml")
+    assert spec.name == "deploy"
+    assert len(spec.tasks) == 2
+
+    spec2 = loader.load("pipelines/simple.yaml")
+    assert spec2.name == "simple"
+
+
+def test_pipeline_loader_load_prefix_with_subdir(setup_project, tmp_project):
+    """子目录中带 pipelines/ 前缀也应正常工作"""
+    subdir = tmp_project / "pipelines" / "nested"
+    subdir.mkdir()
+    nested_yaml = subdir / "inner.yaml"
+    nested_yaml.write_text(
+        "name: inner\n"
+        "options: {}\n"
+        "tasks:\n"
+        "  - name: t1\n"
+        "    command: echo nested\n"
+    )
+    try:
+        loader = PipelineLoader(tmp_project / "pipelines")
+        spec = loader.load("pipelines/nested/inner.yaml")
+        assert spec.name == "inner"
+        assert spec.tasks[0].name == "t1"
+    finally:
+        nested_yaml.unlink()
+        subdir.rmdir()
+
+
 def test_pipeline_loader_load_all(setup_project, tmp_project):
     loader = PipelineLoader(tmp_project / "pipelines")
     all_pipelines = loader.load_all()
