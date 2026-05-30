@@ -1,4 +1,4 @@
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
@@ -46,10 +46,35 @@ async def get_session() -> AsyncSession:
         yield session
 
 
+_MIGRATIONS = {
+    "runs": [
+        ("pipeline_id", "TEXT NOT NULL DEFAULT ''"),
+        ("pipeline_version", "TEXT NOT NULL DEFAULT ''"),
+    ],
+    "task_runs": [
+        ("subpipeline_name", "TEXT NOT NULL DEFAULT ''"),
+    ],
+}
+
+
+async def _migrate_schema() -> None:
+    engine = get_engine()
+    async with engine.begin() as conn:
+        for table_name, columns in _MIGRATIONS.items():
+            result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
+            existing = {row[1] for row in result.fetchall()}
+            for col_name, col_def in columns:
+                if col_name not in existing:
+                    await conn.execute(text(
+                        f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"
+                    ))
+
+
 async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+    await _migrate_schema()
 
 
 async def close_db() -> None:

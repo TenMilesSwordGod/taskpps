@@ -14,10 +14,12 @@ class RunRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_run(self, pipeline_name: str, pipeline_file: str = "", params: dict | None = None) -> PipelineRun:
+    async def create_run(self, pipeline_name: str, pipeline_file: str = "", pipeline_id: str = "", pipeline_version: str = "", *, params: dict | None = None) -> PipelineRun:
         run = PipelineRun(
             pipeline_name=pipeline_name,
             pipeline_file=pipeline_file,
+            pipeline_id=pipeline_id,
+            pipeline_version=pipeline_version,
             params=json.dumps(params or {}),
             status=RunStatus.PENDING,
         )
@@ -29,6 +31,32 @@ class RunRepository:
     async def get_run(self, run_id: str) -> Optional[PipelineRun]:
         result = await self.session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
         return result.scalar_one_or_none()
+
+    async def get_last_run_by_pipeline(self, pipeline_id: str) -> Optional[PipelineRun]:
+        result = await self.session.execute(
+            select(PipelineRun)
+            .where(PipelineRun.pipeline_id == pipeline_id, PipelineRun.pipeline_version != "")
+            .order_by(PipelineRun.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_versions(self, pipeline_id: str) -> list[str]:
+        result = await self.session.execute(
+            select(PipelineRun.pipeline_version)
+            .where(PipelineRun.pipeline_id == pipeline_id, PipelineRun.pipeline_version != "")
+            .order_by(PipelineRun.created_at.desc())
+        )
+        return [row[0] for row in result.fetchall()]
+
+    async def delete_runs_by_version(self, pipeline_id: str, version: str) -> int:
+        stmt = delete(PipelineRun).where(
+            PipelineRun.pipeline_id == pipeline_id,
+            PipelineRun.pipeline_version == version,
+        )
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
 
     async def count_runs(
         self,
@@ -99,10 +127,11 @@ class TaskRunRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_task_run(self, run_id: str, task_name: str, task_type: str = "command", log_path: str = "") -> TaskRun:
+    async def create_task_run(self, run_id: str, task_name: str, task_type: str = "command", subpipeline_name: str = "", log_path: str = "") -> TaskRun:
         tr = TaskRun(
             run_id=run_id,
             task_name=task_name,
+            subpipeline_name=subpipeline_name,
             task_type=task_type,
             log_path=log_path,
             status=TaskStatus.PENDING,

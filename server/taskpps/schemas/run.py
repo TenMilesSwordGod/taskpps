@@ -15,6 +15,7 @@ class TaskRunResponse(BaseModel):
     id: str
     run_id: str
     task_name: str
+    subpipeline_name: str = ""
     task_type: TaskType
     status: TaskStatus
     exit_code: Optional[int] = None
@@ -30,6 +31,9 @@ class RunResponse(BaseModel):
     id: str
     pipeline_name: str
     pipeline_file: str = ""
+    pipeline_id: str = ""
+    pipeline_version: str = ""
+    version_changed: bool = False
     status: RunStatus
     params: Dict[str, Any] = {}
     started_at: Optional[datetime] = None
@@ -46,6 +50,9 @@ class RunResponse(BaseModel):
             "id": obj.id,
             "pipeline_name": obj.pipeline_name,
             "pipeline_file": obj.pipeline_file,
+            "pipeline_id": getattr(obj, "pipeline_id", ""),
+            "pipeline_version": getattr(obj, "pipeline_version", ""),
+            "version_changed": False,
             "status": obj.status,
             "params": json.loads(obj.params) if isinstance(obj.params, str) else (obj.params or {}),
             "started_at": obj.started_at,

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from taskpps.config import get_logs_dir, get_settings
+from taskpps.config import get_logs_dir, get_settings, build_log_path, get_workspaces_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
 from taskpps.i18n import t
@@ -59,6 +59,8 @@ class PipelineRunner:
         self._unexpected_error = False
         self._running_executors: Dict[str, Any] = {}
         self._task_run_ids: Dict[str, str] = {}
+        self._pipeline_id: str = ""
+        self._pipeline_version: str = ""
 
     async def run(self) -> None:
         if not self.pipeline.subpipelines:
@@ -211,6 +213,8 @@ class PipelineRunner:
                 if task is None:
                     continue
 
+                qualified_name = f"{sub.name}.{task_name}"
+
                 on_failure = task.on_failure or sub.config.on_failure or "fail"
 
                 should_skip = False
@@ -222,10 +226,10 @@ class PipelineRunner:
                 if should_skip:
                     async with get_session_factory()() as session:
                         task_repo = TaskRunRepository(session)
-                        task_run_id = self._task_run_ids.get(task_name)
+                        task_run_id = self._task_run_ids.get(qualified_name)
                         if task_run_id:
                             await task_repo.update_task_status(task_run_id, TaskStatus.SKIPPED)
-                    failed_tasks.add(task_name)
+                    failed_tasks.add(qualified_name)
                     continue
 
                 tasks_to_run.append(task)
@@ -245,12 +249,13 @@ class PipelineRunner:
                         results.append(result)
 
                 for task, result in zip(tasks_to_run, results):
+                    qualified_name = f"{sub.name}.{task.name}"
                     if isinstance(result, Exception):
-                        failed_tasks.add(task.name)
+                        failed_tasks.add(qualified_name)
                     elif isinstance(result, ExecutorResult) and not result.success:
-                        failed_tasks.add(task.name)
+                        failed_tasks.add(qualified_name)
                     else:
-                        completed_tasks.add(task.name)
+                        completed_tasks.add(qualified_name)
 
         if failed_tasks:
             return {"success": False, "failed_tasks": list(failed_tasks)}
@@ -258,14 +263,14 @@ class PipelineRunner:
 
     async def _execute_task(self, task: ResolvedTask) -> ExecutorResult:
         event_bus = get_event_bus()
-        logs_dir = get_logs_dir()
-        if self.pipeline.pipeline_file:
-            log_rel_dir = Path(self.pipeline.pipeline_file).with_suffix('')
-        else:
-            log_rel_dir = Path(self.pipeline.name)
 
-        task_run_id = self._task_run_ids.get(task.name, "")
-        log_path = logs_dir / log_rel_dir / self.run_id / task_run_id / "output.log"
+        qualified_name = task.name
+        task_run_id = self._task_run_ids.get(qualified_name, "")
+
+        if self._pipeline_id and self._pipeline_version:
+            log_path = build_log_path(self._pipeline_id, self._pipeline_version, self.run_id, qualified_name)
+        else:
+            log_path = Path(self._task_run_ids.get(qualified_name, "output.log"))
 
         env = self.context.get_task_env(task)
 
@@ -309,6 +314,11 @@ class PipelineRunner:
                         invoke_kwargs=task.invoke_kwargs,
                     )
                 elif isinstance(executor, (GitExecutor, NexusExecutor)):
+                    if isinstance(executor, GitExecutor):
+                        if not executor.dest or executor.dest == "/workspace/repo":
+                            workspace_dir = get_workspaces_dir() / self.run_id / "repo"
+                            workspace_dir.mkdir(parents=True, exist_ok=True)
+                            executor.dest = str(workspace_dir)
                     result = await executor.execute(
                         command="",
                         env=env,

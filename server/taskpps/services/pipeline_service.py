@@ -2,17 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from taskpps.config import get_logs_dir, get_settings
+from taskpps.config import (
+    get_logs_dir,
+    get_pipelines_dir,
+    compute_pipeline_id,
+    compute_pipeline_version,
+    build_log_path,
+)
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
 from taskpps.i18n import t
 from taskpps.domain.context import ExecutionContext, apply_overrides
 from taskpps.domain.dag import DAG, DAGCycleError
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.domain.pipeline import ResolvedPipeline
 from taskpps.engine.runner import PipelineRunner
 from taskpps.loaders.pipeline_loader import PipelineLoader
 from taskpps.schemas.pipeline import PipelineYAML
@@ -47,42 +54,74 @@ class PipelineService:
             except (DAGCycleError, ValueError) as e:
                 raise ValueError(t("SubPipeline '{name}': {error}", name=sub.name, error=str(e)))
 
+        pipeline_id = compute_pipeline_id(pipeline_file)
+        pipeline_version = compute_pipeline_version(pipeline_file)
+
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
 
+            last_run = await run_repo.get_last_run_by_pipeline(pipeline_id)
+            version_changed = (
+                last_run is not None
+                and last_run.pipeline_version != ""
+                and last_run.pipeline_version != pipeline_version
+            )
+
             run = await run_repo.create_run(
                 pipeline_name=resolved.name,
                 pipeline_file=pipeline_file,
+                pipeline_id=pipeline_id,
+                pipeline_version=pipeline_version,
                 params=params,
             )
 
-            logs_dir = get_logs_dir()
-            log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path(resolved.name)
             task_run_ids = {}
 
             for sub in resolved.subpipelines:
                 for task in sub.tasks:
+                    qualified_name = f"{sub.name}.{task.name}"
+                    log_path = build_log_path(pipeline_id, pipeline_version, run.id, qualified_name)
                     task_run = await task_repo.create_task_run(
                         run_id=run.id,
-                        task_name=task.name,
+                        task_name=qualified_name,
                         task_type=task.task_type,
+                        subpipeline_name=sub.name,
+                        log_path=str(log_path),
                     )
-                    log_path = str(logs_dir / log_rel_dir / run.id / task_run.id / "output.log")
-                    task_run.log_path = log_path
-                    await session.commit()
-                    await session.refresh(task_run)
-                    task_run_ids[task.name] = task_run.id
+                    task_run_ids[qualified_name] = task_run.id
+
+        self._save_pipeline_snapshot(pipeline_file, pipeline_id, pipeline_version, run.id)
 
         context = ExecutionContext(pipeline=resolved, run_id=run.id, env=params)
 
         runner = PipelineRunner(run_id=run.id, pipeline=resolved, context=context)
         runner._task_run_ids = task_run_ids
+        runner._pipeline_id = pipeline_id
+        runner._pipeline_version = pipeline_version
 
         asyncio_task = asyncio.create_task(runner.run())
         asyncio_task.add_done_callback(self._handle_run_error)
 
-        return {"id": run.id, "pipeline_name": run.pipeline_name, "status": run.status}
+        return {
+            "id": run.id,
+            "pipeline_name": run.pipeline_name,
+            "pipeline_id": pipeline_id,
+            "pipeline_version": pipeline_version,
+            "version_changed": version_changed,
+            "status": run.status,
+        }
+
+    @staticmethod
+    def _save_pipeline_snapshot(pipeline_file: str, pipeline_id: str, pipeline_version: str, run_id: str) -> None:
+        pipelines_dir = get_pipelines_dir()
+        src = pipelines_dir / pipeline_file
+        if not src.exists():
+            return
+        snapshot_dir = get_logs_dir() / pipeline_id / f"v_{pipeline_version}" / "builds" / run_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        dst = snapshot_dir / "pipeline-snapshot.yaml"
+        shutil.copy2(src, dst)
 
     @staticmethod
     def _handle_run_error(task: asyncio.Task):
@@ -119,6 +158,8 @@ class PipelineService:
                 "id": run.id,
                 "pipeline_name": run.pipeline_name,
                 "pipeline_file": run.pipeline_file,
+                "pipeline_id": run.pipeline_id,
+                "pipeline_version": run.pipeline_version,
                 "status": run.status,
                 "params": params,
                 "started_at": run.started_at,
@@ -129,6 +170,7 @@ class PipelineService:
                         "id": t.id,
                         "run_id": t.run_id,
                         "task_name": t.task_name,
+                        "subpipeline_name": t.subpipeline_name,
                         "task_type": t.task_type,
                         "status": t.status,
                         "exit_code": t.exit_code,
@@ -160,6 +202,8 @@ class PipelineService:
                     "id": run.id,
                     "pipeline_name": run.pipeline_name,
                     "pipeline_file": run.pipeline_file,
+                    "pipeline_id": run.pipeline_id,
+                    "pipeline_version": run.pipeline_version,
                     "status": run.status,
                     "params": params,
                     "started_at": run.started_at,
@@ -202,35 +246,39 @@ class PipelineService:
             if force:
                 runs = await run_repo.list_runs(limit=10000)
                 for run in runs:
-                    deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
+                    deleted_logs += self._delete_run_logs(run)
                 deleted_runs = await run_repo.delete_all_runs()
             elif older_than:
                 cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=older_than)
                 runs = await run_repo.list_runs(limit=10000)
                 for run in runs:
                     if run.created_at and run.created_at < cutoff:
-                        deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
+                        deleted_logs += self._delete_run_logs(run)
                 deleted_runs = await run_repo.delete_runs_older_than(older_than)
             elif keep:
                 runs = await run_repo.list_runs(limit=10000)
                 for run in runs[keep:]:
-                    deleted_logs += self._delete_run_logs(run.pipeline_file, run.id)
+                    deleted_logs += self._delete_run_logs(run)
                 deleted_runs = await run_repo.delete_runs_keep(keep)
             else:
                 return {"deleted_runs": 0, "deleted_logs": 0}
 
             return {"deleted_runs": deleted_runs, "deleted_logs": deleted_logs}
 
-    def _delete_run_logs(self, pipeline_file: str, run_id: str) -> int:
-        import shutil
+    def _delete_run_logs(self, run) -> int:
         logs_dir = get_logs_dir()
-        log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path('unknown')
-        run_dir = logs_dir / log_rel_dir / run_id
         count = 0
+
+        if run.pipeline_version:
+            run_dir = logs_dir / run.pipeline_id / f"v_{run.pipeline_version}" / "builds" / run.id
+        else:
+            log_rel_dir = Path(run.pipeline_file).with_suffix('') if run.pipeline_file else Path('unknown')
+            run_dir = logs_dir / log_rel_dir / run.id
+
         if run_dir.exists():
-            for task_dir in run_dir.iterdir():
-                if task_dir.is_dir():
-                    log_file = task_dir / "output.log"
+            for item in run_dir.iterdir():
+                if item.is_dir():
+                    log_file = item / "output.log"
                     if log_file.exists():
                         count += 1
             shutil.rmtree(run_dir)

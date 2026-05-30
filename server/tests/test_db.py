@@ -10,7 +10,7 @@ from taskpps.models.run import RunStatus, TaskStatus, TaskType
 async def test_create_run(db_engine, clean_db):
     async with get_session_factory()() as session:
         repo = RunRepository(session)
-        run = await repo.create_run("test-pipeline", "test.yaml", {"key": "value"})
+        run = await repo.create_run("test-pipeline", "test.yaml", params={"key": "value"})
         assert run.id is not None
         assert run.pipeline_name == "test-pipeline"
         assert run.status == RunStatus.PENDING

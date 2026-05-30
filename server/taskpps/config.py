@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -130,3 +131,37 @@ def get_tasks_dir() -> Path:
 
 def get_plugins_dir() -> Path:
     return find_project_root() / "plugins"
+
+
+def get_workspaces_dir() -> Path:
+    workspaces = get_data_dir() / "workspaces"
+    workspaces.mkdir(parents=True, exist_ok=True)
+    return workspaces
+
+
+def compute_pipeline_id(pipeline_file: str) -> str:
+    return Path(pipeline_file).with_suffix('').as_posix().replace('/', '_')
+
+
+def compute_pipeline_version(pipeline_file: str) -> str:
+    pipelines_dir = get_pipelines_dir()
+    path = pipelines_dir / pipeline_file
+    if not path.exists():
+        return ""
+    content = path.read_bytes()
+    return hashlib.sha256(content).hexdigest()[:8]
+
+
+def build_log_path(pipeline_id: str, pipeline_version: str, run_id: str, task_name: str) -> Path:
+    logs_dir = get_logs_dir()
+    log_dir = logs_dir / pipeline_id / f"v_{pipeline_version}" / "builds" / run_id / task_name
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir / "output.log"
+
+
+def build_legacy_log_path(pipeline_file: str, run_id: str, task_run_id: str) -> Path:
+    logs_dir = get_logs_dir()
+    log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path('unknown')
+    log_dir = logs_dir / log_rel_dir / run_id / task_run_id
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir / "output.log"
