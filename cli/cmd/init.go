@@ -31,6 +31,10 @@ var initCmd = &cobra.Command{
 		}
 		for _, d := range dirs {
 			path := filepath.Join(".", d)
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				fmt.Printf("  skip    %s/ (已存在, 不覆盖)\n", d)
+				continue
+			}
 			if err := os.MkdirAll(path, 0755); err != nil {
 				return fmt.Errorf("创建 %s 失败: %w", d, err)
 			}
@@ -58,11 +62,9 @@ plugins:
 
 triggers: []
 `
-		configPath := filepath.Join(".taskpps", "taskpps.yaml")
-		if err := os.WriteFile(configPath, []byte(taskppsYAML), 0644); err != nil {
-			return fmt.Errorf("写入 %s 失败: %w", configPath, err)
+		if err := writeFileIfNotExists(".taskpps/taskpps.yaml", taskppsYAML, "  "); err != nil {
+			return err
 		}
-		fmt.Println("  created .taskpps/taskpps.yaml")
 
 		pipelineYAML := `# 示例流水线 — 使用子流水线格式 (config + pipelines)
 # 旧格式 (options + tasks) 仍然兼容, 会自动包装为单子流水线
@@ -106,10 +108,9 @@ pipelines:
         depends_on: [restart]
         when: ${env.APP_ENV} == "staging"
 `
-		if err := os.WriteFile(filepath.Join("pipelines", "example.yaml"), []byte(pipelineYAML), 0644); err != nil {
-			return fmt.Errorf("写入示例流水线失败: %w", err)
+		if err := writeFileIfNotExists("pipelines/example.yaml", pipelineYAML, "  "); err != nil {
+			return err
 		}
-		fmt.Println("  created pipelines/example.yaml")
 
 		agentYAML := `# Agent 配置文件 — 通过 id 字段引用
 # 引用语法: ${agent:<id>.<field>}
@@ -136,10 +137,9 @@ agents:
     credential_id: staging-cred
     max_parallel: 5
 `
-		if err := os.WriteFile(filepath.Join("agents", "local.yaml"), []byte(agentYAML), 0644); err != nil {
-			return fmt.Errorf("写入示例 Agent 失败: %w", err)
+		if err := writeFileIfNotExists("agents/local.yaml", agentYAML, "  "); err != nil {
+			return err
 		}
-		fmt.Println("  created agents/local.yaml")
 
 		credYAML := `# 凭据配置文件 — 通过 id 字段引用
 # 引用语法: ${credential:<id>.<field>}
@@ -161,20 +161,18 @@ credentials:
     username: deploy
     key_path: ~/.ssh/staging_deploy_key
 `
-		if err := os.WriteFile(filepath.Join("credentials", "default.yaml"), []byte(credYAML), 0644); err != nil {
-			return fmt.Errorf("写入示例凭据失败: %w", err)
+		if err := writeFileIfNotExists("credentials/default.yaml", credYAML, "  "); err != nil {
+			return err
 		}
-		fmt.Println("  created credentials/default.yaml")
 
 		initPyContent := `# Invoke 任务模块
 # 在此目录下创建 .py 文件定义 invoke 任务
 `
-		if err := os.WriteFile(filepath.Join("tasks", "__init__.py"), []byte(initPyContent), 0644); err != nil {
-			return fmt.Errorf("写入 tasks/__init__.py 失败: %w", err)
+		if err := writeFileIfNotExists("tasks/__init__.py", initPyContent, "  "); err != nil {
+			return err
 		}
-		fmt.Println("  created tasks/__init__.py")
 
-		exampleTasksYAML := `"""Invoke 任务定义示例
+		exampleTasksContent := `"""Invoke 任务定义示例
 
 这些函数可以在流水线的 invoke 任务中引用, 例如:
   - name: migrate
@@ -205,10 +203,9 @@ def health_check(c, url="http://localhost:8000"):
         print("健康检查失败")
         raise SystemExit(1)
 `
-		if err := os.WriteFile(filepath.Join("tasks", "example_tasks.py"), []byte(exampleTasksYAML), 0644); err != nil {
-			return fmt.Errorf("写入 tasks/example_tasks.py 失败: %w", err)
+		if err := writeFileIfNotExists("tasks/example_tasks.py", exampleTasksContent, "  "); err != nil {
+			return err
 		}
-		fmt.Println("  created tasks/example_tasks.py")
 
 		fmt.Println("\n项目初始化完成!")
 		fmt.Println("\n下一步:")
@@ -219,6 +216,19 @@ def health_check(c, url="http://localhost:8000"):
 		fmt.Println("  5. 运行: taskpps run example 执行流水线")
 		return nil
 	},
+}
+
+func writeFileIfNotExists(relPath, content, indent string) error {
+	path := filepath.Join(".", relPath)
+	if _, err := os.Stat(path); err == nil {
+		fmt.Printf("%sskip    %s (已存在, 不覆盖)\n", indent, relPath)
+		return nil
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return fmt.Errorf("写入 %s 失败: %w", relPath, err)
+	}
+	fmt.Printf("%screated %s\n", indent, relPath)
+	return nil
 }
 
 func init() {
