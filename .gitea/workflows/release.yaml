@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-server:
+    name: Build Python Server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build wheel
+        run: uv build
+
+      - name: Upload server package
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskpps-server-pkg
+          path: server/dist/
+
+  build-cli:
+    name: Build Go CLI (${{ matrix.os }}/${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          BINARY_NAME="taskpps-${GOOS}-${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          go build -ldflags="-s -w" -o "$BINARY_NAME" .
+          echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskpps-cli-${{ matrix.os }}-${{ matrix.arch }}
+          path: cli/${{ env.BINARY_NAME }}
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-server
+      - build-cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download server package
+        uses: actions/download-artifact@v4
+        with:
+          name: taskpps-server-pkg
+          path: dist/
+
+      - name: Download CLI binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/cli/
+
+      - name: List artifacts
+        run: find dist/ -type f
+
+      - name: Create Release
+        uses: actions/gitea/release-action@v1
+        with:
+          files: |
+            dist/**/*.whl
+            dist/**/*.tar.gz
+            dist/cli/**/taskpps-*
+          tag: ${{ github.ref_name }}
+          title: Release ${{ github.ref_name }}
+          body: |
+            ## Changes
+            
+            See [CHANGELOG] for details.
+            
+            ## Assets
+            
+            - `taskpps-server-*.whl` — Python server wheel
+            - `taskpps-{os}-{arch}` — CLI binaries for each platform

@@ -1,0 +1,105 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test-python:
+    name: Python Tests (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache packages
+        uses: actions/cache@v4
+        with:
+          path: server/.venv
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-uv-${{ hashFiles('server/pyproject.toml', 'server/uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-uv-
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run tests
+        run: |
+          uv run pytest tests/ \
+            -v \
+            --tb=short \
+            -m "not slow" \
+            --ignore=tests/test_api.py \
+            --ignore=tests/test_runner_steps.py \
+            --junitxml=junit.xml \
+            --cov=taskpps \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-test-results-py${{ matrix.python-version }}
+          path: |
+            server/junit.xml
+            server/coverage.xml
+
+  test-go:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('cli/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Test
+        run: go test ./... -v -coverprofile=coverage.out
+
+      - name: Build
+        run: go build -o taskpps-cli .
+
+      - name: Upload Go build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskpps-cli-linux
+          path: cli/taskpps-cli
