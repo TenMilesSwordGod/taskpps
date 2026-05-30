@@ -27,6 +27,10 @@ class TaskStatus(str, enum.Enum):
 class TaskType(str, enum.Enum):
     COMMAND = "command"
     INVOKE = "invoke"
+    STEPS = "steps"
+    GIT = "git"
+    NEXUS = "nexus"
+    SSH = "ssh"
 
 
 class PipelineRun(SQLModel, table=True):

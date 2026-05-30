@@ -238,4 +238,4 @@ async def test_run_continue_pipeline(client, setup_project, tmp_project):
     get_resp = await client.get(f"/api/runs/{run_id}")
     data = get_resp.json()
     task_names = [t["task_name"] for t in data.get("tasks", [])]
-    assert "independent" in task_names
+    assert "continue_test.independent" in task_names

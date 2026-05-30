@@ -237,7 +237,7 @@ class PipelineRunner:
             if tasks_to_run:
                 if strategy == "parallel":
                     results = await asyncio.gather(
-                        *[self._execute_task(task) for task in tasks_to_run],
+                        *[self._execute_task(task, sub_name) for task in tasks_to_run],
                         return_exceptions=True,
                     )
                 else:
@@ -245,7 +245,7 @@ class PipelineRunner:
                     for task in tasks_to_run:
                         if self._cancelled:
                             break
-                        result = await self._execute_task(task)
+                        result = await self._execute_task(task, sub_name)
                         results.append(result)
 
                 for task, result in zip(tasks_to_run, results):
@@ -261,10 +261,10 @@ class PipelineRunner:
             return {"success": False, "failed_tasks": list(failed_tasks)}
         return {"success": True}
 
-    async def _execute_task(self, task: ResolvedTask) -> ExecutorResult:
+    async def _execute_task(self, task: ResolvedTask, sub_name: str = "") -> ExecutorResult:
         event_bus = get_event_bus()
 
-        qualified_name = task.name
+        qualified_name = f"{sub_name}.{task.name}" if sub_name else task.name
         task_run_id = self._task_run_ids.get(qualified_name, "")
 
         if self._pipeline_id and self._pipeline_version:

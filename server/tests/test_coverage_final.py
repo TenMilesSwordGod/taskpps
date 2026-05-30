@@ -263,8 +263,16 @@ def test_main_settings_is_none():
 
 def test_delete_run_logs_no_dir(setup_project):
     from taskpps.services.pipeline_service import PipelineService
+    from taskpps.models.run import PipelineRun
     svc = PipelineService()
-    count = svc._delete_run_logs("nonexistent-pipeline", "run123")
+    run = PipelineRun(
+        pipeline_name="nonexistent-pipeline",
+        pipeline_file="nonexistent-pipeline.yaml",
+        pipeline_id="nonexistent",
+        pipeline_version="abc12345",
+        id="run123",
+    )
+    count = svc._delete_run_logs(run)
     assert count == 0
 
 
