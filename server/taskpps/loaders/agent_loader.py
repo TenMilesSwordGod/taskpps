@@ -40,16 +40,19 @@ class AgentLoader:
                     if not data:
                         continue
                     filename = path.stem
+                    source_file = f"{base.name}/{path.name}"
 
                     if isinstance(data, dict) and "agents" in data and isinstance(data["agents"], list):
                         for item in data["agents"]:
                             if isinstance(item, dict) and "id" in item:
                                 agent_id = item["id"]
+                                item["_source_file"] = source_file
                                 result[agent_id] = item
                             else:
                                 logger = __import__("logging").getLogger("taskpps.agents")
                                 logger.warning(t("Agent entry in '{name}' missing 'id', skipped", name=filename))
                     else:
+                        data["_source_file"] = source_file
                         result[filename] = data
                 except Exception:
                     continue

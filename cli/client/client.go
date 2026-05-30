@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -304,4 +305,106 @@ func buildNestedMap(m map[string]interface{}, keys []string, val string) {
 
 func init() {
 	req.Debug = false
+}
+
+func (c *Client) TryConnect(agentID string, timeout int) (*models.AgentCheckResult, error) {
+	body := models.AgentCheckRequest{
+		AgentID: agentID,
+		Timeout: timeout,
+	}
+	resp, err := c.http.Post(c.baseURL+"/agents/try-connect", req.BodyJSON(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+	if resp.Response().StatusCode == 404 {
+		return nil, fmt.Errorf("agent %s not found", agentID)
+	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
+	var result models.AgentCheckResult
+	if err := resp.ToJSON(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) CheckAgents(agentID, fileFilter string, timeout int) (*models.AgentCheckResponse, error) {
+	body := models.AgentCheckRequest{
+		AgentID:    agentID,
+		FileFilter: fileFilter,
+		Timeout:    timeout,
+	}
+	resp, err := c.http.Post(c.baseURL+"/agents/check", req.BodyJSON(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to check agents: %w", err)
+	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		respBody, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, respBody)
+	}
+	var result models.AgentCheckResponse
+	if err := resp.ToJSON(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) CheckAgentsStream(agentID, fileFilter string, timeout int, handler func(models.AgentCheckResult)) (*models.AgentCheckSummary, error) {
+	body := models.AgentCheckRequest{
+		AgentID:    agentID,
+		FileFilter: fileFilter,
+		Timeout:    timeout,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/agents/check-stream", strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to check stream: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("unexpected status %d: %s", httpResp.StatusCode, respBody)
+	}
+
+	var summary *models.AgentCheckSummary
+	scanner := bufio.NewScanner(httpResp.Body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+
+		if strings.HasPrefix(data, "summary:") {
+			var s models.AgentCheckSummary
+			summaryJSON := strings.TrimPrefix(data, "summary:")
+			if err := json.Unmarshal([]byte(summaryJSON), &s); err == nil {
+				summary = &s
+			}
+			continue
+		}
+
+		var result models.AgentCheckResult
+		if err := json.Unmarshal([]byte(data), &result); err != nil {
+			continue
+		}
+		handler(result)
+	}
+
+	if summary == nil {
+		summary = &models.AgentCheckSummary{}
+	}
+	return summary, scanner.Err()
 }

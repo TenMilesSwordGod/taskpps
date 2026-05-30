@@ -96,7 +96,10 @@ check_memory() {
 }
 
 check_db() {
-    if [[ -f /var/lib/taskpps/state.db ]]; then
+    local db_path
+    db_path="/opt/taskpps/.taskpps/state.db"
+
+    if [[ -f "$db_path" ]]; then
         RESULTS+=("database:ok")
         $JSON_OUTPUT || log_ok "Database file exists"
     else

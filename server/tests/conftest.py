@@ -148,6 +148,21 @@ def tmp_project(tmp_path_factory):
         "username: test\n"
     )
 
+    agent_list_yaml = agents_dir / "ssh.yaml"
+    agent_list_yaml.write_text(
+        "agents:\n"
+        "  - id: api-agent-a\n"
+        "    host: 127.0.0.1\n"
+        "    port: 22\n"
+        "    name: API Agent A\n"
+        "    type: local\n"
+        "  - id: api-agent-b\n"
+        "    host: 10.0.0.1\n"
+        "    port: 22\n"
+        "    name: API Agent B\n"
+        "    type: ssh-key\n"
+    )
+
     cred_yaml = credentials_dir / "default-cred.yaml"
     cred_yaml.write_text(
         "password: testpass\n"

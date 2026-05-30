@@ -82,3 +82,32 @@ type HealthResponse struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 }
+
+type AgentCheckRequest struct {
+	AgentID    string `json:"agent_id,omitempty"`
+	FileFilter string `json:"file_filter,omitempty"`
+	Timeout    int    `json:"timeout"`
+}
+
+type AgentCheckResult struct {
+	AgentID    string `json:"agent_id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	SourceFile string `json:"source_file"`
+	Status     string `json:"status"`
+	LatencyMs  int    `json:"latency_ms"`
+	Error      string `json:"error,omitempty"`
+}
+
+type AgentCheckSummary struct {
+	Total     int `json:"total"`
+	Connected int `json:"connected"`
+	Failed    int `json:"failed"`
+}
+
+type AgentCheckResponse struct {
+	Results []AgentCheckResult `json:"results"`
+	Summary AgentCheckSummary  `json:"summary"`
+}

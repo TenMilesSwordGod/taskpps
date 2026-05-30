@@ -16,6 +16,9 @@
 | POST | `/api/plugins/triggers/` | 注册触发器 |
 | GET | `/api/plugins/triggers/` | 触发器列表 |
 | DELETE | `/api/plugins/triggers/{id}` | 删除触发器 |
+| POST | `/api/agents/try-connect` | 测试单个 Agent 连通性 |
+| POST | `/api/agents/check` | 批量检查 Agent 连接状态 |
+| POST | `/api/agents/check-stream` | 流式并发检查 Agent (SSE) |
 
 ## 详细说明
 
@@ -80,6 +83,76 @@ DELETE /api/runs/?force_all=true
 ## API 认证
 
 可选,在 `taskpps.yaml` 中配置 `api_key` 后启用。认证方式为请求头 `X-API-Key`。健康检查和 OPTIONS 请求免认证。
+
+## Agent 连通性检查
+
+### 测试单个 Agent
+
+```http
+POST /api/agents/try-connect
+Content-Type: application/json
+
+{
+  "agent_id": "prod-server",
+  "timeout": 5
+}
+```
+
+响应:
+
+```json
+{
+  "agent_id": "prod-server",
+  "name": "生产环境服务器",
+  "type": "ssh-key",
+  "host": "10.0.0.50",
+  "port": 22,
+  "source_file": "agents/prod.yaml",
+  "status": "connected",
+  "latency_ms": 120,
+  "error": null
+}
+```
+
+### 批量检查
+
+```http
+POST /api/agents/check
+Content-Type: application/json
+
+{
+  "agent_id": null,
+  "file_filter": "prod",
+  "timeout": 5
+}
+```
+
+返回 `{"results": [...], "summary": {"total": N, "connected": N, "failed": N}}`。
+
+### 流式并发检查 (SSE)
+
+```http
+POST /api/agents/check-stream
+Content-Type: application/json
+
+{
+  "timeout": 5
+}
+```
+
+所有 Agent 并发检查,每个完成立即通过 SSE 推送结果。Content-Type: `text/event-stream`。
+
+每个 agent 结果作为一个 SSE event 发送:
+
+```
+data: {"agent_id":"agent-a","status":"connected",...}
+
+data: {"agent_id":"agent-b","status":"failed",...}
+
+data: summary:{"total":2,"connected":1,"failed":1}
+```
+
+最后一条 event 以 `summary:` 前缀发送汇总信息。
 
 ## 日志与事件
 

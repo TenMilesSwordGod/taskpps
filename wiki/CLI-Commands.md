@@ -82,6 +82,59 @@ ppsctl cancel <run-id>
 
 取消正在执行的流水线。已完成任务不受影响,未开始任务被标记为 `cancelled`。
 
+### `agent` — Agent 连通性检查
+
+```bash
+ppsctl agent <subcommand> [flags]
+```
+
+| 子命令 | 说明 |
+|:--|:--|
+| `try-connect <id>` | 测试单个 Agent 的 TCP 连通性 |
+| `check [id]` | 检查 Agent 连接状态,流式实时输出,按文件分组 |
+
+**`agent try-connect`**
+
+```bash
+ppsctl agent try-connect prod-server
+ppsctl agent try-connect prod-server --timeout 10
+```
+
+快速验证单个 Agent 网络可达性。成功退出码 0,失败退出码 1。
+
+**`agent check`**
+
+```bash
+ppsctl agent check                     # 并发检查所有 Agent,流式输出
+ppsctl agent check prod-server         # 检查指定 Agent
+ppsctl agent check --file staging      # 按文件名过滤(不含扩展名)
+ppsctl agent check -t 3                # 自定义超时 3 秒
+```
+
+所有 Agent 并发检查,每个完成立即推送结果(基于 SSE 流)。最后显示按 Agent 文件分组的汇总表。
+
+如果服务端不支持流式端点,自动降级到批量模式。
+
+**输出示例:**
+
+```
+[1] ✓ unknown (127.0.0.1:22) — ready in 0ms
+[2] ✓ test-agent01 (10.98.72.23:22) — connected in 1ms
+[3] ✗ test-agent02 (10.98.72.24:22) — failed
+: [Errno 113] No route to host
+
+───── agents/local.yaml ─────
+   AGENT     HOST:PORT            TYPE          STATUS    LATENCY
+  unknown   127.0.0.1:22          unknown        ✓ ready   0ms
+
+───── agents/ssh.yaml ─────
+     AGENT         HOST:PORT             TYPE            STATUS      LATENCY
+  test-agent01   10.98.72.23:22   ssh-username-pa...   ✓ connected   1ms
+  test-agent02   10.98.72.24:22   ssh-username-pa...   ✗ failed      3070ms
+
+Total: 3 agents — 2 connected, 1 failed
+```
+
 ### `clean` — 清理历史
 
 ```bash

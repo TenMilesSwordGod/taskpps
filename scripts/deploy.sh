@@ -197,7 +197,7 @@ StartLimitBurst=3
 TimeoutStopSec=30
 KillSignal=SIGTERM
 
-ExecStart=/opt/taskpps/server/.venv/bin/python -m taskpps.main
+ExecStart=/opt/taskpps/server/.venv/bin/python -m taskpps
 ExecReload=/bin/kill -HUP $MAINPID
 
 [Install]
@@ -266,6 +266,7 @@ enable_service() {
 # Start service
 start_service() {
     log_step "Starting $SERVICE_NAME service..."
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
     systemctl start "$SERVICE_NAME"
     sleep 2
 

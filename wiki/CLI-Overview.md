@@ -57,7 +57,10 @@ ppsctl status <run-id>
 # 5. 查看日志
 ppsctl logs <run-id>
 
-# 6. TUI 实时监控
+# 6. 检查 Agent 连通性
+ppsctl agent check
+
+# 7. TUI 实时监控
 ppsctl watch
 ```
 

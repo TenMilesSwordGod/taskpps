@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("taskpps")
 
-from taskpps.api import health, runs, triggers
+from taskpps.api import health, runs, triggers, agents
 from taskpps.config import get_settings, load_settings
 from taskpps.db.engine import init_db, close_db, get_engine, reset_engine
 from taskpps.i18n import t, set_locale
@@ -70,6 +70,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(triggers.router, prefix="/api")
+app.include_router(agents.router, prefix="/api")
 
 
 def cli():
