@@ -46,11 +46,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "t", "T":
 			if m.focusedPanel == FocusRightPanel {
 				m.rightTab = m.cycleTab()
-				if m.rightTab == TabLogs && m.runDetail.SelectedRun() != nil {
-					task := m.runDetail.SelectedTask()
-					if task != nil {
-						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
+				if m.rightTab == TabLogs {
+					m.runDetail.CollapseAll()
+					if m.runDetail.SelectedRun() != nil {
+						task := m.runDetail.SelectedTask()
+						if task != nil {
+							cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
+						}
 					}
+				}
+			}
+
+		case "c":
+			if m.focusedPanel == FocusRightPanel && m.rightTab == TabDetail {
+				if m.runDetail.HasExpanded() {
+					m.runDetail.CollapseAll()
+				} else {
+					m.runDetail.ExpandAll()
 				}
 			}
 
@@ -92,6 +104,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					task := m.runDetail.SelectedTask()
 					if task != nil {
+						m.runDetail.CollapseAll()
 						m.rightTab = TabLogs
 						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
 					}

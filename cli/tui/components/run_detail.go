@@ -117,6 +117,30 @@ func (m *RunDetailModel) SetCursor(idx int) {
 	}
 }
 
+func (m *RunDetailModel) CollapseAll() {
+	m.expanded = make(map[int]bool)
+	m.updateViewportContent()
+}
+
+func (m *RunDetailModel) ExpandAll() {
+	if m.run == nil {
+		return
+	}
+	for i := range m.run.Tasks {
+		m.expanded[i] = true
+	}
+	m.updateViewportContent()
+}
+
+func (m *RunDetailModel) HasExpanded() bool {
+	for _, v := range m.expanded {
+		if v {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *RunDetailModel) SelectedTask() *models.TaskRun {
 	if m.run == nil || len(m.flatItems) == 0 || m.cursor >= len(m.flatItems) {
 		return nil

@@ -116,6 +116,83 @@ func TestUpdateBackKey(t *testing.T) {
 	})
 }
 
+func TestUpdateCollapseExpandKey(t *testing.T) {
+	t.Run("c_collapses_expanded_tasks", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		m.runDetail.SetRun(&models.Run{
+			ID:     "abc",
+			Status: models.RunStatusRunning,
+			Tasks: []models.TaskRun{
+				{TaskName: "t1", Status: models.TaskStatusRunning},
+				{TaskName: "t2", Status: models.TaskStatusPending},
+			},
+		})
+		m.runDetail.ExpandAll()
+		if !m.runDetail.HasExpanded() {
+			t.Fatal("precondition: should have expanded tasks")
+		}
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.runDetail.HasExpanded() {
+			t.Error("c should collapse all expanded tasks")
+		}
+	})
+
+	t.Run("c_expands_when_all_collapsed", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		m.runDetail.SetRun(&models.Run{
+			ID:     "abc",
+			Status: models.RunStatusRunning,
+			Tasks: []models.TaskRun{
+				{TaskName: "t1", Status: models.TaskStatusRunning},
+				{TaskName: "t2", Status: models.TaskStatusPending},
+			},
+		})
+		m.runDetail.CollapseAll()
+		if m.runDetail.HasExpanded() {
+			t.Fatal("precondition: should have no expanded tasks")
+		}
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if !model.runDetail.HasExpanded() {
+			t.Error("c when all collapsed should expand all tasks")
+		}
+	})
+
+	t.Run("c_noop_on_runlist", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunList {
+			t.Error("c from RunList should not change anything")
+		}
+	})
+
+	t.Run("c_noop_on_logs_tab", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabLogs
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.rightTab != TabLogs {
+			t.Error("c from Logs tab should not change tab")
+		}
+	})
+}
+
 func TestUpdatePrevNextPipeline(t *testing.T) {
 	t.Run("prev_pipeline", func(t *testing.T) {
 		m := makeTestModel()

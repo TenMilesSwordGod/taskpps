@@ -292,6 +292,8 @@ func contextKeyHints(m Model) string {
 				descStyle.Render("navigate"),
 				keyStyle.Render("enter"),
 				descStyle.Render("expand/select"),
+				keyStyle.Render("c"),
+				descStyle.Render("collapse/expand all"),
 				keyStyle.Render("b"),
 				descStyle.Render("back"),
 				keyStyle.Render("p/n"),
