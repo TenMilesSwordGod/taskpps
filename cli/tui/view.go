@@ -154,7 +154,7 @@ func renderFooter(width int, m Model) string {
 	if sel != nil {
 		for _, t := range sel.Tasks {
 			totalTasks++
-			if t.Status == "success" || t.Status == "failed" || t.Status == "skipped" {
+			if t.Status == "success" || t.Status == "failed" || t.Status == "skipped" || t.Status == "cancelled" {
 				tasksDone++
 			}
 		}
