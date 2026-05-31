@@ -10,26 +10,82 @@ import (
 	"github.com/taskpps/ppsctl/models"
 )
 
+type subpipelineGroup struct {
+	name  string
+	tasks []int
+}
+
 type RunDetailModel struct {
-	run      *models.Run
-	cursor   int
-	expanded map[int]bool
-	width    int
-	height   int
-	viewport viewport.Model
-	ready    bool
+	run       *models.Run
+	cursor    int
+	expanded  map[int]bool
+	subExpanded map[string]bool
+	width     int
+	height    int
+	viewport  viewport.Model
+	ready     bool
+	groups    []subpipelineGroup
+	flatItems []flatItem
+}
+
+type flatItem struct {
+	kind       string
+	subName    string
+	taskIdx    int
 }
 
 func NewRunDetailModel() RunDetailModel {
 	return RunDetailModel{
-		expanded: make(map[int]bool),
+		expanded:    make(map[int]bool),
+		subExpanded: make(map[string]bool),
+	}
+}
+
+func (m *RunDetailModel) buildGroups() {
+	if m.run == nil {
+		m.groups = nil
+		m.flatItems = nil
+		return
+	}
+
+	groupMap := make(map[string][]int)
+	order := []string{}
+	for i, t := range m.run.Tasks {
+		name := t.SubpipelineName
+		if name == "" {
+			name = "default"
+		}
+		if _, ok := groupMap[name]; !ok {
+			order = append(order, name)
+		}
+		groupMap[name] = append(groupMap[name], i)
+	}
+
+	m.groups = make([]subpipelineGroup, 0, len(order))
+	for _, name := range order {
+		m.groups = append(m.groups, subpipelineGroup{name: name, tasks: groupMap[name]})
+	}
+
+	m.flatItems = nil
+	for _, g := range m.groups {
+		m.flatItems = append(m.flatItems, flatItem{kind: "sub", subName: g.name})
+		for _, idx := range g.tasks {
+			m.flatItems = append(m.flatItems, flatItem{kind: "task", taskIdx: idx, subName: g.name})
+		}
 	}
 }
 
 func (m *RunDetailModel) SetRun(run *models.Run) {
 	m.run = run
-	if run != nil && m.cursor >= len(run.Tasks) && len(run.Tasks) > 0 {
-		m.cursor = len(run.Tasks) - 1
+	m.buildGroups()
+	if run != nil {
+		for _, g := range m.groups {
+			m.subExpanded[g.name] = true
+		}
+		m.rebuildFlatItems()
+		if m.cursor >= len(m.flatItems) && len(m.flatItems) > 0 {
+			m.cursor = len(m.flatItems) - 1
+		}
 	}
 	if m.ready {
 		m.updateViewportContent()
@@ -55,11 +111,24 @@ func (m *RunDetailModel) SelectedRun() *models.Run {
 	return m.run
 }
 
+func (m *RunDetailModel) SetCursor(idx int) {
+	if idx >= 0 && idx < len(m.flatItems) {
+		m.cursor = idx
+	}
+}
+
 func (m *RunDetailModel) SelectedTask() *models.TaskRun {
-	if m.run == nil || len(m.run.Tasks) == 0 || m.cursor >= len(m.run.Tasks) {
+	if m.run == nil || len(m.flatItems) == 0 || m.cursor >= len(m.flatItems) {
 		return nil
 	}
-	return &m.run.Tasks[m.cursor]
+	item := m.flatItems[m.cursor]
+	if item.kind != "task" {
+		return nil
+	}
+	if item.taskIdx >= len(m.run.Tasks) {
+		return nil
+	}
+	return &m.run.Tasks[item.taskIdx]
 }
 
 func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
@@ -70,20 +139,28 @@ func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.skipCollapsedTasks()
 				m.updateViewportContent()
 			} else {
 				m.viewport, cmd = m.viewport.Update(msg)
 			}
 		case "down", "j":
-			if m.run != nil && m.cursor < len(m.run.Tasks)-1 {
+			if m.cursor < len(m.flatItems)-1 {
 				m.cursor++
+				m.skipCollapsedTasks()
 				m.updateViewportContent()
 			} else {
 				m.viewport, cmd = m.viewport.Update(msg)
 			}
 		case "enter":
-			if m.run != nil && len(m.run.Tasks) > 0 {
-				m.expanded[m.cursor] = !m.expanded[m.cursor]
+			if m.cursor < len(m.flatItems) {
+				item := m.flatItems[m.cursor]
+				if item.kind == "sub" {
+					m.subExpanded[item.subName] = !m.subExpanded[item.subName]
+					m.rebuildFlatItems()
+				} else {
+					m.expanded[item.taskIdx] = !m.expanded[item.taskIdx]
+				}
 				m.updateViewportContent()
 			}
 		default:
@@ -95,6 +172,38 @@ func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+func (m *RunDetailModel) skipCollapsedTasks() {
+	for m.cursor < len(m.flatItems) {
+		item := m.flatItems[m.cursor]
+		if item.kind == "sub" {
+			break
+		}
+		parentExpanded := m.subExpanded[item.subName]
+		if parentExpanded {
+			break
+		}
+		m.cursor++
+	}
+	if m.cursor >= len(m.flatItems) && len(m.flatItems) > 0 {
+		m.cursor = len(m.flatItems) - 1
+	}
+}
+
+func (m *RunDetailModel) rebuildFlatItems() {
+	m.flatItems = nil
+	for _, g := range m.groups {
+		m.flatItems = append(m.flatItems, flatItem{kind: "sub", subName: g.name})
+		if m.subExpanded[g.name] {
+			for _, idx := range g.tasks {
+				m.flatItems = append(m.flatItems, flatItem{kind: "task", taskIdx: idx, subName: g.name})
+			}
+		}
+	}
+	if m.cursor >= len(m.flatItems) && len(m.flatItems) > 0 {
+		m.cursor = len(m.flatItems) - 1
+	}
+}
+
 func (m *RunDetailModel) updateViewportContent() {
 	var b strings.Builder
 
@@ -103,80 +212,115 @@ func (m *RunDetailModel) updateViewportContent() {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(select a run)"))
 		b.WriteString("\n")
 	} else {
-		// Helper to truncate lines
-		truncateLine := func(line string) string {
-			if m.width > 0 && lipgloss.Width(line) > m.width {
-				for lipgloss.Width(line) > m.width-3 && len(line) > 3 {
-					line = line[:len(line)-1]
-				}
-				line = line + "..."
-			}
-			return line
-		}
-
-		b.WriteString(truncateLine(fmt.Sprintf("ID: %s", m.run.ID)))
+		b.WriteString(TruncateLine(fmt.Sprintf("ID: %s", m.run.ID), m.width))
 		b.WriteString("\n")
-		b.WriteString(truncateLine(fmt.Sprintf("Pipeline: %s", m.run.PipelineName)))
+		b.WriteString(TruncateLine(fmt.Sprintf("Pipeline: %s", m.run.PipelineName), m.width))
 		b.WriteString("\n")
 
 		statusStyle := StatusStyle(string(m.run.Status))
-		b.WriteString(truncateLine(fmt.Sprintf("Status: %s", statusStyle.Render(string(m.run.Status)))))
+		b.WriteString(TruncateLine(fmt.Sprintf("Status: %s", statusStyle.Render(string(m.run.Status))), m.width))
 		b.WriteString("\n")
 
 		if m.run.StartedAt != nil {
-			b.WriteString(truncateLine(fmt.Sprintf("Started: %s", *m.run.StartedAt)))
+			b.WriteString(TruncateLine(fmt.Sprintf("Started: %s", *m.run.StartedAt), m.width))
 			b.WriteString("\n")
 		}
 		if m.run.FinishedAt != nil {
-			b.WriteString(truncateLine(fmt.Sprintf("Finished: %s", *m.run.FinishedAt)))
+			b.WriteString(TruncateLine(fmt.Sprintf("Finished: %s", *m.run.FinishedAt), m.width))
 			b.WriteString("\n")
 		}
-		b.WriteString("\n")
-		b.WriteString(TitleStyle.Render("Tasks"))
 		b.WriteString("\n")
 
 		if len(m.run.Tasks) == 0 {
 			b.WriteString("  (no tasks)\n")
 		} else {
-			for i, task := range m.run.Tasks {
-				icon := StatusIcon(string(task.Status))
-				style := StatusStyle(string(task.Status))
-
-				expandIcon := "  "
-				if m.expanded[i] {
+			cursorIdx := 0
+			for _, g := range m.groups {
+				isExpanded := m.subExpanded[g.name]
+				expandIcon := "▶ "
+				if isExpanded {
 					expandIcon = "▼ "
 				}
 
-				line := fmt.Sprintf("%s%s %s  %s", expandIcon, icon, task.TaskName, style.Render(string(task.Status)))
-				if task.ExitCode != nil {
-					line += fmt.Sprintf(" (exit: %d)", *task.ExitCode)
+				isCursor := cursorIdx < len(m.flatItems) && m.cursor == cursorIdx
+				prefix := "  "
+				if isCursor {
+					prefix = CursorStyle.Render("> ")
 				}
 
-				if i == m.cursor {
-					line = CursorStyle.Render(">") + line[1:]
-				}
+				subLine := fmt.Sprintf("%s%s%s %s (%d tasks)",
+					prefix, expandIcon,
+					SubpipelineStyle.Render(g.name),
+					SubpipelineStyle.Render("pipeline"),
+					len(g.tasks))
 
-				b.WriteString(truncateLine(line))
+				b.WriteString(TruncateLine(subLine, m.width))
 				b.WriteString("\n")
+				cursorIdx++
 
-				if m.expanded[i] {
-					b.WriteString(truncateLine(fmt.Sprintf("    Type: %s", task.TaskType)))
-					b.WriteString("\n")
-					if task.StartedAt != nil {
-						b.WriteString(truncateLine(fmt.Sprintf("    Started: %s", *task.StartedAt)))
+				if isExpanded {
+					for ti, taskIdx := range g.tasks {
+						task := m.run.Tasks[taskIdx]
+						icon := StatusIcon(string(task.Status))
+						style := StatusStyle(string(task.Status))
+
+						connector := TreeBranch + " "
+						if ti == len(g.tasks)-1 {
+							connector = TreeLast + " "
+						}
+
+						taskExpandIcon := "  "
+						if m.expanded[taskIdx] {
+							taskExpandIcon = "▼ "
+						}
+
+						isTaskCursor := cursorIdx < len(m.flatItems) && m.cursor == cursorIdx
+						taskPrefix := "  " + connector + taskExpandIcon
+						if isTaskCursor {
+							taskPrefix = "  " + connector + CursorStyle.Render("> ")
+						}
+
+						displayName := task.TaskName
+						if strings.HasPrefix(displayName, g.name+".") {
+							displayName = displayName[len(g.name)+1:]
+						}
+
+						line := fmt.Sprintf("%s%s %s  %s", taskPrefix, icon, displayName, style.Render(string(task.Status)))
+						if task.ExitCode != nil {
+							line += fmt.Sprintf(" (exit: %d)", *task.ExitCode)
+						}
+
+						b.WriteString(TruncateLine(line, m.width))
 						b.WriteString("\n")
+
+						if m.expanded[taskIdx] {
+							indent := "  "
+							if ti == len(g.tasks)-1 {
+								indent = "    "
+							} else {
+								indent = "  " + TreeConnector
+							}
+
+							b.WriteString(TruncateLine(fmt.Sprintf("%s  Type: %s", indent, task.TaskType), m.width))
+							b.WriteString("\n")
+							if task.StartedAt != nil {
+								b.WriteString(TruncateLine(fmt.Sprintf("%s  Started: %s", indent, *task.StartedAt), m.width))
+								b.WriteString("\n")
+							}
+							if task.FinishedAt != nil {
+								b.WriteString(TruncateLine(fmt.Sprintf("%s  Finished: %s", indent, *task.FinishedAt), m.width))
+								b.WriteString("\n")
+							}
+							b.WriteString("\n")
+						}
+
+						cursorIdx++
 					}
-					if task.FinishedAt != nil {
-						b.WriteString(truncateLine(fmt.Sprintf("    Finished: %s", *task.FinishedAt)))
-						b.WriteString("\n")
-					}
-					b.WriteString("\n")
 				}
 			}
 		}
 	}
 
-	// Save current scroll position before updating content
 	oldY := m.viewport.YPosition
 	m.viewport.SetContent(b.String())
 	m.viewport.YPosition = oldY

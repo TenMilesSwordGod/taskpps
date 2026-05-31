@@ -173,6 +173,7 @@ func TestUpdateEnterKey(t *testing.T) {
 				{TaskName: "test", Status: models.TaskStatusRunning},
 			},
 		})
+		m.runDetail.SetCursor(1)
 
 		msg := tea.KeyMsg{Type: tea.KeyEnter}
 		_, cmd := m.Update(msg)
@@ -189,7 +190,7 @@ func TestUpdateEnterKey(t *testing.T) {
 		m.runDetail.SetRun(&models.Run{
 			ID:     "abc",
 			Status: models.RunStatusRunning,
-			Tasks: []models.TaskRun{},
+			Tasks:  []models.TaskRun{},
 		})
 
 		msg := tea.KeyMsg{Type: tea.KeyEnter}

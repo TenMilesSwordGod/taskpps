@@ -58,8 +58,8 @@ func TestRunDetailSetRunCursorAdjust(t *testing.T) {
 		Tasks: []models.TaskRun{{TaskName: "t1"}, {TaskName: "t2"}},
 	}
 	m.SetRun(run)
-	if m.cursor != 1 {
-		t.Errorf("cursor = %d, want 1", m.cursor)
+	if m.cursor != 2 {
+		t.Errorf("cursor = %d, want 2", m.cursor)
 	}
 }
 

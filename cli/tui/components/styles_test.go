@@ -127,3 +127,70 @@ func TestWidthStyle(t *testing.T) {
 		}
 	})
 }
+
+func TestTruncateLine(t *testing.T) {
+	t.Run("no_truncation_needed", func(t *testing.T) {
+		result := TruncateLine("hello", 10)
+		if result != "hello" {
+			t.Errorf("TruncateLine = %q, want %q", result, "hello")
+		}
+	})
+
+	t.Run("truncation_with_ellipsis", func(t *testing.T) {
+		result := TruncateLine("hello world", 8)
+		if lipgloss.Width(result) > 8 {
+			t.Errorf("TruncateLine width = %d, want <= 8, got %q", lipgloss.Width(result), result)
+		}
+		if len(result) > 0 && result[len(result)-3:] != "..." {
+			t.Errorf("TruncateLine should end with ..., got %q", result)
+		}
+	})
+
+	t.Run("zero_width", func(t *testing.T) {
+		result := TruncateLine("hello", 0)
+		if result != "hello" {
+			t.Errorf("TruncateLine with width 0 should return original, got %q", result)
+		}
+	})
+
+	t.Run("very_small_width", func(t *testing.T) {
+		result := TruncateLine("hello", 3)
+		if lipgloss.Width(result) > 3 {
+			t.Errorf("TruncateLine width = %d, want <= 3, got %q", lipgloss.Width(result), result)
+		}
+	})
+
+	t.Run("unicode_characters", func(t *testing.T) {
+		result := TruncateLine("▶ ✔ ✘ ○", 6)
+		if lipgloss.Width(result) > 6 {
+			t.Errorf("TruncateLine with unicode width = %d, want <= 6, got %q", lipgloss.Width(result), result)
+		}
+	})
+
+	t.Run("styled_text", func(t *testing.T) {
+		styled := StatusRunningStyle.Render("running task with a very long name")
+		result := TruncateLine(styled, 15)
+		if lipgloss.Width(result) > 15 {
+			t.Errorf("TruncateLine with styled text width = %d, want <= 15, got %q", lipgloss.Width(result), result)
+		}
+	})
+}
+
+func TestSubpipelineStyle(t *testing.T) {
+	result := SubpipelineStyle.Render("build")
+	if result == "" {
+		t.Error("SubpipelineStyle rendered empty")
+	}
+}
+
+func TestTreeConnectors(t *testing.T) {
+	if TreeConnector == "" {
+		t.Error("TreeConnector should not be empty")
+	}
+	if TreeBranch == "" {
+		t.Error("TreeBranch should not be empty")
+	}
+	if TreeLast == "" {
+		t.Error("TreeLast should not be empty")
+	}
+}

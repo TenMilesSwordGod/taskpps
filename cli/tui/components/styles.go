@@ -1,6 +1,9 @@
 package components
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+	truncate "github.com/muesli/reflow/truncate"
+)
 
 var (
 	ColorPending   = lipgloss.Color("#FFA500")
@@ -51,6 +54,14 @@ var (
 	StatusCancelledStyle = lipgloss.NewStyle().Foreground(ColorCancelled)
 
 	CursorStyle = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
+
+	SubpipelineStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FFD700"))
+
+	TreeConnector = "│ "
+	TreeBranch    = "├─"
+	TreeLast      = "└─"
 )
 
 func StatusIcon(status string) string {
@@ -89,4 +100,14 @@ func StatusStyle(status string) lipgloss.Style {
 	default:
 		return lipgloss.NewStyle()
 	}
+}
+
+func TruncateLine(line string, maxWidth int) string {
+	if maxWidth <= 0 || lipgloss.Width(line) <= maxWidth {
+		return line
+	}
+	if maxWidth <= 3 {
+		return ""
+	}
+	return truncate.StringWithTail(line, uint(maxWidth), "...")
 }

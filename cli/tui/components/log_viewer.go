@@ -8,34 +8,26 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const maxLogLines = 5000 // Keep last 5000 lines of logs
+const maxLogLines = 5000
 
 type LogViewerModel struct {
 	viewport viewport.Model
 	lines    []string
 	ready    bool
-	width    int // Store current width for line wrapping/truncation
+	width    int
 }
 
 func NewLogViewerModel() LogViewerModel {
 	return LogViewerModel{}
 }
 
-// Helper to process a single line: truncate if too long for the given width
 func processLine(line string, width int) string {
 	if width <= 0 {
-		width = 80 // Default if no width set
+		return line
 	}
-	if len(line) > width {
-		if width > 3 {
-			return line[:width-3] + "..."
-		}
-		return line[:width]
-	}
-	return line
+	return TruncateLine(line, width)
 }
 
-// Process all lines for display
 func processLines(lines []string, width int) []string {
 	processed := make([]string, len(lines))
 	for i, line := range lines {
@@ -67,7 +59,6 @@ func (m *LogViewerModel) SetContent(content string) {
 	}
 	if m.ready {
 		processedLines := processLines(m.lines, m.width)
-		// Save scroll position before updating content
 		oldY := m.viewport.YPosition
 		m.viewport.SetContent(strings.Join(processedLines, "\n"))
 		m.viewport.YPosition = oldY

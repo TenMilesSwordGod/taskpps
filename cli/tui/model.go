@@ -26,10 +26,18 @@ const (
 	TabLogs
 )
 
+type layoutDims struct {
+	leftContentW  int
+	rightContentW int
+	leftContentH  int
+	rightContentH int
+	panelH        int
+}
+
 type Model struct {
-	runList    components.RunListModel
-	runDetail  components.RunDetailModel
-	logViewer  components.LogViewerModel
+	runList   components.RunListModel
+	runDetail components.RunDetailModel
+	logViewer components.LogViewerModel
 
 	focusedPanel PanelFocus
 	rightTab     RightPanelTab
@@ -37,13 +45,14 @@ type Model struct {
 	client      *client.Client
 	targetRunID string
 
-	runs        []models.Run
-	errMsg      string
+	runs   []models.Run
+	errMsg string
 
 	width  int
 	height int
 	ready  bool
 	quit   bool
+	dims   layoutDims
 }
 
 func StartWatch(c *client.Client, runID string) error {
@@ -129,10 +138,9 @@ func (m Model) cycleTab() RightPanelTab {
 }
 
 func renderPanel(panelContent string, focused bool, contentWidth, contentHeight int) string {
-	// contentWidth/contentHeight are content area dimensions; add border + padding for total
 	style := components.PanelStyle.
-		Width(contentWidth + 4).   // border(2) + padding(2)
-		Height(contentHeight + 2)  // border(2)
+		Width(contentWidth + 4).
+		Height(contentHeight + 2)
 	if focused {
 		style = components.FocusedPanelStyle.
 			Width(contentWidth + 4).
@@ -201,14 +209,12 @@ func renderFooter(width int, m Model) string {
 	total := len(m.runs)
 	tasksDone := 0
 	totalTasks := 0
-	if m.runDetail.SelectedTask() != nil {
-		sel := m.runList.SelectedRun()
-		if sel != nil {
-			for _, t := range sel.Tasks {
-				totalTasks++
-				if t.Status == "success" || t.Status == "failed" || t.Status == "skipped" {
-					tasksDone++
-				}
+	sel := m.runList.SelectedRun()
+	if sel != nil {
+		for _, t := range sel.Tasks {
+			totalTasks++
+			if t.Status == "success" || t.Status == "failed" || t.Status == "skipped" {
+				tasksDone++
 			}
 		}
 	}

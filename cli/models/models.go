@@ -23,16 +23,17 @@ const (
 )
 
 type TaskRun struct {
-	ID         string     `json:"id"`
-	RunID      string     `json:"run_id"`
-	TaskName   string     `json:"task_name"`
-	TaskType   string     `json:"task_type"`
-	Status     TaskStatus `json:"status"`
-	ExitCode   *int       `json:"exit_code"`
-	LogPath    string     `json:"log_path"`
-	StartedAt  *string    `json:"started_at"`
-	FinishedAt *string    `json:"finished_at"`
-	CreatedAt  string     `json:"created_at"`
+	ID              string     `json:"id"`
+	RunID           string     `json:"run_id"`
+	TaskName        string     `json:"task_name"`
+	SubpipelineName string     `json:"subpipeline_name"`
+	TaskType        string     `json:"task_type"`
+	Status          TaskStatus `json:"status"`
+	ExitCode        *int       `json:"exit_code"`
+	LogPath         string     `json:"log_path"`
+	StartedAt       *string    `json:"started_at"`
+	FinishedAt      *string    `json:"finished_at"`
+	CreatedAt       string     `json:"created_at"`
 }
 
 type Run struct {

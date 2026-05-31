@@ -1,12 +1,10 @@
 package tui
 
 import (
-	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/taskpps/ppsctl/tui/components"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -35,7 +33,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focusedPanel = m.focusPrev()
 
 		case "t", "T":
-			// Cycle between Detail and Logs tabs when right panel is focused
 			if m.focusedPanel == FocusRightPanel {
 				m.rightTab = m.cycleTab()
 				if m.rightTab == TabLogs && m.runDetail.SelectedRun() != nil {
@@ -159,43 +156,31 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 	case FocusRightPanel:
 		if m.rightTab == TabDetail {
 			return m.runDetail.Update(msg)
-		} else {
-			return m.logViewer.Update(msg)
 		}
+		return m.logViewer.Update(msg)
 	}
 	return nil
 }
 
 func (m *Model) resizeComponents() {
-	// Calculate available height properly
 	header := renderHeader(m.width)
 	footer := renderFooter(m.width, *m)
-	
-	errLine := ""
-	if m.errMsg != "" {
-		errLine = components.ErrorStyle.Render(fmt.Sprintf(" ERROR: %s ", m.errMsg))
-	}
 
 	headerH := lipgloss.Height(header)
 	footerH := lipgloss.Height(footer)
-	errH := lipgloss.Height(errLine)
-	availableH := m.height - headerH - footerH - errH
+
+	availableH := m.height - headerH - footerH
 	if availableH < 5 {
 		availableH = 5
 	}
 
-	totalW := m.width
-	totalH := availableH
-
-	// Panel: border(2) + padding(2) = 4 horizontal, border(2) only vertical
 	borderOverheadW := 4
 	borderOverheadH := 2
-	gap := 2       // gap between panels
-	rightTabH := 2 // tab row + newline
+	gap := 2
+	rightTabH := 2
 
-	// Total width available for content inside panels
 	totalFrameAndGapW := borderOverheadW + gap + borderOverheadW
-	contentW := totalW - totalFrameAndGapW
+	contentW := m.width - totalFrameAndGapW
 	if contentW < 42 {
 		contentW = 42
 	}
@@ -216,13 +201,21 @@ func (m *Model) resizeComponents() {
 		}
 	}
 
-	leftContentH := totalH - borderOverheadH
-	rightContentH := totalH - borderOverheadH - rightTabH
+	leftContentH := availableH - borderOverheadH
+	rightContentH := availableH - borderOverheadH - rightTabH
 	if leftContentH < 3 {
 		leftContentH = 3
 	}
 	if rightContentH < 3 {
 		rightContentH = 3
+	}
+
+	m.dims = layoutDims{
+		leftContentW:  leftContentW,
+		rightContentW: rightContentW,
+		leftContentH:  leftContentH,
+		rightContentH: rightContentH,
+		panelH:        availableH,
 	}
 
 	m.runList.SetSize(leftContentW, leftContentH)
