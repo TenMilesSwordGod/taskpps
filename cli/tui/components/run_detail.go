@@ -254,15 +254,22 @@ func (m *RunDetailModel) updateContent() {
 		b.WriteString("\n")
 
 		if m.run.FinishedAt != nil {
-			dur := fmt.Sprintf("  %s%s → %s",
-				LabelStyle.Render("ran: "),
-				DimStyle.Render(FormatTime(m.run.StartedAt)),
-				DimStyle.Render(FormatTime(m.run.FinishedAt)))
-			b.WriteString(TruncateLine(dur, m.width))
+			if m.run.StartedAt != nil && *m.run.StartedAt != *m.run.FinishedAt {
+				dur := fmt.Sprintf("  %s%s → %s",
+					LabelStyle.Render("ran: "),
+					DimStyle.Render(FormatTime(m.run.StartedAt)),
+					DimStyle.Render(FormatTime(m.run.FinishedAt)))
+				b.WriteString(TruncateLine(dur, m.width))
+			} else {
+				dur := fmt.Sprintf("  %s%s",
+					LabelStyle.Render("ran: "),
+					DimStyle.Render(FormatTime(m.run.FinishedAt)))
+				b.WriteString(TruncateLine(dur, m.width))
+			}
 			b.WriteString("\n")
 		}
 
-		b.WriteString(TruncateLine(LabelStyle.Render(strings.Repeat("─", min(m.width, 50))), m.width))
+		b.WriteString(TruncateLine(LabelStyle.Render(strings.Repeat("─", min(m.width, 30))), m.width))
 		b.WriteString("\n")
 
 		if len(m.run.Tasks) == 0 {
@@ -272,7 +279,7 @@ func (m *RunDetailModel) updateContent() {
 			cursorIdx := 0
 			for gi, g := range m.groups {
 				if gi > 0 {
-					b.WriteString(TruncateLine(DimStyle.Render("  "+strings.Repeat("┄", min(m.width-2, 40))), m.width))
+					b.WriteString(TruncateLine(DimStyle.Render("  "+strings.Repeat("┄", min(m.width-2, 20))), m.width))
 					b.WriteString("\n")
 				}
 
@@ -291,13 +298,13 @@ func (m *RunDetailModel) updateContent() {
 				}
 
 				done, running, total := subStats(m.run, g)
-			barW := m.width / 4
-			if barW < 5 {
-				barW = 5
-			}
-			if barW > 30 {
-				barW = 30
-			}
+			barW := m.width / 6
+				if barW < 5 {
+					barW = 5
+				}
+				if barW > 12 {
+					barW = 12
+				}
 			bar := MakeProgressBar(done, running, total, barW)
 				prog := ""
 				if total > 0 {
