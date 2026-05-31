@@ -65,14 +65,6 @@ func (m *RunDetailModel) buildGroups() {
 	for _, name := range order {
 		m.groups = append(m.groups, subpipelineGroup{name: name, tasks: groupMap[name]})
 	}
-
-	m.flatItems = nil
-	for _, g := range m.groups {
-		m.flatItems = append(m.flatItems, flatItem{kind: "sub", subName: g.name})
-		for _, idx := range g.tasks {
-			m.flatItems = append(m.flatItems, flatItem{kind: "task", taskIdx: idx, subName: g.name})
-		}
-	}
 }
 
 func (m *RunDetailModel) SetRun(run *models.Run) {
@@ -88,7 +80,7 @@ func (m *RunDetailModel) SetRun(run *models.Run) {
 		}
 	}
 	if m.ready {
-		m.updateViewportContent()
+		m.updateContent()
 	}
 }
 
@@ -104,7 +96,7 @@ func (m *RunDetailModel) SetSize(w, h int) {
 		m.viewport.Width = w
 		m.viewport.Height = h
 	}
-	m.updateViewportContent()
+	m.updateContent()
 }
 
 func (m *RunDetailModel) SelectedRun() *models.Run {
@@ -119,7 +111,9 @@ func (m *RunDetailModel) SetCursor(idx int) {
 
 func (m *RunDetailModel) CollapseAll() {
 	m.expanded = make(map[int]bool)
-	m.updateViewportContent()
+	if m.ready {
+		m.updateContent()
+	}
 }
 
 func (m *RunDetailModel) ExpandAll() {
@@ -129,7 +123,9 @@ func (m *RunDetailModel) ExpandAll() {
 	for i := range m.run.Tasks {
 		m.expanded[i] = true
 	}
-	m.updateViewportContent()
+	if m.ready {
+		m.updateContent()
+	}
 }
 
 func (m *RunDetailModel) HasExpanded() bool {
@@ -164,7 +160,7 @@ func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
 			if m.cursor > 0 {
 				m.cursor--
 				m.skipCollapsedTasks()
-				m.updateViewportContent()
+				m.updateContent()
 			} else {
 				m.viewport, cmd = m.viewport.Update(msg)
 			}
@@ -172,7 +168,7 @@ func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
 			if m.cursor < len(m.flatItems)-1 {
 				m.cursor++
 				m.skipCollapsedTasks()
-				m.updateViewportContent()
+				m.updateContent()
 			} else {
 				m.viewport, cmd = m.viewport.Update(msg)
 			}
@@ -185,7 +181,7 @@ func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
 				} else {
 					m.expanded[item.taskIdx] = !m.expanded[item.taskIdx]
 				}
-				m.updateViewportContent()
+				m.updateContent()
 			}
 		default:
 			m.viewport, cmd = m.viewport.Update(msg)
@@ -202,8 +198,7 @@ func (m *RunDetailModel) skipCollapsedTasks() {
 		if item.kind == "sub" {
 			break
 		}
-		parentExpanded := m.subExpanded[item.subName]
-		if parentExpanded {
+		if m.subExpanded[item.subName] {
 			break
 		}
 		m.cursor++
@@ -228,77 +223,39 @@ func (m *RunDetailModel) rebuildFlatItems() {
 	}
 }
 
-func subpipelineProgress(run *models.Run, g subpipelineGroup) string {
-	done := 0
-	running := 0
-	for _, idx := range g.tasks {
-		if idx < len(run.Tasks) {
-			s := run.Tasks[idx].Status
-			if s == "success" || s == "failed" || s == "skipped" || s == "cancelled" {
-				done++
-			} else if s == "running" {
-				running++
-			}
-		}
-	}
-	total := len(g.tasks)
-	if total == 0 {
-		return ""
-	}
-
-	barW := 6
-	doneW := barW * done / total
-	runW := barW * running / total
-	todoW := barW - doneW - runW
-	if todoW < 0 {
-		todoW = 0
-	}
-
-	bar := StatusSuccessStyle.Render(strings.Repeat(ProgressDone, doneW)) +
-		StatusRunningStyle.Render(strings.Repeat(ProgressDone, runW)) +
-		DimStyle.Render(strings.Repeat(ProgressTodo, todoW))
-
-	return fmt.Sprintf("%s %d/%d", bar, done, total)
-}
-
-func (m *RunDetailModel) updateViewportContent() {
+func (m *RunDetailModel) updateContent() {
 	var b strings.Builder
 
 	if m.run == nil {
-		b.WriteString("\n")
 		b.WriteString(DimStyle.Render("  (select a run)"))
 		b.WriteString("\n")
 	} else {
-		statusIcon := StatusIcon(string(m.run.Status))
-		statusStyle := StatusStyle(string(m.run.Status))
-		statusBadge := BadgeStyle.Copy().
-			Foreground(lipgloss.Color("#000000")).
-			Background(statusStyle.GetForeground()).
-			Render(string(m.run.Status))
+		icon := StatusIcon(string(m.run.Status))
+		style := StatusStyle(string(m.run.Status))
 
-		headerLine := fmt.Sprintf("%s %s  %s", statusIcon, statusBadge, m.run.PipelineName)
-		b.WriteString(TruncateLine(headerLine, m.width))
+		b.WriteString(TruncateLine(fmt.Sprintf("%s %s  %s", icon, style.Bold(true).Render(string(m.run.Status)), m.run.PipelineName), m.width))
 		b.WriteString("\n")
 
-		metaLine := fmt.Sprintf("%s%s  %s%s",
-			LabelStyle.Render("id:"),
-			DimStyle.Render(m.run.ID[:min(12, len(m.run.ID))]),
-			LabelStyle.Render("time:"),
-			DimStyle.Render(formatTime(m.run.StartedAt)))
-		b.WriteString(TruncateLine(metaLine, m.width))
+		idStr := m.run.ID
+		if len(idStr) > 12 {
+			idStr = idStr[:12]
+		}
+		meta := fmt.Sprintf("%s%s  %s%s",
+			LabelStyle.Render("id:"), DimStyle.Render(idStr),
+			LabelStyle.Render("time:"), DimStyle.Render(FormatTime(m.run.StartedAt)))
+		b.WriteString(TruncateLine(meta, m.width))
 		b.WriteString("\n")
 
 		if m.run.FinishedAt != nil {
-			durLine := fmt.Sprintf("%s%s → %s",
-				LabelStyle.Render("duration: "),
-				DimStyle.Render(formatTime(m.run.StartedAt)),
-				DimStyle.Render(formatTime(m.run.FinishedAt)))
-			b.WriteString(TruncateLine(durLine, m.width))
+			dur := fmt.Sprintf("%s%s → %s",
+				LabelStyle.Render("ran: "),
+				DimStyle.Render(FormatTime(m.run.StartedAt)),
+				DimStyle.Render(FormatTime(m.run.FinishedAt)))
+			b.WriteString(TruncateLine(dur, m.width))
 			b.WriteString("\n")
 		}
 
-		sepLine := LabelStyle.Render(strings.Repeat("─", min(m.width, 40)))
-		b.WriteString(TruncateLine(sepLine, m.width))
+		b.WriteString(TruncateLine(LabelStyle.Render(strings.Repeat("─", min(m.width, 50))), m.width))
 		b.WriteString("\n")
 
 		if len(m.run.Tasks) == 0 {
@@ -319,12 +276,17 @@ func (m *RunDetailModel) updateViewportContent() {
 					prefix = CursorStyle.Render("> ")
 				}
 
-				prog := subpipelineProgress(m.run, g)
-				subLine := fmt.Sprintf("%s%s %s %s",
+				done, running, total := subStats(m.run, g)
+				bar := MakeProgressBar(done, running, total, 5)
+				prog := ""
+				if total > 0 {
+					prog = fmt.Sprintf(" %s %d/%d", bar, done, total)
+				}
+
+				subLine := fmt.Sprintf("%s%s %s%s",
 					prefix, expandIcon,
 					SubpipelineStyle.Render(g.name),
 					prog)
-
 				b.WriteString(TruncateLine(subLine, m.width))
 				b.WriteString("\n")
 				cursorIdx++
@@ -332,8 +294,8 @@ func (m *RunDetailModel) updateViewportContent() {
 				if isExpanded {
 					for ti, taskIdx := range g.tasks {
 						task := m.run.Tasks[taskIdx]
-						icon := StatusIcon(string(task.Status))
-						style := StatusStyle(string(task.Status))
+						taskIcon := StatusIcon(string(task.Status))
+						taskStyle := StatusStyle(string(task.Status))
 
 						connector := TreeBranch + " "
 						if ti == len(g.tasks)-1 {
@@ -341,49 +303,42 @@ func (m *RunDetailModel) updateViewportContent() {
 						}
 
 						isTaskCursor := cursorIdx < len(m.flatItems) && m.cursor == cursorIdx
-						taskPrefix := "  " + connector
+						taskPrefix := "  " + connector + "  "
 						if isTaskCursor {
 							taskPrefix = "  " + connector + CursorStyle.Render("> ")
-						} else {
-							taskPrefix = "  " + connector + "  "
 						}
 
 						displayName := task.TaskName
-						if strings.HasPrefix(displayName, g.name+".") {
-							displayName = displayName[len(g.name)+1:]
+						if idx := strings.Index(displayName, "."); idx >= 0 {
+							displayName = displayName[idx+1:]
 						}
 
-						line := fmt.Sprintf("%s%s %s %s", taskPrefix, icon, displayName, style.Render(string(task.Status)))
+						line := fmt.Sprintf("%s%s %s %s", taskPrefix, taskIcon, displayName, taskStyle.Render(string(task.Status)))
 						if task.ExitCode != nil {
 							line += DimStyle.Render(fmt.Sprintf(" exit:%d", *task.ExitCode))
 						}
-
 						b.WriteString(TruncateLine(line, m.width))
 						b.WriteString("\n")
 
 						if m.expanded[taskIdx] {
-							indent := "  "
-							if ti == len(g.tasks)-1 {
-								indent = "    "
-							} else {
-								indent = "  " + TreeConnector
+							indent := "    "
+							if ti < len(g.tasks)-1 {
+								indent = "  " + TreeBar
 							}
 
-							detailLine := fmt.Sprintf("%s%s %s  %s %s",
+							b.WriteString(TruncateLine(fmt.Sprintf("%s%s %s  %s %s",
 								indent,
 								LabelStyle.Render("type:"),
 								DimStyle.Render(task.TaskType),
 								LabelStyle.Render("start:"),
-								DimStyle.Render(formatTime(task.StartedAt)))
-							b.WriteString(TruncateLine(detailLine, m.width))
+								DimStyle.Render(FormatTime(task.StartedAt))), m.width))
 							b.WriteString("\n")
 
 							if task.FinishedAt != nil {
-								finLine := fmt.Sprintf("%s%s %s",
+								b.WriteString(TruncateLine(fmt.Sprintf("%s%s %s",
 									indent,
 									LabelStyle.Render("end:  "),
-									DimStyle.Render(formatTime(task.FinishedAt)))
-								b.WriteString(TruncateLine(finLine, m.width))
+									DimStyle.Render(FormatTime(task.FinishedAt))), m.width))
 								b.WriteString("\n")
 							}
 						}
@@ -395,9 +350,22 @@ func (m *RunDetailModel) updateViewportContent() {
 		}
 	}
 
-	oldY := m.viewport.YPosition
 	m.viewport.SetContent(b.String())
-	m.viewport.YPosition = oldY
+}
+
+func subStats(run *models.Run, g subpipelineGroup) (done, running, total int) {
+	total = len(g.tasks)
+	for _, idx := range g.tasks {
+		if idx < len(run.Tasks) {
+			s := run.Tasks[idx].Status
+			if s == "success" || s == "failed" || s == "skipped" || s == "cancelled" {
+				done++
+			} else if s == "running" {
+				running++
+			}
+		}
+	}
+	return
 }
 
 func min(a, b int) int {
@@ -411,11 +379,5 @@ func (m RunDetailModel) View() string {
 	if m.ready {
 		return m.viewport.View()
 	}
-	var b strings.Builder
-	if m.run == nil {
-		b.WriteString("\n")
-		b.WriteString(DimStyle.Render("  (select a run)"))
-		b.WriteString("\n")
-	}
-	return b.String()
+	return DimStyle.Render("  (select a run)")
 }

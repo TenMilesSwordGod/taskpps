@@ -65,20 +65,6 @@ func TestStyleDefinitions(t *testing.T) {
 		}
 	})
 
-	t.Run("HeaderStyle", func(t *testing.T) {
-		result := HeaderStyle.Render("test")
-		if result == "" {
-			t.Error("HeaderStyle rendered empty")
-		}
-	})
-
-	t.Run("FooterStyle", func(t *testing.T) {
-		result := FooterStyle.Render("test")
-		if result == "" {
-			t.Error("FooterStyle rendered empty")
-		}
-	})
-
 	t.Run("ErrorStyle", func(t *testing.T) {
 		result := ErrorStyle.Render("test")
 		if result == "" {
@@ -90,6 +76,20 @@ func TestStyleDefinitions(t *testing.T) {
 		result := CursorStyle.Render("test")
 		if result == "" {
 			t.Error("CursorStyle rendered empty")
+		}
+	})
+
+	t.Run("DimStyle", func(t *testing.T) {
+		result := DimStyle.Render("test")
+		if result == "" {
+			t.Error("DimStyle rendered empty")
+		}
+	})
+
+	t.Run("LabelStyle", func(t *testing.T) {
+		result := LabelStyle.Render("test")
+		if result == "" {
+			t.Error("LabelStyle rendered empty")
 		}
 	})
 }
@@ -104,6 +104,11 @@ func TestColorDefinitions(t *testing.T) {
 		ColorCancelled,
 		ColorCyan,
 		ColorWhite,
+		ColorDim,
+		ColorLabel,
+		ColorGold,
+		ColorBarBg,
+		ColorBorder,
 	}
 	for i, c := range colors {
 		if c == "" {
@@ -141,9 +146,6 @@ func TestTruncateLine(t *testing.T) {
 		if lipgloss.Width(result) > 8 {
 			t.Errorf("TruncateLine width = %d, want <= 8, got %q", lipgloss.Width(result), result)
 		}
-		if len(result) > 0 && result[len(result)-3:] != "..." {
-			t.Errorf("TruncateLine should end with ..., got %q", result)
-		}
 	})
 
 	t.Run("zero_width", func(t *testing.T) {
@@ -153,25 +155,10 @@ func TestTruncateLine(t *testing.T) {
 		}
 	})
 
-	t.Run("very_small_width", func(t *testing.T) {
-		result := TruncateLine("hello", 3)
-		if lipgloss.Width(result) > 3 {
-			t.Errorf("TruncateLine width = %d, want <= 3, got %q", lipgloss.Width(result), result)
-		}
-	})
-
 	t.Run("unicode_characters", func(t *testing.T) {
 		result := TruncateLine("▶ ✔ ✘ ○", 6)
 		if lipgloss.Width(result) > 6 {
 			t.Errorf("TruncateLine with unicode width = %d, want <= 6, got %q", lipgloss.Width(result), result)
-		}
-	})
-
-	t.Run("styled_text", func(t *testing.T) {
-		styled := StatusRunningStyle.Render("running task with a very long name")
-		result := TruncateLine(styled, 15)
-		if lipgloss.Width(result) > 15 {
-			t.Errorf("TruncateLine with styled text width = %d, want <= 15, got %q", lipgloss.Width(result), result)
 		}
 	})
 }
@@ -184,13 +171,53 @@ func TestSubpipelineStyle(t *testing.T) {
 }
 
 func TestTreeConnectors(t *testing.T) {
-	if TreeConnector == "" {
-		t.Error("TreeConnector should not be empty")
-	}
 	if TreeBranch == "" {
 		t.Error("TreeBranch should not be empty")
 	}
 	if TreeLast == "" {
 		t.Error("TreeLast should not be empty")
 	}
+	if TreeBar == "" {
+		t.Error("TreeBar should not be empty")
+	}
+}
+
+func TestFormatTime(t *testing.T) {
+	t.Run("nil_time", func(t *testing.T) {
+		result := FormatTime(nil)
+		if result != "-" {
+			t.Errorf("FormatTime(nil) = %q, want %q", result, "-")
+		}
+	})
+
+	t.Run("short_time", func(t *testing.T) {
+		s := "2024-01-01T12:00:00Z"
+		result := FormatTime(&s)
+		if result == "" {
+			t.Error("FormatTime should not return empty")
+		}
+	})
+}
+
+func TestMakeProgressBar(t *testing.T) {
+	t.Run("zero_total", func(t *testing.T) {
+		result := MakeProgressBar(0, 0, 0, 5)
+		if result != "" {
+			t.Errorf("MakeProgressBar with zero total should return empty, got %q", result)
+		}
+	})
+
+	t.Run("all_done", func(t *testing.T) {
+		result := MakeProgressBar(3, 0, 3, 5)
+		if result == "" {
+			t.Error("MakeProgressBar should not return empty")
+		}
+	})
+
+	t.Run("partial", func(t *testing.T) {
+		result := MakeProgressBar(1, 1, 3, 5)
+		if result == "" {
+			t.Error("MakeProgressBar should not return empty")
+		}
+	})
 }

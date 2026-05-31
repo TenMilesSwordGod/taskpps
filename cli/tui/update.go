@@ -4,7 +4,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -201,62 +200,55 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) resizeComponents() {
-	header := renderHeader(m.width)
-	footer := renderFooter(m.width, *m)
-
-	headerH := lipgloss.Height(header)
-	footerH := lipgloss.Height(footer)
-
+	headerH := 1
+	footerH := 1
 	availableH := m.height - headerH - footerH
 	if availableH < 5 {
 		availableH = 5
 	}
 
-	borderOverheadW := 4
-	borderOverheadH := 2
-	gap := 2
-	rightTabH := 2
+	borderW := 4
+	borderH := 2
+	gap := 1
 
-	totalFrameAndGapW := borderOverheadW + gap + borderOverheadW
-	contentW := m.width - totalFrameAndGapW
+	totalBorderGapW := borderW + gap + borderW
+	contentW := m.width - totalBorderGapW
 	if contentW < 42 {
 		contentW = 42
 	}
 
-	leftContentW := contentW * 20 / 100
-	rightContentW := contentW - leftContentW
-
-	if leftContentW < 16 {
-		leftContentW = 16
-		rightContentW = contentW - leftContentW
+	leftW := contentW * 22 / 100
+	rightW := contentW - leftW
+	if leftW < 18 {
+		leftW = 18
+		rightW = contentW - leftW
 	}
-	if rightContentW < 26 {
-		rightContentW = 26
-		leftContentW = contentW - rightContentW
-		if leftContentW < 16 {
-			leftContentW = 16
-			rightContentW = 26
+	if rightW < 26 {
+		rightW = 26
+		leftW = contentW - rightW
+		if leftW < 18 {
+			leftW = 18
+			rightW = 26
 		}
 	}
 
-	leftContentH := availableH - borderOverheadH
-	rightContentH := availableH - borderOverheadH - rightTabH
-	if leftContentH < 3 {
-		leftContentH = 3
+	leftH := availableH - borderH
+	rightH := availableH - borderH - 1
+	if leftH < 3 {
+		leftH = 3
 	}
-	if rightContentH < 3 {
-		rightContentH = 3
+	if rightH < 3 {
+		rightH = 3
 	}
 
 	m.dims = layoutDims{
-		leftContentW:  leftContentW,
-		rightContentW: rightContentW,
-		leftContentH:  leftContentH,
-		rightContentH: rightContentH,
-		panelH:        availableH,
+		leftContentW:  leftW,
+		rightContentW: rightW,
+		leftContentH:  leftH,
+		rightContentH: rightH,
 	}
 
-	m.runList.SetSize(leftContentW, leftContentH)
-	m.runDetail.SetSize(rightContentW, rightContentH)
-	m.logViewer.SetSize(rightContentW, rightContentH)
+	m.runList.SetSize(leftW, leftH-1)
+	m.runDetail.SetSize(rightW, rightH-1)
+	m.logViewer.SetSize(rightW, rightH-1)
 }

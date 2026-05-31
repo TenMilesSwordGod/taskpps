@@ -20,42 +20,171 @@ func (m Model) View() string {
 	header := renderHeader(m.width)
 	footer := renderFooter(m.width, m)
 
-	errLine := ""
-	if m.errMsg != "" {
-		errLine = components.ErrorStyle.Render(fmt.Sprintf(" ERROR: %s ", m.errMsg))
-	}
-
-	listView := m.runList.View()
-
-	var rightContent string
-	if m.rightTab == TabDetail {
-		rightContent = m.runDetail.View()
-	} else {
-		rightContent = m.logViewer.View()
-	}
-
-	tabs := renderTabs(m.rightTab, m.dims.rightContentW)
-	rightView := tabs + "\n" + rightContent
-
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
 
-	leftPanel := renderPanel(listView, leftFocused, m.dims.leftContentW, m.dims.leftContentH)
-	rightPanel := renderPanel(rightView, rightFocused, m.dims.rightContentW, m.dims.rightContentH)
+	leftPanelW := m.dims.leftContentW + 4
+	leftPanelH := m.dims.leftContentH + 2
+	rightPanelW := m.dims.rightContentW + 4
+	rightPanelH := m.dims.rightContentH + 2 + 1
 
-	gap := 2
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, strings.Repeat(" ", gap), rightPanel)
+	leftStyle := components.PanelStyle.Width(leftPanelW).Height(leftPanelH)
+	if leftFocused {
+		leftStyle = components.FocusedPanelStyle.Width(leftPanelW).Height(leftPanelH)
+	}
+
+	rightStyle := components.PanelStyle.Width(rightPanelW).Height(rightPanelH)
+	if rightFocused {
+		rightStyle = components.FocusedPanelStyle.Width(rightPanelW).Height(rightPanelH)
+	}
+
+	leftContent := components.TitleStyle.Render("Runs") + "\n" + m.runList.View()
+	leftPanel := leftStyle.Render(leftContent)
+
+	tabs := renderTabs(m.rightTab, m.dims.rightContentW)
+	var rightContent string
+	if m.rightTab == TabDetail {
+		rightContent = tabs + "\n" + m.runDetail.View()
+	} else {
+		rightContent = tabs + "\n" + m.logViewer.View()
+	}
+	rightPanel := rightStyle.Render(rightContent)
+
+	gap := " "
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, gap, rightPanel)
 
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("\n")
 	b.WriteString(panels)
-	if errLine != "" {
-		b.WriteString("\n")
-		b.WriteString(errLine)
-	}
 	b.WriteString("\n")
 	b.WriteString(footer)
 
 	return b.String()
+}
+
+func renderTabs(activeTab RightPanelTab, width int) string {
+	activeStyle := lipgloss.NewStyle().
+		Background(components.ColorBarBg).
+		Foreground(components.ColorCyan).Bold(true)
+	inactiveStyle := lipgloss.NewStyle().
+		Background(components.ColorBarBg).
+		Foreground(components.ColorDim)
+
+	var tabs string
+	if activeTab == TabDetail {
+		tabs = activeStyle.Render(" ▸ Detail ") +
+			inactiveStyle.Render(" │ ") +
+			inactiveStyle.Render("  Logs ")
+	} else {
+		tabs = inactiveStyle.Render("  Detail ") +
+			inactiveStyle.Render(" │ ") +
+			activeStyle.Render(" ▸ Logs ")
+	}
+
+	padW := width - lipgloss.Width(tabs)
+	if padW > 0 {
+		tabs += lipgloss.NewStyle().Background(components.ColorBarBg).Render(strings.Repeat(" ", padW))
+	}
+
+	return tabs
+}
+
+func renderHeader(width int) string {
+	bg := lipgloss.NewStyle().Background(components.ColorBarBg)
+
+	left := bg.Copy().
+		Foreground(components.ColorCyan).Bold(true).
+		Render(" ppsctl watch ")
+
+	right := bg.Copy().
+		Foreground(components.ColorDim).
+		Render(" pipeline task monitor ")
+
+	padW := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if padW < 1 {
+		padW = 1
+	}
+	spacer := bg.Render(strings.Repeat(" ", padW))
+
+	return left + spacer + right
+}
+
+func renderFooter(width int, m Model) string {
+	bg := lipgloss.NewStyle().Background(components.ColorBarBg)
+
+	keyStyle := lipgloss.NewStyle().Background(components.ColorBarBg).Foreground(components.ColorWhite).Bold(true)
+	descStyle := lipgloss.NewStyle().Background(components.ColorBarBg).Foreground(components.ColorDim)
+	sep := descStyle.Render(" ")
+
+	var hints []string
+	switch m.focusedPanel {
+	case FocusRunList:
+		hints = []string{
+			keyStyle.Render("↑↓") + descStyle.Render("nav"),
+			keyStyle.Render("enter") + descStyle.Render("select"),
+			keyStyle.Render("tab") + descStyle.Render("panel"),
+			keyStyle.Render("r") + descStyle.Render("refresh"),
+			keyStyle.Render("q") + descStyle.Render("quit"),
+		}
+	case FocusRightPanel:
+		if m.rightTab == TabDetail {
+			hints = []string{
+				keyStyle.Render("↑↓") + descStyle.Render("nav"),
+				keyStyle.Render("enter") + descStyle.Render("expand"),
+				keyStyle.Render("c") + descStyle.Render("collapse"),
+				keyStyle.Render("b") + descStyle.Render("back"),
+				keyStyle.Render("p/n") + descStyle.Render("pipeline"),
+				keyStyle.Render("t") + descStyle.Render("logs"),
+				keyStyle.Render("q") + descStyle.Render("quit"),
+			}
+		} else {
+			hints = []string{
+				keyStyle.Render("↑↓") + descStyle.Render("scroll"),
+				keyStyle.Render("b") + descStyle.Render("back"),
+				keyStyle.Render("p/n") + descStyle.Render("pipeline"),
+				keyStyle.Render("t") + descStyle.Render("detail"),
+				keyStyle.Render("q") + descStyle.Render("quit"),
+			}
+		}
+	}
+
+	hintsStr := bg.Render(" ") + strings.Join(hints, sep)
+
+	total := len(m.runs)
+	tasksDone := 0
+	totalTasks := 0
+	sel := m.runList.SelectedRun()
+	if sel != nil {
+		for _, t := range sel.Tasks {
+			totalTasks++
+			if t.Status == "success" || t.Status == "failed" || t.Status == "skipped" {
+				tasksDone++
+			}
+		}
+	}
+
+	statusStr := bg.Copy().Foreground(components.ColorDim).Render(
+		fmt.Sprintf(" Runs:%d Tasks:%d/%d 2s ", total, tasksDone, totalTasks))
+
+	if m.errMsg != "" {
+		errStr := bg.Copy().Foreground(components.ColorFailed).Bold(true).Render(
+			fmt.Sprintf(" ERR:%s ", truncateStr(m.errMsg, 20)))
+		statusStr = errStr + statusStr
+	}
+
+	padW := width - lipgloss.Width(hintsStr) - lipgloss.Width(statusStr)
+	if padW < 0 {
+		padW = 0
+	}
+	spacer := bg.Render(strings.Repeat(" ", padW))
+
+	return hintsStr + spacer + statusStr
+}
+
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }

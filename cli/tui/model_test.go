@@ -98,25 +98,6 @@ func TestRenderHeader(t *testing.T) {
 	if result == "" {
 		t.Error("renderHeader should not return empty")
 	}
-	if len(result) == 0 {
-		t.Error("renderHeader should return content")
-	}
-}
-
-func TestRenderPanel(t *testing.T) {
-	t.Run("unfocused", func(t *testing.T) {
-		result := renderPanel("content", false, 50, 20)
-		if result == "" {
-			t.Error("renderPanel should not return empty")
-		}
-	})
-
-	t.Run("focused", func(t *testing.T) {
-		result := renderPanel("content", true, 50, 20)
-		if result == "" {
-			t.Error("renderPanel focused should not return empty")
-		}
-	})
 }
 
 func TestRenderFooter(t *testing.T) {

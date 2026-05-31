@@ -1,6 +1,8 @@
 package components
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 	truncate "github.com/muesli/reflow/truncate"
 )
@@ -14,11 +16,17 @@ var (
 	ColorCancelled = lipgloss.Color("#FF00FF")
 	ColorCyan      = lipgloss.Color("#00FFFF")
 	ColorWhite     = lipgloss.Color("#FFFFFF")
+	ColorDim       = lipgloss.Color("#666666")
+	ColorLabel     = lipgloss.Color("#888888")
+	ColorGold      = lipgloss.Color("#FFD700")
+	ColorBarBg     = lipgloss.Color("#333333")
+	ColorBorder    = lipgloss.Color("#555555")
 )
 
 var (
 	PanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorBorder).
 			Padding(0, 1)
 
 	FocusedPanelStyle = PanelStyle.Copy().
@@ -28,23 +36,14 @@ var (
 			Bold(true).
 			Foreground(ColorCyan)
 
-	HeaderStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#333333")).
-			Foreground(ColorWhite).
-			Padding(0, 1)
+	DimStyle   = lipgloss.NewStyle().Foreground(ColorDim)
+	LabelStyle = lipgloss.NewStyle().Foreground(ColorLabel)
 
-	TabBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#333333")).
-			Foreground(ColorWhite)
+	CursorStyle = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
 
-	FooterStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#333333")).
-			Foreground(ColorWhite).
-			Padding(0, 1)
-
-	ErrorStyle = lipgloss.NewStyle().
-			Foreground(ColorFailed).
-			Bold(true)
+	SubpipelineStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(ColorGold)
 
 	StatusPendingStyle   = lipgloss.NewStyle().Foreground(ColorPending)
 	StatusRunningStyle   = lipgloss.NewStyle().Foreground(ColorRunning)
@@ -53,15 +52,17 @@ var (
 	StatusSkippedStyle   = lipgloss.NewStyle().Foreground(ColorSkipped)
 	StatusCancelledStyle = lipgloss.NewStyle().Foreground(ColorCancelled)
 
-	CursorStyle = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
+	ErrorStyle = lipgloss.NewStyle().
+			Foreground(ColorFailed).
+			Bold(true)
 
-	SubpipelineStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#FFD700"))
+	ProgressDone = "█"
+	ProgressRun  = "▓"
+	ProgressTodo = "░"
 
-	TreeConnector = "│ "
-	TreeBranch    = "├─"
-	TreeLast      = "└─"
+	TreeBranch = "├─"
+	TreeLast   = "└─"
+	TreeBar    = "│ "
 )
 
 func StatusIcon(status string) string {
@@ -110,4 +111,39 @@ func TruncateLine(line string, maxWidth int) string {
 		return ""
 	}
 	return truncate.StringWithTail(line, uint(maxWidth), "...")
+}
+
+func FormatTime(t *string) string {
+	if t == nil {
+		return "-"
+	}
+	s := *t
+	if len(s) >= 19 {
+		return s[5:19]
+	}
+	return s
+}
+
+func MakeProgressBar(done, running, total, barW int) string {
+	if total == 0 || barW <= 0 {
+		return ""
+	}
+	doneW := barW * done / total
+	runW := barW * running / total
+	todoW := barW - doneW - runW
+	if todoW < 0 {
+		todoW = 0
+	}
+	if doneW+runW > barW {
+		doneW = barW - runW
+		if doneW < 0 {
+			doneW = 0
+			runW = barW
+		}
+	}
+
+	bar := StatusSuccessStyle.Render(strings.Repeat(ProgressDone, doneW)) +
+		StatusRunningStyle.Render(strings.Repeat(ProgressRun, runW)) +
+		DimStyle.Render(strings.Repeat(ProgressTodo, todoW))
+	return bar
 }

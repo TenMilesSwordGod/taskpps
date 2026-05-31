@@ -188,8 +188,8 @@ func TestRunDetailView(t *testing.T) {
 		}
 		m.SetRun(run)
 		view := m.View()
-		if !strings.Contains(view, "duration:") {
-			t.Errorf("view should show duration, got: %s", view)
+		if !strings.Contains(view, "ran:") {
+			t.Errorf("view should show ran, got: %s", view)
 		}
 	})
 

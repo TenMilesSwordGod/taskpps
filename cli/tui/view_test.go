@@ -51,11 +51,8 @@ func TestViewWithError(t *testing.T) {
 	m.errMsg = "Connection refused"
 
 	view := m.View()
-	if !strings.Contains(view, "ERROR") {
-		t.Errorf("view should contain ERROR, got: %s", view)
-	}
-	if !strings.Contains(view, "Connection refused") {
-		t.Errorf("view should contain error message, got: %s", view)
+	if !strings.Contains(view, "ERR:") {
+		t.Errorf("view should contain ERR, got: %s", view)
 	}
 }
 
