@@ -128,10 +128,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runList.SetRuns(m.runs)
 
 			if m.targetRunID != "" {
-				for i, r := range msg.runs {
+				for i, r := range m.runs {
 					if r.ID == m.targetRunID {
 						m.runList.SetCursor(i)
-						m.runDetail.SetRun(&msg.runs[i])
+						m.runDetail.SetRun(&m.runs[i])
 						m.focusedPanel = FocusRightPanel
 						m.rightTab = TabDetail
 						cmds = append(cmds, fetchRun(m.client, r.ID))

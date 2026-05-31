@@ -68,7 +68,12 @@ func (m *RunDetailModel) buildGroups() {
 }
 
 func (m *RunDetailModel) SetRun(run *models.Run) {
-	m.run = run
+	if run != nil {
+		cp := *run
+		m.run = &cp
+	} else {
+		m.run = nil
+	}
 	m.buildGroups()
 	if run != nil {
 		for _, g := range m.groups {
@@ -367,6 +372,56 @@ func (m *RunDetailModel) updateContent() {
 	}
 
 	m.viewport.SetContent(b.String())
+	m.ensureCursorVisible()
+}
+
+func (m *RunDetailModel) ensureCursorVisible() {
+	if !m.ready || len(m.flatItems) == 0 {
+		return
+	}
+	cursorLine := m.cursorLineForIndex(m.cursor)
+	viewTop := m.viewport.YOffset
+	viewBottom := viewTop + m.viewport.Height - 1
+
+	if cursorLine < viewTop {
+		m.viewport.SetYOffset(cursorLine)
+	} else if cursorLine > viewBottom {
+		m.viewport.SetYOffset(cursorLine - m.viewport.Height + 1)
+	}
+}
+
+func (m *RunDetailModel) cursorLineForIndex(idx int) int {
+	if m.run == nil || len(m.flatItems) == 0 || idx >= len(m.flatItems) {
+		return 0
+	}
+	line := 0
+	flatIdx := 0
+	for _, g := range m.groups {
+		if flatIdx == idx {
+			return line
+		}
+		line++
+		flatIdx++
+
+		if m.subExpanded[g.name] {
+			for ti, taskIdx := range g.tasks {
+				if flatIdx == idx {
+					return line
+				}
+				line++
+				flatIdx++
+
+				if m.expanded[taskIdx] {
+					line++
+					if m.run.Tasks[taskIdx].FinishedAt != nil {
+						line++
+					}
+				}
+				_ = ti
+			}
+		}
+	}
+	return line
 }
 
 func subStats(run *models.Run, g subpipelineGroup) (done, running, total int) {
