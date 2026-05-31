@@ -119,6 +119,8 @@ func StatusIcon(status string) string {
 		return "⊘"
 	case "cancelled":
 		return "✕"
+	case "partial":
+		return "◐"
 	default:
 		return "?"
 	}
@@ -138,6 +140,8 @@ func StatusStyle(status string) lipgloss.Style {
 		return StatusSkippedStyle
 	case "cancelled":
 		return StatusCancelledStyle
+	case "partial":
+		return lipgloss.NewStyle().Foreground(ColorGold)
 	default:
 		return lipgloss.NewStyle()
 	}

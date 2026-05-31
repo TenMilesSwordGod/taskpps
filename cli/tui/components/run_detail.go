@@ -388,7 +388,9 @@ func subStatus(run *models.Run, g subpipelineGroup) string {
 	hasFailed := false
 	hasRunning := false
 	hasPending := false
-	allSuccess := true
+	hasSuccess := false
+	hasSkipped := false
+	hasCancelled := false
 	for _, idx := range g.tasks {
 		if idx >= len(run.Tasks) {
 			continue
@@ -397,17 +399,16 @@ func subStatus(run *models.Run, g subpipelineGroup) string {
 		switch s {
 		case "failed":
 			hasFailed = true
-			allSuccess = false
 		case "running":
 			hasRunning = true
-			allSuccess = false
 		case "pending":
 			hasPending = true
-			allSuccess = false
 		case "success":
-		case "skipped", "cancelled":
-		default:
-			allSuccess = false
+			hasSuccess = true
+		case "skipped":
+			hasSkipped = true
+		case "cancelled":
+			hasCancelled = true
 		}
 	}
 	if hasFailed {
@@ -419,8 +420,14 @@ func subStatus(run *models.Run, g subpipelineGroup) string {
 	if hasPending {
 		return "pending"
 	}
-	if allSuccess && len(g.tasks) > 0 {
+	if hasSuccess {
 		return "success"
+	}
+	if hasCancelled {
+		return "cancelled"
+	}
+	if hasSkipped {
+		return "skipped"
 	}
 	return "pending"
 }
