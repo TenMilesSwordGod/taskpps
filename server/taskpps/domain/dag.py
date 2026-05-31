@@ -11,16 +11,25 @@ class DAGCycleError(Exception):
 
 
 class DAG:
-    def __init__(self, tasks: list[ResolvedTask]):
+    def __init__(self, tasks: list[ResolvedTask], implicit_sequential: bool = True):
         self.tasks = {t.name: t for t in tasks}
+        self.task_order = [t.name for t in tasks]
         self.adjacency: dict[str, list[str]] = {}
         self.reverse_adjacency: dict[str, list[str]] = {}
-        self._build()
+        self._build(implicit_sequential)
 
-    def _build(self) -> None:
+    def _build(self, implicit_sequential: bool = True) -> None:
         for name in self.tasks:
             self.adjacency[name] = []
             self.reverse_adjacency[name] = []
+
+        if implicit_sequential:
+            for i in range(1, len(self.task_order)):
+                name = self.task_order[i]
+                task = self.tasks[name]
+                if not task.depends_on:
+                    prev = self.task_order[i - 1]
+                    task.depends_on = [prev]
 
         for name, task in self.tasks.items():
             for dep in task.depends_on:

@@ -116,6 +116,45 @@ def test_dag_get_dependencies():
     assert deps == {"a", "b"}
 
 
+def test_dag_implicit_sequential_ordering():
+    tasks = [
+        ResolvedTask(name="clone-repo", task_type="git", git={"repo": "http://example.com/repo.git"}),
+        ResolvedTask(name="list-files", task_type="command", command="ls"),
+        ResolvedTask(name="build", task_type="command", command="make"),
+    ]
+    dag = DAG(tasks)
+    levels = dag.get_execution_levels()
+    assert len(levels) == 3
+    assert levels[0] == ["clone-repo"]
+    assert levels[1] == ["list-files"]
+    assert levels[2] == ["build"]
+
+
+def test_dag_implicit_sequential_with_explicit_dep():
+    tasks = [
+        ResolvedTask(name="a", task_type="command", command="echo a"),
+        ResolvedTask(name="b", task_type="command", command="echo b", depends_on=["a"]),
+        ResolvedTask(name="c", task_type="command", command="echo c"),
+    ]
+    dag = DAG(tasks)
+    levels = dag.get_execution_levels()
+    assert len(levels) == 3
+    assert levels[0] == ["a"]
+    assert levels[1] == ["b"]
+    assert levels[2] == ["c"]
+
+
+def test_dag_no_implicit_sequential():
+    tasks = [
+        ResolvedTask(name="a", task_type="command", command="echo a"),
+        ResolvedTask(name="b", task_type="command", command="echo b"),
+    ]
+    dag = DAG(tasks, implicit_sequential=False)
+    levels = dag.get_execution_levels()
+    assert len(levels) == 1
+    assert set(levels[0]) == {"a", "b"}
+
+
 def test_apply_overrides():
     data = {"options": {"host": "staging"}, "tasks": [{"name": "t1", "command": "echo"}]}
     overrides = {"options.host": "prod"}

@@ -204,13 +204,27 @@ class TestDAGP0:
         assert dag.get_execution_levels() == [["a"]]
 
     def test_dag_independent_tasks(self):
-        """Multiple independent tasks - all in same level."""
+        """Multiple independent tasks - implicit sequential by default."""
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
             ResolvedTask(name="b", task_type="command", command="echo b"),
             ResolvedTask(name="c", task_type="command", command="echo c"),
         ]
         dag = DAG(tasks)
+        levels = dag.get_execution_levels()
+        assert len(levels) == 3
+        assert levels[0] == ["a"]
+        assert levels[1] == ["b"]
+        assert levels[2] == ["c"]
+
+    def test_dag_independent_tasks_parallel(self):
+        """Multiple independent tasks - parallel when implicit_sequential=False."""
+        tasks = [
+            ResolvedTask(name="a", task_type="command", command="echo a"),
+            ResolvedTask(name="b", task_type="command", command="echo b"),
+            ResolvedTask(name="c", task_type="command", command="echo c"),
+        ]
+        dag = DAG(tasks, implicit_sequential=False)
         levels = dag.get_execution_levels()
         assert len(levels) == 1
         assert set(levels[0]) == {"a", "b", "c"}
@@ -275,7 +289,7 @@ class TestDAGP0:
         assert levels[2] == ["c"]
 
     def test_dag_multiple_roots(self):
-        """Multiple independent root tasks."""
+        """Multiple root tasks with explicit depends_on."""
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
             ResolvedTask(name="b", task_type="command", command="echo b"),
@@ -283,8 +297,9 @@ class TestDAGP0:
         ]
         dag = DAG(tasks)
         levels = dag.get_execution_levels()
-        assert set(levels[0]) == {"a", "b"}
-        assert set(levels[1]) == {"c"}
+        assert levels[0] == ["a"]
+        assert set(levels[1]) == {"b"}
+        assert set(levels[2]) == {"c"}
 
 
 # ============================================================
