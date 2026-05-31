@@ -15,6 +15,7 @@ type LogViewerModel struct {
 	lines    []string
 	ready    bool
 	width    int
+	loading  bool
 }
 
 func NewLogViewerModel() LogViewerModel {
@@ -87,6 +88,14 @@ func (m *LogViewerModel) Content() string {
 	return strings.Join(m.lines, "\n")
 }
 
+func (m *LogViewerModel) SetLoading(loading bool) {
+	m.loading = loading
+}
+
+func (m *LogViewerModel) IsLoading() bool {
+	return m.loading
+}
+
 func (m *LogViewerModel) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
@@ -95,6 +104,16 @@ func (m *LogViewerModel) Update(msg tea.Msg) tea.Cmd {
 
 func (m LogViewerModel) View() string {
 	var b strings.Builder
+
+	if m.loading {
+		b.WriteString("\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#00ffff")).Render("  Loading logs...\n\n"))
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("  ⠋ Fetching task output"))
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("  ⠙ Retrieving log data"))
+		b.WriteString("\n")
+		return b.String()
+	}
 
 	if len(m.lines) == 0 {
 		b.WriteString("\n")

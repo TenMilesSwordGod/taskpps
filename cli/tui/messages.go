@@ -18,3 +18,5 @@ type logsFetchedMsg struct {
 }
 
 type tickMsg struct{}
+
+type debounceTickMsg struct{}

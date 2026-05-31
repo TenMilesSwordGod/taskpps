@@ -26,6 +26,7 @@ type RunDetailModel struct {
 	ready       bool
 	groups      []subpipelineGroup
 	flatItems   []flatItem
+	loading     bool
 }
 
 type flatItem struct {
@@ -90,6 +91,10 @@ func (m *RunDetailModel) SetRun(run *models.Run) {
 	if m.ready {
 		m.updateContent()
 	}
+}
+
+func (m *RunDetailModel) SetLoading(loading bool) {
+	m.loading = loading
 }
 
 func (m *RunDetailModel) SetSize(w, h int) {
@@ -377,21 +382,15 @@ func (m *RunDetailModel) updateContent() {
 								indent = "  " + TreeBar + " "
 							}
 
-							b.WriteString(TruncateLine(fmt.Sprintf("%s%s %s  %s %s",
-								indent,
-								LabelStyle.Render("type:"),
-								DimStyle.Render(task.TaskType),
-								LabelStyle.Render("start:"),
-								DimStyle.Render(FormatTime(task.StartedAt))), m.width))
-							b.WriteString("\n")
-
+							metaParts := []string{}
+							metaParts = append(metaParts, fmt.Sprintf("%s%s", LabelStyle.Render("type:"), DimStyle.Render(task.TaskType)))
+							metaParts = append(metaParts, fmt.Sprintf("%s%s", LabelStyle.Render("start:"), DimStyle.Render(FormatTime(task.StartedAt))))
 							if task.FinishedAt != nil {
-								b.WriteString(TruncateLine(fmt.Sprintf("%s%s %s",
-									indent,
-									LabelStyle.Render("end:  "),
-									DimStyle.Render(FormatTime(task.FinishedAt))), m.width))
-								b.WriteString("\n")
+								metaParts = append(metaParts, fmt.Sprintf("%s%s", LabelStyle.Render("end:"), DimStyle.Render(FormatTime(task.FinishedAt))))
 							}
+							metaLine := strings.Join(metaParts, DimStyle.Render("  ·  "))
+							b.WriteString(TruncateLine(fmt.Sprintf("%s%s", indent, metaLine), m.width))
+							b.WriteString("\n")
 						}
 
 						cursorIdx++
@@ -526,7 +525,22 @@ func min(a, b int) int {
 
 func (m RunDetailModel) View() string {
 	if m.ready {
+		if m.loading {
+			return m.renderLoadingState()
+		}
 		return m.viewport.View()
 	}
 	return DimStyle.Render("  (select a run)")
+}
+
+func (m RunDetailModel) renderLoadingState() string {
+	var sb strings.Builder
+	sb.WriteString(LabelStyle.Render("  Loading task details...\n\n"))
+	sb.WriteString(DimStyle.Render("  ⠋ Fetching run information"))
+	sb.WriteString("\n")
+	sb.WriteString(DimStyle.Render("  ⠙ Retrieving task list"))
+	sb.WriteString("\n")
+	sb.WriteString(DimStyle.Render("  ⠹ Processing data"))
+	sb.WriteString("\n")
+	return sb.String()
 }

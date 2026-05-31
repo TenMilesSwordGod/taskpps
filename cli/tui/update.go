@@ -53,6 +53,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeComponents()
 
 	case tea.KeyMsg:
+		m.recordUserActivity()
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quit = true
@@ -83,6 +84,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.runDetail.SelectedRun() != nil {
 						task := m.runDetail.SelectedTask()
 						if task != nil {
+							m.logViewer.SetLoading(true)
 							cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
 						}
 					}
@@ -123,10 +125,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focusedPanel == FocusRunList {
 				sel := m.runList.SelectedRun()
 				if sel != nil {
+					m.runDetail.SetLoading(true)
 					m.runDetail.SetRun(sel)
 					m.focusedPanel = FocusRightPanel
 					m.rightTab = TabDetail
 					cmds = append(cmds, fetchRun(m.client, sel.ID))
+					return m, tea.Batch(cmds...)
 				}
 			} else if m.focusedPanel == FocusRightPanel {
 				if m.rightTab == TabDetail {
@@ -153,49 +157,79 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runsFetchedMsg:
 		if msg.err != nil {
 			m.errMsg = msg.err.Error()
-		} else {
-			m.errMsg = ""
-			m.runs = mergeRuns(m.runs, msg.runs)
-			m.runList.SetRuns(m.runs)
+			return m, nil
+		}
 
-			if m.targetRunID != "" {
-				for i, r := range m.runs {
-					if r.ID == m.targetRunID {
-						m.runList.SetCursor(i)
-						m.runDetail.SetRun(&m.runs[i])
-						m.focusedPanel = FocusRightPanel
-						m.rightTab = TabDetail
-						cmds = append(cmds, fetchRun(m.client, r.ID))
-						m.targetRunID = ""
-						break
-					}
+		newHash := computeRunsHash(msg.runs)
+		if newHash == m.runsHash {
+			return m, nil
+		}
+		m.runsHash = newHash
+		m.errMsg = ""
+		m.runs = mergeRuns(m.runs, msg.runs)
+		m.runList.SetRuns(m.runs)
+
+		if m.targetRunID != "" {
+			for i, r := range m.runs {
+				if r.ID == m.targetRunID {
+					m.runList.SetCursor(i)
+					m.runDetail.SetRun(&m.runs[i])
+					m.focusedPanel = FocusRightPanel
+					m.rightTab = TabDetail
+					cmds = append(cmds, fetchRun(m.client, r.ID))
+					m.targetRunID = ""
+					break
 				}
 			}
+		}
+
+		if !m.pendingRender {
+			m.pendingRender = true
+			cmds = append(cmds, tea.Tick(debounceInterval, func(_ time.Time) tea.Msg {
+				return debounceTickMsg{}
+			}))
 		}
 
 	case runFetchedMsg:
 		if msg.err != nil {
 			m.errMsg = msg.err.Error()
-		} else {
-			m.errMsg = ""
-			m.runDetail.SetRun(msg.run)
-			if msg.run != nil {
-				for i, r := range m.runs {
-					if r.ID == msg.run.ID {
-						m.runs[i] = *msg.run
-						break
-					}
+			m.runDetail.SetLoading(false)
+			return m, nil
+		}
+
+		newHash := computeRunHash(msg.run)
+		if newHash == m.runHash {
+			return m, nil
+		}
+		m.runHash = newHash
+		m.errMsg = ""
+		m.runDetail.SetLoading(false)
+		m.runDetail.SetRun(msg.run)
+		if msg.run != nil {
+			for i, r := range m.runs {
+				if r.ID == msg.run.ID {
+					m.runs[i] = *msg.run
+					break
 				}
-				m.runList.SetRuns(m.runs)
 			}
+			m.runList.SetRuns(m.runs)
+		}
+
+		if !m.pendingRender {
+			m.pendingRender = true
+			cmds = append(cmds, tea.Tick(debounceInterval, func(_ time.Time) tea.Msg {
+				return debounceTickMsg{}
+			}))
 		}
 
 	case logsFetchedMsg:
 		if msg.err != nil {
 			m.errMsg = msg.err.Error()
+			m.logViewer.SetLoading(false)
 			m.logViewer.SetContent(components.ErrorStyle.Render("Error: ") + msg.err.Error())
 		} else {
 			m.errMsg = ""
+			m.logViewer.SetLoading(false)
 			var content string
 			for taskName, log := range msg.logs {
 				content += components.LabelStyle.Render("["+taskName+"]") + "\n" + log + "\n"
@@ -203,7 +237,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logViewer.SetContent(content)
 		}
 
+		if !m.pendingRender {
+			m.pendingRender = true
+			cmds = append(cmds, tea.Tick(debounceInterval, func(_ time.Time) tea.Msg {
+				return debounceTickMsg{}
+			}))
+		}
+
 	case tickMsg:
+		if m.shouldSkipTick() {
+			cmds = append(cmds, tea.Tick(time.Duration(refreshInterval)*time.Second, func(_ time.Time) tea.Msg {
+				return tickMsg{}
+			}))
+			break
+		}
+
 		cmds = append(cmds, fetchRuns(m.client))
 		sel := m.runDetail.SelectedRun()
 		if sel != nil {
@@ -218,6 +266,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, tea.Tick(time.Duration(refreshInterval)*time.Second, func(_ time.Time) tea.Msg {
 			return tickMsg{}
 		}))
+
+	case debounceTickMsg:
+		m.pendingRender = false
+		return m, nil
 	}
 
 	if len(cmds) > 0 {
@@ -234,7 +286,23 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 		return cmd
 	case FocusRightPanel:
 		if m.rightTab == TabDetail {
-			return m.runDetail.Update(msg)
+			detailCmd := m.runDetail.Update(msg)
+			if detailCmd != nil {
+				return detailCmd
+			}
+			run := m.runDetail.SelectedRun()
+			task := m.runDetail.SelectedTask()
+			if run != nil && task != nil && m.rightTab == TabDetail && !m.logViewer.IsLoading() {
+				preFetchLogs := func() tea.Msg {
+					logs, err := fetchLogsSync(m.client, run.ID, task.TaskName)
+					if err != nil {
+						return logsFetchedMsg{logs: nil, err: err}
+					}
+					return logsFetchedMsg{logs: logs, err: nil}
+				}
+				return preFetchLogs
+			}
+			return nil
 		}
 		return m.logViewer.Update(msg)
 	}

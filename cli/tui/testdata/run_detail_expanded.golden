@@ -11,18 +11,17 @@
 │                                                                                                                      │
 │   ✘ test-pipeline run-ghi1      │  ├─ ✔ build success exit:0                                                      │
 │                                                                                                                      │
-│     01-15T10:30:00 ████...  │  │  type: local  start: 01-15T10:30:00                                           │
-│                                                                                                                      │
-│                                 │  │  end:   01-15T11:45:00                                                        │
+│     01-15T10:30:00 ████...  │  │  type:local  ·  start:01-15T10:30:00  ·  end:01-15T11:45:00                 │
 │                                                                                                                      │
 │                                 │  └─ ▶ test running                                                             │
-│                                 │      type: local  start: 01-15T10:30:00                                           │
+│                                 │      type:local  ·  start:01-15T10:30:00                                         │
 │                                                                                                                      │
 │                                 │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄                                         │
 │                                 │  ▼ deploy ░░░░░░░░░░░░ 0/1                                                       │
 │                                 │  └─ ○ deploy pending                                                           │
-│                                 │      type: ssh  start: -                                                          │
+│                                 │      type:ssh  ·  start:-                                                        │
 │                                                                                                                      │
+│                                 │                                                                                   │
 │                                 │                                                                                   │
 │                                 │                                                                                   │
 │                                 │                                                                                   │

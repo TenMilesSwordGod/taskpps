@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -50,6 +53,12 @@ type Model struct {
 	ready  bool
 	quit   bool
 	dims   layoutDims
+
+	lastUserActivityTime time.Time
+	debounceTimer        *time.Timer
+	pendingRender        bool
+	runsHash             string
+	runHash              string
 }
 
 func StartWatch(c *client.Client, runID string) error {
@@ -123,6 +132,10 @@ func fetchLogs(c *client.Client, runID, taskName string) tea.Cmd {
 		}
 		return logsFetchedMsg{logs: logs}
 	}
+}
+
+func fetchLogsSync(c *client.Client, runID, taskName string) (map[string]string, error) {
+	return c.GetLogs(runID, taskName, 500)
 }
 
 func (m Model) focusNext() PanelFocus {
@@ -201,4 +214,35 @@ func (m *Model) navigateNextPipeline() tea.Cmd {
 	m.runDetail.SetRun(nextRun)
 	m.rightTab = TabDetail
 	return fetchRun(m.client, nextRun.ID)
+}
+
+const (
+	debounceInterval     = 30 * time.Millisecond
+	userActivityCooldown = 500 * time.Millisecond
+)
+
+func computeRunsHash(runs []models.Run) string {
+	data, _ := json.Marshal(runs)
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
+func computeRunHash(run *models.Run) string {
+	if run == nil {
+		return ""
+	}
+	data, _ := json.Marshal(run)
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
+func (m *Model) recordUserActivity() {
+	m.lastUserActivityTime = time.Now()
+}
+
+func (m *Model) shouldSkipTick() bool {
+	if m.lastUserActivityTime.IsZero() {
+		return false
+	}
+	return time.Since(m.lastUserActivityTime) < userActivityCooldown
 }
