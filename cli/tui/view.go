@@ -110,7 +110,8 @@ func renderFooter(width int, m Model) string {
 
 	keyStyle := lipgloss.NewStyle().Background(components.ColorBarBg).Foreground(components.ColorWhite).Bold(true)
 	descStyle := lipgloss.NewStyle().Background(components.ColorBarBg).Foreground(components.ColorDim)
-	sep := descStyle.Render(" ")
+	sepStyle := lipgloss.NewStyle().Background(components.ColorBarBg).Foreground(components.ColorDim)
+	sep := sepStyle.Render(" │ ")
 
 	var hints []string
 	switch m.focusedPanel {
