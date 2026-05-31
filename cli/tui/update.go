@@ -146,6 +146,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.errMsg = ""
 			m.runDetail.SetRun(msg.run)
+			if msg.run != nil {
+				for i, r := range m.runs {
+					if r.ID == msg.run.ID {
+						m.runs[i] = *msg.run
+						break
+					}
+				}
+				m.runList.SetRuns(m.runs)
+			}
 		}
 
 	case logsFetchedMsg:
