@@ -1,12 +1,24 @@
 package tui
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/taskpps/ppsctl/tui/components"
 )
+
+var (
+	lastViewHash string
+	lastRendered string
+)
+
+func computeViewHash(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
 
 func (m Model) View() string {
 	if m.quit {
@@ -63,16 +75,13 @@ func (m Model) View() string {
 		}
 	}
 
-	borderColor := components.ColorBorder
-	if m.focusedPanel == FocusRunList {
-		borderColor = components.ColorCyan
-	}
+	borderColor := components.ColorCyan
 
 	outerStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Width(m.dims.innerW).
-		Height(m.dims.panelH)
+		Height(m.dims.contentH)
 
 	panels := outerStyle.Render(innerB.String())
 
@@ -85,7 +94,13 @@ func (m Model) View() string {
 
 	result := b.String()
 
-	// Record frame if debug recording is enabled
+	newHash := computeViewHash(result)
+	if newHash == lastViewHash {
+		return lastRendered
+	}
+	lastViewHash = newHash
+	lastRendered = result
+
 	if rec := GetDebugRecorder(); rec.IsEnabled() {
 		rec.RecordFrame(result)
 	}
@@ -172,10 +187,14 @@ func renderFooter(width int, m Model) string {
 		}
 	case FocusRightPanel:
 		if m.rightTab == TabDetail {
+			cLabel := "expand"
+			if m.runDetail.HasExpanded() {
+				cLabel = "collapse"
+			}
 			hints = []string{
 				keyStyle.Render("↑↓") + descStyle.Render("nav"),
 				keyStyle.Render("enter") + descStyle.Render("expand"),
-				keyStyle.Render("c") + descStyle.Render("collapse"),
+				keyStyle.Render("c") + descStyle.Render(cLabel),
 				keyStyle.Render("b") + descStyle.Render("back"),
 				keyStyle.Render("p/n") + descStyle.Render("pipeline"),
 				keyStyle.Render("t") + descStyle.Render("logs"),
@@ -201,7 +220,7 @@ func renderFooter(width int, m Model) string {
 	}
 	hintsWidth += lipgloss.Width(bg.Render(" "))
 
-	total := len(m.runs)
+	total := m.runList.Len()
 	tasksDone := 0
 	totalTasks := 0
 	sel := m.runList.SelectedRun()

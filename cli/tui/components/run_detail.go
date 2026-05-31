@@ -258,7 +258,7 @@ func (m *RunDetailModel) updateContent() {
 		icon := StatusIcon(string(m.run.Status))
 		style := StatusStyle(string(m.run.Status))
 
-		b.WriteString(TruncateLine(fmt.Sprintf("  %s %s  %s", icon, style.Bold(true).Render(string(m.run.Status)), m.run.PipelineName), m.width))
+		b.WriteString(TruncateLine(fmt.Sprintf("> %s %s  %s", icon, style.Bold(true).Render(string(m.run.Status)), m.run.PipelineName), m.width))
 		b.WriteString("\n")
 
 		idStr := m.run.ID
@@ -330,8 +330,8 @@ func (m *RunDetailModel) updateContent() {
 				if barW < 5 {
 					barW = 5
 				}
-				if barW > 12 {
-					barW = 12
+				if barW > 20 {
+					barW = 20
 				}
 				bar := MakeProgressBar(done, running, total, barW)
 				prog := ""

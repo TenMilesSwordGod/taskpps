@@ -1,7 +1,7 @@
  ppsctl watch                                                                                                                                                                     pipeline task monitor 
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Runs                                                  │▸ Detail · Logs                                                                                                                             │
-│   ▶ deploy-production r1                             │  ✘ failed  test-integration                                                                                                                 │
+│   ▶ deploy-production r1                             │> ✘ failed  test-integration                                                                                                                 │
 │                                                                                                                                                                                                      │
 │     01-15T10:30:00                                    │  id:r3  time:01-15T10:30:00                                                                                                                 │
 │                                                                                                                                                                                                      │
@@ -57,4 +57,4 @@
 │                                                       │                                                                                                                                             │
 │                                                       │                                                                                                                                             │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
- ↑↓nav │ enterexpand │ ccollapse │ bback │ p/npipeline │ tlogs │ qquit                                                                                                      Runs:5 Tasks:0/0 2s 
+ ↑↓nav │ enterexpand │ cexpand │ bback │ p/npipeline │ tlogs │ qquit                                                                                                        Runs:5 Tasks:0/0 2s 

@@ -83,6 +83,10 @@ func (m *RunListModel) SelectedRun() *models.Run {
 	return &m.runs[m.cursor]
 }
 
+func (m *RunListModel) Len() int {
+	return len(m.runs)
+}
+
 func (m RunListModel) Update(msg tea.Msg) (RunListModel, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
@@ -153,11 +157,11 @@ func (m *RunListModel) updateContent() {
 			prog := ""
 			if total > 0 {
 				barW := m.width / 5
-				if barW < 3 {
-					barW = 3
+				if barW < 5 {
+					barW = 5
 				}
-				if barW > 10 {
-					barW = 10
+				if barW > 20 {
+					barW = 20
 				}
 				bar := MakeProgressBar(done, countRunning(run.Tasks), total, barW)
 				prog = fmt.Sprintf(" %s %d/%d", bar, done, total)
