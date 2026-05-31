@@ -277,7 +277,14 @@ func (m *RunDetailModel) updateContent() {
 				}
 
 				done, running, total := subStats(m.run, g)
-				bar := MakeProgressBar(done, running, total, 5)
+			barW := m.width / 4
+			if barW < 5 {
+				barW = 5
+			}
+			if barW > 30 {
+				barW = 30
+			}
+			bar := MakeProgressBar(done, running, total, barW)
 				prog := ""
 				if total > 0 {
 					prog = fmt.Sprintf(" %s %d/%d", bar, done, total)
