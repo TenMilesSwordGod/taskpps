@@ -125,6 +125,14 @@ func (m *RunDetailModel) SetCursor(idx int) {
 	}
 }
 
+func (m *RunDetailModel) Cursor() int {
+	return m.cursor
+}
+
+func (m *RunDetailModel) FlatCount() int {
+	return len(m.flatItems)
+}
+
 func (m *RunDetailModel) CollapseAll() {
 	m.expanded = make(map[int]bool)
 	if m.ready {

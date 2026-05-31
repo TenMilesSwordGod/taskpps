@@ -13,33 +13,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
-	// Record key events for debug
-	if rec := GetDebugRecorder(); rec.IsEnabled() {
+	rec := GetDebugRecorder()
+	debugEnabled := rec.IsEnabled()
+
+	if debugEnabled {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
-			rec.RecordEvent("KEY", fmt.Sprintf("key=%s type=%v", msg.String(), msg.Type))
+			rec.RecordEvent("KEY", fmt.Sprintf("key=%q type=%v alt=%v",
+				msg.String(), msg.Type, msg.Alt))
 		case tea.WindowSizeMsg:
 			rec.RecordEvent("RESIZE", fmt.Sprintf("width=%d height=%d", msg.Width, msg.Height))
 		case runsFetchedMsg:
 			if msg.err != nil {
 				rec.RecordEvent("RUNS_FETCHED", fmt.Sprintf("error=%v", msg.err))
 			} else {
-				rec.RecordEvent("RUNS_FETCHED", fmt.Sprintf("count=%d", len(msg.runs)))
+				var ids []string
+				for _, r := range msg.runs {
+					id := r.ID
+					if len(id) > 8 {
+						id = id[:8]
+					}
+					ids = append(ids, id)
+				}
+				rec.RecordEvent("RUNS_FETCHED", fmt.Sprintf("count=%d ids=%v", len(msg.runs), ids))
 			}
 		case runFetchedMsg:
 			if msg.err != nil {
 				rec.RecordEvent("RUN_FETCHED", fmt.Sprintf("error=%v", msg.err))
 			} else if msg.run != nil {
-				rec.RecordEvent("RUN_FETCHED", fmt.Sprintf("id=%s status=%s", msg.run.ID, msg.run.Status))
+				idShort := msg.run.ID
+				if len(idShort) > 8 {
+					idShort = idShort[:8]
+				}
+				rec.RecordEvent("RUN_FETCHED", fmt.Sprintf("id=%s status=%s tasks=%d",
+					idShort, msg.run.Status, len(msg.run.Tasks)))
 			}
 		case logsFetchedMsg:
 			if msg.err != nil {
 				rec.RecordEvent("LOGS_FETCHED", fmt.Sprintf("error=%v", msg.err))
 			} else {
-				rec.RecordEvent("LOGS_FETCHED", fmt.Sprintf("tasks=%d", len(msg.logs)))
+				var taskNames []string
+				for tn := range msg.logs {
+					taskNames = append(taskNames, tn)
+				}
+				rec.RecordEvent("LOGS_FETCHED", fmt.Sprintf("tasks=%d names=%v", len(msg.logs), taskNames))
 			}
 		case tickMsg:
-			rec.RecordEvent("TICK", "refresh interval")
+			rec.RecordEvent("TICK", fmt.Sprintf("focused=%d rightTab=%d pendingRender=%v runs=%d",
+				m.focusedPanel, m.rightTab, m.pendingRender, len(m.runs)))
+		case debounceTickMsg:
+			rec.RecordEvent("DEBOUNCE", "render flushed")
 		}
 	}
 
@@ -60,25 +83,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "esc":
+			oldPanel, oldTab := m.focusedPanel, m.rightTab
 			if m.focusedPanel == FocusRightPanel {
 				m.navigateBack()
 			} else {
 				m.quit = true
 				return m, tea.Quit
 			}
+			if debugEnabled {
+				rec.RecordEvent("NAV", fmt.Sprintf("esc: focus %d→%d tab %d→%d",
+					oldPanel, m.focusedPanel, oldTab, m.rightTab))
+			}
 
 		case "b":
+			oldPanel, oldTab := m.focusedPanel, m.rightTab
 			m.navigateBack()
+			if debugEnabled {
+				rec.RecordEvent("NAV", fmt.Sprintf("back: focus %d→%d tab %d→%d",
+					oldPanel, m.focusedPanel, oldTab, m.rightTab))
+			}
 
 		case "tab":
+			oldFocus := m.focusedPanel
 			m.focusedPanel = m.focusNext()
+			if debugEnabled {
+				rec.RecordEvent("FOCUS", fmt.Sprintf("tab: %d→%d", oldFocus, m.focusedPanel))
+			}
 
 		case "shift+tab":
+			oldFocus := m.focusedPanel
 			m.focusedPanel = m.focusPrev()
+			if debugEnabled {
+				rec.RecordEvent("FOCUS", fmt.Sprintf("shift+tab: %d→%d", oldFocus, m.focusedPanel))
+			}
 
 		case "t", "T":
 			if m.focusedPanel == FocusRightPanel {
+				oldTab := m.rightTab
 				m.rightTab = m.cycleTab()
+				if debugEnabled {
+					rec.RecordEvent("TAB", fmt.Sprintf("cycle: %d→%d", oldTab, m.rightTab))
+				}
 				if m.rightTab == TabLogs {
 					m.runDetail.CollapseAll()
 					if m.runDetail.SelectedRun() != nil {
@@ -93,10 +138,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "c":
 			if m.focusedPanel == FocusRightPanel && m.rightTab == TabDetail {
-				if m.runDetail.HasExpanded() {
+				wasExpanded := m.runDetail.HasExpanded()
+				if wasExpanded {
 					m.runDetail.CollapseAll()
 				} else {
 					m.runDetail.ExpandAll()
+				}
+				if debugEnabled {
+					rec.RecordEvent("EXPAND", fmt.Sprintf("c key: was_expanded=%v now_expanded=%v",
+						wasExpanded, m.runDetail.HasExpanded()))
 				}
 			}
 
@@ -105,6 +155,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if prevCmd := m.navigatePrevPipeline(); prevCmd != nil {
 					cmds = append(cmds, prevCmd)
 				}
+				if debugEnabled {
+					rec.RecordEvent("PIPELINE", "navigate prev")
+				}
 			}
 
 		case "n":
@@ -112,9 +165,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if nextCmd := m.navigateNextPipeline(); nextCmd != nil {
 					cmds = append(cmds, nextCmd)
 				}
+				if debugEnabled {
+					rec.RecordEvent("PIPELINE", "navigate next")
+				}
 			}
 
 		case "r":
+			if debugEnabled {
+				rec.RecordEvent("REFRESH", "manual refresh triggered")
+			}
 			cmds = append(cmds, fetchRuns(m.client))
 			if m.runDetail.SelectedRun() != nil {
 				cmds = append(cmds, fetchRun(m.client, m.runDetail.SelectedRun().ID))
@@ -125,6 +184,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focusedPanel == FocusRunList {
 				sel := m.runList.SelectedRun()
 				if sel != nil {
+					idShort := sel.ID
+					if len(idShort) > 8 {
+						idShort = idShort[:8]
+					}
+					if debugEnabled {
+						rec.RecordEvent("ENTER", fmt.Sprintf("select run=%s", idShort))
+					}
 					m.runDetail.SetLoading(true)
 					m.runDetail.SetRun(sel)
 					m.focusedPanel = FocusRightPanel
@@ -134,12 +200,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.focusedPanel == FocusRightPanel {
 				if m.rightTab == TabDetail {
+					flatBefore := m.runDetail.FlatCount()
 					detailCmd := m.runDetail.Update(msg)
+					if debugEnabled && flatBefore != m.runDetail.FlatCount() {
+						rec.RecordEvent("EXPAND", fmt.Sprintf("detail toggle: items %d→%d",
+							flatBefore, m.runDetail.FlatCount()))
+					}
 					if detailCmd != nil {
 						cmds = append(cmds, detailCmd)
 					}
 					task := m.runDetail.SelectedTask()
 					if task != nil {
+						if debugEnabled {
+							rec.RecordEvent("ENTER", fmt.Sprintf("expand task=%s", task.TaskName))
+						}
 						m.runDetail.CollapseAll()
 						m.rightTab = TabLogs
 						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
@@ -148,6 +222,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		default:
+			if debugEnabled {
+				rec.RecordEvent("DISPATCH", fmt.Sprintf("key=%q to panel=%d tab=%d",
+					msg.String(), m.focusedPanel, m.rightTab))
+			}
 			cmd = m.dispatchKey(msg)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
@@ -162,11 +240,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		newHash := computeRunsHash(msg.runs)
 		if newHash == m.runsHash {
+			if debugEnabled {
+				oldShort := m.runsHash
+				newShort := newHash
+				if len(oldShort) > 12 { oldShort = oldShort[:12] }
+				if len(newShort) > 12 { newShort = newShort[:12] }
+				rec.RecordEvent("HASH", fmt.Sprintf("runs unchanged old=%s new=%s", oldShort, newShort))
+			}
 			return m, nil
+		}
+		if debugEnabled {
+			oldShort := m.runsHash
+			newShort := newHash
+			if len(oldShort) > 12 { oldShort = oldShort[:12] }
+			if len(newShort) > 12 { newShort = newShort[:12] }
+			rec.RecordEvent("HASH", fmt.Sprintf("runs changed old=%s new=%s", oldShort, newShort))
 		}
 		m.runsHash = newHash
 		m.errMsg = ""
+		beforeCount := len(m.runs)
 		m.runs = mergeRuns(m.runs, msg.runs)
+		if debugEnabled {
+			rec.RecordEvent("MERGE", fmt.Sprintf("runs: before=%d fetched=%d merged=%d",
+				beforeCount, len(msg.runs), len(m.runs)))
+		}
 		m.runList.SetRuns(m.runs)
 
 		if m.targetRunID != "" {
@@ -185,6 +282,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.pendingRender {
 			m.pendingRender = true
+			if debugEnabled {
+				rec.RecordEvent("DEBOUNCE", "pendingRender=true -> scheduling debounce tick")
+			}
 			cmds = append(cmds, tea.Tick(debounceInterval, func(_ time.Time) tea.Msg {
 				return debounceTickMsg{}
 			}))
@@ -199,7 +299,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		newHash := computeRunHash(msg.run)
 		if newHash == m.runHash {
+			if debugEnabled {
+				oldShort := m.runHash
+				newShort := newHash
+				if len(oldShort) > 12 { oldShort = oldShort[:12] }
+				if len(newShort) > 12 { newShort = newShort[:12] }
+				rec.RecordEvent("HASH", fmt.Sprintf("run unchanged old=%s new=%s", oldShort, newShort))
+			}
 			return m, nil
+		}
+		if debugEnabled {
+			oldShort := m.runHash
+			newShort := newHash
+			if len(oldShort) > 12 { oldShort = oldShort[:12] }
+			if len(newShort) > 12 { newShort = newShort[:12] }
+			rec.RecordEvent("HASH", fmt.Sprintf("run changed old=%s new=%s", oldShort, newShort))
 		}
 		m.runHash = newHash
 		m.errMsg = ""
@@ -217,6 +331,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.pendingRender {
 			m.pendingRender = true
+			if debugEnabled {
+				rec.RecordEvent("DEBOUNCE", "pendingRender=true (runFetchedMsg)")
+			}
 			cmds = append(cmds, tea.Tick(debounceInterval, func(_ time.Time) tea.Msg {
 				return debounceTickMsg{}
 			}))
@@ -239,6 +356,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.pendingRender {
 			m.pendingRender = true
+			if debugEnabled {
+				rec.RecordEvent("DEBOUNCE", "pendingRender=true (logsFetchedMsg)")
+			}
 			cmds = append(cmds, tea.Tick(debounceInterval, func(_ time.Time) tea.Msg {
 				return debounceTickMsg{}
 			}))
@@ -246,6 +366,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if m.shouldSkipTick() {
+			if debugEnabled {
+				rec.RecordEvent("TICK", "skipped: user activity cooldown")
+			}
 			cmds = append(cmds, tea.Tick(time.Duration(refreshInterval)*time.Second, func(_ time.Time) tea.Msg {
 				return tickMsg{}
 			}))
@@ -263,12 +386,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		if debugEnabled {
+			rec.RecordEvent("TICK", fmt.Sprintf("active: fetching runs+run%s",
+				map[bool]string{true: "+logs", false: ""}[m.rightTab == TabLogs]))
+		}
 		cmds = append(cmds, tea.Tick(time.Duration(refreshInterval)*time.Second, func(_ time.Time) tea.Msg {
 			return tickMsg{}
 		}))
 
 	case debounceTickMsg:
 		m.pendingRender = false
+		if debugEnabled {
+			rec.RecordEvent("DEBOUNCE", "pendingRender=false -> render flushed to terminal")
+		}
 		return m, nil
 	}
 
@@ -279,14 +409,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
+	rec := GetDebugRecorder()
+	debugEnabled := rec.IsEnabled()
+
 	switch m.focusedPanel {
 	case FocusRunList:
 		var cmd tea.Cmd
+		oldCursor := m.runList.Cursor()
 		m.runList, cmd = m.runList.Update(msg)
+		if debugEnabled && oldCursor != m.runList.Cursor() {
+			rec.RecordEvent("CURSOR", fmt.Sprintf("runlist: %d→%d total=%d",
+				oldCursor, m.runList.Cursor(), m.runList.Len()))
+		}
 		return cmd
 	case FocusRightPanel:
 		if m.rightTab == TabDetail {
+			oldCursor := m.runDetail.Cursor()
 			detailCmd := m.runDetail.Update(msg)
+			if debugEnabled && oldCursor != m.runDetail.Cursor() {
+				rec.RecordEvent("CURSOR", fmt.Sprintf("detail: %d→%d items=%d",
+					oldCursor, m.runDetail.Cursor(), m.runDetail.FlatCount()))
+			}
 			if detailCmd != nil {
 				return detailCmd
 			}

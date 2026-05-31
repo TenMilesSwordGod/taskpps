@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	lastViewHash string
-	lastRendered string
+	lastViewHash  string
+	lastRendered  string
+	viewCacheHits int
 )
 
 func computeViewHash(s string) string {
@@ -96,7 +97,15 @@ func (m Model) View() string {
 
 	newHash := computeViewHash(result)
 	if newHash == lastViewHash {
+		viewCacheHits++
+		if rec := GetDebugRecorder(); rec.IsEnabled() {
+			rec.RecordEvent("VIEW_CACHE", fmt.Sprintf("HIT #%d: view unchanged, returning cached render", viewCacheHits))
+		}
 		return lastRendered
+	}
+	if rec := GetDebugRecorder(); rec.IsEnabled() && viewCacheHits > 0 {
+		rec.RecordEvent("VIEW_CACHE", fmt.Sprintf("MISS after %d hits: view changed, generating new render", viewCacheHits))
+		viewCacheHits = 0
 	}
 	lastViewHash = newHash
 	lastRendered = result

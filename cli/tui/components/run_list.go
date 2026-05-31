@@ -87,6 +87,10 @@ func (m *RunListModel) Len() int {
 	return len(m.runs)
 }
 
+func (m *RunListModel) Cursor() int {
+	return m.cursor
+}
+
 func (m RunListModel) Update(msg tea.Msg) (RunListModel, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
