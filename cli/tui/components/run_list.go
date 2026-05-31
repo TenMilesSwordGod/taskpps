@@ -9,6 +9,50 @@ import (
 	"github.com/taskpps/ppsctl/models"
 )
 
+var (
+	DimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+	LabelStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
+	BadgeStyle    = lipgloss.NewStyle().Padding(0, 1)
+	ProgressDone  = "█"
+	ProgressTodo  = "░"
+)
+
+func formatTime(t *string) string {
+	if t == nil {
+		return "-"
+	}
+	s := *t
+	if len(s) >= 19 {
+		return s[:19]
+	}
+	return s
+}
+
+func taskProgress(tasks []models.TaskRun) string {
+	done := 0
+	for _, t := range tasks {
+		if t.Status == "success" || t.Status == "failed" || t.Status == "skipped" || t.Status == "cancelled" {
+			done++
+		}
+	}
+	total := len(tasks)
+	if total == 0 {
+		return ""
+	}
+
+	barW := 8
+	doneW := barW * done / total
+	if doneW > barW {
+		doneW = barW
+	}
+	todoW := barW - doneW
+
+	bar := StatusSuccessStyle.Render(strings.Repeat(ProgressDone, doneW)) +
+		DimStyle.Render(strings.Repeat(ProgressTodo, todoW))
+
+	return fmt.Sprintf("%s %d/%d", bar, done, total)
+}
+
 type RunListModel struct {
 	runs   []models.Run
 	cursor int
@@ -65,21 +109,21 @@ func (m RunListModel) Update(msg tea.Msg) (RunListModel, tea.Cmd) {
 func (m RunListModel) View() string {
 	var b strings.Builder
 
-	title := TitleStyle.Render("Runs")
-	b.WriteString(title)
-	b.WriteString("\n")
-
 	if len(m.runs) == 0 {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(no runs)"))
+		b.WriteString(DimStyle.Render("  (no runs)"))
 		b.WriteString("\n")
 		return b.String()
 	}
 
-	visible := m.height - 3
+	visible := m.height / 2
 	if visible < 1 {
 		visible = 1
 	}
+	if visible > len(m.runs) {
+		visible = len(m.runs)
+	}
+
 	start := m.cursor - visible/2
 	if start < 0 {
 		start = 0
@@ -93,34 +137,49 @@ func (m RunListModel) View() string {
 		}
 	}
 
-	for i := start; i < end; i++ {
+	renderedLines := 0
+	for i := start; i < end && renderedLines < m.height-1; i++ {
 		run := m.runs[i]
 		icon := StatusIcon(string(run.Status))
 		style := StatusStyle(string(run.Status))
 
-		line := fmt.Sprintf("%s %s  %s", icon, run.ID[:min(8, len(run.ID))], run.PipelineName)
-
-		if i == m.cursor {
-			line = CursorStyle.Render("> ") + style.Render(line)
-		} else {
-			line = "  " + style.Render(line)
+		isCursor := i == m.cursor
+		cursorPrefix := "  "
+		if isCursor {
+			cursorPrefix = CursorStyle.Render("> ")
 		}
 
-		line = TruncateLine(line, m.width)
-		b.WriteString(line)
+		idStr := run.ID
+		if len(idStr) > 8 {
+			idStr = idStr[:8]
+		}
+
+		line1 := fmt.Sprintf("%s%s %s %s",
+			cursorPrefix,
+			icon,
+			style.Bold(true).Render(run.PipelineName),
+			LabelStyle.Render(idStr))
+		line1 = TruncateLine(line1, m.width)
+
+		timeStr := formatTime(run.StartedAt)
+		prog := taskProgress(run.Tasks)
+		line2 := fmt.Sprintf("%s  %s  %s",
+			strings.Repeat(" ", lipgloss.Width(cursorPrefix)+2),
+			LabelStyle.Render(timeStr),
+			prog)
+		line2 = TruncateLine(line2, m.width)
+
+		b.WriteString(line1)
 		b.WriteString("\n")
+		b.WriteString(line2)
+		b.WriteString("\n")
+		renderedLines += 2
 	}
 
-	for i := end - start; i < visible; i++ {
+	for renderedLines < m.height-1 {
 		b.WriteString("\n")
+		renderedLines++
 	}
 
 	return b.String()
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -16,22 +16,22 @@ type subpipelineGroup struct {
 }
 
 type RunDetailModel struct {
-	run       *models.Run
-	cursor    int
-	expanded  map[int]bool
+	run         *models.Run
+	cursor      int
+	expanded    map[int]bool
 	subExpanded map[string]bool
-	width     int
-	height    int
-	viewport  viewport.Model
-	ready     bool
-	groups    []subpipelineGroup
-	flatItems []flatItem
+	width       int
+	height      int
+	viewport    viewport.Model
+	ready       bool
+	groups      []subpipelineGroup
+	flatItems   []flatItem
 }
 
 type flatItem struct {
-	kind       string
-	subName    string
-	taskIdx    int
+	kind    string
+	subName string
+	taskIdx int
 }
 
 func NewRunDetailModel() RunDetailModel {
@@ -228,42 +228,89 @@ func (m *RunDetailModel) rebuildFlatItems() {
 	}
 }
 
+func subpipelineProgress(run *models.Run, g subpipelineGroup) string {
+	done := 0
+	running := 0
+	for _, idx := range g.tasks {
+		if idx < len(run.Tasks) {
+			s := run.Tasks[idx].Status
+			if s == "success" || s == "failed" || s == "skipped" || s == "cancelled" {
+				done++
+			} else if s == "running" {
+				running++
+			}
+		}
+	}
+	total := len(g.tasks)
+	if total == 0 {
+		return ""
+	}
+
+	barW := 6
+	doneW := barW * done / total
+	runW := barW * running / total
+	todoW := barW - doneW - runW
+	if todoW < 0 {
+		todoW = 0
+	}
+
+	bar := StatusSuccessStyle.Render(strings.Repeat(ProgressDone, doneW)) +
+		StatusRunningStyle.Render(strings.Repeat(ProgressDone, runW)) +
+		DimStyle.Render(strings.Repeat(ProgressTodo, todoW))
+
+	return fmt.Sprintf("%s %d/%d", bar, done, total)
+}
+
 func (m *RunDetailModel) updateViewportContent() {
 	var b strings.Builder
 
 	if m.run == nil {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(select a run)"))
+		b.WriteString(DimStyle.Render("  (select a run)"))
 		b.WriteString("\n")
 	} else {
-		b.WriteString(TruncateLine(fmt.Sprintf("ID: %s", m.run.ID), m.width))
-		b.WriteString("\n")
-		b.WriteString(TruncateLine(fmt.Sprintf("Pipeline: %s", m.run.PipelineName), m.width))
-		b.WriteString("\n")
-
+		statusIcon := StatusIcon(string(m.run.Status))
 		statusStyle := StatusStyle(string(m.run.Status))
-		b.WriteString(TruncateLine(fmt.Sprintf("Status: %s", statusStyle.Render(string(m.run.Status))), m.width))
+		statusBadge := BadgeStyle.Copy().
+			Foreground(lipgloss.Color("#000000")).
+			Background(statusStyle.GetForeground()).
+			Render(string(m.run.Status))
+
+		headerLine := fmt.Sprintf("%s %s  %s", statusIcon, statusBadge, m.run.PipelineName)
+		b.WriteString(TruncateLine(headerLine, m.width))
 		b.WriteString("\n")
 
-		if m.run.StartedAt != nil {
-			b.WriteString(TruncateLine(fmt.Sprintf("Started: %s", *m.run.StartedAt), m.width))
-			b.WriteString("\n")
-		}
+		metaLine := fmt.Sprintf("%s%s  %s%s",
+			LabelStyle.Render("id:"),
+			DimStyle.Render(m.run.ID[:min(12, len(m.run.ID))]),
+			LabelStyle.Render("time:"),
+			DimStyle.Render(formatTime(m.run.StartedAt)))
+		b.WriteString(TruncateLine(metaLine, m.width))
+		b.WriteString("\n")
+
 		if m.run.FinishedAt != nil {
-			b.WriteString(TruncateLine(fmt.Sprintf("Finished: %s", *m.run.FinishedAt), m.width))
+			durLine := fmt.Sprintf("%s%s → %s",
+				LabelStyle.Render("duration: "),
+				DimStyle.Render(formatTime(m.run.StartedAt)),
+				DimStyle.Render(formatTime(m.run.FinishedAt)))
+			b.WriteString(TruncateLine(durLine, m.width))
 			b.WriteString("\n")
 		}
+
+		sepLine := LabelStyle.Render(strings.Repeat("─", min(m.width, 40)))
+		b.WriteString(TruncateLine(sepLine, m.width))
 		b.WriteString("\n")
 
 		if len(m.run.Tasks) == 0 {
-			b.WriteString("  (no tasks)\n")
+			b.WriteString(DimStyle.Render("  (no tasks)"))
+			b.WriteString("\n")
 		} else {
 			cursorIdx := 0
 			for _, g := range m.groups {
 				isExpanded := m.subExpanded[g.name]
-				expandIcon := "▶ "
+				expandIcon := "▶"
 				if isExpanded {
-					expandIcon = "▼ "
+					expandIcon = "▼"
 				}
 
 				isCursor := cursorIdx < len(m.flatItems) && m.cursor == cursorIdx
@@ -272,11 +319,11 @@ func (m *RunDetailModel) updateViewportContent() {
 					prefix = CursorStyle.Render("> ")
 				}
 
-				subLine := fmt.Sprintf("%s%s%s %s (%d tasks)",
+				prog := subpipelineProgress(m.run, g)
+				subLine := fmt.Sprintf("%s%s %s %s",
 					prefix, expandIcon,
 					SubpipelineStyle.Render(g.name),
-					SubpipelineStyle.Render("pipeline"),
-					len(g.tasks))
+					prog)
 
 				b.WriteString(TruncateLine(subLine, m.width))
 				b.WriteString("\n")
@@ -293,15 +340,12 @@ func (m *RunDetailModel) updateViewportContent() {
 							connector = TreeLast + " "
 						}
 
-						taskExpandIcon := "  "
-						if m.expanded[taskIdx] {
-							taskExpandIcon = "▼ "
-						}
-
 						isTaskCursor := cursorIdx < len(m.flatItems) && m.cursor == cursorIdx
-						taskPrefix := "  " + connector + taskExpandIcon
+						taskPrefix := "  " + connector
 						if isTaskCursor {
 							taskPrefix = "  " + connector + CursorStyle.Render("> ")
+						} else {
+							taskPrefix = "  " + connector + "  "
 						}
 
 						displayName := task.TaskName
@@ -309,9 +353,9 @@ func (m *RunDetailModel) updateViewportContent() {
 							displayName = displayName[len(g.name)+1:]
 						}
 
-						line := fmt.Sprintf("%s%s %s  %s", taskPrefix, icon, displayName, style.Render(string(task.Status)))
+						line := fmt.Sprintf("%s%s %s %s", taskPrefix, icon, displayName, style.Render(string(task.Status)))
 						if task.ExitCode != nil {
-							line += fmt.Sprintf(" (exit: %d)", *task.ExitCode)
+							line += DimStyle.Render(fmt.Sprintf(" exit:%d", *task.ExitCode))
 						}
 
 						b.WriteString(TruncateLine(line, m.width))
@@ -325,17 +369,23 @@ func (m *RunDetailModel) updateViewportContent() {
 								indent = "  " + TreeConnector
 							}
 
-							b.WriteString(TruncateLine(fmt.Sprintf("%s  Type: %s", indent, task.TaskType), m.width))
+							detailLine := fmt.Sprintf("%s%s %s  %s %s",
+								indent,
+								LabelStyle.Render("type:"),
+								DimStyle.Render(task.TaskType),
+								LabelStyle.Render("start:"),
+								DimStyle.Render(formatTime(task.StartedAt)))
+							b.WriteString(TruncateLine(detailLine, m.width))
 							b.WriteString("\n")
-							if task.StartedAt != nil {
-								b.WriteString(TruncateLine(fmt.Sprintf("%s  Started: %s", indent, *task.StartedAt), m.width))
-								b.WriteString("\n")
-							}
+
 							if task.FinishedAt != nil {
-								b.WriteString(TruncateLine(fmt.Sprintf("%s  Finished: %s", indent, *task.FinishedAt), m.width))
+								finLine := fmt.Sprintf("%s%s %s",
+									indent,
+									LabelStyle.Render("end:  "),
+									DimStyle.Render(formatTime(task.FinishedAt)))
+								b.WriteString(TruncateLine(finLine, m.width))
 								b.WriteString("\n")
 							}
-							b.WriteString("\n")
 						}
 
 						cursorIdx++
@@ -350,6 +400,13 @@ func (m *RunDetailModel) updateViewportContent() {
 	m.viewport.YPosition = oldY
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func (m RunDetailModel) View() string {
 	if m.ready {
 		return m.viewport.View()
@@ -357,7 +414,7 @@ func (m RunDetailModel) View() string {
 	var b strings.Builder
 	if m.run == nil {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(select a run)"))
+		b.WriteString(DimStyle.Render("  (select a run)"))
 		b.WriteString("\n")
 	}
 	return b.String()

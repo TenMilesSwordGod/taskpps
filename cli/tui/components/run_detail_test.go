@@ -136,8 +136,11 @@ func TestRunDetailView(t *testing.T) {
 		}
 		m.SetRun(run)
 		view := m.View()
-		if !strings.Contains(view, "Type: local") {
+		if !strings.Contains(view, "type:") {
 			t.Errorf("expanded view should show task type, got: %s", view)
+		}
+		if !strings.Contains(view, "local") {
+			t.Errorf("expanded view should show task type value, got: %s", view)
 		}
 	})
 
@@ -156,11 +159,11 @@ func TestRunDetailView(t *testing.T) {
 		}
 		m.SetRun(run)
 		view := m.View()
-		if !strings.Contains(view, "Started:") {
-			t.Errorf("expanded view should show Started, got: %s", view)
+		if !strings.Contains(view, "start:") {
+			t.Errorf("expanded view should show start, got: %s", view)
 		}
-		if !strings.Contains(view, "Finished:") {
-			t.Errorf("expanded view should show Finished, got: %s", view)
+		if !strings.Contains(view, "end:") {
+			t.Errorf("expanded view should show end, got: %s", view)
 		}
 	})
 
@@ -185,8 +188,8 @@ func TestRunDetailView(t *testing.T) {
 		}
 		m.SetRun(run)
 		view := m.View()
-		if !strings.Contains(view, "Finished:") {
-			t.Errorf("view should show Finished, got: %s", view)
+		if !strings.Contains(view, "duration:") {
+			t.Errorf("view should show duration, got: %s", view)
 		}
 	})
 
@@ -201,8 +204,8 @@ func TestRunDetailView(t *testing.T) {
 		}
 		m.SetRun(run)
 		view := m.View()
-		if !strings.Contains(view, "Started:") {
-			t.Errorf("view should show Started, got: %s", view)
+		if !strings.Contains(view, "time:") {
+			t.Errorf("view should show time, got: %s", view)
 		}
 	})
 

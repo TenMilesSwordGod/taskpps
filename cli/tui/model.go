@@ -210,34 +210,59 @@ func renderPanel(panelContent string, focused bool, contentWidth, contentHeight 
 }
 
 func renderTabs(activeTab RightPanelTab, width int) string {
-	var detailTab, logsTab string
+	tabBg := lipgloss.Color("#333333")
+	activeFg := components.ColorCyan
+	inactiveFg := lipgloss.Color("#888888")
+
+	detailLabel := "Detail"
+	logsLabel := "Logs"
 
 	if activeTab == TabDetail {
-		detailTab = components.TabBarStyle.Copy().
-			Bold(true).Foreground(components.ColorCyan).
-			Render("> Detail")
-	} else {
-		detailTab = components.TabBarStyle.Render("  Detail")
+		detailTab := lipgloss.NewStyle().
+			Background(tabBg).Foreground(activeFg).Bold(true).
+			Render(" ▸ " + detailLabel + " ")
+		underline := lipgloss.NewStyle().
+			Background(tabBg).Foreground(activeFg).
+			Render(strings.Repeat("━", len(detailLabel)+2))
+		detailTab += "\n" + underline
+
+		logsTab := lipgloss.NewStyle().
+			Background(tabBg).Foreground(inactiveFg).
+			Render("   " + logsLabel + " ")
+		logsTab += "\n" + lipgloss.NewStyle().
+			Background(tabBg).Foreground(inactiveFg).
+			Render(strings.Repeat("─", len(logsLabel)+2))
+
+		tabs := lipgloss.JoinHorizontal(lipgloss.Bottom, detailTab, "  ", logsTab)
+		textWidth := lipgloss.Width(tabs)
+		if textWidth < width {
+			pad := lipgloss.NewStyle().Background(tabBg).Render(strings.Repeat(" ", width-textWidth))
+			tabs += pad
+		}
+		return tabs
 	}
 
-	sep := components.TabBarStyle.Render(" | ")
+	detailTab := lipgloss.NewStyle().
+		Background(tabBg).Foreground(inactiveFg).
+		Render("   " + detailLabel + " ")
+	detailTab += "\n" + lipgloss.NewStyle().
+		Background(tabBg).Foreground(inactiveFg).
+		Render(strings.Repeat("─", len(detailLabel)+2))
 
-	if activeTab == TabLogs {
-		logsTab = components.TabBarStyle.Copy().
-			Bold(true).Foreground(components.ColorCyan).
-			Render("> Logs")
-	} else {
-		logsTab = components.TabBarStyle.Render("  Logs")
-	}
+	logsTab := lipgloss.NewStyle().
+		Background(tabBg).Foreground(activeFg).Bold(true).
+		Render(" ▸ " + logsLabel + " ")
+	underline := lipgloss.NewStyle().
+		Background(tabBg).Foreground(activeFg).
+		Render(strings.Repeat("━", len(logsLabel)+2))
+	logsTab += "\n" + underline
 
-	tabs := detailTab + sep + logsTab
-
+	tabs := lipgloss.JoinHorizontal(lipgloss.Bottom, detailTab, "  ", logsTab)
 	textWidth := lipgloss.Width(tabs)
 	if textWidth < width {
-		pad := components.TabBarStyle.Render(strings.Repeat(" ", width-textWidth))
+		pad := lipgloss.NewStyle().Background(tabBg).Render(strings.Repeat(" ", width-textWidth))
 		tabs += pad
 	}
-
 	return tabs
 }
 
