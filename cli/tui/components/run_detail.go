@@ -306,15 +306,15 @@ func (m *RunDetailModel) updateContent() {
 						taskIcon := StatusIcon(string(task.Status))
 						taskStyle := StatusStyle(string(task.Status))
 
-						connector := TreeBranch + " "
+						connector := TreeBranch
 						if ti == len(g.tasks)-1 {
-							connector = TreeLast + " "
+							connector = TreeLast
 						}
 
 						isTaskCursor := cursorIdx < len(m.flatItems) && m.cursor == cursorIdx
-						taskPrefix := "  " + connector + "  "
+						taskPrefix := "  " + connector + " "
 						if isTaskCursor {
-							taskPrefix = "  " + connector + CursorStyle.Render("> ")
+							taskPrefix = "  " + connector + CursorStyle.Render(" ")
 						}
 
 						displayName := task.TaskName
@@ -330,9 +330,9 @@ func (m *RunDetailModel) updateContent() {
 						b.WriteString("\n")
 
 						if m.expanded[taskIdx] {
-							indent := "    "
+							indent := "      "
 							if ti < len(g.tasks)-1 {
-								indent = "  " + TreeBar
+								indent = "  " + TreeBar + " "
 							}
 
 							b.WriteString(TruncateLine(fmt.Sprintf("%s%s %s  %s %s",
