@@ -72,7 +72,9 @@ func (m *RunDetailModel) SetRun(run *models.Run) {
 	m.buildGroups()
 	if run != nil {
 		for _, g := range m.groups {
-			m.subExpanded[g.name] = true
+			if _, ok := m.subExpanded[g.name]; !ok {
+				m.subExpanded[g.name] = true
+			}
 		}
 		m.rebuildFlatItems()
 		if m.cursor >= len(m.flatItems) && len(m.flatItems) > 0 {
