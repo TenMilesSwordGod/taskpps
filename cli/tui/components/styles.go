@@ -195,6 +195,9 @@ func MakeProgressBar(done, running, total, barW int) string {
 			runW = barW
 		}
 	}
+	if doneW+runW < barW {
+		todoW = barW - doneW - runW
+	}
 
 	bar := StatusSuccessStyle.Render(strings.Repeat(ProgressDone, doneW)) +
 		StatusRunningStyle.Render(strings.Repeat(ProgressRun, runW)) +

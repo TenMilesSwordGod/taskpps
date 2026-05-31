@@ -114,6 +114,9 @@ func (m *RunListModel) ensureCursorVisible() {
 		return
 	}
 	cursorLine := m.cursor * 2
+	if m.cursor >= len(m.runs) {
+		cursorLine = (len(m.runs) - 1) * 2
+	}
 	viewTop := m.viewport.YOffset
 	viewBottom := viewTop + m.viewport.Height - 1
 

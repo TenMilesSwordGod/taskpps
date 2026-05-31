@@ -83,7 +83,14 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(footer)
 
-	return b.String()
+	result := b.String()
+
+	// Record frame if debug recording is enabled
+	if rec := GetDebugRecorder(); rec.IsEnabled() {
+		rec.RecordFrame(result)
+	}
+
+	return result
 }
 
 func padRightVisual(line string, width int) string {
@@ -185,7 +192,14 @@ func renderFooter(width int, m Model) string {
 		}
 	}
 
-	hintsStr := bg.Render(" ") + strings.Join(hints, sep)
+	var hintsWidth int
+	for i, h := range hints {
+		if i > 0 {
+			hintsWidth += lipgloss.Width(sep)
+		}
+		hintsWidth += lipgloss.Width(h)
+	}
+	hintsWidth += lipgloss.Width(bg.Render(" "))
 
 	total := len(m.runs)
 	tasksDone := 0
@@ -200,18 +214,24 @@ func renderFooter(width int, m Model) string {
 		}
 	}
 
-	statusStr := bg.Copy().Foreground(components.ColorDim).Render(
-		fmt.Sprintf(" Runs:%d Tasks:%d/%d %ds ", total, tasksDone, totalTasks, refreshInterval))
+	statusText := fmt.Sprintf(" Runs:%d Tasks:%d/%d %ds ", total, tasksDone, totalTasks, refreshInterval)
+	statusWidth := lipgloss.Width(statusText)
+	if m.errMsg != "" {
+		errText := fmt.Sprintf(" ERR:%s ", truncateStr(m.errMsg, 20))
+		statusWidth += lipgloss.Width(errText)
+	}
 
+	padW := width - hintsWidth - statusWidth
+	if padW < 0 {
+		padW = 0
+	}
+
+	hintsStr := bg.Render(" ") + strings.Join(hints, sep)
+	statusStr := bg.Copy().Foreground(components.ColorDim).Render(statusText)
 	if m.errMsg != "" {
 		errStr := bg.Copy().Foreground(components.ColorFailed).Bold(true).Render(
 			fmt.Sprintf(" ERR:%s ", truncateStr(m.errMsg, 20)))
 		statusStr = errStr + statusStr
-	}
-
-	padW := width - lipgloss.Width(hintsStr) - lipgloss.Width(statusStr)
-	if padW < 0 {
-		padW = 0
 	}
 	spacer := bg.Render(strings.Repeat(" ", padW))
 

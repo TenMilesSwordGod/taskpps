@@ -12,10 +12,49 @@ on:
       - main
       - develop
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-suffix: lint
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff check
+        run: uv run --frozen ruff check --output-format=github
+
+      - name: Ruff format
+        run: uv run --frozen ruff format --check --diff
+
   test-python:
     name: Python Tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -31,23 +70,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Cache packages
-        uses: actions/cache@v4
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
         with:
-          path: server/.venv
-          key: ${{ runner.os }}-py${{ matrix.python-version }}-uv-${{ hashFiles('server/pyproject.toml', 'server/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-py${{ matrix.python-version }}-uv-
-
-      - name: Install uv
-        run: pip install uv
+          enable-cache: true
+          cache-suffix: py${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --frozen
 
       - name: Run tests
         run: |
-          uv run pytest tests/ \
+          uv run --frozen pytest tests/ \
             -v \
             --tb=short \
             -m "not slow" \
@@ -70,6 +104,7 @@ jobs:
   test-go:
     name: Go Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: cli
@@ -81,16 +116,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: cli/go.mod
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('cli/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Test
         run: go test ./... -v -coverprofile=coverage.out

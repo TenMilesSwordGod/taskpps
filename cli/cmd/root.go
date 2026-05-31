@@ -8,13 +8,14 @@ import (
 	"github.com/taskpps/ppsctl/client"
 	"github.com/taskpps/ppsctl/config"
 	"github.com/taskpps/ppsctl/logger"
+	"github.com/taskpps/ppsctl/tui"
 )
 
 var (
 	cfgFile   string
 	apiClient *client.Client
 	appConfig *config.Config
-	verbose int
+	verbose   int
 )
 
 var RootCmd = &cobra.Command{
@@ -41,7 +42,7 @@ backend server via REST API.`,
 			logLevel = 4
 		}
 		logger.SetLevel(logLevel)
-		
+
 		// Only enable console output when verbose flag is set
 		if verbose > 0 {
 			logger.EnableVerboseOutput()
@@ -50,6 +51,26 @@ backend server via REST API.`,
 		if logLevel >= 4 {
 			logger.Debug("Verbose level set to %d (logLevel: %d)", verbose, logLevel)
 			logger.Debug("Command: %s", cmd.Name())
+			// Enable TUI debug recording for -vvvv
+			term := os.Getenv("TERM")
+			tty := os.Getenv("TTY")
+			if tty == "" {
+				tty = "/dev/pts/0"
+			}
+			columns := 183
+			if cols := os.Getenv("COLUMNS"); cols != "" {
+				fmt.Sscanf(cols, "%d", &columns)
+			}
+			lines := 30
+			if l := os.Getenv("LINES"); l != "" {
+				fmt.Sscanf(l, "%d", &lines)
+			}
+			err := tui.EnableDebugRecorder(cmd.Name(), term, tty, columns, lines)
+			if err != nil {
+				logger.Debug("Failed to enable debug recorder: %v", err)
+			} else {
+				logger.Debug("Debug recording enabled")
+			}
 		}
 
 		if cmd.Name() == "init" || cmd.Name() == "version" {
@@ -67,23 +88,23 @@ backend server via REST API.`,
 			logger.Info("Config loaded successfully")
 		}
 		apiClient = client.New(appConfig)
-		if verbose >=4 {
+		if verbose >= 4 {
 			logger.Debug("API client initialized")
 		}
-		
+
 		// Check version mismatch
 		health, err := apiClient.HealthCheck()
 		if err == nil && health != nil {
-			if verbose >=4 {
+			if verbose >= 4 {
 				logger.Debug("Server version: %s", health.Version)
 			}
 			CheckVersionMismatch(health.Version)
 		} else if err != nil {
-			if verbose >=2 {
+			if verbose >= 2 {
 				logger.Warn("Could not check server version: %v", err)
 			}
 		}
-		
+
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {

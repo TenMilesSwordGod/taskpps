@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +12,36 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
+
+	// Record key events for debug
+	if rec := GetDebugRecorder(); rec.IsEnabled() {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			rec.RecordEvent("KEY", fmt.Sprintf("key=%s type=%v", msg.String(), msg.Type))
+		case tea.WindowSizeMsg:
+			rec.RecordEvent("RESIZE", fmt.Sprintf("width=%d height=%d", msg.Width, msg.Height))
+		case runsFetchedMsg:
+			if msg.err != nil {
+				rec.RecordEvent("RUNS_FETCHED", fmt.Sprintf("error=%v", msg.err))
+			} else {
+				rec.RecordEvent("RUNS_FETCHED", fmt.Sprintf("count=%d", len(msg.runs)))
+			}
+		case runFetchedMsg:
+			if msg.err != nil {
+				rec.RecordEvent("RUN_FETCHED", fmt.Sprintf("error=%v", msg.err))
+			} else if msg.run != nil {
+				rec.RecordEvent("RUN_FETCHED", fmt.Sprintf("id=%s status=%s", msg.run.ID, msg.run.Status))
+			}
+		case logsFetchedMsg:
+			if msg.err != nil {
+				rec.RecordEvent("LOGS_FETCHED", fmt.Sprintf("error=%v", msg.err))
+			} else {
+				rec.RecordEvent("LOGS_FETCHED", fmt.Sprintf("tasks=%d", len(msg.logs)))
+			}
+		case tickMsg:
+			rec.RecordEvent("TICK", "refresh interval")
+		}
+	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -179,7 +210,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, fetchRun(m.client, sel.ID))
 			if m.rightTab == TabLogs {
 				task := m.runDetail.SelectedTask()
-				if task != nil {
+				if task != nil && task.Status == models.TaskStatusRunning {
 					cmds = append(cmds, fetchLogs(m.client, sel.ID, task.TaskName))
 				}
 			}
@@ -257,9 +288,9 @@ func (m *Model) resizeComponents() {
 		contentH:      contentH,
 	}
 
-	m.runList.SetSize(leftContentW, contentH-1)
-	m.runDetail.SetSize(rightContentW, contentH-1)
-	m.logViewer.SetSize(rightContentW, contentH-1)
+	m.runList.SetSize(leftContentW, contentH)
+	m.runDetail.SetSize(rightContentW, contentH)
+	m.logViewer.SetSize(rightContentW, contentH)
 }
 
 func mergeRuns(existing []models.Run, newRuns []models.Run) []models.Run {

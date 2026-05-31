@@ -180,8 +180,6 @@ func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
 				m.cursor++
 				m.skipCollapsedTasks()
 				m.updateContent()
-			} else {
-				m.viewport, cmd = m.viewport.Update(msg)
 			}
 		case "enter":
 			if m.cursor < len(m.flatItems) {
@@ -204,6 +202,17 @@ func (m *RunDetailModel) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (m *RunDetailModel) skipCollapsedTasks() {
+	if len(m.flatItems) == 0 {
+		m.cursor = 0
+		return
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= len(m.flatItems) {
+		m.cursor = len(m.flatItems) - 1
+		return
+	}
 	for m.cursor < len(m.flatItems) {
 		item := m.flatItems[m.cursor]
 		if item.kind == "sub" {

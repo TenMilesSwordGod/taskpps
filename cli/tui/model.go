@@ -54,8 +54,22 @@ type Model struct {
 
 func StartWatch(c *client.Client, runID string) error {
 	m := NewModel(c, runID)
+
+	// Check if debug recording should be enabled (verbose >= 4)
+	recorder := GetDebugRecorder()
+	if recorder.IsEnabled() {
+		recorder.RecordEvent("START", "Starting watch command")
+	}
+
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
+
+	exitCode := 0
+	if err != nil {
+		exitCode = 1
+	}
+	DisableDebugRecorder(exitCode)
+
 	return err
 }
 

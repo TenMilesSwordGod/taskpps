@@ -64,12 +64,9 @@ func (m *LogViewerModel) SetContent(content string) {
 		m.lines = m.lines[len(m.lines)-maxLogLines:]
 	}
 	if m.ready {
-		wasAtBottom := m.viewport.AtBottom()
 		processedLines := processLines(m.lines, m.width)
 		m.viewport.SetContent(strings.Join(processedLines, "\n"))
-		if wasAtBottom {
-			m.viewport.GotoBottom()
-		}
+		m.viewport.GotoBottom()
 	}
 }
 
