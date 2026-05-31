@@ -207,9 +207,14 @@ func (m *Model) resizeComponents() {
 		availableH = 5
 	}
 
-	borderW := 4
 	borderH := 2
+	borderW := 4
 	gap := 1
+
+	contentH := availableH - borderH
+	if contentH < 3 {
+		contentH = 3
+	}
 
 	totalBorderGapW := borderW + gap + borderW
 	contentW := m.width - totalBorderGapW
@@ -232,23 +237,14 @@ func (m *Model) resizeComponents() {
 		}
 	}
 
-	leftH := availableH - borderH
-	rightH := availableH - borderH - 1
-	if leftH < 3 {
-		leftH = 3
-	}
-	if rightH < 3 {
-		rightH = 3
-	}
-
 	m.dims = layoutDims{
 		leftContentW:  leftW,
 		rightContentW: rightW,
-		leftContentH:  leftH,
-		rightContentH: rightH,
+		leftContentH:  contentH,
+		rightContentH: contentH,
 	}
 
-	m.runList.SetSize(leftW, leftH-1)
-	m.runDetail.SetSize(rightW, rightH-1)
-	m.logViewer.SetSize(rightW, rightH-1)
+	m.runList.SetSize(leftW, contentH-1)
+	m.runDetail.SetSize(rightW, contentH-1)
+	m.logViewer.SetSize(rightW, contentH-1)
 }

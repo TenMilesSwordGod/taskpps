@@ -23,19 +23,14 @@ func (m Model) View() string {
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
 
-	leftPanelW := m.dims.leftContentW + 4
-	leftPanelH := m.dims.leftContentH + 2
-	rightPanelW := m.dims.rightContentW + 4
-	rightPanelH := m.dims.rightContentH + 2 + 1
-
-	leftStyle := components.PanelStyle.Width(leftPanelW).Height(leftPanelH)
+	leftStyle := components.PanelStyle.Width(m.dims.leftContentW).Height(m.dims.leftContentH)
 	if leftFocused {
-		leftStyle = components.FocusedPanelStyle.Width(leftPanelW).Height(leftPanelH)
+		leftStyle = components.FocusedPanelStyle.Width(m.dims.leftContentW).Height(m.dims.leftContentH)
 	}
 
-	rightStyle := components.PanelStyle.Width(rightPanelW).Height(rightPanelH)
+	rightStyle := components.PanelStyle.Width(m.dims.rightContentW).Height(m.dims.rightContentH)
 	if rightFocused {
-		rightStyle = components.FocusedPanelStyle.Width(rightPanelW).Height(rightPanelH)
+		rightStyle = components.FocusedPanelStyle.Width(m.dims.rightContentW).Height(m.dims.rightContentH)
 	}
 
 	leftContent := components.TitleStyle.Render("Runs") + "\n" + m.runList.View()
