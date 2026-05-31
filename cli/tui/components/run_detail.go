@@ -233,21 +233,21 @@ func (m *RunDetailModel) updateContent() {
 		icon := StatusIcon(string(m.run.Status))
 		style := StatusStyle(string(m.run.Status))
 
-		b.WriteString(TruncateLine(fmt.Sprintf("%s %s  %s", icon, style.Bold(true).Render(string(m.run.Status)), m.run.PipelineName), m.width))
+		b.WriteString(TruncateLine(fmt.Sprintf("  %s %s  %s", icon, style.Bold(true).Render(string(m.run.Status)), m.run.PipelineName), m.width))
 		b.WriteString("\n")
 
 		idStr := m.run.ID
 		if len(idStr) > 12 {
 			idStr = idStr[:12]
 		}
-		meta := fmt.Sprintf("%s%s  %s%s",
+		meta := fmt.Sprintf("  %s%s  %s%s",
 			LabelStyle.Render("id:"), DimStyle.Render(idStr),
 			LabelStyle.Render("time:"), DimStyle.Render(FormatTime(m.run.StartedAt)))
 		b.WriteString(TruncateLine(meta, m.width))
 		b.WriteString("\n")
 
 		if m.run.FinishedAt != nil {
-			dur := fmt.Sprintf("%s%s → %s",
+			dur := fmt.Sprintf("  %s%s → %s",
 				LabelStyle.Render("ran: "),
 				DimStyle.Render(FormatTime(m.run.StartedAt)),
 				DimStyle.Render(FormatTime(m.run.FinishedAt)))
@@ -263,7 +263,12 @@ func (m *RunDetailModel) updateContent() {
 			b.WriteString("\n")
 		} else {
 			cursorIdx := 0
-			for _, g := range m.groups {
+			for gi, g := range m.groups {
+				if gi > 0 {
+					b.WriteString(TruncateLine(DimStyle.Render("  "+strings.Repeat("┄", min(m.width-2, 40))), m.width))
+					b.WriteString("\n")
+				}
+
 				isExpanded := m.subExpanded[g.name]
 				expandIcon := "▶"
 				if isExpanded {
