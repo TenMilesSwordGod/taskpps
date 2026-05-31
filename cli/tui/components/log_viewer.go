@@ -37,7 +37,7 @@ func processLines(lines []string, width int) []string {
 }
 
 func (m *LogViewerModel) SetSize(w, h int) {
-	m.width = w
+	m.width = w - 1
 	if !m.ready {
 		m.viewport = viewport.New(w, h)
 		m.viewport.YPosition = 0

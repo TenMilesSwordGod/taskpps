@@ -46,7 +46,7 @@ func (m *RunListModel) SetRuns(runs []models.Run) {
 }
 
 func (m *RunListModel) SetSize(w, h int) {
-	m.width = w
+	m.width = w - 1
 	m.height = h
 	if !m.ready {
 		m.viewport = viewport.New(w, h)

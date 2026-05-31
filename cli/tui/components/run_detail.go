@@ -92,7 +92,7 @@ func (m *RunDetailModel) SetRun(run *models.Run) {
 }
 
 func (m *RunDetailModel) SetSize(w, h int) {
-	m.width = w
+	m.width = w - 1
 	m.height = h
 	if !m.ready {
 		m.viewport = viewport.New(w, h)
@@ -254,16 +254,18 @@ func (m *RunDetailModel) updateContent() {
 		b.WriteString("\n")
 
 		if m.run.FinishedAt != nil {
-			if m.run.StartedAt != nil && *m.run.StartedAt != *m.run.FinishedAt {
+			startFmt := FormatTime(m.run.StartedAt)
+			endFmt := FormatTime(m.run.FinishedAt)
+			if startFmt != endFmt && startFmt != "-" {
 				dur := fmt.Sprintf("  %s%s → %s",
 					LabelStyle.Render("ran: "),
-					DimStyle.Render(FormatTime(m.run.StartedAt)),
-					DimStyle.Render(FormatTime(m.run.FinishedAt)))
+					DimStyle.Render(startFmt),
+					DimStyle.Render(endFmt))
 				b.WriteString(TruncateLine(dur, m.width))
 			} else {
 				dur := fmt.Sprintf("  %s%s",
 					LabelStyle.Render("ran: "),
-					DimStyle.Render(FormatTime(m.run.FinishedAt)))
+					DimStyle.Render(endFmt))
 				b.WriteString(TruncateLine(dur, m.width))
 			}
 			b.WriteString("\n")

@@ -53,9 +53,11 @@ func (m Model) View() string {
 
 	var innerB strings.Builder
 	for i := 0; i < contentH; i++ {
+		innerB.WriteString(" ")
 		innerB.WriteString(padRightVisual(leftLines[i], m.dims.leftContentW))
 		innerB.WriteString(components.DividerStyle.Render("│"))
 		innerB.WriteString(padRightVisual(rightLines[i], m.dims.rightContentW))
+		innerB.WriteString(" ")
 		if i < contentH-1 {
 			innerB.WriteString("\n")
 		}
@@ -69,7 +71,6 @@ func (m Model) View() string {
 	outerStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Padding(0, 1).
 		Width(m.dims.innerW).
 		Height(m.dims.panelH)
 
@@ -98,26 +99,24 @@ func padRightVisual(line string, width int) string {
 
 func renderTabs(activeTab RightPanelTab, width int) string {
 	activeStyle := lipgloss.NewStyle().
-		Background(components.ColorBarBg).
 		Foreground(components.ColorCyan).Bold(true)
 	inactiveStyle := lipgloss.NewStyle().
-		Background(components.ColorBarBg).
 		Foreground(components.ColorDim)
 
 	var tabs string
 	if activeTab == TabDetail {
-		tabs = activeStyle.Render(" ▸ Detail ") +
-			inactiveStyle.Render(" │ ") +
-			inactiveStyle.Render("  Logs ")
+		tabs = activeStyle.Render("▸ Detail") +
+			inactiveStyle.Render(" · ") +
+			inactiveStyle.Render("Logs")
 	} else {
-		tabs = inactiveStyle.Render("  Detail ") +
-			inactiveStyle.Render(" │ ") +
-			activeStyle.Render(" ▸ Logs ")
+		tabs = inactiveStyle.Render("Detail") +
+			inactiveStyle.Render(" · ") +
+			activeStyle.Render("▸ Logs")
 	}
 
 	padW := width - lipgloss.Width(tabs)
 	if padW > 0 {
-		tabs += lipgloss.NewStyle().Background(components.ColorBarBg).Render(strings.Repeat(" ", padW))
+		tabs += strings.Repeat(" ", padW)
 	}
 
 	return tabs

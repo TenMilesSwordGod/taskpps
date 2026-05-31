@@ -219,8 +219,8 @@ func (m *Model) resizeComponents() {
 	}
 
 	borderH := 2
-	paddingW := 2
 	borderW := 2
+	manualPadW := 2
 	dividerW := 1
 
 	contentH := availableH - borderH
@@ -228,11 +228,11 @@ func (m *Model) resizeComponents() {
 		contentH = 3
 	}
 
-	innerW := m.width - borderW - paddingW
-	totalContentW := innerW - dividerW
+	innerW := m.width - borderW
+	totalContentW := innerW - manualPadW - dividerW
 	if totalContentW < 36 {
 		totalContentW = 36
-		innerW = totalContentW + dividerW
+		innerW = totalContentW + manualPadW + dividerW
 	}
 
 	leftContentW := totalContentW * 28 / 100
