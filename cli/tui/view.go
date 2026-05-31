@@ -87,6 +87,9 @@ func (m Model) View() string {
 }
 
 func padRightVisual(line string, width int) string {
+	if width <= 0 {
+		return ""
+	}
 	visualW := lipgloss.Width(line)
 	if visualW > width {
 		return components.TruncateLine(line, width)

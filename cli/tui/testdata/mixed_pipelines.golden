@@ -1,0 +1,50 @@
+ ppsctl watch                                                                                     pipeline task monitor 
+╭───────────────────────────────────────────────────────────╮
+│ Runs                            │▸ Detail · Logs                                                                   │
+│ > ▶ deploy-production r1       │  (select a run)                                                                   │
+│                                                                                                                      │
+│     01-15T10:30:00              │                                                                                   │
+│                                                                                                                      │
+│   ✔ build-service r2            │                                                                                   │
+│                                                                                                                      │
+│     01-15T10:30:00              │                                                                                   │
+│                                                                                                                      │
+│   ✘ test-integration r3         │                                                                                   │
+│                                                                                                                      │
+│     01-15T10:30:00              │                                                                                   │
+│                                                                                                                      │
+│   ○ release-candidate r4       │                                                                                   │
+│                                                                                                                      │
+│     -                           │                                                                                   │
+│                                                                                                                      │
+│   ✕ monitor-health r5           │                                                                                   │
+│                                                                                                                      │
+│     01-15T10:30:00              │                                                                                   │
+│                                                                                                                      │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+╰───────────────────────────────────────────────────────────╯
+ ↑↓nav │ enterselect │ tabpanel │ rrefresh │ qquit                                            Runs:5 Tasks:0/0 2s 

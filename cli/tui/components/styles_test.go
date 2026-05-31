@@ -150,8 +150,8 @@ func TestTruncateLine(t *testing.T) {
 
 	t.Run("zero_width", func(t *testing.T) {
 		result := TruncateLine("hello", 0)
-		if result != "hello" {
-			t.Errorf("TruncateLine with width 0 should return original, got %q", result)
+		if result != "" {
+			t.Errorf("TruncateLine with width 0 should return empty, got %q", result)
 		}
 	})
 

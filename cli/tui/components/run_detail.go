@@ -73,6 +73,7 @@ func (m *RunDetailModel) SetRun(run *models.Run) {
 		m.run = &cp
 	} else {
 		m.run = nil
+		m.expanded = make(map[int]bool)
 	}
 	m.buildGroups()
 	if run != nil {
@@ -93,6 +94,9 @@ func (m *RunDetailModel) SetRun(run *models.Run) {
 
 func (m *RunDetailModel) SetSize(w, h int) {
 	m.width = w - 1
+	if m.width < 0 {
+		m.width = 0
+	}
 	m.height = h
 	if !m.ready {
 		m.viewport = viewport.New(w, h)
@@ -271,7 +275,11 @@ func (m *RunDetailModel) updateContent() {
 			b.WriteString("\n")
 		}
 
-		b.WriteString(TruncateLine(LabelStyle.Render(strings.Repeat("─", min(m.width, 30))), m.width))
+		sepW := min(m.width, 30)
+		if sepW < 0 {
+			sepW = 0
+		}
+		b.WriteString(TruncateLine(LabelStyle.Render(strings.Repeat("─", sepW)), m.width))
 		b.WriteString("\n")
 
 		if len(m.run.Tasks) == 0 {
@@ -281,7 +289,11 @@ func (m *RunDetailModel) updateContent() {
 			cursorIdx := 0
 			for gi, g := range m.groups {
 				if gi > 0 {
-					b.WriteString(TruncateLine(DimStyle.Render("  "+strings.Repeat("┄", min(m.width-2, 20))), m.width))
+					sepW2 := min(m.width-2, 20)
+					if sepW2 < 0 {
+						sepW2 = 0
+					}
+					b.WriteString(TruncateLine(DimStyle.Render("  "+strings.Repeat("┄", sepW2)), m.width))
 					b.WriteString("\n")
 				}
 
@@ -300,14 +312,14 @@ func (m *RunDetailModel) updateContent() {
 				}
 
 				done, running, total := subStats(m.run, g)
-			barW := m.width / 6
+				barW := m.width / 6
 				if barW < 5 {
 					barW = 5
 				}
 				if barW > 12 {
 					barW = 12
 				}
-			bar := MakeProgressBar(done, running, total, barW)
+				bar := MakeProgressBar(done, running, total, barW)
 				prog := ""
 				if total > 0 {
 					prog = fmt.Sprintf(" %s %d/%d", bar, done, total)

@@ -23,7 +23,7 @@ func NewLogViewerModel() LogViewerModel {
 
 func processLine(line string, width int) string {
 	if width <= 0 {
-		return line
+		return ""
 	}
 	return TruncateLine(line, width)
 }
@@ -38,6 +38,9 @@ func processLines(lines []string, width int) []string {
 
 func (m *LogViewerModel) SetSize(w, h int) {
 	m.width = w - 1
+	if m.width < 0 {
+		m.width = 0
+	}
 	if !m.ready {
 		m.viewport = viewport.New(w, h)
 		m.viewport.YPosition = 0
@@ -54,6 +57,9 @@ func (m *LogViewerModel) SetSize(w, h int) {
 
 func (m *LogViewerModel) SetContent(content string) {
 	m.lines = strings.Split(content, "\n")
+	if len(m.lines) == 1 && m.lines[0] == "" {
+		m.lines = nil
+	}
 	if len(m.lines) > maxLogLines {
 		m.lines = m.lines[len(m.lines)-maxLogLines:]
 	}
@@ -110,7 +116,11 @@ func (m LogViewerModel) View() string {
 		} else {
 			displayLines = m.lines
 		}
-		processedLines := processLines(displayLines, m.width)
+		w := m.width
+		if w <= 0 {
+			w = 80
+		}
+		processedLines := processLines(displayLines, w)
 		b.WriteString(strings.Join(processedLines, "\n"))
 	}
 

@@ -29,16 +29,20 @@ func (m *RunListModel) SetRuns(runs []models.Run) {
 		prevID = m.runs[m.cursor].ID
 	}
 	m.runs = runs
-	if prevID != "" {
-		for i, r := range runs {
-			if r.ID == prevID {
-				m.cursor = i
-				break
+	if len(m.runs) == 0 {
+		m.cursor = 0
+	} else {
+		if prevID != "" {
+			for i, r := range runs {
+				if r.ID == prevID {
+					m.cursor = i
+					break
+				}
 			}
 		}
-	}
-	if m.cursor >= len(m.runs) && len(m.runs) > 0 {
-		m.cursor = len(m.runs) - 1
+		if m.cursor >= len(m.runs) {
+			m.cursor = len(m.runs) - 1
+		}
 	}
 	if m.ready {
 		m.updateContent()
@@ -47,6 +51,9 @@ func (m *RunListModel) SetRuns(runs []models.Run) {
 
 func (m *RunListModel) SetSize(w, h int) {
 	m.width = w - 1
+	if m.width < 0 {
+		m.width = 0
+	}
 	m.height = h
 	if !m.ready {
 		m.viewport = viewport.New(w, h)

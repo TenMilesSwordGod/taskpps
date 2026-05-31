@@ -1,0 +1,46 @@
+ ppsctl watch                                                                                     pipeline task monitor 
+╭───────────────────────────────────────────────────────────╮
+│ Runs                            │Detail · ▸ Logs                                                                   │
+│ > ▶ deploy run-abc1            │[build] Building project...                                                        │
+│                                                                                                                      │
+│     01-15T10:30:00 ██▓▓░... │[build] Compiling main.go                                                          │
+│                                                                                                                      │
+│   ✔ build run-def6              │[test] Running tests...                                                            │
+│                                                                                                                      │
+│     01-15T10:30:00 ████...  │[test] All tests passed                                                            │
+│                                                                                                                      │
+│   ✘ test-pipeline run-ghi1      │                                                                                   │
+│                                                                                                                      │
+│     01-15T10:30:00 ████...  │                                                                                   │
+│                                                                                                                      │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+│                                 │                                                                                   │
+╰───────────────────────────────────────────────────────────╯
+ ↑↓scroll │ bback │ p/npipeline │ tdetail │ qquit                                             Runs:3 Tasks:1/3 2s 

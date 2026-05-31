@@ -148,7 +148,10 @@ func StatusStyle(status string) lipgloss.Style {
 }
 
 func TruncateLine(line string, maxWidth int) string {
-	if maxWidth <= 0 || lipgloss.Width(line) <= maxWidth {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(line) <= maxWidth {
 		return line
 	}
 	if maxWidth <= 3 {
@@ -170,8 +173,14 @@ func FormatTime(t *string) string {
 }
 
 func MakeProgressBar(done, running, total, barW int) string {
-	if total == 0 || barW <= 0 {
+	if total <= 0 || barW <= 0 {
 		return ""
+	}
+	if done < 0 {
+		done = 0
+	}
+	if running < 0 {
+		running = 0
 	}
 	doneW := barW * done / total
 	runW := barW * running / total
