@@ -137,6 +137,66 @@ func (m Model) cycleTab() RightPanelTab {
 	return TabDetail
 }
 
+func (m *Model) navigateBack() {
+	if m.focusedPanel == FocusRightPanel {
+		if m.rightTab == TabLogs {
+			m.rightTab = TabDetail
+		} else {
+			m.focusedPanel = FocusRunList
+		}
+	}
+}
+
+func (m *Model) navigatePrevPipeline() tea.Cmd {
+	if len(m.runs) == 0 {
+		return nil
+	}
+	cur := m.runList.SelectedRun()
+	if cur == nil {
+		return nil
+	}
+	curIdx := -1
+	for i, r := range m.runs {
+		if r.ID == cur.ID {
+			curIdx = i
+			break
+		}
+	}
+	if curIdx <= 0 {
+		return nil
+	}
+	prevRun := &m.runs[curIdx-1]
+	m.runList.SetCursor(curIdx - 1)
+	m.runDetail.SetRun(prevRun)
+	m.rightTab = TabDetail
+	return fetchRun(m.client, prevRun.ID)
+}
+
+func (m *Model) navigateNextPipeline() tea.Cmd {
+	if len(m.runs) == 0 {
+		return nil
+	}
+	cur := m.runList.SelectedRun()
+	if cur == nil {
+		return nil
+	}
+	curIdx := -1
+	for i, r := range m.runs {
+		if r.ID == cur.ID {
+			curIdx = i
+			break
+		}
+	}
+	if curIdx >= len(m.runs)-1 {
+		return nil
+	}
+	nextRun := &m.runs[curIdx+1]
+	m.runList.SetCursor(curIdx + 1)
+	m.runDetail.SetRun(nextRun)
+	m.rightTab = TabDetail
+	return fetchRun(m.client, nextRun.ID)
+}
+
 func renderPanel(panelContent string, focused bool, contentWidth, contentHeight int) string {
 	style := components.PanelStyle.
 		Width(contentWidth + 4).
@@ -182,7 +242,7 @@ func renderTabs(activeTab RightPanelTab, width int) string {
 }
 
 func renderHeader(width int) string {
-	help := "[q]uit  [tab]panel  [t]abs  [↑↓/jk]nav  [enter]select  [r]efresh"
+	help := "[q]uit [b]ack [tab]panel [t]abs [↑↓/jk]nav [enter]select [p/n]prev/next [r]efresh"
 
 	headerBg := lipgloss.NewStyle().Background(lipgloss.Color("#333333"))
 

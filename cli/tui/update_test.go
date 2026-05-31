@@ -19,7 +19,7 @@ func makeTestModel() Model {
 }
 
 func TestUpdateKeyQuit(t *testing.T) {
-	keys := []string{"q", "esc", "ctrl+c"}
+	keys := []string{"q", "ctrl+c"}
 	for _, key := range keys {
 		t.Run(key, func(t *testing.T) {
 			m := makeTestModel()
@@ -27,8 +27,6 @@ func TestUpdateKeyQuit(t *testing.T) {
 			switch key {
 			case "q":
 				msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
-			case "esc":
-				msg = tea.KeyMsg{Type: tea.KeyEsc}
 			case "ctrl+c":
 				msg = tea.KeyMsg{Type: tea.KeyCtrlC}
 			}
@@ -39,6 +37,202 @@ func TestUpdateKeyQuit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdateEscKey(t *testing.T) {
+	t.Run("esc_on_runlist_quits", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyEsc}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if !model.quit {
+			t.Error("esc on RunList should quit")
+		}
+	})
+
+	t.Run("esc_on_rightpanel_navigates_back", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabLogs
+		msg := tea.KeyMsg{Type: tea.KeyEsc}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.quit {
+			t.Error("esc on RightPanel should not quit")
+		}
+		if model.rightTab != TabDetail {
+			t.Error("esc on Logs tab should switch to Detail tab")
+		}
+	})
+
+	t.Run("esc_on_detail_navigates_to_runlist", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		msg := tea.KeyMsg{Type: tea.KeyEsc}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunList {
+			t.Error("esc on Detail tab should focus RunList")
+		}
+	})
+}
+
+func TestUpdateBackKey(t *testing.T) {
+	t.Run("back_from_logs_to_detail", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabLogs
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.rightTab != TabDetail {
+			t.Error("b from Logs should switch to Detail tab")
+		}
+	})
+
+	t.Run("back_from_detail_to_runlist", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunList {
+			t.Error("b from Detail should focus RunList")
+		}
+	})
+
+	t.Run("back_from_runlist_noop", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRunList
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.focusedPanel != FocusRunList {
+			t.Error("b from RunList should not change focus")
+		}
+	})
+}
+
+func TestUpdatePrevNextPipeline(t *testing.T) {
+	t.Run("prev_pipeline", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		m.runs = []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
+			{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
+			{ID: "r3", PipelineName: "test", Status: models.RunStatusPending},
+		}
+		m.runList.SetRuns(m.runs)
+		m.runList.SetCursor(1)
+		m.runDetail.SetRun(&m.runs[1])
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+		m2, cmd := m.Update(msg)
+		model := m2.(Model)
+		if model.runList.SelectedRun().ID != "r1" {
+			t.Errorf("prev pipeline should select r1, got %s", model.runList.SelectedRun().ID)
+		}
+		if cmd == nil {
+			t.Error("prev pipeline should dispatch fetchRun")
+		}
+	})
+
+	t.Run("next_pipeline", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		m.runs = []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
+			{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
+			{ID: "r3", PipelineName: "test", Status: models.RunStatusPending},
+		}
+		m.runList.SetRuns(m.runs)
+		m.runList.SetCursor(1)
+		m.runDetail.SetRun(&m.runs[1])
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+		m2, cmd := m.Update(msg)
+		model := m2.(Model)
+		if model.runList.SelectedRun().ID != "r3" {
+			t.Errorf("next pipeline should select r3, got %s", model.runList.SelectedRun().ID)
+		}
+		if cmd == nil {
+			t.Error("next pipeline should dispatch fetchRun")
+		}
+	})
+
+	t.Run("prev_at_first_noop", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		m.runs = []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
+			{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
+		}
+		m.runList.SetRuns(m.runs)
+		m.runList.SetCursor(0)
+		m.runDetail.SetRun(&m.runs[0])
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.runList.SelectedRun().ID != "r1" {
+			t.Error("prev at first run should stay on r1")
+		}
+	})
+
+	t.Run("next_at_last_noop", func(t *testing.T) {
+		m := makeTestModel()
+		m.ready = true
+		m.focusedPanel = FocusRightPanel
+		m.rightTab = TabDetail
+		m.runs = []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
+			{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
+		}
+		m.runList.SetRuns(m.runs)
+		m.runList.SetCursor(1)
+		m.runDetail.SetRun(&m.runs[1])
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.runList.SelectedRun().ID != "r2" {
+			t.Error("next at last run should stay on r2")
+		}
+	})
+
+	t.Run("prev_next_from_runlist_noop", func(t *testing.T) {
+		m := makeTestModel()
+		m.focusedPanel = FocusRunList
+		m.runs = []models.Run{
+			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
+			{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
+		}
+		m.runList.SetRuns(m.runs)
+		m.runList.SetCursor(1)
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+		m2, _ := m.Update(msg)
+		model := m2.(Model)
+		if model.runList.SelectedRun().ID != "r2" {
+			t.Error("p from RunList should not change selection")
+		}
+
+		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+		m3, _ := model.Update(msg)
+		model2 := m3.(Model)
+		if model2.runList.SelectedRun().ID != "r2" {
+			t.Error("n from RunList should not change selection")
+		}
+	})
 }
 
 func TestUpdateTabFocus(t *testing.T) {

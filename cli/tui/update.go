@@ -22,9 +22,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		case "q", "ctrl+c":
 			m.quit = true
 			return m, tea.Quit
+
+		case "esc":
+			if m.focusedPanel == FocusRightPanel {
+				m.navigateBack()
+			} else {
+				m.quit = true
+				return m, tea.Quit
+			}
+
+		case "b":
+			m.navigateBack()
 
 		case "tab":
 			m.focusedPanel = m.focusNext()
@@ -40,6 +51,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if task != nil {
 						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
 					}
+				}
+			}
+
+		case "p":
+			if m.focusedPanel == FocusRightPanel {
+				if prevCmd := m.navigatePrevPipeline(); prevCmd != nil {
+					cmds = append(cmds, prevCmd)
+				}
+			}
+
+		case "n":
+			if m.focusedPanel == FocusRightPanel {
+				if nextCmd := m.navigateNextPipeline(); nextCmd != nil {
+					cmds = append(cmds, nextCmd)
 				}
 			}
 
