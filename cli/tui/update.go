@@ -232,7 +232,7 @@ func (m *Model) resizeComponents() {
 		contentW = 42
 	}
 
-	leftW := contentW * 22 / 100
+	leftW := contentW * 28 / 100
 	rightW := contentW - leftW
 	if leftW < 18 {
 		leftW = 18
