@@ -239,8 +239,8 @@ func (m *RunDetailModel) updateContent() {
 		b.WriteString("\n")
 
 		idStr := m.run.ID
-		if len(idStr) > 12 {
-			idStr = idStr[:12]
+		if len([]rune(idStr)) > 12 {
+			idStr = string([]rune(idStr)[:12])
 		}
 		meta := fmt.Sprintf("  %s%s  %s%s",
 			LabelStyle.Render("id:"), DimStyle.Render(idStr),

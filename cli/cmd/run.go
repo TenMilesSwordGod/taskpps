@@ -63,8 +63,12 @@ func colorForStatus(s string) *color.Color {
 		return color.New(color.FgYellow)
 	case "success":
 		return color.New(color.FgGreen)
-	case "failed", "cancelled":
+	case "failed":
 		return color.New(color.FgRed)
+	case "cancelled":
+		return color.New(color.FgMagenta)
+	case "skipped":
+		return color.New(color.FgHiBlack)
 	default:
 		return color.New(color.FgWhite)
 	}
@@ -79,7 +83,7 @@ func colorForTaskStatus(s string) *color.Color {
 	case "failed":
 		return color.New(color.FgRed)
 	case "skipped":
-		return color.New(color.FgCyan)
+		return color.New(color.FgHiBlack)
 	case "cancelled":
 		return color.New(color.FgMagenta)
 	default:

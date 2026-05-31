@@ -4,6 +4,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/taskpps/ppsctl/tui/components"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -160,12 +161,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logsFetchedMsg:
 		if msg.err != nil {
 			m.errMsg = msg.err.Error()
-			m.logViewer.SetContent("Error: " + msg.err.Error())
+			m.logViewer.SetContent(components.ErrorStyle.Render("Error: ") + msg.err.Error())
 		} else {
 			m.errMsg = ""
 			var content string
 			for taskName, log := range msg.logs {
-				content += "[" + taskName + "]\n" + log + "\n"
+				content += components.LabelStyle.Render("["+taskName+"]") + "\n" + log + "\n"
 			}
 			m.logViewer.SetContent(content)
 		}

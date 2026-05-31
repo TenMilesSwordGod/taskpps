@@ -123,8 +123,8 @@ func (m *RunListModel) updateContent() {
 			}
 
 			idStr := run.ID
-			if len(idStr) > 8 {
-				idStr = idStr[:8]
+			if len([]rune(idStr)) > 8 {
+				idStr = string([]rune(idStr)[:8])
 			}
 
 			done, total := countDone(run.Tasks)

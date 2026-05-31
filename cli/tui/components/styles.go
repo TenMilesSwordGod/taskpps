@@ -162,8 +162,9 @@ func FormatTime(t *string) string {
 		return "-"
 	}
 	s := *t
-	if len(s) >= 19 {
-		return s[5:19]
+	runes := []rune(s)
+	if len(runes) >= 19 {
+		return string(runes[5:19])
 	}
 	return s
 }
