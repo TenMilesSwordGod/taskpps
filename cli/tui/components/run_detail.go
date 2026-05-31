@@ -269,6 +269,8 @@ func (m *RunDetailModel) updateContent() {
 				if isExpanded {
 					expandIcon = "▼"
 				}
+				groupStatus := subStatus(m.run, g)
+				expandIcon = StatusStyle(groupStatus).Render(expandIcon)
 
 				isCursor := cursorIdx < len(m.flatItems) && m.cursor == cursorIdx
 				prefix := "  "
@@ -373,6 +375,47 @@ func subStats(run *models.Run, g subpipelineGroup) (done, running, total int) {
 		}
 	}
 	return
+}
+
+func subStatus(run *models.Run, g subpipelineGroup) string {
+	hasFailed := false
+	hasRunning := false
+	hasPending := false
+	allSuccess := true
+	for _, idx := range g.tasks {
+		if idx >= len(run.Tasks) {
+			continue
+		}
+		s := string(run.Tasks[idx].Status)
+		switch s {
+		case "failed":
+			hasFailed = true
+			allSuccess = false
+		case "running":
+			hasRunning = true
+			allSuccess = false
+		case "pending":
+			hasPending = true
+			allSuccess = false
+		case "success":
+		case "skipped", "cancelled":
+		default:
+			allSuccess = false
+		}
+	}
+	if hasFailed {
+		return "failed"
+	}
+	if hasRunning {
+		return "running"
+	}
+	if hasPending {
+		return "pending"
+	}
+	if allSuccess && len(g.tasks) > 0 {
+		return "success"
+	}
+	return "pending"
 }
 
 func min(a, b int) int {
