@@ -4,6 +4,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/taskpps/ppsctl/models"
 	"github.com/taskpps/ppsctl/tui/components"
 )
 
@@ -123,8 +124,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.errMsg = msg.err.Error()
 		} else {
 			m.errMsg = ""
-			m.runs = msg.runs
-			m.runList.SetRuns(msg.runs)
+			m.runs = mergeRuns(m.runs, msg.runs)
+			m.runList.SetRuns(m.runs)
 
 			if m.targetRunID != "" {
 				for i, r := range msg.runs {
@@ -262,4 +263,22 @@ func (m *Model) resizeComponents() {
 	m.runList.SetSize(leftContentW, contentH-1)
 	m.runDetail.SetSize(rightContentW, contentH-1)
 	m.logViewer.SetSize(rightContentW, contentH-1)
+}
+
+func mergeRuns(existing []models.Run, newRuns []models.Run) []models.Run {
+	existingMap := make(map[string]models.Run)
+	for _, r := range existing {
+		existingMap[r.ID] = r
+	}
+
+	result := make([]models.Run, 0, len(newRuns))
+	for _, r := range newRuns {
+		if e, ok := existingMap[r.ID]; ok {
+			if len(e.Tasks) > 0 {
+				r.Tasks = e.Tasks
+			}
+		}
+		result = append(result, r)
+	}
+	return result
 }
