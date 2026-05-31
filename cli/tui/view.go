@@ -23,14 +23,14 @@ func (m Model) View() string {
 	leftFocused := m.focusedPanel == FocusRunList
 	rightFocused := m.focusedPanel == FocusRightPanel
 
-	leftStyle := components.PanelStyle.Width(m.dims.leftContentW).Height(m.dims.leftContentH)
+	leftStyle := components.LeftPanelStyle.Width(m.dims.leftContentW).Height(m.dims.leftContentH)
 	if leftFocused {
-		leftStyle = components.FocusedPanelStyle.Width(m.dims.leftContentW).Height(m.dims.leftContentH)
+		leftStyle = components.FocusedLeftPanelStyle.Width(m.dims.leftContentW).Height(m.dims.leftContentH)
 	}
 
-	rightStyle := components.PanelStyle.Width(m.dims.rightContentW).Height(m.dims.rightContentH)
+	rightStyle := components.RightPanelStyle.Width(m.dims.rightContentW).Height(m.dims.rightContentH)
 	if rightFocused {
-		rightStyle = components.FocusedPanelStyle.Width(m.dims.rightContentW).Height(m.dims.rightContentH)
+		rightStyle = components.FocusedRightPanelStyle.Width(m.dims.rightContentW).Height(m.dims.rightContentH)
 	}
 
 	leftContent := components.TitleStyle.Render("Runs") + "\n" + m.runList.View()
@@ -45,8 +45,8 @@ func (m Model) View() string {
 	}
 	rightPanel := rightStyle.Render(rightContent)
 
-	gap := " "
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, gap, rightPanel)
+	divider := components.DividerStyle.Render("│")
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, divider, rightPanel)
 
 	var b strings.Builder
 	b.WriteString(header)

@@ -217,15 +217,16 @@ func (m *Model) resizeComponents() {
 	}
 
 	borderH := 2
-	borderW := 4
-	gap := 1
+	leftBorderW := 3
+	rightBorderW := 3
+	divider := 1
 
 	contentH := availableH - borderH
 	if contentH < 3 {
 		contentH = 3
 	}
 
-	totalBorderGapW := borderW + gap + borderW
+	totalBorderGapW := leftBorderW + divider + rightBorderW
 	contentW := m.width - totalBorderGapW
 	if contentW < 42 {
 		contentW = 42

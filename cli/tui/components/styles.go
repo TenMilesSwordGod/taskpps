@@ -32,6 +32,46 @@ var (
 	FocusedPanelStyle = PanelStyle.Copy().
 				BorderForeground(ColorCyan)
 
+	LeftPanelBorder = lipgloss.Border{
+		Top:         "─",
+		Bottom:      "─",
+		Left:        "│",
+		Right:       "",
+		TopLeft:     "╭",
+		TopRight:    "─",
+		BottomLeft:  "╰",
+		BottomRight: "─",
+	}
+
+	RightPanelBorder = lipgloss.Border{
+		Top:         "─",
+		Bottom:      "─",
+		Left:        "",
+		Right:       "│",
+		TopLeft:     "─",
+		TopRight:    "╮",
+		BottomLeft:  "─",
+		BottomRight: "╯",
+	}
+
+	LeftPanelStyle = lipgloss.NewStyle().
+			Border(LeftPanelBorder).
+			BorderForeground(ColorBorder).
+			Padding(0, 1)
+
+	FocusedLeftPanelStyle = LeftPanelStyle.Copy().
+				BorderForeground(ColorCyan)
+
+	RightPanelStyle = lipgloss.NewStyle().
+			Border(RightPanelBorder).
+			BorderForeground(ColorBorder).
+			Padding(0, 1)
+
+	FocusedRightPanelStyle = RightPanelStyle.Copy().
+				BorderForeground(ColorCyan)
+
+	DividerStyle = lipgloss.NewStyle().Foreground(ColorBorder)
+
 	TitleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorCyan)
