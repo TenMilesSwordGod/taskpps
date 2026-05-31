@@ -161,7 +161,7 @@ func renderFooter(width int, m Model) string {
 	}
 
 	statusStr := bg.Copy().Foreground(components.ColorDim).Render(
-		fmt.Sprintf(" Runs:%d Tasks:%d/%d 2s ", total, tasksDone, totalTasks))
+		fmt.Sprintf(" Runs:%d Tasks:%d/%d %ds ", total, tasksDone, totalTasks, refreshInterval))
 
 	if m.errMsg != "" {
 		errStr := bg.Copy().Foreground(components.ColorFailed).Bold(true).Render(
@@ -179,8 +179,12 @@ func renderFooter(width int, m Model) string {
 }
 
 func truncateStr(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen-3] + "..."
+	if maxLen <= 3 {
+		return ""
+	}
+	return string(runes[:maxLen-3]) + "..."
 }

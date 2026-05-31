@@ -130,7 +130,14 @@ func (m *RunListModel) updateContent() {
 			done, total := countDone(run.Tasks)
 			prog := ""
 			if total > 0 {
-				bar := MakeProgressBar(done, countRunning(run.Tasks), total, 5)
+				barW := m.width / 5
+				if barW < 3 {
+					barW = 3
+				}
+				if barW > 10 {
+					barW = 10
+				}
+				bar := MakeProgressBar(done, countRunning(run.Tasks), total, barW)
 				prog = fmt.Sprintf(" %s %d/%d", bar, done, total)
 			}
 

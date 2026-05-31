@@ -12,7 +12,7 @@ var (
 	ColorRunning   = lipgloss.Color("#FFFF00")
 	ColorSuccess   = lipgloss.Color("#00FF00")
 	ColorFailed    = lipgloss.Color("#FF0000")
-	ColorSkipped   = lipgloss.Color("#00FFFF")
+	ColorSkipped   = lipgloss.Color("#AAAAAA")
 	ColorCancelled = lipgloss.Color("#FF00FF")
 	ColorCyan      = lipgloss.Color("#00FFFF")
 	ColorWhite     = lipgloss.Color("#FFFFFF")

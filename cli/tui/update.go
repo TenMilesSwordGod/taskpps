@@ -182,7 +182,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		cmds = append(cmds, tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+		cmds = append(cmds, tea.Tick(time.Duration(refreshInterval)*time.Second, func(_ time.Time) tea.Msg {
 			return tickMsg{}
 		}))
 	}

@@ -71,10 +71,12 @@ func NewModel(c *client.Client, runID string) Model {
 	}
 }
 
+const refreshInterval = 2
+
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		fetchRuns(m.client),
-		tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+		tea.Tick(time.Duration(refreshInterval)*time.Second, func(_ time.Time) tea.Msg {
 			return tickMsg{}
 		}),
 	)
