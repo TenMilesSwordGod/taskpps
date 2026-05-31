@@ -175,6 +175,17 @@ class ExecutionContext:
         self.pipeline = pipeline
         self.run_id = run_id
         self.env = env or {}
+        self._workspaces: Dict[str, str] = {}
+
+    def set_workspace(self, task_name: str, path: str) -> None:
+        self._workspaces[task_name] = path
+
+    def get_workspace(self, task_name: Optional[str] = None) -> Optional[str]:
+        if task_name:
+            return self._workspaces.get(task_name)
+        if self._workspaces:
+            return next(reversed(self._workspaces.values()))
+        return None
 
     def get_task_env(self, task: ResolvedTask) -> Dict[str, str]:
         settings = get_settings()

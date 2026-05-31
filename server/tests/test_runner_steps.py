@@ -225,9 +225,10 @@ async def test_execute_steps_cwd_merge(tmp_path):
         env={},
         log_path=log_path,
         timeout=30,
+        effective_cwd="/workspace",
     )
 
     assert result.success
     calls = mock_executor.execute.call_args_list
     assert calls[0].kwargs["cwd"] == "/step-dir"
-    assert calls[1].kwargs["cwd"] == "/workspace"  # from task.cwd
+    assert calls[1].kwargs["cwd"] == "/workspace"

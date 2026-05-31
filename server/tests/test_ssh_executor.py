@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from taskpps.executors.ssh import SSHExecutor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 
@@ -50,28 +50,25 @@ async def test_ssh_executor_cancel():
 
 
 @pytest.mark.asyncio
-async def test_ssh_executor_cancel_with_channel():
+async def test_ssh_executor_cancel_with_connection():
     ex = SSHExecutor(host="127.0.0.1", port=29999, username="test", password="test")
-    ex._channel = MagicMock()
-    ex._client = MagicMock()
+    mock_conn = MagicMock()
+    ex._connection = mock_conn
     await ex.cancel()
-    ex._channel.close.assert_called_once()
-    ex._client.close.assert_called_once()
+    mock_conn.close.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_ssh_executor_cancel_channel_exception():
+async def test_ssh_executor_cancel_connection_exception():
     ex = SSHExecutor(host="127.0.0.1", port=29999, username="test", password="test")
-    ex._channel = MagicMock()
-    ex._channel.close.side_effect = Exception("close error")
-    ex._client = MagicMock()
-    ex._client.close.side_effect = Exception("client error")
+    mock_conn = MagicMock()
+    mock_conn.close.side_effect = Exception("close error")
+    ex._connection = mock_conn
     await ex.cancel()
 
 
 @pytest.mark.asyncio
-async def test_ssh_executor_cancel_client_only():
+async def test_ssh_executor_cancel_no_connection():
     ex = SSHExecutor(host="127.0.0.1", port=29999, username="test", password="test")
-    ex._client = MagicMock()
+    assert ex._connection is None
     await ex.cancel()
-    ex._client.close.assert_called_once()

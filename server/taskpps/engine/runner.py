@@ -302,6 +302,8 @@ class PipelineRunner:
             executor = create_executor(task)
             self._running_executors[task.name] = executor
 
+            effective_cwd = task.cwd or self.context.get_workspace()
+
             try:
                 if isinstance(executor, InvokeExecutor):
                     result = await executor.execute(
@@ -325,17 +327,19 @@ class PipelineRunner:
                         log_path=log_path,
                         timeout=timeout,
                     )
+                    if isinstance(executor, GitExecutor) and result.success:
+                        self.context.set_workspace(task.name, executor.dest)
                 elif task.task_type == "steps" and task.steps:
-                    result = await self._execute_steps(executor, task, env, log_path, timeout)
+                    result = await self._execute_steps(executor, task, env, log_path, timeout, effective_cwd)
                 elif task.commands:
-                    result = await self._execute_commands(executor, task, env, log_path, timeout)
+                    result = await self._execute_commands(executor, task, env, log_path, timeout, effective_cwd)
                 else:
                     result = await executor.execute(
                         command=task.command or "",
                         env=env,
                         log_path=log_path,
                         timeout=timeout,
-                        cwd=task.cwd,
+                        cwd=effective_cwd,
                     )
             except Exception as e:
                 result = ExecutorResult(exit_code=1, stderr=str(e))
@@ -368,6 +372,7 @@ class PipelineRunner:
         env: Dict[str, str],
         log_path: Path,
         timeout: Optional[int],
+        effective_cwd: Optional[str] = None,
     ) -> ExecutorResult:
         if not task.commands:
             return ExecutorResult(exit_code=0)
@@ -388,7 +393,7 @@ class PipelineRunner:
                 env=env,
                 log_path=log_path,
                 timeout=cmd_timeout,
-                cwd=task.cwd,
+                cwd=effective_cwd,
             )
 
             combined_output += result.stdout or ""
@@ -410,6 +415,7 @@ class PipelineRunner:
         env: Dict[str, str],
         log_path: Path,
         timeout: Optional[int],
+        effective_cwd: Optional[str] = None,
     ) -> ExecutorResult:
         combined_output = ""
         step_timeout = None
@@ -420,7 +426,7 @@ class PipelineRunner:
 
         for i, step in enumerate(task.steps):
             step_env = {**env, **step.env}
-            step_cwd = step.cd or task.cwd
+            step_cwd = step.cd or effective_cwd
 
             with open(log_path, "a") as f:
                 f.write(t("Step {n}/{total}: {cmd}", n=i + 1, total=len(task.steps), cmd=step.run[:80]))
