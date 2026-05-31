@@ -24,10 +24,12 @@ const (
 )
 
 type layoutDims struct {
+	leftPanelW    int
+	rightPanelW   int
 	leftContentW  int
 	rightContentW int
-	leftContentH  int
-	rightContentH int
+	panelH        int
+	contentH      int
 }
 
 type Model struct {

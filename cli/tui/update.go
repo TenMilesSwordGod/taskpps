@@ -217,44 +217,48 @@ func (m *Model) resizeComponents() {
 	}
 
 	borderH := 2
-	leftBorderW := 3
-	rightBorderW := 3
-	divider := 1
+	leftOverhead := 3
+	rightOverhead := 3
+	dividerW := 1
+
+	totalOverhead := leftOverhead + dividerW + rightOverhead
+	totalContentW := m.width - totalOverhead
+	if totalContentW < 42 {
+		totalContentW = 42
+	}
+
+	leftContentW := totalContentW * 28 / 100
+	rightContentW := totalContentW - leftContentW
+	if leftContentW < 14 {
+		leftContentW = 14
+		rightContentW = totalContentW - leftContentW
+	}
+	if rightContentW < 22 {
+		rightContentW = 22
+		leftContentW = totalContentW - rightContentW
+		if leftContentW < 14 {
+			leftContentW = 14
+		}
+	}
+
+	leftPanelW := leftContentW + leftOverhead
+	rightPanelW := rightContentW + rightOverhead
 
 	contentH := availableH - borderH
 	if contentH < 3 {
 		contentH = 3
 	}
 
-	totalBorderGapW := leftBorderW + divider + rightBorderW
-	contentW := m.width - totalBorderGapW
-	if contentW < 42 {
-		contentW = 42
-	}
-
-	leftW := contentW * 28 / 100
-	rightW := contentW - leftW
-	if leftW < 18 {
-		leftW = 18
-		rightW = contentW - leftW
-	}
-	if rightW < 26 {
-		rightW = 26
-		leftW = contentW - rightW
-		if leftW < 18 {
-			leftW = 18
-			rightW = 26
-		}
-	}
-
 	m.dims = layoutDims{
-		leftContentW:  leftW,
-		rightContentW: rightW,
-		leftContentH:  contentH,
-		rightContentH: contentH,
+		leftPanelW:    leftPanelW,
+		rightPanelW:   rightPanelW,
+		leftContentW:  leftContentW,
+		rightContentW: rightContentW,
+		panelH:        availableH,
+		contentH:      contentH,
 	}
 
-	m.runList.SetSize(leftW, contentH-1)
-	m.runDetail.SetSize(rightW, contentH-1)
-	m.logViewer.SetSize(rightW, contentH-1)
+	m.runList.SetSize(leftContentW, contentH-1)
+	m.runDetail.SetSize(rightContentW, contentH-1)
+	m.logViewer.SetSize(rightContentW, contentH-1)
 }
