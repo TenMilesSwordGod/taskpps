@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -8,7 +8,7 @@ from taskpps.models.trigger import TriggerType
 
 class CreateTriggerRequest(BaseModel):
     type: TriggerType = TriggerType.CRON
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
     pipeline_file: str
     enabled: bool = True
 
@@ -16,7 +16,7 @@ class CreateTriggerRequest(BaseModel):
 class TriggerResponse(BaseModel):
     id: str
     type: TriggerType
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
     pipeline_file: str
     enabled: bool
     created_at: datetime
@@ -26,6 +26,7 @@ class TriggerResponse(BaseModel):
     @classmethod
     def from_orm_with_parsed_config(cls, obj):
         import json
+
         data = {
             "id": obj.id,
             "type": obj.type,

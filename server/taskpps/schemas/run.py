@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -8,7 +8,7 @@ from taskpps.models.run import RunStatus, TaskStatus, TaskType
 
 class CreateRunRequest(BaseModel):
     pipeline: str
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
 
 
 class TaskRunResponse(BaseModel):
@@ -18,10 +18,10 @@ class TaskRunResponse(BaseModel):
     subpipeline_name: str = ""
     task_type: TaskType
     status: TaskStatus
-    exit_code: Optional[int] = None
+    exit_code: int | None = None
     log_path: str = ""
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -35,17 +35,18 @@ class RunResponse(BaseModel):
     pipeline_version: str = ""
     version_changed: bool = False
     status: RunStatus
-    params: Dict[str, Any] = {}
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
+    params: dict[str, Any] = {}
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
     created_at: datetime
-    tasks: List[TaskRunResponse] = []
+    tasks: list[TaskRunResponse] = []
 
     model_config = {"from_attributes": True}
 
     @classmethod
     def from_orm_with_parsed_params(cls, obj):
         import json
+
         data = {
             "id": obj.id,
             "pipeline_name": obj.pipeline_name,
@@ -58,19 +59,19 @@ class RunResponse(BaseModel):
             "started_at": obj.started_at,
             "finished_at": obj.finished_at,
             "created_at": obj.created_at,
-            "tasks": obj.tasks if hasattr(obj, '_tasks_loaded') else [],
+            "tasks": obj.tasks if hasattr(obj, "_tasks_loaded") else [],
         }
         return cls(**data)
 
 
 class RunListResponse(BaseModel):
-    items: List[RunResponse]
+    items: list[RunResponse]
     total: int
 
 
 class CleanRequest(BaseModel):
-    older_than: Optional[int] = None
-    keep: Optional[int] = None
+    older_than: int | None = None
+    keep: int | None = None
     force: bool = False
 
 

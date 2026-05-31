@@ -1,12 +1,13 @@
 import pytest
+
 from taskpps.domain.context import (
+    ExecutionContext,
     _navigate_to_key,
     _set_key,
-    set_dot_path,
     apply_overrides,
-    resolve_dot_path,
     build_env,
-    ExecutionContext,
+    resolve_dot_path,
+    set_dot_path,
 )
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.schemas.pipeline import OptionsYAML

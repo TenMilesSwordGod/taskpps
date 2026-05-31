@@ -1,4 +1,3 @@
-import pytest
 from taskpps.domain import task as domain_task_module
 
 

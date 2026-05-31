@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Dict, List, Set
 
 from taskpps.domain.pipeline import ResolvedTask
 from taskpps.i18n import t
@@ -12,10 +11,10 @@ class DAGCycleError(Exception):
 
 
 class DAG:
-    def __init__(self, tasks: List[ResolvedTask]):
+    def __init__(self, tasks: list[ResolvedTask]):
         self.tasks = {t.name: t for t in tasks}
-        self.adjacency: Dict[str, List[str]] = {}
-        self.reverse_adjacency: Dict[str, List[str]] = {}
+        self.adjacency: dict[str, list[str]] = {}
+        self.reverse_adjacency: dict[str, list[str]] = {}
         self._build()
 
     def _build(self) -> None:
@@ -30,8 +29,8 @@ class DAG:
                 self.adjacency[dep].append(name)
                 self.reverse_adjacency[name].append(dep)
 
-    def topological_sort(self) -> List[str]:
-        in_degree: Dict[str, int] = {name: 0 for name in self.tasks}
+    def topological_sort(self) -> list[str]:
+        in_degree: dict[str, int] = {name: 0 for name in self.tasks}
         for name in self.tasks:
             for neighbor in self.adjacency[name]:
                 in_degree[neighbor] = in_degree.get(neighbor, 0) + 1
@@ -53,8 +52,8 @@ class DAG:
 
         return result
 
-    def get_execution_levels(self) -> List[List[str]]:
-        in_degree: Dict[str, int] = {name: len(self.reverse_adjacency[name]) for name in self.tasks}
+    def get_execution_levels(self) -> list[list[str]]:
+        in_degree: dict[str, int] = {name: len(self.reverse_adjacency[name]) for name in self.tasks}
         levels = []
         remaining = set(self.tasks.keys())
 
@@ -70,7 +69,7 @@ class DAG:
 
         return levels
 
-    def get_dependents(self, task_name: str) -> Set[str]:
+    def get_dependents(self, task_name: str) -> set[str]:
         visited = set()
         queue = deque([task_name])
         while queue:
@@ -81,7 +80,7 @@ class DAG:
                     queue.append(neighbor)
         return visited
 
-    def get_dependencies(self, task_name: str) -> Set[str]:
+    def get_dependencies(self, task_name: str) -> set[str]:
         visited = set()
         queue = deque([task_name])
         while queue:

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
 
 
 class ExecutorResult:
@@ -22,15 +20,15 @@ class BaseExecutor(ABC):
     async def execute(
         self,
         command: str,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> ExecutorResult:  # pragma: no cover
         ...
 
-    async def cancel(self) -> None:
-        pass
+    @abstractmethod
+    async def cancel(self) -> None: ...
 
     def _ensure_log_dir(self, log_path: Path) -> None:
         log_path.parent.mkdir(parents=True, exist_ok=True)

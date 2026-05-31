@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import os
-import subprocess
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -52,7 +50,7 @@ async def test_git_executor_existing_dir_pull(tmp_path):
 
 @pytest.mark.asyncio
 async def test_git_executor_cancel(tmp_path):
-    log_path = tmp_path / "test.log"
+    tmp_path / "test.log"
     executor = GitExecutor(repo="https://github.com/example/repo.git")
     await executor.cancel()
     assert executor._cancelled is True

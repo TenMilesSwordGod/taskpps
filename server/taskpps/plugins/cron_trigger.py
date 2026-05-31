@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Optional
 
 from croniter import croniter
 
@@ -20,7 +18,7 @@ class CronTrigger(TriggerPlugin):
         self._pipeline_file = pipeline_file
         self._callback = callback
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
 
     @property

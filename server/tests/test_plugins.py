@@ -1,5 +1,6 @@
 import pytest
-from taskpps.plugins.base import BasePlugin, TriggerPlugin, NotifierPlugin, ExecutorPlugin
+
+from taskpps.plugins.base import BasePlugin, ExecutorPlugin, NotifierPlugin, TriggerPlugin
 from taskpps.plugins.cron_trigger import CronTrigger
 
 
@@ -43,6 +44,7 @@ def test_cron_trigger_start_stop():
 
 def test_plugin_manager():
     from taskpps.services.plugin_manager import PluginManager
+
     pm = PluginManager()
     assert pm.list_plugins() == []
 
@@ -61,6 +63,7 @@ class MockPlugin(BasePlugin):
 
 def test_plugin_manager_register():
     from taskpps.services.plugin_manager import PluginManager
+
     pm = PluginManager()
     plugin = MockPlugin()
     pm.register("mock", plugin)

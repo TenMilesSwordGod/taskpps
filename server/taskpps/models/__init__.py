@@ -1,7 +1,12 @@
-from taskpps.models.run import PipelineRun, TaskRun, RunStatus, TaskStatus, TaskType
+from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus, TaskType
 from taskpps.models.trigger import Trigger, TriggerType
 
 __all__ = [
-    "PipelineRun", "TaskRun", "RunStatus", "TaskStatus", "TaskType",
-    "Trigger", "TriggerType",
+    "PipelineRun",
+    "RunStatus",
+    "TaskRun",
+    "TaskStatus",
+    "TaskType",
+    "Trigger",
+    "TriggerType",
 ]

@@ -1,6 +1,6 @@
 import pytest
-from unittest.mock import patch
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
 from taskpps.main import app
 
 
@@ -21,6 +21,7 @@ async def test_auth_disabled_runs(db_engine):
 @pytest.mark.asyncio
 async def test_auth_enabled_valid_key(db_engine):
     from taskpps.config import get_settings
+
     settings = get_settings()
     settings.server.api_key = "test-key-123"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -31,6 +32,7 @@ async def test_auth_enabled_valid_key(db_engine):
 @pytest.mark.asyncio
 async def test_auth_enabled_invalid_key(db_engine):
     from taskpps.config import get_settings
+
     settings = get_settings()
     settings.server.api_key = "test-key-123"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -41,6 +43,7 @@ async def test_auth_enabled_invalid_key(db_engine):
 @pytest.mark.asyncio
 async def test_auth_enabled_missing_key(db_engine):
     from taskpps.config import get_settings
+
     settings = get_settings()
     settings.server.api_key = "test-key-123"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -51,6 +54,7 @@ async def test_auth_enabled_missing_key(db_engine):
 @pytest.mark.asyncio
 async def test_auth_enabled_options_skip(db_engine):
     from taskpps.config import get_settings
+
     settings = get_settings()
     settings.server.api_key = "test-key-123"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -61,6 +65,7 @@ async def test_auth_enabled_options_skip(db_engine):
 @pytest.mark.asyncio
 async def test_auth_enabled_health_skip(db_engine):
     from taskpps.config import get_settings
+
     settings = get_settings()
     settings.server.api_key = "test-key-123"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -71,6 +76,7 @@ async def test_auth_enabled_health_skip(db_engine):
 @pytest.mark.asyncio
 async def test_auth_enabled_health_skip_no_key(db_engine):
     from taskpps.config import get_settings
+
     settings = get_settings()
     settings.server.api_key = "test-key-123"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -81,6 +87,7 @@ async def test_auth_enabled_health_skip_no_key(db_engine):
 @pytest.mark.asyncio
 async def test_auth_enabled_valid_key_on_runs(db_engine):
     from taskpps.config import get_settings
+
     settings = get_settings()
     settings.server.api_key = "test-key-123"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

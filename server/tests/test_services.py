@@ -1,9 +1,10 @@
+import contextlib
+
 import pytest
+
 from taskpps.services.pipeline_service import PipelineService
-from taskpps.services.trigger_service import TriggerService
 from taskpps.services.plugin_manager import PluginManager
-from taskpps.db.engine import get_session_factory
-from taskpps.db.repository import RunRepository, TaskRunRepository
+from taskpps.services.trigger_service import TriggerService
 
 
 @pytest.mark.asyncio
@@ -104,11 +105,11 @@ async def test_pipeline_service_params_parsing_get(setup_project, tmp_project, d
     """Test that params are parsed correctly from JSON string in get_run"""
     svc = PipelineService()
     params = {"key1": "value1", "key2": {"nested": "value"}}
-    
+
     # Create run with params
     create_result = await svc.create_run("deploy.yaml", params)
     run_id = create_result["id"]
-    
+
     # Get the run
     fetched = await svc.get_run(run_id)
     assert fetched is not None
@@ -122,14 +123,14 @@ async def test_pipeline_service_params_parsing_list(setup_project, tmp_project, 
     """Test that params are parsed correctly from JSON string in list_runs"""
     svc = PipelineService()
     params = {"options": {"host": "test-server"}}
-    
+
     # Create run with params
     await svc.create_run("deploy.yaml", params)
-    
+
     # List runs
     result = await svc.list_runs()
     assert result["total"] >= 1
-    
+
     # Check all items have params as dict
     for item in result["items"]:
         assert isinstance(item["params"], dict)
@@ -139,11 +140,11 @@ async def test_pipeline_service_params_parsing_list(setup_project, tmp_project, 
 async def test_pipeline_service_empty_params(setup_project, tmp_project, db_engine):
     """Test empty params are handled correctly"""
     svc = PipelineService()
-    
+
     # Create run without params
     create_result = await svc.create_run("deploy.yaml", {})
     run_id = create_result["id"]
-    
+
     fetched = await svc.get_run(run_id)
     assert isinstance(fetched["params"], dict)
     assert fetched["params"] == {}
@@ -153,11 +154,11 @@ async def test_pipeline_service_empty_params(setup_project, tmp_project, db_engi
 async def test_pipeline_service_null_params(setup_project, tmp_project, db_engine):
     """Test null/None params are handled correctly"""
     svc = PipelineService()
-    
+
     # Create run with None params
     create_result = await svc.create_run("deploy.yaml", None)
     run_id = create_result["id"]
-    
+
     fetched = await svc.get_run(run_id)
     assert isinstance(fetched["params"], dict)
     assert fetched["params"] == {}
@@ -166,12 +167,11 @@ async def test_pipeline_service_null_params(setup_project, tmp_project, db_engin
 @pytest.mark.asyncio
 async def test_pipeline_service_invalid_json_params_edge_case(setup_project, tmp_project, db_engine):
     """Test edge case with invalid JSON params"""
-    svc = PipelineService()
-    
+    PipelineService()
+
     # Manually test the parsing logic by mocking the params
     # The actual create_run uses json.dumps, but we can test what happens if params is invalid JSON string
-    from taskpps.services.pipeline_service import PipelineService as PS
-    
+
     # Let's create a mock PipelineRun object
     class MockRun:
         def __init__(self):
@@ -183,18 +183,18 @@ async def test_pipeline_service_invalid_json_params_edge_case(setup_project, tmp
             self.started_at = None
             self.finished_at = None
             from datetime import datetime
+
             self.created_at = datetime.now()
-    
+
     # Now let's test what happens with invalid JSON (should default to {})
     # We can manually test the parsing logic from pipeline_service.py
     import json
+
     test_params = "invalid-json"
     params = {}
     if isinstance(test_params, str):
-        try:
+        with contextlib.suppress(json.JSONDecodeError, TypeError):
             params = json.loads(test_params)
-        except (json.JSONDecodeError, TypeError):
-            pass
     assert params == {}
 
 
@@ -202,12 +202,12 @@ async def test_pipeline_service_invalid_json_params_edge_case(setup_project, tmp
 async def test_pipeline_service_many_list_runs(setup_project, tmp_project, db_engine):
     """Test list_runs with multiple runs"""
     svc = PipelineService()
-    
+
     # Create multiple runs
     await svc.create_run("deploy.yaml", {"test": 1})
     await svc.create_run("deploy.yaml", {"test": 2})
     await svc.create_run("deploy.yaml", {"test": 3})
-    
+
     result = await svc.list_runs()
     assert result["total"] >= 3
     assert len(result["items"]) >= 3
@@ -217,12 +217,12 @@ async def test_pipeline_service_many_list_runs(setup_project, tmp_project, db_en
 async def test_pipeline_service_list_with_limit(setup_project, tmp_project, db_engine):
     """Test list_runs limit"""
     svc = PipelineService()
-    
+
     # Create multiple runs
     await svc.create_run("deploy.yaml", {"test": 1})
     await svc.create_run("deploy.yaml", {"test": 2})
     await svc.create_run("deploy.yaml", {"test": 3})
-    
+
     result = await svc.list_runs(limit=2)
     assert len(result["items"]) == 2
 

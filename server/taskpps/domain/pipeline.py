@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from taskpps.schemas.pipeline import (
-    GitSpec,
-    NexusSpec,
     OptionsYAML,
     PipelineConfig,
     PipelineYAML,
     SubPipeline,
-    TaskYAML,
     TaskStep,
+    TaskYAML,
 )
 
 
 class ResolvedStep:
-    def __init__(self, run: str, cd: Optional[str] = None, env: Optional[Dict[str, str]] = None):
+    def __init__(self, run: str, cd: str | None = None, env: dict[str, str] | None = None):
         self.run = run
         self.cd = cd
         self.env = env or {}
@@ -30,23 +28,23 @@ class ResolvedTask:
         self,
         name: str,
         task_type: str,
-        command: Optional[str] = None,
-        commands: Optional[List[str]] = None,
-        invoke_task: Optional[str] = None,
-        invoke_args: Optional[List[Any]] = None,
-        invoke_kwargs: Optional[Dict[str, Any]] = None,
-        steps: Optional[List[ResolvedStep]] = None,
-        git: Optional[Dict[str, Any]] = None,
-        nexus: Optional[Dict[str, Any]] = None,
-        cwd: Optional[str] = None,
-        host: Optional[str] = None,
-        credential: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        timeout: Optional[int] = None,
+        command: str | None = None,
+        commands: list[str] | None = None,
+        invoke_task: str | None = None,
+        invoke_args: list[Any] | None = None,
+        invoke_kwargs: dict[str, Any] | None = None,
+        steps: list[ResolvedStep] | None = None,
+        git: dict[str, Any] | None = None,
+        nexus: dict[str, Any] | None = None,
+        cwd: str | None = None,
+        host: str | None = None,
+        credential: str | None = None,
+        env: dict[str, str] | None = None,
+        timeout: int | None = None,
         retry: int = 0,
-        on_failure: Optional[str] = None,
-        depends_on: Optional[List[str]] = None,
-        when: Optional[str] = None,
+        on_failure: str | None = None,
+        depends_on: list[str] | None = None,
+        when: str | None = None,
     ):
         self.name = name
         self.task_type = task_type
@@ -69,7 +67,9 @@ class ResolvedTask:
         self.when = when
 
     @classmethod
-    def from_yaml(cls, task_yaml: TaskYAML, config: Union[PipelineConfig, OptionsYAML, None] = None, options: Optional[OptionsYAML] = None) -> ResolvedTask:
+    def from_yaml(
+        cls, task_yaml: TaskYAML, config: PipelineConfig | OptionsYAML | None = None, options: OptionsYAML | None = None
+    ) -> ResolvedTask:
         if config is None:
             config = options or PipelineConfig()
         if isinstance(config, OptionsYAML):
@@ -113,9 +113,9 @@ class ResolvedSubPipeline:
     def __init__(
         self,
         name: str,
-        tasks: List[ResolvedTask],
+        tasks: list[ResolvedTask],
         config: PipelineConfig,
-        depends_on: Optional[List[str]] = None,
+        depends_on: list[str] | None = None,
     ):
         self.name = name
         self.tasks = tasks
@@ -128,7 +128,7 @@ class ResolvedSubPipeline:
         tasks = [ResolvedTask.from_yaml(t, merged_config) for t in sub.tasks]
         return cls(name=sub.name, tasks=tasks, config=merged_config, depends_on=sub.depends_on)
 
-    def get_task_by_name(self, name: str) -> Optional[ResolvedTask]:
+    def get_task_by_name(self, name: str) -> ResolvedTask | None:
         for t in self.tasks:
             if t.name == name:
                 return t
@@ -139,10 +139,10 @@ class ResolvedPipeline:
     def __init__(
         self,
         name: str,
-        tasks: Optional[List[ResolvedTask]] = None,
-        options: Optional[Union[PipelineConfig, OptionsYAML]] = None,
-        subpipelines: Optional[List[ResolvedSubPipeline]] = None,
-        top_config: Optional[PipelineConfig] = None,
+        tasks: list[ResolvedTask] | None = None,
+        options: PipelineConfig | OptionsYAML | None = None,
+        subpipelines: list[ResolvedSubPipeline] | None = None,
+        top_config: PipelineConfig | None = None,
         pipeline_file: str = "",
     ):
         self.name = name
@@ -166,26 +166,26 @@ class ResolvedPipeline:
     @classmethod
     def from_yaml(cls, spec: PipelineYAML, pipeline_file: str = "") -> ResolvedPipeline:
         top_config = spec.get_effective_config()
-        subs: List[ResolvedSubPipeline] = []
+        subs: list[ResolvedSubPipeline] = []
         if spec.pipelines:
             for sub in spec.pipelines:
                 subs.append(ResolvedSubPipeline.from_yaml(sub, top_config))
         return cls(name=spec.name, subpipelines=subs, top_config=top_config, pipeline_file=pipeline_file)
 
-    def get_subpipeline_by_name(self, name: str) -> Optional[ResolvedSubPipeline]:
+    def get_subpipeline_by_name(self, name: str) -> ResolvedSubPipeline | None:
         for s in self.subpipelines:
             if s.name == name:
                 return s
         return None
 
-    def get_task_by_name(self, name: str) -> Optional[ResolvedTask]:
+    def get_task_by_name(self, name: str) -> ResolvedTask | None:
         for t in self.tasks:
             if t.name == name:
                 return t
         return None
 
     @property
-    def tasks(self) -> List[ResolvedTask]:
+    def tasks(self) -> list[ResolvedTask]:
         result = []
         for s in self.subpipelines:
             result.extend(s.tasks)
@@ -196,7 +196,7 @@ class ResolvedPipeline:
         return self.top_config
 
 
-def _merge_config(top: PipelineConfig, override: Optional[PipelineConfig]) -> PipelineConfig:
+def _merge_config(top: PipelineConfig, override: PipelineConfig | None) -> PipelineConfig:
     if override is None:
         return top
     return PipelineConfig(
@@ -206,5 +206,7 @@ def _merge_config(top: PipelineConfig, override: Optional[PipelineConfig]) -> Pi
         timeout=override.timeout if override.timeout is not None else top.timeout,
         retry=override.retry if override.retry > 0 else top.retry,
         on_failure=override.on_failure if override.on_failure != "fail" or top.on_failure == "fail" else top.on_failure,
-        execution_strategy=override.execution_strategy if override.execution_strategy != "sequential" or top.execution_strategy == "sequential" else top.execution_strategy,
+        execution_strategy=override.execution_strategy
+        if override.execution_strategy != "sequential" or top.execution_strategy == "sequential"
+        else top.execution_strategy,
     )

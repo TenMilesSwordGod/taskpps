@@ -1,11 +1,9 @@
-from typing import List, Optional
-
 from pydantic import BaseModel
 
 
 class AgentCheckRequest(BaseModel):
-    agent_id: Optional[str] = None
-    file_filter: Optional[str] = None
+    agent_id: str | None = None
+    file_filter: str | None = None
     timeout: int = 5
 
 
@@ -18,7 +16,7 @@ class AgentCheckResult(BaseModel):
     source_file: str
     status: str
     latency_ms: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class AgentCheckSummary(BaseModel):
@@ -28,5 +26,5 @@ class AgentCheckSummary(BaseModel):
 
 
 class AgentCheckResponse(BaseModel):
-    results: List[AgentCheckResult]
+    results: list[AgentCheckResult]
     summary: AgentCheckSummary

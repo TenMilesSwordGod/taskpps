@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -8,15 +8,15 @@ from taskpps.i18n import t
 
 
 class AgentLoader:
-    def __init__(self, base_dir: Optional[Path] = None):
+    def __init__(self, base_dir: Path | None = None):
         self._base_dir = base_dir
-        self._cache: Optional[Dict[str, Dict[str, Any]]] = None
+        self._cache: dict[str, dict[str, Any]] | None = None
 
     @property
     def base_dir(self) -> Path:
         return self._base_dir or get_agents_dir()
 
-    def load(self, agent_name: str) -> Dict[str, Any]:
+    def load(self, agent_name: str) -> dict[str, Any]:
         for ext in (".yaml", ".yml"):
             path = self.base_dir / f"{agent_name}{ext}"
             if path.exists():
@@ -27,7 +27,7 @@ class AgentLoader:
                 return data
         raise FileNotFoundError(t("Agent file not found: {name}", name=agent_name))
 
-    def _load_yaml_files(self) -> Dict[str, Dict[str, Any]]:
+    def _load_yaml_files(self) -> dict[str, dict[str, Any]]:
         result = {}
         base = self.base_dir
         if not base.exists():
@@ -58,12 +58,12 @@ class AgentLoader:
                     continue
         return result
 
-    def load_all(self) -> Dict[str, Dict[str, Any]]:
+    def load_all(self) -> dict[str, dict[str, Any]]:
         if self._cache is None:
             self._cache = self._load_yaml_files()
         return dict(self._cache)
 
-    def get(self, agent_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, agent_id: str) -> dict[str, Any] | None:
         if self._cache is None:
             self._cache = self._load_yaml_files()
         return self._cache.get(agent_id)
@@ -76,10 +76,10 @@ class AgentLoader:
             raise KeyError(t("Field '{field}' not found in agent '{id}'", field=field, id=agent_id))
         return agent[field]
 
-    def resolve_credential(self, agent_or_id: Any) -> Optional[Dict[str, Any]]:
+    def resolve_credential(self, agent_or_id: Any) -> dict[str, Any] | None:
         from taskpps.loaders.credential_loader import CredentialLoader
 
-        agent_data: Optional[Dict[str, Any]] = None
+        agent_data: dict[str, Any] | None = None
         if isinstance(agent_or_id, str):
             agent_data = self.get(agent_or_id)
         elif isinstance(agent_or_id, dict):

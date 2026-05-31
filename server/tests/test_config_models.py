@@ -1,5 +1,4 @@
-import pytest
-from taskpps.config import Settings, ServerConfig, ExecutorConfig, PluginsConfig, TriggerConfig
+from taskpps.config import ExecutorConfig, PluginsConfig, ServerConfig, Settings, TriggerConfig
 
 
 def test_settings_default_values():

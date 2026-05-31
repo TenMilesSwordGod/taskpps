@@ -1,12 +1,11 @@
 import json
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import List, Optional, Sequence
 
-from sqlalchemy import delete, select, func
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from taskpps.models.run import PipelineRun, TaskRun, RunStatus, TaskStatus
+from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus
 from taskpps.models.trigger import Trigger
 
 
@@ -14,7 +13,15 @@ class RunRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_run(self, pipeline_name: str, pipeline_file: str = "", pipeline_id: str = "", pipeline_version: str = "", *, params: dict | None = None) -> PipelineRun:
+    async def create_run(
+        self,
+        pipeline_name: str,
+        pipeline_file: str = "",
+        pipeline_id: str = "",
+        pipeline_version: str = "",
+        *,
+        params: dict | None = None,
+    ) -> PipelineRun:
         run = PipelineRun(
             pipeline_name=pipeline_name,
             pipeline_file=pipeline_file,
@@ -28,11 +35,11 @@ class RunRepository:
         await self.session.refresh(run)
         return run
 
-    async def get_run(self, run_id: str) -> Optional[PipelineRun]:
+    async def get_run(self, run_id: str) -> PipelineRun | None:
         result = await self.session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
         return result.scalar_one_or_none()
 
-    async def get_last_run_by_pipeline(self, pipeline_id: str) -> Optional[PipelineRun]:
+    async def get_last_run_by_pipeline(self, pipeline_id: str) -> PipelineRun | None:
         result = await self.session.execute(
             select(PipelineRun)
             .where(PipelineRun.pipeline_id == pipeline_id, PipelineRun.pipeline_version != "")
@@ -60,10 +67,9 @@ class RunRepository:
 
     async def count_runs(
         self,
-        pipeline: Optional[str] = None,
-        status: Optional[str] = None,
+        pipeline: str | None = None,
+        status: str | None = None,
     ) -> int:
-        from sqlalchemy import func
         stmt = select(func.count(PipelineRun.id))
         if pipeline:
             stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
@@ -74,8 +80,8 @@ class RunRepository:
 
     async def list_runs(
         self,
-        pipeline: Optional[str] = None,
-        status: Optional[str] = None,
+        pipeline: str | None = None,
+        status: str | None = None,
         limit: int = 50,
     ) -> Sequence[PipelineRun]:
         stmt = select(PipelineRun).order_by(PipelineRun.created_at.desc())
@@ -87,7 +93,9 @@ class RunRepository:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
-    async def update_run_status(self, run_id: str, status: RunStatus, started_at: datetime | None = None, finished_at: datetime | None = None) -> None:
+    async def update_run_status(
+        self, run_id: str, status: RunStatus, started_at: datetime | None = None, finished_at: datetime | None = None
+    ) -> None:
         run = await self.get_run(run_id)
         if run is None:
             return
@@ -127,7 +135,9 @@ class TaskRunRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_task_run(self, run_id: str, task_name: str, task_type: str = "command", subpipeline_name: str = "", log_path: str = "") -> TaskRun:
+    async def create_task_run(
+        self, run_id: str, task_name: str, task_type: str = "command", subpipeline_name: str = "", log_path: str = ""
+    ) -> TaskRun:
         tr = TaskRun(
             run_id=run_id,
             task_name=task_name,
@@ -141,7 +151,7 @@ class TaskRunRepository:
         await self.session.refresh(tr)
         return tr
 
-    async def get_task_run(self, task_run_id: str) -> Optional[TaskRun]:
+    async def get_task_run(self, task_run_id: str) -> TaskRun | None:
         result = await self.session.execute(select(TaskRun).where(TaskRun.id == task_run_id))
         return result.scalar_one_or_none()
 
@@ -172,10 +182,7 @@ class TaskRunRepository:
         await self.session.commit()
 
     async def cancel_pending_tasks(self, run_id: str) -> int:
-        stmt = (
-            select(TaskRun)
-            .where(TaskRun.run_id == run_id, TaskRun.status == TaskStatus.PENDING)
-        )
+        stmt = select(TaskRun).where(TaskRun.run_id == run_id, TaskRun.status == TaskStatus.PENDING)
         result = await self.session.execute(stmt)
         tasks = result.scalars().all()
         count = 0
@@ -214,7 +221,7 @@ class TriggerRepository:
         await self.session.refresh(trigger)
         return trigger
 
-    async def get_trigger(self, trigger_id: str) -> Optional[Trigger]:
+    async def get_trigger(self, trigger_id: str) -> Trigger | None:
         result = await self.session.execute(select(Trigger).where(Trigger.id == trigger_id))
         return result.scalar_one_or_none()
 

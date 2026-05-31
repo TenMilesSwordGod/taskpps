@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from taskpps.i18n import t
 from taskpps.schemas.agent import AgentCheckRequest, AgentCheckResponse, AgentCheckResult
 from taskpps.services.agent_service import AgentService
 
@@ -16,7 +15,7 @@ async def try_connect(body: AgentCheckRequest):
         result = _agent_service.try_connect(body.agent_id, body.timeout)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/check", response_model=AgentCheckResponse)
@@ -25,7 +24,7 @@ async def check(body: AgentCheckRequest):
         result = _agent_service.check(body)
         return result
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/check-stream")

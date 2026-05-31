@@ -1,7 +1,8 @@
 import pytest
-from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
+
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
+from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
 
 
 def test_substitute_env_vars():
@@ -56,13 +57,7 @@ def test_pipeline_loader_load_prefix_with_subdir(setup_project, tmp_project):
     subdir = tmp_project / "pipelines" / "nested"
     subdir.mkdir()
     nested_yaml = subdir / "inner.yaml"
-    nested_yaml.write_text(
-        "name: inner\n"
-        "options: {}\n"
-        "tasks:\n"
-        "  - name: t1\n"
-        "    command: echo nested\n"
-    )
+    nested_yaml.write_text("name: inner\noptions: {}\ntasks:\n  - name: t1\n    command: echo nested\n")
     try:
         loader = PipelineLoader(tmp_project / "pipelines")
         spec = loader.load("pipelines/nested/inner.yaml")

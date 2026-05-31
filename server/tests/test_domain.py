@@ -1,10 +1,15 @@
 import pytest
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
-from taskpps.domain.dag import DAG, DAGCycleError
+
 from taskpps.domain.context import (
-    ExecutionContext, apply_overrides, build_env, resolve_dot_path, set_dot_path,
+    ExecutionContext,
+    apply_overrides,
+    build_env,
+    resolve_dot_path,
+    set_dot_path,
 )
-from taskpps.schemas.pipeline import PipelineYAML, TaskYAML, OptionsYAML, InvokeSpec
+from taskpps.domain.dag import DAG, DAGCycleError
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineYAML, TaskYAML
 
 
 def test_resolved_task_from_yaml():

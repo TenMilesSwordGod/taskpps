@@ -1,7 +1,5 @@
-import pytest
-from taskpps.models.run import PipelineRun, TaskRun, RunStatus, TaskStatus, TaskType
+from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus, TaskType
 from taskpps.models.trigger import Trigger, TriggerType
-from datetime import datetime
 
 
 def test_pipeline_run_defaults():

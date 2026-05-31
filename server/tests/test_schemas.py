@@ -1,9 +1,7 @@
-import pytest
-from taskpps.schemas.pipeline import PipelineYAML, TaskYAML, OptionsYAML, InvokeSpec
-from taskpps.schemas.run import CreateRunRequest, RunResponse, TaskRunResponse, CleanRequest, CleanResponse
-from taskpps.schemas.trigger import CreateTriggerRequest, TriggerResponse
-from taskpps.models.run import RunStatus, TaskStatus, TaskType
 from taskpps.models.trigger import TriggerType
+from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineYAML, TaskYAML
+from taskpps.schemas.run import CleanRequest, CreateRunRequest
+from taskpps.schemas.trigger import CreateTriggerRequest
 
 
 def test_invoke_spec():

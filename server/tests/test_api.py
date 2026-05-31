@@ -1,9 +1,6 @@
 import asyncio
-import pytest
-import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
 
-from taskpps.main import app
+import pytest
 
 
 @pytest.mark.asyncio

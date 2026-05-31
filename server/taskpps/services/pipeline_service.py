@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from taskpps.config import (
-    get_logs_dir,
-    get_pipelines_dir,
+    build_log_path,
     compute_pipeline_id,
     compute_pipeline_version,
-    build_log_path,
+    get_logs_dir,
+    get_pipelines_dir,
 )
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
-from taskpps.i18n import t
 from taskpps.domain.context import ExecutionContext, apply_overrides
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline
 from taskpps.engine.runner import PipelineRunner
+from taskpps.i18n import t
 from taskpps.loaders.pipeline_loader import PipelineLoader
 from taskpps.schemas.pipeline import PipelineYAML
 
@@ -29,13 +30,13 @@ class PipelineService:
     def __init__(self):
         self.loader = PipelineLoader()
 
-    async def create_run(self, pipeline_file: str, params: Optional[Dict[str, Any]] = None) -> dict:
+    async def create_run(self, pipeline_file: str, params: dict[str, Any] | None = None) -> dict:
         try:
             spec = self.loader.load(pipeline_file)
         except FileNotFoundError as e:
-            raise ValueError(str(e))
+            raise ValueError(str(e)) from e
         except Exception as e:
-            raise ValueError(t("Failed to load pipeline: {error}", error=str(e)))
+            raise ValueError(t("Failed to load pipeline: {error}", error=str(e))) from e
 
         if params:
             pipeline_data = spec.model_dump()
@@ -43,7 +44,7 @@ class PipelineService:
                 overridden = apply_overrides(pipeline_data, params)
                 spec = PipelineYAML(**overridden)
             except Exception as e:
-                raise ValueError(t("Failed to apply overrides: {error}", error=str(e)))
+                raise ValueError(t("Failed to apply overrides: {error}", error=str(e))) from e
 
         resolved = ResolvedPipeline.from_yaml(spec, pipeline_file=pipeline_file)
 
@@ -52,7 +53,7 @@ class PipelineService:
                 dag = DAG(sub.tasks)
                 dag.topological_sort()
             except (DAGCycleError, ValueError) as e:
-                raise ValueError(t("SubPipeline '{name}': {error}", name=sub.name, error=str(e)))
+                raise ValueError(t("SubPipeline '{name}': {error}", name=sub.name, error=str(e))) from e
 
         pipeline_id = compute_pipeline_id(pipeline_file)
         pipeline_version = compute_pipeline_version(pipeline_file)
@@ -132,12 +133,14 @@ class PipelineService:
             task.result()
         except asyncio.CancelledError:
             import logging
+
             logging.getLogger("taskpps").info(t("Pipeline run was cancelled"))
         except Exception as e:
             import logging
+
             logging.getLogger("taskpps").error(t("Pipeline run failed unexpectedly: {error}", error=str(e)))
 
-    async def get_run(self, run_id: str) -> Optional[dict]:
+    async def get_run(self, run_id: str) -> dict | None:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
@@ -150,10 +153,8 @@ class PipelineService:
 
             params = {}
             if isinstance(run.params, str):
-                try:
+                with contextlib.suppress(json.JSONDecodeError, TypeError):
                     params = json.loads(run.params)
-                except (json.JSONDecodeError, TypeError):
-                    pass
             elif isinstance(run.params, dict):
                 params = run.params
 
@@ -186,7 +187,7 @@ class PipelineService:
                 ],
             }
 
-    async def list_runs(self, pipeline: Optional[str] = None, status: Optional[str] = None, limit: int = 50) -> dict:
+    async def list_runs(self, pipeline: str | None = None, status: str | None = None, limit: int = 50) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             runs = await run_repo.list_runs(pipeline=pipeline, status=status, limit=limit)
@@ -194,26 +195,26 @@ class PipelineService:
             for run in runs:
                 params = {}
                 if isinstance(run.params, str):
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError, TypeError):
                         params = json.loads(run.params)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
                 elif isinstance(run.params, dict):
                     params = run.params
 
-                items.append({
-                    "id": run.id,
-                    "pipeline_name": run.pipeline_name,
-                    "pipeline_file": run.pipeline_file,
-                    "pipeline_id": run.pipeline_id,
-                    "pipeline_version": run.pipeline_version,
-                    "status": run.status,
-                    "params": params,
-                    "started_at": run.started_at,
-                    "finished_at": run.finished_at,
-                    "created_at": run.created_at,
-                    "tasks": [],
-                })
+                items.append(
+                    {
+                        "id": run.id,
+                        "pipeline_name": run.pipeline_name,
+                        "pipeline_file": run.pipeline_file,
+                        "pipeline_id": run.pipeline_id,
+                        "pipeline_version": run.pipeline_version,
+                        "status": run.status,
+                        "params": params,
+                        "started_at": run.started_at,
+                        "finished_at": run.finished_at,
+                        "created_at": run.created_at,
+                        "tasks": [],
+                    }
+                )
             total = await run_repo.count_runs(pipeline=pipeline, status=status)
             return {"items": items, "total": total}
 
@@ -240,7 +241,7 @@ class PipelineService:
 
             return False
 
-    async def clean_runs(self, older_than: Optional[int] = None, keep: Optional[int] = None, force: bool = False) -> dict:
+    async def clean_runs(self, older_than: int | None = None, keep: int | None = None, force: bool = False) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
 
@@ -275,7 +276,7 @@ class PipelineService:
         if run.pipeline_version:
             run_dir = logs_dir / run.pipeline_id / f"v_{run.pipeline_version}" / "builds" / run.id
         else:
-            log_rel_dir = Path(run.pipeline_file).with_suffix('') if run.pipeline_file else Path('unknown')
+            log_rel_dir = Path(run.pipeline_file).with_suffix("") if run.pipeline_file else Path("unknown")
             run_dir = logs_dir / log_rel_dir / run.id
 
         if run_dir.exists():
@@ -287,6 +288,6 @@ class PipelineService:
             shutil.rmtree(run_dir)
         return count
 
-    def list_pipelines(self) -> List[str]:
+    def list_pipelines(self) -> list[str]:
         all_pipelines = self.loader.load_all()
         return list(all_pipelines.keys())

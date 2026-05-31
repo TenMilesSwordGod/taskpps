@@ -5,7 +5,8 @@ import base64
 import hashlib
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+
+import httpx
 
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
@@ -17,17 +18,17 @@ class NexusExecutor(BaseExecutor):
         action: str,
         url: str,
         repository: str,
-        credential: Optional[str] = None,
-        group_id: Optional[str] = None,
-        artifact_id: Optional[str] = None,
-        version: Optional[str] = None,
+        credential: str | None = None,
+        group_id: str | None = None,
+        artifact_id: str | None = None,
+        version: str | None = None,
         packaging: str = "jar",
-        classifier: Optional[str] = None,
-        files: Optional[List[str]] = None,
-        dest: Optional[str] = None,
-        query: Optional[str] = None,
-        source_repo: Optional[str] = None,
-        target_repo: Optional[str] = None,
+        classifier: str | None = None,
+        files: list[str] | None = None,
+        dest: str | None = None,
+        query: str | None = None,
+        source_repo: str | None = None,
+        target_repo: str | None = None,
     ):
         self.action = action
         self.url = url.rstrip("/")
@@ -48,62 +49,71 @@ class NexusExecutor(BaseExecutor):
     async def execute(
         self,
         command: str,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
         self._cancelled = False
 
         merged_env = {**os.environ, **env}
+        auth_header = _build_auth_header(self.credential, merged_env)
+        headers = {}
+        if auth_header:
+            headers["Authorization"] = auth_header
 
-        def _run_nexus():
-            try:
-                import urllib.request
-                import urllib.error
-            except ImportError:
-                return ExecutorResult(exit_code=1, stderr=t("urllib not available"))
-
-            auth_header = _build_auth_header(self.credential, merged_env)
-
-            if self.action == "upload":
-                return _nexus_upload(
-                    self.url, self.repository, self.files,
-                    self.group_id, self.artifact_id, self.version,
-                    self.packaging, self.classifier, auth_header, log_path,
-                )
-            elif self.action == "download":
-                return _nexus_download(
-                    self.url, self.repository,
-                    self.group_id, self.artifact_id, self.version,
-                    self.packaging, self.classifier, self.dest,
-                    auth_header, log_path,
-                )
-            elif self.action == "search":
-                return _nexus_search(
-                    self.url, self.repository, self.query,
-                    auth_header, log_path,
-                )
-            elif self.action == "delete":
-                return _nexus_delete(
-                    self.url, self.repository,
-                    self.group_id, self.artifact_id, self.version,
-                    self.packaging, self.classifier,
-                    auth_header, log_path,
-                )
-            elif self.action == "list":
-                return _nexus_list(
-                    self.url, self.repository,
-                    auth_header, log_path,
-                )
-            else:
-                return ExecutorResult(exit_code=1, stderr=t("Unknown nexus action: {action}", action=self.action))
+        client_timeout = timeout or 300
 
         try:
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, _run_nexus)
-            return result
+            async with httpx.AsyncClient(timeout=client_timeout) as client:
+                if self.action == "upload":
+                    return await _nexus_upload(
+                        client,
+                        self.url,
+                        self.repository,
+                        self.files,
+                        self.group_id,
+                        self.artifact_id,
+                        self.version,
+                        self.packaging,
+                        self.classifier,
+                        headers,
+                        log_path,
+                    )
+                elif self.action == "download":
+                    return await _nexus_download(
+                        client,
+                        self.url,
+                        self.repository,
+                        self.group_id,
+                        self.artifact_id,
+                        self.version,
+                        self.packaging,
+                        self.classifier,
+                        self.dest,
+                        headers,
+                        log_path,
+                    )
+                elif self.action == "search":
+                    return await _nexus_search(client, self.url, self.repository, self.query, headers, log_path)
+                elif self.action == "delete":
+                    return await _nexus_delete(
+                        client,
+                        self.url,
+                        self.repository,
+                        self.group_id,
+                        self.artifact_id,
+                        self.version,
+                        self.packaging,
+                        self.classifier,
+                        headers,
+                        log_path,
+                    )
+                elif self.action == "list":
+                    return await _nexus_list(client, self.url, self.repository, headers, log_path)
+                else:
+                    return ExecutorResult(exit_code=1, stderr=t("Unknown nexus action: {action}", action=self.action))
         except asyncio.CancelledError:
             msg = t("Nexus task was cancelled")
             with open(log_path, "a") as f:
@@ -114,7 +124,7 @@ class NexusExecutor(BaseExecutor):
         self._cancelled = True
 
 
-def _build_auth_header(credential: Optional[str], env: Dict[str, str]) -> Optional[str]:
+def _build_auth_header(credential: str | None, env: dict[str, str]) -> str | None:
     username = env.get("NEXUS_USER", "")
     password = env.get("NEXUS_PASS", "")
 
@@ -129,40 +139,36 @@ def _build_auth_header(credential: Optional[str], env: Dict[str, str]) -> Option
     return None
 
 
-def _build_maven_path(group_id: Optional[str], artifact_id: Optional[str], version: Optional[str],
-                      packaging: str, classifier: Optional[str]) -> Optional[str]:
+def _build_maven_path(
+    group_id: str | None, artifact_id: str | None, version: str | None, packaging: str, classifier: str | None
+) -> str | None:
     if not group_id or not artifact_id or not version:
         return None
 
     group_path = group_id.replace(".", "/")
     base_name = f"{artifact_id}-{version}"
-    if classifier:
-        file_name = f"{base_name}-{classifier}.{packaging}"
-    else:
-        file_name = f"{base_name}.{packaging}"
+    file_name = f"{base_name}-{classifier}.{packaging}" if classifier else f"{base_name}.{packaging}"
 
     return f"{group_path}/{artifact_id}/{version}/{file_name}"
 
 
-def _nexus_upload(
+async def _nexus_upload(
+    client: httpx.AsyncClient,
     url: str,
     repository: str,
-    files: List[str],
-    group_id: Optional[str],
-    artifact_id: Optional[str],
-    version: Optional[str],
+    files: list[str],
+    group_id: str | None,
+    artifact_id: str | None,
+    version: str | None,
     packaging: str,
-    classifier: Optional[str],
-    auth_header: Optional[str],
+    classifier: str | None,
+    headers: dict[str, str],
     log_path: Path,
 ) -> ExecutorResult:
-    import urllib.request
-    import urllib.error
-
     if not files:
         return ExecutorResult(exit_code=1, stderr=t("No files specified for upload"))
 
-    results: List[ExecutorResult] = []
+    results: list[ExecutorResult] = []
 
     for file_path in files:
         p = Path(file_path)
@@ -174,10 +180,7 @@ def _nexus_upload(
             continue
 
         maven_path = _build_maven_path(group_id, artifact_id, version, packaging, classifier)
-        if maven_path:
-            nexus_path = maven_path
-        else:
-            nexus_path = p.name
+        nexus_path = maven_path or p.name
 
         nexus_url = f"{url}/repository/{repository}/{nexus_path}"
 
@@ -185,32 +188,25 @@ def _nexus_upload(
             f.write(f"+ PUT {nexus_url}\n")
 
         try:
-            with open(p, "rb") as fh:
-                data = fh.read()
+            data = p.read_bytes()
+            resp = await client.put(
+                nexus_url, content=data, headers={**headers, "Content-Type": "application/octet-stream"}
+            )
+            body = resp.text
 
-            req = urllib.request.Request(nexus_url, data=data, method="PUT")
-            req.add_header("Content-Type", "application/octet-stream")
-            if auth_header:
-                req.add_header("Authorization", auth_header)
-
-            with urllib.request.urlopen(req, timeout=300) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
-                with open(log_path, "a") as f:
-                    f.write(f"HTTP {resp.status}: {body[:500]}\n")
-
-                sha256 = hashlib.sha256(data).hexdigest()
-                with open(log_path, "a") as f:
-                    f.write(f"SHA256: {sha256}\n")
-
-                results.append(ExecutorResult(exit_code=0, stdout=f"Uploaded {file_path} → {nexus_url}"))
-
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-            msg = f"HTTP {e.code}: {error_body[:500]}"
             with open(log_path, "a") as f:
-                f.write(f"{msg}\n")
-            results.append(ExecutorResult(exit_code=1, stderr=msg))
-        except Exception as e:
+                f.write(f"HTTP {resp.status_code}: {body[:500]}\n")
+
+            sha256 = hashlib.sha256(data).hexdigest()
+            with open(log_path, "a") as f:
+                f.write(f"SHA256: {sha256}\n")
+
+            if resp.is_success:
+                results.append(ExecutorResult(exit_code=0, stdout=f"Uploaded {file_path} → {nexus_url}"))
+            else:
+                results.append(ExecutorResult(exit_code=1, stderr=f"HTTP {resp.status_code}: {body[:500]}"))
+
+        except httpx.HTTPError as e:
             msg = str(e)
             with open(log_path, "a") as f:
                 f.write(f"{msg}\n")
@@ -226,21 +222,19 @@ def _nexus_upload(
     return ExecutorResult(exit_code=0, stdout="\n".join(r.stdout or "" for r in results))
 
 
-def _nexus_download(
+async def _nexus_download(
+    client: httpx.AsyncClient,
     url: str,
     repository: str,
-    group_id: Optional[str],
-    artifact_id: Optional[str],
-    version: Optional[str],
+    group_id: str | None,
+    artifact_id: str | None,
+    version: str | None,
     packaging: str,
-    classifier: Optional[str],
-    dest: Optional[str],
-    auth_header: Optional[str],
+    classifier: str | None,
+    dest: str | None,
+    headers: dict[str, str],
     log_path: Path,
 ) -> ExecutorResult:
-    import urllib.request
-    import urllib.error
-
     maven_path = _build_maven_path(group_id, artifact_id, version, packaging, classifier)
     if not maven_path:
         return ExecutorResult(exit_code=1, stderr=t("Maven coordinates required for download"))
@@ -254,14 +248,10 @@ def _nexus_download(
         f.write(f"+ GET {nexus_url}\n")
 
     try:
-        req = urllib.request.Request(nexus_url)
-        if auth_header:
-            req.add_header("Authorization", auth_header)
-
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            data = resp.read()
-            with open(dest_file, "wb") as fh:
-                fh.write(data)
+        resp = await client.get(nexus_url, headers=headers)
+        if resp.is_success:
+            data = resp.content
+            dest_file.write_bytes(data)
 
             sha256 = hashlib.sha256(data).hexdigest()
             with open(log_path, "a") as f:
@@ -270,79 +260,68 @@ def _nexus_download(
 
             return ExecutorResult(exit_code=0, stdout=f"Downloaded {nexus_url} → {dest_file}")
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        msg = f"HTTP {e.code}: {error_body[:500]}"
+        msg = f"HTTP {resp.status_code}: {resp.text[:500]}"
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")
         return ExecutorResult(exit_code=1, stderr=msg)
-    except Exception as e:
+
+    except httpx.HTTPError as e:
         msg = str(e)
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")
         return ExecutorResult(exit_code=1, stderr=msg)
 
 
-def _nexus_search(
+async def _nexus_search(
+    client: httpx.AsyncClient,
     url: str,
     repository: str,
-    query: Optional[str],
-    auth_header: Optional[str],
+    query: str | None,
+    headers: dict[str, str],
     log_path: Path,
 ) -> ExecutorResult:
-    import json
-    import urllib.request
-    import urllib.error
-
     search_url = f"{url}/service/rest/v1/search"
-    params = f"?repository={repository}"
+    params: dict[str, str] = {"repository": repository}
     if query:
-        params += f"&q={urllib.request.quote(query)}"
-
-    full_url = search_url + params
+        params["q"] = query
 
     with open(log_path, "a") as f:
-        f.write(f"+ GET {full_url}\n")
+        f.write(f"+ GET {search_url} params={params}\n")
 
     try:
-        req = urllib.request.Request(full_url)
-        if auth_header:
-            req.add_header("Authorization", auth_header)
+        resp = await client.get(search_url, params=params, headers=headers)
+        data = resp.text
 
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = resp.read().decode("utf-8", errors="replace")
-            with open(log_path, "a") as f:
-                f.write(data[:2000])
+        with open(log_path, "a") as f:
+            f.write(data[:2000])
 
+        if resp.is_success:
             return ExecutorResult(exit_code=0, stdout=data)
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        msg = f"HTTP {e.code}: {error_body[:500]}"
+        msg = f"HTTP {resp.status_code}: {data[:500]}"
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")
         return ExecutorResult(exit_code=1, stderr=msg)
-    except Exception as e:
+
+    except httpx.HTTPError as e:
         msg = str(e)
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")
         return ExecutorResult(exit_code=1, stderr=msg)
 
 
-def _nexus_delete(
+async def _nexus_delete(
+    client: httpx.AsyncClient,
     url: str,
     repository: str,
-    group_id: Optional[str],
-    artifact_id: Optional[str],
-    version: Optional[str],
+    group_id: str | None,
+    artifact_id: str | None,
+    version: str | None,
     packaging: str,
-    classifier: Optional[str],
-    auth_header: Optional[str],
+    classifier: str | None,
+    headers: dict[str, str],
     log_path: Path,
 ) -> ExecutorResult:
-    import urllib.request
-    import urllib.error
-
     maven_path = _build_maven_path(group_id, artifact_id, version, packaging, classifier)
     if not maven_path:
         return ExecutorResult(exit_code=1, stderr=t("Maven coordinates required for delete"))
@@ -353,63 +332,53 @@ def _nexus_delete(
         f.write(f"+ DELETE {nexus_url}\n")
 
     try:
-        req = urllib.request.Request(nexus_url, method="DELETE")
-        if auth_header:
-            req.add_header("Authorization", auth_header)
-
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
+        resp = await client.delete(nexus_url, headers=headers)
+        if resp.is_success:
             with open(log_path, "a") as f:
-                f.write(f"HTTP {resp.status}: deleted\n")
+                f.write(f"HTTP {resp.status_code}: deleted\n")
             return ExecutorResult(exit_code=0, stdout=f"Deleted {nexus_url}")
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        msg = f"HTTP {e.code}: {error_body[:500]}"
+        msg = f"HTTP {resp.status_code}: {resp.text[:500]}"
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")
         return ExecutorResult(exit_code=1, stderr=msg)
-    except Exception as e:
+
+    except httpx.HTTPError as e:
         msg = str(e)
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")
         return ExecutorResult(exit_code=1, stderr=msg)
 
 
-def _nexus_list(
+async def _nexus_list(
+    client: httpx.AsyncClient,
     url: str,
     repository: str,
-    auth_header: Optional[str],
+    headers: dict[str, str],
     log_path: Path,
 ) -> ExecutorResult:
-    import json
-    import urllib.request
-    import urllib.error
-
-    list_url = f"{url}/service/rest/v1/components?repository={repository}"
+    list_url = f"{url}/service/rest/v1/components"
+    params = {"repository": repository}
 
     with open(log_path, "a") as f:
         f.write(f"+ GET {list_url}\n")
 
     try:
-        req = urllib.request.Request(list_url)
-        if auth_header:
-            req.add_header("Authorization", auth_header)
+        resp = await client.get(list_url, params=params, headers=headers)
+        data = resp.text
 
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = resp.read().decode("utf-8", errors="replace")
-            with open(log_path, "a") as f:
-                f.write(data[:2000])
+        with open(log_path, "a") as f:
+            f.write(data[:2000])
 
+        if resp.is_success:
             return ExecutorResult(exit_code=0, stdout=data)
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        msg = f"HTTP {e.code}: {error_body[:500]}"
+        msg = f"HTTP {resp.status_code}: {data[:500]}"
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")
         return ExecutorResult(exit_code=1, stderr=msg)
-    except Exception as e:
+
+    except httpx.HTTPError as e:
         msg = str(e)
         with open(log_path, "a") as f:
             f.write(f"{msg}\n")

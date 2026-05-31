@@ -5,16 +5,15 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-logger = logging.getLogger("taskpps")
-
-from taskpps.api import health, runs, triggers, agents
+from taskpps.api import agents, health, runs, triggers
 from taskpps.config import get_settings, load_settings
-from taskpps.db.engine import init_db, close_db, get_engine, reset_engine
-from taskpps.i18n import t, set_locale
+from taskpps.db.engine import close_db, init_db
+from taskpps.i18n import set_locale, t
 from taskpps.middleware.auth import APIKeyMiddleware
 from taskpps.services.plugin_manager import PluginManager
 from taskpps.version import __version__
 
+logger = logging.getLogger("taskpps")
 
 _plugin_manager: PluginManager | None = None
 _external_engine = False
@@ -45,6 +44,7 @@ async def lifespan(app: FastAPI):
 
     # Gracefully shutdown active pipeline runners
     from taskpps.engine.runner import _active_runs
+
     if _active_runs:
         logger.info(f"Gracefully shutting down {len(_active_runs)} active pipeline runners")
         for runner in _active_runs.values():

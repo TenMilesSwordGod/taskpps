@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -11,15 +11,15 @@ logger = logging.getLogger("taskpps.credentials")
 
 
 class CredentialLoader:
-    def __init__(self, base_dir: Optional[Path] = None):
+    def __init__(self, base_dir: Path | None = None):
         self._base_dir = base_dir
-        self._cache: Optional[Dict[str, Dict[str, Any]]] = None
+        self._cache: dict[str, dict[str, Any]] | None = None
 
     @property
     def base_dir(self) -> Path:
         return self._base_dir or get_credentials_dir()
 
-    def load(self, credential_name: str) -> Dict[str, Any]:
+    def load(self, credential_name: str) -> dict[str, Any]:
         for ext in (".yaml", ".yml"):
             path = self.base_dir / f"{credential_name}{ext}"
             if path.exists():
@@ -28,11 +28,16 @@ class CredentialLoader:
                 if data is None:
                     raise ValueError(t("Credential file is empty: {name}", name=credential_name))
                 if "password" in data:
-                    logger.warning(t("Credential '{name}' contains plaintext password. Consider using key_path (SSH key) instead.", name=credential_name))
+                    logger.warning(
+                        t(
+                            "Credential '{name}' contains plaintext password. Consider using key_path (SSH key) instead.",
+                            name=credential_name,
+                        )
+                    )
                 return data
         raise FileNotFoundError(t("Credential file not found: {name}", name=credential_name))
 
-    def _load_yaml_files(self) -> Dict[str, Dict[str, Any]]:
+    def _load_yaml_files(self) -> dict[str, dict[str, Any]]:
         result = {}
         base = self.base_dir
         if not base.exists():
@@ -59,12 +64,12 @@ class CredentialLoader:
                     continue
         return result
 
-    def load_all(self) -> Dict[str, Dict[str, Any]]:
+    def load_all(self) -> dict[str, dict[str, Any]]:
         if self._cache is None:
             self._cache = self._load_yaml_files()
         return dict(self._cache)
 
-    def get(self, credential_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, credential_id: str) -> dict[str, Any] | None:
         if self._cache is None:
             self._cache = self._load_yaml_files()
         return self._cache.get(credential_id)

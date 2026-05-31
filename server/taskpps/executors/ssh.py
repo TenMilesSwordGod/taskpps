@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shlex
 from pathlib import Path
-from typing import Dict, Optional
 
 from fabric import Connection
-from invoke import UnexpectedExit
 
 from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
@@ -14,13 +13,20 @@ from taskpps.i18n import t
 
 
 class SSHExecutor(BaseExecutor):
-    def __init__(self, host: str, port: int = 22, username: str = "root", password: Optional[str] = None, key_path: Optional[str] = None):
+    def __init__(
+        self,
+        host: str,
+        port: int = 22,
+        username: str = "root",
+        password: str | None = None,
+        key_path: str | None = None,
+    ):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.key_path = key_path
-        self._connection: Optional[Connection] = None
+        self._connection: Connection | None = None
 
     def _make_connect_kwargs(self) -> dict:
         kwargs: dict = {}
@@ -33,10 +39,10 @@ class SSHExecutor(BaseExecutor):
     async def execute(
         self,
         command: str,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
 
@@ -90,17 +96,13 @@ class SSHExecutor(BaseExecutor):
             exit_code, output, error = await loop.run_in_executor(None, _run_ssh)
         except asyncio.CancelledError:
             if self._connection:
-                try:
+                with contextlib.suppress(Exception):
                     self._connection.close()
-                except Exception:
-                    pass
             return ExecutorResult(exit_code=-1, stderr=t("Task was cancelled"))
 
         return ExecutorResult(exit_code=exit_code, stdout=output, stderr=error)
 
     async def cancel(self) -> None:
         if self._connection:
-            try:
+            with contextlib.suppress(Exception):
                 self._connection.close()
-            except Exception:
-                pass

@@ -1,37 +1,42 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
-from taskpps.config import get_logs_dir, get_settings, build_log_path, get_workspaces_dir
+from taskpps.config import build_log_path, get_logs_dir, get_settings, get_workspaces_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
-from taskpps.i18n import t
 from taskpps.domain.context import ExecutionContext
 from taskpps.domain.dag import DAG, DAGCycleError
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask, ResolvedSubPipeline
-from taskpps.events.bus import get_event_bus, SIGNAL_PIPELINE_STARTED, SIGNAL_TASK_STARTED, SIGNAL_TASK_FINISHED, SIGNAL_RUN_COMPLETED, SIGNAL_RUN_CANCELLED
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.events.bus import (
+    SIGNAL_PIPELINE_STARTED,
+    SIGNAL_RUN_CANCELLED,
+    SIGNAL_RUN_COMPLETED,
+    SIGNAL_TASK_FINISHED,
+    SIGNAL_TASK_STARTED,
+    get_event_bus,
+)
 from taskpps.executors import create_executor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
-from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.git import GitExecutor
+from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.nexus import NexusExecutor
+from taskpps.i18n import t
 from taskpps.models.run import RunStatus, TaskStatus
 
-
 logger = logging.getLogger(__name__)
-_active_runs: Dict[str, "PipelineRunner"] = {}
+_active_runs: dict[str, PipelineRunner] = {}
 
 _WHEN_PATTERN = re.compile(r'\$\{env\.([^}]+)\}\s*(==|!=)\s*"([^"]*)"')
 
 
-def _evaluate_when(when_expr: Optional[str], env: Dict[str, str]) -> bool:
+def _evaluate_when(when_expr: str | None, env: dict[str, str]) -> bool:
     if when_expr is None:
         return True
     match = _WHEN_PATTERN.match(when_expr.strip())
@@ -54,11 +59,11 @@ class PipelineRunner:
         self.run_id = run_id
         self.pipeline = pipeline
         self.context = context
-        self.dag: Optional[DAG] = None
+        self.dag: DAG | None = None
         self._cancelled = False
         self._unexpected_error = False
-        self._running_executors: Dict[str, Any] = {}
-        self._task_run_ids: Dict[str, str] = {}
+        self._running_executors: dict[str, Any] = {}
+        self._task_run_ids: dict[str, str] = {}
         self._pipeline_id: str = ""
         self._pipeline_version: str = ""
 
@@ -78,8 +83,8 @@ class PipelineRunner:
 
             sub_levels = self._build_subpipeline_levels()
 
-            failed_subpipelines: Set[str] = set()
-            completed_subpipelines: Set[str] = set()
+            failed_subpipelines: set[str] = set()
+            completed_subpipelines: set[str] = set()
 
             try:
                 for level in sub_levels:
@@ -100,7 +105,7 @@ class PipelineRunner:
                         return_exceptions=True,
                     )
 
-                    for sub_name, result in zip(subs_to_run, results):
+                    for sub_name, result in zip(subs_to_run, results, strict=False):
                         sub = self.pipeline.get_subpipeline_by_name(sub_name)
                         if sub is None:
                             failed_subpipelines.add(sub_name)
@@ -121,7 +126,7 @@ class PipelineRunner:
                         else:
                             completed_subpipelines.add(sub_name)
 
-            except Exception as e:
+            except Exception:
                 logger.exception(f"Pipeline runner {self.run_id} encountered an unexpected error")
                 self._unexpected_error = True
 
@@ -133,10 +138,7 @@ class PipelineRunner:
                 elif self._unexpected_error:
                     final_status = RunStatus.FAILED
                 elif failed_subpipelines:
-                    if completed_subpipelines:
-                        final_status = RunStatus.PARTIAL
-                    else:
-                        final_status = RunStatus.FAILED
+                    final_status = RunStatus.PARTIAL if completed_subpipelines else RunStatus.FAILED
                 else:
                     final_status = RunStatus.SUCCESS
 
@@ -146,9 +148,9 @@ class PipelineRunner:
         finally:
             _active_runs.pop(self.run_id, None)
 
-    def _build_subpipeline_levels(self) -> List[List[str]]:
-        in_degree: Dict[str, int] = {}
-        adjacency: Dict[str, List[str]] = {}
+    def _build_subpipeline_levels(self) -> list[list[str]]:
+        in_degree: dict[str, int] = {}
+        adjacency: dict[str, list[str]] = {}
 
         for sub in self.pipeline.subpipelines:
             if sub.name not in in_degree:
@@ -158,7 +160,9 @@ class PipelineRunner:
         for sub in self.pipeline.subpipelines:
             for dep in sub.depends_on:
                 if dep not in in_degree:
-                    raise ValueError(t("SubPipeline '{name}' depends on unknown subpipeline '{dep}'", name=sub.name, dep=dep))
+                    raise ValueError(
+                        t("SubPipeline '{name}' depends on unknown subpipeline '{dep}'", name=sub.name, dep=dep)
+                    )
                 adjacency[dep].append(sub.name)
                 in_degree[sub.name] += 1
 
@@ -177,7 +181,7 @@ class PipelineRunner:
 
         return levels
 
-    def _get_subpipeline_dependents(self, sub_name: str) -> Set[str]:
+    def _get_subpipeline_dependents(self, sub_name: str) -> set[str]:
         result = set()
         for sub in self.pipeline.subpipelines:
             if sub_name in sub.depends_on:
@@ -190,7 +194,7 @@ class PipelineRunner:
         if sub is None:
             return {"success": False, "error": f"SubPipeline '{sub_name}' not found"}
 
-        sub_env = self.context.get_subpipeline_env(sub)
+        self.context.get_subpipeline_env(sub)
 
         try:
             dag = DAG(sub.tasks)
@@ -199,8 +203,8 @@ class PipelineRunner:
             logger.error(t("SubPipeline '{name}' DAG error: {error}", name=sub_name, error=str(e)))
             return {"success": False, "error": str(e)}
 
-        failed_tasks: Set[str] = set()
-        completed_tasks: Set[str] = set()
+        failed_tasks: set[str] = set()
+        completed_tasks: set[str] = set()
         strategy = sub.config.execution_strategy
 
         for level in levels:
@@ -220,7 +224,7 @@ class PipelineRunner:
                 should_skip = False
                 for dep in task.depends_on:
                     if dep in failed_tasks:
-                        should_skip = (on_failure != "continue")
+                        should_skip = on_failure != "continue"
                         break
 
                 if should_skip:
@@ -248,11 +252,9 @@ class PipelineRunner:
                         result = await self._execute_task(task, sub_name)
                         results.append(result)
 
-                for task, result in zip(tasks_to_run, results):
+                for task, result in zip(tasks_to_run, results, strict=False):
                     qualified_name = f"{sub.name}.{task.name}"
-                    if isinstance(result, Exception):
-                        failed_tasks.add(qualified_name)
-                    elif isinstance(result, ExecutorResult) and not result.success:
+                    if isinstance(result, Exception) or (isinstance(result, ExecutorResult) and not result.success):
                         failed_tasks.add(qualified_name)
                     else:
                         completed_tasks.add(qualified_name)
@@ -316,11 +318,10 @@ class PipelineRunner:
                         invoke_kwargs=task.invoke_kwargs,
                     )
                 elif isinstance(executor, (GitExecutor, NexusExecutor)):
-                    if isinstance(executor, GitExecutor):
-                        if not executor.dest or executor.dest == "/workspace/repo":
-                            workspace_dir = get_workspaces_dir() / self.run_id / "repo"
-                            workspace_dir.mkdir(parents=True, exist_ok=True)
-                            executor.dest = str(workspace_dir)
+                    if isinstance(executor, GitExecutor) and (not executor.dest or executor.dest == "/workspace/repo"):
+                        workspace_dir = get_workspaces_dir() / self.run_id / "repo"
+                        workspace_dir.mkdir(parents=True, exist_ok=True)
+                        executor.dest = str(workspace_dir)
                     result = await executor.execute(
                         command="",
                         env=env,
@@ -369,10 +370,10 @@ class PipelineRunner:
         self,
         executor: Any,
         task: ResolvedTask,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int],
-        effective_cwd: Optional[str] = None,
+        timeout: int | None,
+        effective_cwd: str | None = None,
     ) -> ExecutorResult:
         if not task.commands:
             return ExecutorResult(exit_code=0)
@@ -412,10 +413,10 @@ class PipelineRunner:
         self,
         executor: BaseExecutor,
         task: ResolvedTask,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int],
-        effective_cwd: Optional[str] = None,
+        timeout: int | None,
+        effective_cwd: str | None = None,
     ) -> ExecutorResult:
         combined_output = ""
         step_timeout = None
@@ -460,9 +461,9 @@ class PipelineRunner:
             task_repo = TaskRunRepository(session)
             await task_repo.cancel_pending_tasks(self.run_id)
 
-        for name, executor in self._running_executors.items():
+        for _name, executor in self._running_executors.items():
             await executor.cancel()
 
 
-def get_active_runner(run_id: str) -> Optional[PipelineRunner]:
+def get_active_runner(run_id: str) -> PipelineRunner | None:
     return _active_runs.get(run_id)

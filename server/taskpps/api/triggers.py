@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, HTTPException
 
 from taskpps.i18n import t
@@ -22,7 +20,7 @@ async def create_trigger(body: CreateTriggerRequest):
     return TriggerResponse.from_orm_with_parsed_config(result)
 
 
-@router.get("/", response_model=List[TriggerResponse])
+@router.get("/", response_model=list[TriggerResponse])
 async def list_triggers():
     triggers = await _trigger_service.list_triggers()
     return [TriggerResponse.from_orm_with_parsed_config(t) for t in triggers]

@@ -1,7 +1,6 @@
-import pytest
-from taskpps.engine.runner import PipelineRunner, get_active_runner
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.domain.context import ExecutionContext
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.engine.runner import PipelineRunner, get_active_runner
 from taskpps.schemas.pipeline import OptionsYAML
 
 

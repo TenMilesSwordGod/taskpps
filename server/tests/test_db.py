@@ -1,7 +1,6 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from taskpps.db.engine import get_session_factory, init_db
+from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository, TriggerRepository
 from taskpps.models.run import RunStatus, TaskStatus, TaskType
 
@@ -54,6 +53,7 @@ async def test_update_run_status(db_engine, clean_db):
         repo = RunRepository(session)
         run = await repo.create_run("test")
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc)
         await repo.update_run_status(run.id, RunStatus.RUNNING, started_at=now)
         updated = await repo.get_run(run.id)
@@ -111,7 +111,7 @@ async def test_cancel_pending_tasks(db_engine, clean_db):
         task_repo = TaskRunRepository(session)
         run = await run_repo.create_run("test")
         t1 = await task_repo.create_task_run(run.id, "task-1")
-        t2 = await task_repo.create_task_run(run.id, "task-2")
+        await task_repo.create_task_run(run.id, "task-2")
         count = await task_repo.cancel_pending_tasks(run.id)
         assert count == 2
         updated1 = await task_repo.get_task_run(t1.id)

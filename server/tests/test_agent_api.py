@@ -7,20 +7,24 @@ from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.schemas.agent import AgentCheckRequest
 from taskpps.services.agent_service import AgentService, _match_file_filter
 
-
 # ============================================================
 # AgentLoader source_file tests
 # ============================================================
 
+
 class TestAgentLoaderSourceFile:
     def test_agents_list_has_source_file(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [
-                {"id": "agent-a", "host": "10.0.0.1", "port": 22, "username": "admin"},
-                {"id": "agent-b", "host": "10.0.0.2", "credential_id": "cred-x"},
-            ]
-        }))
+        agent_file.write_text(
+            yaml.dump(
+                {
+                    "agents": [
+                        {"id": "agent-a", "host": "10.0.0.1", "port": 22, "username": "admin"},
+                        {"id": "agent-b", "host": "10.0.0.2", "credential_id": "cred-x"},
+                    ]
+                }
+            )
+        )
         loader = AgentLoader(tmp_path)
         all_agents = loader.load_all()
         assert all_agents["agent-a"]["_source_file"] == f"{tmp_path.name}/ssh.yaml"
@@ -36,9 +40,7 @@ class TestAgentLoaderSourceFile:
     def test_source_file_with_nested_base_dir(self, tmp_path):
         agents_dir = tmp_path / "config" / "agents"
         agents_dir.mkdir(parents=True)
-        (agents_dir / "prod.yaml").write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1"}]
-        }))
+        (agents_dir / "prod.yaml").write_text(yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1"}]}))
         loader = AgentLoader(agents_dir)
         all_agents = loader.load_all()
         assert all_agents["agent-x"]["_source_file"] == "agents/prod.yaml"
@@ -47,6 +49,7 @@ class TestAgentLoaderSourceFile:
 # ============================================================
 # _match_file_filter tests
 # ============================================================
+
 
 class TestMatchFileFilter:
     def test_exact_match(self):
@@ -69,18 +72,35 @@ class TestMatchFileFilter:
 # AgentService tests
 # ============================================================
 
+
 class TestAgentService:
     def _make_agents(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [
-                {"id": "agent-a", "host": "10.0.0.1", "port": 22, "username": "admin",
-                 "name": "Agent A", "type": "ssh-key"},
-                {"id": "agent-b", "host": "10.0.0.2", "port": 22, "username": "admin",
-                 "name": "Agent B", "type": "ssh-key"},
-            ]
-        }))
+        (agents_dir / "ssh.yaml").write_text(
+            yaml.dump(
+                {
+                    "agents": [
+                        {
+                            "id": "agent-a",
+                            "host": "10.0.0.1",
+                            "port": 22,
+                            "username": "admin",
+                            "name": "Agent A",
+                            "type": "ssh-key",
+                        },
+                        {
+                            "id": "agent-b",
+                            "host": "10.0.0.2",
+                            "port": 22,
+                            "username": "admin",
+                            "name": "Agent B",
+                            "type": "ssh-key",
+                        },
+                    ]
+                }
+            )
+        )
         return agents_dir
 
     def test_try_connect_not_found(self, tmp_path):
@@ -93,9 +113,11 @@ class TestAgentService:
     def test_try_connect_local_agent(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "local.yaml").write_text(yaml.dump({
-            "agents": [{"id": "local-agent", "host": "127.0.0.1", "port": 22, "name": "Local", "type": "local"}]
-        }))
+        (agents_dir / "local.yaml").write_text(
+            yaml.dump(
+                {"agents": [{"id": "local-agent", "host": "127.0.0.1", "port": 22, "name": "Local", "type": "local"}]}
+            )
+        )
         svc = AgentService()
         svc._loader = AgentLoader(agents_dir)
         result = svc.try_connect("local-agent")
@@ -106,9 +128,9 @@ class TestAgentService:
     def test_try_connect_no_host(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "local.yaml").write_text(yaml.dump({
-            "agents": [{"id": "no-host-agent", "host": "", "port": 0, "name": "NoHost", "type": "local"}]
-        }))
+        (agents_dir / "local.yaml").write_text(
+            yaml.dump({"agents": [{"id": "no-host-agent", "host": "", "port": 0, "name": "NoHost", "type": "local"}]})
+        )
         svc = AgentService()
         svc._loader = AgentLoader(agents_dir)
         result = svc.try_connect("no-host-agent")
@@ -117,9 +139,15 @@ class TestAgentService:
     def test_try_connect_timeout(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [{"id": "timeout-agent", "host": "192.0.2.1", "port": 9999, "name": "Timeout", "type": "ssh-key"}]
-        }))
+        (agents_dir / "ssh.yaml").write_text(
+            yaml.dump(
+                {
+                    "agents": [
+                        {"id": "timeout-agent", "host": "192.0.2.1", "port": 9999, "name": "Timeout", "type": "ssh-key"}
+                    ]
+                }
+            )
+        )
         svc = AgentService()
         svc._loader = AgentLoader(agents_dir)
         result = svc.try_connect("timeout-agent", timeout=1)
@@ -129,9 +157,15 @@ class TestAgentService:
     def test_try_connect_refused(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [{"id": "refused-agent", "host": "169.254.0.1", "port": 1, "name": "Refused", "type": "ssh-key"}]
-        }))
+        (agents_dir / "ssh.yaml").write_text(
+            yaml.dump(
+                {
+                    "agents": [
+                        {"id": "refused-agent", "host": "169.254.0.1", "port": 1, "name": "Refused", "type": "ssh-key"}
+                    ]
+                }
+            )
+        )
         svc = AgentService()
         svc._loader = AgentLoader(agents_dir)
         result = svc.try_connect("refused-agent", timeout=1)
@@ -140,9 +174,9 @@ class TestAgentService:
     def test_check_single_agent(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "127.0.0.1", "port": 22, "name": "X", "type": "local"}]
-        }))
+        (agents_dir / "ssh.yaml").write_text(
+            yaml.dump({"agents": [{"id": "agent-x", "host": "127.0.0.1", "port": 22, "name": "X", "type": "local"}]})
+        )
         svc = AgentService()
         svc._loader = AgentLoader(agents_dir)
         response = svc.check(AgentCheckRequest(agent_id="agent-x"))

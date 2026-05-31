@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import TriggerRepository
-from taskpps.models.trigger import TriggerType
 
 
 class TriggerService:
-    async def create_trigger(self, type: str, config: Dict[str, Any], pipeline_file: str, enabled: bool = True):
+    async def create_trigger(self, type: str, config: dict[str, Any], pipeline_file: str, enabled: bool = True):
         async with get_session_factory()() as session:
             repo = TriggerRepository(session)
             trigger = await repo.create_trigger(

@@ -1,10 +1,10 @@
 import logging
-import pytest
-from pathlib import Path
 
-from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
+import pytest
+
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
+from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
 
 
 def test_pipeline_loader_empty_file(tmp_path):
@@ -28,13 +28,7 @@ def test_pipeline_loader_load_with_env_subst(tmp_path):
     pipelines_dir.mkdir()
     p = pipelines_dir / "env_test.yaml"
     p.write_text(
-        "name: env_test\n"
-        "options:\n"
-        "  env:\n"
-        "    KEY: ${MY_VAR}\n"
-        "tasks:\n"
-        "  - name: step1\n"
-        "    command: echo ${MY_VAR}\n"
+        "name: env_test\noptions:\n  env:\n    KEY: ${MY_VAR}\ntasks:\n  - name: step1\n    command: echo ${MY_VAR}\n"
     )
     loader = PipelineLoader(pipelines_dir)
     spec = loader.load("env_test.yaml", env={"MY_VAR": "resolved_value"})
@@ -46,13 +40,7 @@ def test_pipeline_loader_load_absolute_path(tmp_path):
     pipelines_dir = tmp_path / "pipelines"
     pipelines_dir.mkdir(parents=True, exist_ok=True)
     yaml_file = pipelines_dir / "absolute.yaml"
-    yaml_file.write_text(
-        "name: absolute\n"
-        "options: {}\n"
-        "tasks:\n"
-        "  - name: t1\n"
-        "    command: echo abs\n"
-    )
+    yaml_file.write_text("name: absolute\noptions: {}\ntasks:\n  - name: t1\n    command: echo abs\n")
     loader = PipelineLoader(pipelines_dir)
     spec = loader.load("absolute.yaml")
     assert spec.name == "absolute"
@@ -62,13 +50,7 @@ def test_pipeline_loader_load_all_includes_yml(tmp_path):
     pipelines_dir = tmp_path / "pipelines"
     pipelines_dir.mkdir()
     yml_file = pipelines_dir / "test.yml"
-    yml_file.write_text(
-        "name: yml_test\n"
-        "options: {}\n"
-        "tasks:\n"
-        "  - name: t1\n"
-        "    command: echo yml\n"
-    )
+    yml_file.write_text("name: yml_test\noptions: {}\ntasks:\n  - name: t1\n    command: echo yml\n")
     loader = PipelineLoader(pipelines_dir)
     result = loader.load_all()
     assert "yml_test" in result

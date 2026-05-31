@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from taskpps.domain.pipeline import ResolvedTask
-from taskpps.executors.base import BaseExecutor, ExecutorResult
-from taskpps.executors.local import LocalExecutor
-from taskpps.executors.ssh import SSHExecutor
-from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.base import BaseExecutor
 from taskpps.executors.git import GitExecutor
+from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.local import LocalExecutor
 from taskpps.executors.nexus import NexusExecutor
+from taskpps.executors.ssh import SSHExecutor
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
 
@@ -81,7 +81,7 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
     return LocalExecutor()
 
 
-def _resolve_agent(agent_loader: AgentLoader, agent_ref: str) -> Optional[Dict[str, Any]]:
+def _resolve_agent(agent_loader: AgentLoader, agent_ref: str) -> dict[str, Any] | None:
     agent_data = agent_loader.get(agent_ref)
     if agent_data is not None:
         return agent_data
@@ -93,7 +93,7 @@ def _resolve_agent(agent_loader: AgentLoader, agent_ref: str) -> Optional[Dict[s
         return None
 
 
-def _resolve_credential(cred_loader: CredentialLoader, cred_ref: str) -> Optional[Dict[str, Any]]:
+def _resolve_credential(cred_loader: CredentialLoader, cred_ref: str) -> dict[str, Any] | None:
     cred_data = cred_loader.get(cred_ref)
     if cred_data is not None:
         return cred_data

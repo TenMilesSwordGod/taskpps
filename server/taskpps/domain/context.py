@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from taskpps.config import get_settings
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask, ResolvedSubPipeline
-
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedSubPipeline, ResolvedTask
 
 _NAME_INDEX_PATTERN = re.compile(r'^(\w+)\["([^"]+)"\]$')
-_NUMERIC_INDEX_PATTERN = re.compile(r'^(\w+)\[(\d+)\]$')
+_NUMERIC_INDEX_PATTERN = re.compile(r"^(\w+)\[(\d+)\]$")
 
 
 def _navigate_to_key(current: Any, key: str) -> Any:
@@ -107,19 +106,35 @@ def set_dot_path(data: dict, path: str, value: Any) -> None:
 
 
 _ALLOWED_OVERRIDE_PATHS = {
-    "options.host", "options.credential", "options.timeout", "options.on_failure",
+    "options.host",
+    "options.credential",
+    "options.timeout",
+    "options.on_failure",
     "options.env",
-    "config.host", "config.credential", "config.timeout", "config.on_failure",
-    "config.env", "config.retry", "config.execution_strategy",
+    "config.host",
+    "config.credential",
+    "config.timeout",
+    "config.on_failure",
+    "config.env",
+    "config.retry",
+    "config.execution_strategy",
 }
 
 _ALLOWED_TASK_OVERRIDE_KEYS = {
-    "timeout", "on_failure", "env", "cwd", "host", "credential", "retry", "when",
+    "timeout",
+    "on_failure",
+    "env",
+    "cwd",
+    "host",
+    "credential",
+    "retry",
+    "when",
 }
 
 
-def apply_overrides(pipeline_data: dict, overrides: Dict[str, Any]) -> dict:
+def apply_overrides(pipeline_data: dict, overrides: dict[str, Any]) -> dict:
     import copy
+
     data = copy.deepcopy(pipeline_data)
     for path, value in overrides.items():
         keys = path.split(".")
@@ -147,12 +162,12 @@ def apply_overrides(pipeline_data: dict, overrides: Dict[str, Any]) -> dict:
 
 
 def build_env(
-    system_env: Dict[str, str] | None = None,
-    global_env: Dict[str, str] | None = None,
-    pipeline_env: Dict[str, str] | None = None,
-    task_env: Dict[str, str] | None = None,
-    cli_env: Dict[str, str] | None = None,
-) -> Dict[str, str]:
+    system_env: dict[str, str] | None = None,
+    global_env: dict[str, str] | None = None,
+    pipeline_env: dict[str, str] | None = None,
+    task_env: dict[str, str] | None = None,
+    cli_env: dict[str, str] | None = None,
+) -> dict[str, str]:
     result = dict(system_env or os.environ)
     if global_env:
         result.update(global_env)
@@ -170,24 +185,24 @@ class ExecutionContext:
         self,
         pipeline: ResolvedPipeline,
         run_id: str,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ):
         self.pipeline = pipeline
         self.run_id = run_id
         self.env = env or {}
-        self._workspaces: Dict[str, str] = {}
+        self._workspaces: dict[str, str] = {}
 
     def set_workspace(self, task_name: str, path: str) -> None:
         self._workspaces[task_name] = path
 
-    def get_workspace(self, task_name: Optional[str] = None) -> Optional[str]:
+    def get_workspace(self, task_name: str | None = None) -> str | None:
         if task_name:
             return self._workspaces.get(task_name)
         if self._workspaces:
             return next(reversed(self._workspaces.values()))
         return None
 
-    def get_task_env(self, task: ResolvedTask) -> Dict[str, str]:
+    def get_task_env(self, task: ResolvedTask) -> dict[str, str]:
         settings = get_settings()
         return build_env(
             global_env=settings.env,
@@ -196,7 +211,7 @@ class ExecutionContext:
             cli_env=self.env,
         )
 
-    def get_subpipeline_env(self, sub: ResolvedSubPipeline) -> Dict[str, str]:
+    def get_subpipeline_env(self, sub: ResolvedSubPipeline) -> dict[str, str]:
         settings = get_settings()
         return build_env(
             global_env=settings.env,

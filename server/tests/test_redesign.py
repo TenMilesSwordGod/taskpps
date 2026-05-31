@@ -1,59 +1,62 @@
+import contextlib
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import yaml
 
-from taskpps.loaders.credential_loader import CredentialLoader
-from taskpps.loaders.agent_loader import AgentLoader
-from taskpps.loaders.pipeline_loader import (
-    PipelineLoader,
-    substitute_env_vars,
-    _resolve_variable_match,
-    _get_credential_loader,
-    _get_agent_loader,
-)
-from taskpps.schemas.pipeline import (
-    PipelineYAML,
-    TaskYAML,
-    OptionsYAML,
-    PipelineConfig,
-    SubPipeline,
+from taskpps.domain.context import (
+    ExecutionContext,
+    _navigate_to_key,
+    _set_key,
+    apply_overrides,
+    set_dot_path,
 )
 from taskpps.domain.pipeline import (
     ResolvedPipeline,
-    ResolvedTask,
-    ResolvedSubPipeline,
     ResolvedStep,
+    ResolvedSubPipeline,
+    ResolvedTask,
     _merge_config,
 )
-from taskpps.domain.context import (
-    _navigate_to_key,
-    _set_key,
-    set_dot_path,
-    apply_overrides,
-    ExecutionContext,
-)
 from taskpps.engine.runner import PipelineRunner, _evaluate_when
-from taskpps.executors import create_executor, _resolve_agent, _resolve_credential
+from taskpps.executors import _resolve_agent, _resolve_credential, create_executor
 from taskpps.executors.base import ExecutorResult
-
+from taskpps.loaders.agent_loader import AgentLoader
+from taskpps.loaders.credential_loader import CredentialLoader
+from taskpps.loaders.pipeline_loader import (
+    PipelineLoader,
+    _get_agent_loader,
+    _get_credential_loader,
+    substitute_env_vars,
+)
+from taskpps.schemas.pipeline import (
+    OptionsYAML,
+    PipelineConfig,
+    PipelineYAML,
+    SubPipeline,
+    TaskYAML,
+)
 
 # ============================================================
 # CredentialLoader tests
 # ============================================================
 
+
 class TestCredentialLoaderNew:
     def test_load_all_credentials_list(self, tmp_path):
         cred_file = tmp_path / "ssh.yaml"
-        cred_file.write_text(yaml.dump({
-            "credentials": [
-                {"id": "cred-a", "username": "admin", "password": "pass1"},
-                {"id": "cred-b", "username": "deploy", "key_path": "/key"},
-            ]
-        }))
+        cred_file.write_text(
+            yaml.dump(
+                {
+                    "credentials": [
+                        {"id": "cred-a", "username": "admin", "password": "pass1"},
+                        {"id": "cred-b", "username": "deploy", "key_path": "/key"},
+                    ]
+                }
+            )
+        )
         loader = CredentialLoader(tmp_path)
         all_creds = loader.load_all()
         assert all_creds["cred-a"]["username"] == "admin"
@@ -62,12 +65,16 @@ class TestCredentialLoaderNew:
 
     def test_load_all_credentials_list_missing_id(self, tmp_path):
         cred_file = tmp_path / "ssh.yaml"
-        cred_file.write_text(yaml.dump({
-            "credentials": [
-                {"username": "admin"},
-                {"id": "cred-b", "password": "pass"},
-            ]
-        }))
+        cred_file.write_text(
+            yaml.dump(
+                {
+                    "credentials": [
+                        {"username": "admin"},
+                        {"id": "cred-b", "password": "pass"},
+                    ]
+                }
+            )
+        )
         loader = CredentialLoader(tmp_path)
         all_creds = loader.load_all()
         assert all_creds["cred-b"]["password"] == "pass"
@@ -80,9 +87,7 @@ class TestCredentialLoaderNew:
 
     def test_get_method(self, tmp_path):
         cred_file = tmp_path / "ssh.yaml"
-        cred_file.write_text(yaml.dump({
-            "credentials": [{"id": "cred-x", "password": "secret"}]
-        }))
+        cred_file.write_text(yaml.dump({"credentials": [{"id": "cred-x", "password": "secret"}]}))
         loader = CredentialLoader(tmp_path)
         cred = loader.get("cred-x")
         assert cred["password"] == "secret"
@@ -90,9 +95,7 @@ class TestCredentialLoaderNew:
 
     def test_get_method_from_cache(self, tmp_path):
         cred_file = tmp_path / "ssh.yaml"
-        cred_file.write_text(yaml.dump({
-            "credentials": [{"id": "cred-x", "password": "secret"}]
-        }))
+        cred_file.write_text(yaml.dump({"credentials": [{"id": "cred-x", "password": "secret"}]}))
         loader = CredentialLoader(tmp_path)
         loader.load_all()
         cred = loader.get("cred-x")
@@ -100,9 +103,7 @@ class TestCredentialLoaderNew:
 
     def test_get_field_success(self, tmp_path):
         cred_file = tmp_path / "ssh.yaml"
-        cred_file.write_text(yaml.dump({
-            "credentials": [{"id": "cred-z", "password": "pw", "host": "h"}]
-        }))
+        cred_file.write_text(yaml.dump({"credentials": [{"id": "cred-z", "password": "pw", "host": "h"}]}))
         loader = CredentialLoader(tmp_path)
         assert loader.get_field("cred-z", "password") == "pw"
 
@@ -113,18 +114,14 @@ class TestCredentialLoaderNew:
 
     def test_get_field_field_not_found(self, tmp_path):
         cred_file = tmp_path / "ssh.yaml"
-        cred_file.write_text(yaml.dump({
-            "credentials": [{"id": "cred-z", "password": "pw"}]
-        }))
+        cred_file.write_text(yaml.dump({"credentials": [{"id": "cred-z", "password": "pw"}]}))
         loader = CredentialLoader(tmp_path)
-        with pytest.raises(KeyError, match="Field.*not found"):
+        with pytest.raises(KeyError, match=r"Field.*not found"):
             loader.get_field("cred-z", "host")
 
     def test_clear_cache(self, tmp_path):
         cred_file = tmp_path / "ssh.yaml"
-        cred_file.write_text(yaml.dump({
-            "credentials": [{"id": "cred-x", "password": "secret"}]
-        }))
+        cred_file.write_text(yaml.dump({"credentials": [{"id": "cred-x", "password": "secret"}]}))
         loader = CredentialLoader(tmp_path)
         loader.load_all()
         assert loader._cache is not None
@@ -147,15 +144,20 @@ class TestCredentialLoaderNew:
 # AgentLoader tests
 # ============================================================
 
+
 class TestAgentLoaderNew:
     def test_load_all_agents_list(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [
-                {"id": "agent-a", "host": "10.0.0.1", "port": 22, "username": "admin"},
-                {"id": "agent-b", "host": "10.0.0.2", "credential_id": "cred-x"},
-            ]
-        }))
+        agent_file.write_text(
+            yaml.dump(
+                {
+                    "agents": [
+                        {"id": "agent-a", "host": "10.0.0.1", "port": 22, "username": "admin"},
+                        {"id": "agent-b", "host": "10.0.0.2", "credential_id": "cred-x"},
+                    ]
+                }
+            )
+        )
         loader = AgentLoader(tmp_path)
         all_agents = loader.load_all()
         assert all_agents["agent-a"]["host"] == "10.0.0.1"
@@ -163,12 +165,16 @@ class TestAgentLoaderNew:
 
     def test_load_all_agents_list_missing_id(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [
-                {"host": "10.0.0.1"},
-                {"id": "agent-b", "host": "10.0.0.2"},
-            ]
-        }))
+        agent_file.write_text(
+            yaml.dump(
+                {
+                    "agents": [
+                        {"host": "10.0.0.1"},
+                        {"id": "agent-b", "host": "10.0.0.2"},
+                    ]
+                }
+            )
+        )
         loader = AgentLoader(tmp_path)
         all_agents = loader.load_all()
         assert all_agents["agent-b"]["host"] == "10.0.0.2"
@@ -180,27 +186,21 @@ class TestAgentLoaderNew:
 
     def test_get_method(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1"}]
-        }))
+        agent_file.write_text(yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1"}]}))
         loader = AgentLoader(tmp_path)
         assert loader.get("agent-x")["host"] == "10.0.0.1"
         assert loader.get("nonexistent") is None
 
     def test_get_method_from_cache(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1"}]
-        }))
+        agent_file.write_text(yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1"}]}))
         loader = AgentLoader(tmp_path)
         loader.load_all()
         assert loader.get("agent-x")["host"] == "10.0.0.1"
 
     def test_get_field_success(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [{"id": "agent-z", "host": "h", "port": 22}]
-        }))
+        agent_file.write_text(yaml.dump({"agents": [{"id": "agent-z", "host": "h", "port": 22}]}))
         loader = AgentLoader(tmp_path)
         assert loader.get_field("agent-z", "host") == "h"
 
@@ -211,18 +211,14 @@ class TestAgentLoaderNew:
 
     def test_get_field_field_not_found(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [{"id": "agent-z", "host": "h"}]
-        }))
+        agent_file.write_text(yaml.dump({"agents": [{"id": "agent-z", "host": "h"}]}))
         loader = AgentLoader(tmp_path)
-        with pytest.raises(KeyError, match="Field.*not found"):
+        with pytest.raises(KeyError, match=r"Field.*not found"):
             loader.get_field("agent-z", "port")
 
     def test_clear_cache(self, tmp_path):
         agent_file = tmp_path / "ssh.yaml"
-        agent_file.write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1"}]
-        }))
+        agent_file.write_text(yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1"}]}))
         loader = AgentLoader(tmp_path)
         loader.load_all()
         assert loader._cache is not None
@@ -246,12 +242,10 @@ class TestAgentLoaderNew:
         agents_dir.mkdir()
         creds_dir.mkdir()
 
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1", "credential_id": "cred-x"}]
-        }))
-        (creds_dir / "ssh.yaml").write_text(yaml.dump({
-            "credentials": [{"id": "cred-x", "password": "secret"}]
-        }))
+        (agents_dir / "ssh.yaml").write_text(
+            yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1", "credential_id": "cred-x"}]})
+        )
+        (creds_dir / "ssh.yaml").write_text(yaml.dump({"credentials": [{"id": "cred-x", "password": "secret"}]}))
 
         loader = AgentLoader(agents_dir)
         cred = loader.resolve_credential("agent-x")
@@ -263,9 +257,7 @@ class TestAgentLoaderNew:
         agents_dir.mkdir()
         creds_dir.mkdir()
 
-        (creds_dir / "ssh.yaml").write_text(yaml.dump({
-            "credentials": [{"id": "cred-x", "password": "secret"}]
-        }))
+        (creds_dir / "ssh.yaml").write_text(yaml.dump({"credentials": [{"id": "cred-x", "password": "secret"}]}))
 
         loader = AgentLoader(agents_dir)
         cred = loader.resolve_credential({"credential_id": "cred-x"})
@@ -278,9 +270,7 @@ class TestAgentLoaderNew:
     def test_resolve_credential_no_credential_id(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1"}]
-        }))
+        (agents_dir / "ssh.yaml").write_text(yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1"}]}))
         loader = AgentLoader(agents_dir)
         assert loader.resolve_credential("agent-x") is None
 
@@ -293,29 +283,31 @@ class TestAgentLoaderNew:
 # PipelineLoader tests - variable substitution
 # ============================================================
 
+
 class TestVariableSubstitution:
     def test_substitute_credential_var(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
-        (creds_dir / "ssh.yaml").write_text(yaml.dump({
-            "credentials": [{"id": "cred-x", "password": "secret123"}]
-        }))
+        (creds_dir / "ssh.yaml").write_text(yaml.dump({"credentials": [{"id": "cred-x", "password": "secret123"}]}))
         loader = CredentialLoader(creds_dir)
         with patch("taskpps.loaders.pipeline_loader._get_credential_loader", return_value=loader):
             result = substitute_env_vars("${credential:cred-x.password}", {})
             assert result == "secret123"
 
     def test_substitute_credential_var_not_found(self):
-        with patch("taskpps.loaders.pipeline_loader._get_credential_loader", return_value=CredentialLoader(Path("/nonexistent"))):
+        with patch(
+            "taskpps.loaders.pipeline_loader._get_credential_loader",
+            return_value=CredentialLoader(Path("/nonexistent")),
+        ):
             result = substitute_env_vars("${credential:noexist.field}", {})
             assert result == "${credential:noexist.field}"
 
     def test_substitute_agent_var(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1", "description": "test server"}]
-        }))
+        (agents_dir / "ssh.yaml").write_text(
+            yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1", "description": "test server"}]})
+        )
         loader = AgentLoader(agents_dir)
         with patch("taskpps.loaders.pipeline_loader._get_agent_loader", return_value=loader):
             result = substitute_env_vars("${agent:agent-x.description}", {})
@@ -386,6 +378,7 @@ class TestVariableSubstitution:
 # Pipeline schema tests (new fields)
 # ============================================================
 
+
 class TestPipelineSchemaNew:
     def test_task_yaml_commands_and_when(self):
         t = TaskYAML(name="t1", commands=["cmd1", "cmd2"], when='${env.APP_ENV} == "dev"', retry=3)
@@ -455,12 +448,15 @@ class TestPipelineSchemaNew:
 # Domain pipeline tests (new)
 # ============================================================
 
+
 class TestDomainPipelineNew:
     def test_resolved_task_new_fields(self):
         task = ResolvedTask(
-            name="t1", task_type="command",
+            name="t1",
+            task_type="command",
             commands=["cmd1", "cmd2"],
-            retry=3, when='${env.X} == "y"',
+            retry=3,
+            when='${env.X} == "y"',
         )
         assert task.commands == ["cmd1", "cmd2"]
         assert task.retry == 3
@@ -563,6 +559,7 @@ class TestDomainPipelineNew:
 # Domain context tests (new)
 # ============================================================
 
+
 class TestContextNew:
     def test_navigate_to_key_non_list_container(self):
         data = {"tasks": {"a": 1, "b": 2}}
@@ -625,6 +622,7 @@ class TestContextNew:
 # ============================================================
 # Runner tests (new)
 # ============================================================
+
 
 def _make_async_session_mock():
     mock_session = MagicMock()
@@ -761,16 +759,19 @@ class TestRunnerNew:
         ctx = ExecutionContext(pipeline=p, run_id="r1")
         runner = PipelineRunner(run_id="r1", pipeline=p, context=ctx)
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+        ):
             runner._task_run_ids = {"t1": "tr1"}
             result = await runner._execute_task(task)
         assert result.success is True
 
     async def test_runner_execute_task_commands(self, tmp_path):
         task = ResolvedTask(
-            name="t1", task_type="command",
+            name="t1",
+            task_type="command",
             commands=["echo step1", "echo step2"],
         )
         sub = ResolvedSubPipeline(name="s1", tasks=[task], config=PipelineConfig())
@@ -785,13 +786,15 @@ class TestRunnerNew:
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok\n")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_task(task)
 
         assert result.success
@@ -799,7 +802,8 @@ class TestRunnerNew:
 
     async def test_runner_execute_task_commands_failure(self, tmp_path):
         task = ResolvedTask(
-            name="t1", task_type="command",
+            name="t1",
+            task_type="command",
             commands=["echo step1", "exit 1"],
         )
         sub = ResolvedSubPipeline(name="s1", tasks=[task], config=PipelineConfig())
@@ -817,13 +821,15 @@ class TestRunnerNew:
             ExecutorResult(exit_code=1, stderr="failed"),
         ]
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_task(task)
 
         assert not result.success
@@ -839,7 +845,7 @@ class TestRunnerNew:
 
         log_dir = tmp_path / "p" / "r1" / "tr1"
         log_dir.mkdir(parents=True)
-        log_path = log_dir / "output.log"
+        log_dir / "output.log"
 
         mock_executor = AsyncMock()
         mock_executor.execute.side_effect = [
@@ -848,13 +854,15 @@ class TestRunnerNew:
             ExecutorResult(exit_code=0, stdout="ok on retry"),
         ]
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_task(task)
 
         assert result.success
@@ -877,13 +885,15 @@ class TestRunnerNew:
             ExecutorResult(exit_code=1, stderr="fail2"),
         ]
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_task(task)
 
         assert not result.success
@@ -893,7 +903,8 @@ class TestRunnerNew:
         task1 = ResolvedTask(name="t1", task_type="command", command="echo 1")
         task2 = ResolvedTask(name="t2", task_type="command", command="echo 2")
         sub = ResolvedSubPipeline(
-            name="s1", tasks=[task1, task2],
+            name="s1",
+            tasks=[task1, task2],
             config=PipelineConfig(execution_strategy="sequential"),
         )
         p = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
@@ -909,13 +920,15 @@ class TestRunnerNew:
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_subpipeline("s1")
 
         assert result["success"] is True
@@ -924,7 +937,8 @@ class TestRunnerNew:
         task1 = ResolvedTask(name="t1", task_type="command", command="echo 1")
         task2 = ResolvedTask(name="t2", task_type="command", command="echo 2")
         sub = ResolvedSubPipeline(
-            name="s1", tasks=[task1, task2],
+            name="s1",
+            tasks=[task1, task2],
             config=PipelineConfig(execution_strategy="parallel"),
         )
         p = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
@@ -940,13 +954,15 @@ class TestRunnerNew:
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_subpipeline("s1")
 
         assert result["success"] is True
@@ -996,13 +1012,15 @@ class TestRunnerNew:
         mock_executor = AsyncMock()
         mock_executor.execute.side_effect = Exception("boom")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_task(task)
 
         assert not result.success
@@ -1013,25 +1031,28 @@ class TestRunnerNew:
 # Executors tests (new)
 # ============================================================
 
+
 class TestCreateExecutor:
     def test_create_executor_invoke(self):
         task = ResolvedTask(name="t1", task_type="invoke", invoke_task="mod.fn")
         executor = create_executor(task)
         from taskpps.executors.invoke import InvokeExecutor
+
         assert isinstance(executor, InvokeExecutor)
 
     def test_create_executor_no_host(self):
         task = ResolvedTask(name="t1", task_type="command", command="echo")
         executor = create_executor(task)
         from taskpps.executors.local import LocalExecutor
+
         assert isinstance(executor, LocalExecutor)
 
     def test_resolve_agent_by_id(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "ssh.yaml").write_text(yaml.dump({
-            "agents": [{"id": "agent-x", "host": "10.0.0.1", "username": "admin"}]
-        }))
+        (agents_dir / "ssh.yaml").write_text(
+            yaml.dump({"agents": [{"id": "agent-x", "host": "10.0.0.1", "username": "admin"}]})
+        )
         loader = AgentLoader(agents_dir)
         result = _resolve_agent(loader, "agent-x")
         assert result["host"] == "10.0.0.1"
@@ -1052,9 +1073,7 @@ class TestCreateExecutor:
     def test_resolve_credential_by_id(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
-        (creds_dir / "ssh.yaml").write_text(yaml.dump({
-            "credentials": [{"id": "cred-x", "password": "secret"}]
-        }))
+        (creds_dir / "ssh.yaml").write_text(yaml.dump({"credentials": [{"id": "cred-x", "password": "secret"}]}))
         loader = CredentialLoader(creds_dir)
         result = _resolve_credential(loader, "cred-x")
         assert result["password"] == "secret"
@@ -1077,6 +1096,7 @@ class TestCreateExecutor:
 # PipelineService tests (new)
 # ============================================================
 
+
 @pytest.mark.asyncio
 class TestPipelineServiceNew:
     async def test_service_create_run_new_pipeline(self):
@@ -1091,13 +1111,14 @@ class TestPipelineServiceNew:
             spec = PipelineYAML(name="multi", pipelines=[sub_yaml])
             mock_load.return_value = spec
 
-            with patch("taskpps.services.pipeline_service.get_session_factory") as mock_sf, \
-                 patch("taskpps.services.pipeline_service.RunRepository") as mock_rr, \
-                 patch("taskpps.services.pipeline_service.TaskRunRepository") as mock_tr, \
-                 patch("taskpps.services.pipeline_service.get_logs_dir"), \
-                 patch("taskpps.services.pipeline_service.asyncio.create_task"), \
-                 patch("taskpps.services.pipeline_service.PipelineRunner") as mock_pr:
-
+            with (
+                patch("taskpps.services.pipeline_service.get_session_factory") as mock_sf,
+                patch("taskpps.services.pipeline_service.RunRepository") as mock_rr,
+                patch("taskpps.services.pipeline_service.TaskRunRepository") as mock_tr,
+                patch("taskpps.services.pipeline_service.get_logs_dir"),
+                patch("taskpps.services.pipeline_service.asyncio.create_task"),
+                patch("taskpps.services.pipeline_service.PipelineRunner"),
+            ):
                 mock_session = MagicMock()
                 mock_session.__aenter__ = AsyncMock(return_value=mock_session)
                 mock_session.__aexit__ = AsyncMock(return_value=None)
@@ -1138,28 +1159,27 @@ class TestPipelineServiceNew:
         from taskpps.services.pipeline_service import PipelineService
 
         svc = PipelineService()
-        with patch.object(svc.loader, "load", side_effect=Exception("load error")):
-            with pytest.raises(ValueError):
-                await svc.create_run("bad.yaml")
+        with patch.object(svc.loader, "load", side_effect=Exception("load error")), pytest.raises(ValueError):
+            await svc.create_run("bad.yaml")
 
     async def test_handle_run_error_cancelled(self):
-        from taskpps.services.pipeline_service import PipelineService
         import asyncio
+
+        from taskpps.services.pipeline_service import PipelineService
 
         async def cancelled_coro():
             raise asyncio.CancelledError()
 
         task = asyncio.ensure_future(cancelled_coro())
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
         PipelineService._handle_run_error(task)
 
 
 # ============================================================
 # Final coverage gap tests
 # ============================================================
+
 
 @pytest.mark.asyncio
 class TestCoverageFinal:
@@ -1196,10 +1216,14 @@ class TestCoverageFinal:
         task1 = ResolvedTask(name="t1", task_type="command", command="echo ok")
         task2 = ResolvedTask(name="t2", task_type="command", command="exit 1")
         sub1 = ResolvedSubPipeline(
-            name="s1", tasks=[task1], config=PipelineConfig(on_failure="continue"),
+            name="s1",
+            tasks=[task1],
+            config=PipelineConfig(on_failure="continue"),
         )
         sub2 = ResolvedSubPipeline(
-            name="s2", tasks=[task2], config=PipelineConfig(),
+            name="s2",
+            tasks=[task2],
+            config=PipelineConfig(),
         )
         p = ResolvedPipeline(name="p", subpipelines=[sub1, sub2], top_config=PipelineConfig())
         ctx = ExecutionContext(pipeline=p, run_id="r1")
@@ -1210,20 +1234,22 @@ class TestCoverageFinal:
         (log_dir / "tr1").mkdir()
         (log_dir / "tr2").mkdir()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_executor = AsyncMock()
         mock_executor.execute.side_effect = [
             ExecutorResult(exit_code=0, stdout="ok"),
             ExecutorResult(exit_code=1, stderr="fail"),
         ]
 
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.RunRepository", return_value=mock_rr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.RunRepository", return_value=mock_rr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             await runner.run()
 
     async def test_service_create_run_with_params(self):
@@ -1234,7 +1260,7 @@ class TestCoverageFinal:
             spec = PipelineYAML(name="test", tasks=[TaskYAML(name="t1", command="echo", timeout=10)])
             mock_load.return_value = spec
 
-            mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+            mock_sf, mock_tr, mock_rr, _mock_session = _make_async_session_mock()
             mock_run = MagicMock()
             mock_run.id = "run-id"
             mock_run.pipeline_name = "test"
@@ -1244,17 +1270,20 @@ class TestCoverageFinal:
             mock_task_run.id = "tr1"
             mock_tr.create_task_run = AsyncMock(return_value=mock_task_run)
 
-            with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-                 patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr), \
-                 patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr), \
-                 patch("taskpps.services.pipeline_service.get_logs_dir"), \
-                 patch("taskpps.services.pipeline_service.asyncio.create_task"), \
-                 patch("taskpps.services.pipeline_service.PipelineRunner"):
+            with (
+                patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+                patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+                patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr),
+                patch("taskpps.services.pipeline_service.get_logs_dir"),
+                patch("taskpps.services.pipeline_service.asyncio.create_task"),
+                patch("taskpps.services.pipeline_service.PipelineRunner"),
+            ):
                 result = await svc.create_run("test.yaml", params={"tasks[0].timeout": 60})
                 assert result["id"] == "run-id"
 
     def test_service_list_pipelines(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
         with patch.object(svc.loader, "load_all", return_value={"p1": MagicMock()}):
             result = svc.list_pipelines()
@@ -1336,6 +1365,7 @@ class TestCoverageFinal:
 # Additional coverage tests
 # ============================================================
 
+
 class TestContextEdgeCases:
     def test_navigate_to_key_numeric_non_list(self):
         data = {"items": 42}
@@ -1363,8 +1393,6 @@ class TestContextEdgeCases:
         assert result[0]["name"] == "hello"
 
 
-
-
 @pytest.mark.asyncio
 class TestRunnerEdgeCases:
     async def test_runner_run_sub_not_found(self, tmp_path):
@@ -1381,13 +1409,15 @@ class TestRunnerEdgeCases:
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.RunRepository", return_value=mock_rr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.RunRepository", return_value=mock_rr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             await runner.run()
 
     async def test_runner_run_subpipeline_fails_on_failure_block(self, tmp_path):
@@ -1405,25 +1435,30 @@ class TestRunnerEdgeCases:
         mock_executor.execute.return_value = ExecutorResult(exit_code=1, stderr="fail")
 
         mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.RunRepository", return_value=mock_rr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.RunRepository", return_value=mock_rr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             await runner.run()
 
     async def test_runner_run_subpipeline_fails_on_failure_continue(self, tmp_path):
         task1 = ResolvedTask(name="t1", task_type="command", command="exit 1")
         task2 = ResolvedTask(name="t2", task_type="command", command="echo ok")
         sub1 = ResolvedSubPipeline(
-            name="s1", tasks=[task1],
+            name="s1",
+            tasks=[task1],
             config=PipelineConfig(on_failure="continue"),
         )
         sub2 = ResolvedSubPipeline(
-            name="s2", tasks=[task2],
-            config=PipelineConfig(), depends_on=["s1"],
+            name="s2",
+            tasks=[task2],
+            config=PipelineConfig(),
+            depends_on=["s1"],
         )
         p = ResolvedPipeline(name="p", subpipelines=[sub1, sub2], top_config=PipelineConfig())
         ctx = ExecutionContext(pipeline=p, run_id="r1")
@@ -1438,13 +1473,15 @@ class TestRunnerEdgeCases:
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
         mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.RunRepository", return_value=mock_rr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.RunRepository", return_value=mock_rr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             await runner.run()
 
     async def test_runner_run_unexpected_exception(self, tmp_path):
@@ -1458,13 +1495,15 @@ class TestRunnerEdgeCases:
         log_dir.mkdir(parents=True)
 
         mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.RunRepository", return_value=mock_rr), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()), \
-             patch("taskpps.engine.runner.DAG") as mock_dag:
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.RunRepository", return_value=mock_rr),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+            patch("taskpps.engine.runner.DAG") as mock_dag,
+        ):
             mock_dag.side_effect = RuntimeError("unexpected")
             await runner.run()
 
@@ -1476,17 +1515,20 @@ class TestRunnerEdgeCases:
         runner = PipelineRunner(run_id="r1", pipeline=p, context=ctx)
         runner._cancelled = True
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.RunRepository", return_value=mock_rr):
+        mock_sf, _mock_tr, mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.RunRepository", return_value=mock_rr),
+        ):
             await runner.run()
 
     async def test_runner_execute_subpipeline_cancelled(self, tmp_path):
         task1 = ResolvedTask(name="t1", task_type="command", command="echo 1")
         task2 = ResolvedTask(name="t2", task_type="command", command="echo 2")
         sub = ResolvedSubPipeline(
-            name="s1", tasks=[task1, task2],
+            name="s1",
+            tasks=[task1, task2],
             config=PipelineConfig(execution_strategy="sequential"),
         )
         p = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
@@ -1498,13 +1540,15 @@ class TestRunnerEdgeCases:
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_subpipeline("s1")
         assert result["success"] is True
 
@@ -1521,19 +1565,22 @@ class TestRunnerEdgeCases:
         mock_executor = AsyncMock()
         mock_executor.execute.side_effect = Exception("boom")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_subpipeline("s1")
         assert result["success"] is False
 
     async def test_runner_execute_commands_timeout_below_1(self, tmp_path):
         task = ResolvedTask(
-            name="t1", task_type="command",
+            name="t1",
+            task_type="command",
             commands=["echo step1"],
         )
         sub = ResolvedSubPipeline(name="s1", tasks=[task], config=PipelineConfig())
@@ -1561,13 +1608,15 @@ class TestRunnerEdgeCases:
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()):
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+        ):
             result = await runner._execute_task(task)
         assert result.success
 
@@ -1580,6 +1629,7 @@ class TestRunnerEdgeCases:
         ctx = ExecutionContext(pipeline=p, run_id="r1")
         runner = PipelineRunner(run_id="r1", pipeline=p, context=ctx)
         from taskpps.domain.dag import DAGCycleError
+
         with pytest.raises(DAGCycleError):
             runner._build_subpipeline_levels()
 
@@ -1588,9 +1638,10 @@ class TestRunnerEdgeCases:
 class TestPipelineServiceEdgeCases:
     async def test_get_run_with_json_params(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.pipeline_name = "p"
@@ -1603,18 +1654,21 @@ class TestPipelineServiceEdgeCases:
         mock_rr.get_run = AsyncMock(return_value=mock_run)
         mock_tr.list_task_runs = AsyncMock(return_value=[])
 
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr), \
-             patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+            patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr),
+        ):
             result = await svc.get_run("r1")
             assert result["id"] == "r1"
             assert result["params"] == {"key": "value"}
 
     async def test_get_run_with_dict_params(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.pipeline_name = "p"
@@ -1627,17 +1681,20 @@ class TestPipelineServiceEdgeCases:
         mock_rr.get_run = AsyncMock(return_value=mock_run)
         mock_tr.list_task_runs = AsyncMock(return_value=[])
 
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr), \
-             patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+            patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr),
+        ):
             result = await svc.get_run("r1")
             assert result["params"] == {"key": "value"}
 
     async def test_get_run_invalid_json(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.pipeline_name = "p"
@@ -1650,19 +1707,20 @@ class TestPipelineServiceEdgeCases:
         mock_rr.get_run = AsyncMock(return_value=mock_run)
         mock_tr.list_task_runs = AsyncMock(return_value=[])
 
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr), \
-             patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+            patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr),
+        ):
             result = await svc.get_run("r1")
             assert result["params"] == {}
 
     async def test_cancel_run_via_session(self):
         from taskpps.services.pipeline_service import PipelineService
-        from taskpps.engine.runner import get_active_runner
 
         svc = PipelineService()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.status = "running"
@@ -1670,18 +1728,21 @@ class TestPipelineServiceEdgeCases:
         mock_rr.update_run_status = AsyncMock()
         mock_tr.cancel_pending_tasks = AsyncMock()
 
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr), \
-             patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.get_active_runner", return_value=None):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+            patch("taskpps.services.pipeline_service.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.get_active_runner", return_value=None),
+        ):
             result = await svc.cancel_run("r1")
             assert result is True
 
     async def test_list_runs_with_json_params(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, _mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.pipeline_name = "p"
@@ -1694,17 +1755,20 @@ class TestPipelineServiceEdgeCases:
         mock_rr.list_runs = AsyncMock(return_value=[mock_run])
         mock_rr.count_runs = AsyncMock(return_value=1)
 
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+        ):
             result = await svc.list_runs()
             assert result["total"] == 1
             assert result["items"][0]["params"] == {"key": "value"}
 
     async def test_list_runs_with_dict_params(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, _mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.pipeline_name = "p"
@@ -1717,16 +1781,19 @@ class TestPipelineServiceEdgeCases:
         mock_rr.list_runs = AsyncMock(return_value=[mock_run])
         mock_rr.count_runs = AsyncMock(return_value=1)
 
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+        ):
             result = await svc.list_runs()
             assert result["items"][0]["params"] == {"key": "value"}
 
     async def test_list_runs_invalid_json(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
 
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, _mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.pipeline_name = "p"
@@ -1739,24 +1806,26 @@ class TestPipelineServiceEdgeCases:
         mock_rr.list_runs = AsyncMock(return_value=[mock_run])
         mock_rr.count_runs = AsyncMock(return_value=1)
 
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+        ):
             result = await svc.list_runs()
             assert result["items"][0]["params"] == {}
 
     async def test_handle_run_error_exception(self):
-        from taskpps.services.pipeline_service import PipelineService
         import asyncio
+
+        from taskpps.services.pipeline_service import PipelineService
 
         async def error_coro():
             raise RuntimeError("test error")
 
         task = asyncio.ensure_future(error_coro())
-        try:
+        with contextlib.suppress(RuntimeError):
             await task
-        except RuntimeError:
-            pass
         PipelineService._handle_run_error(task)
+
 
 @pytest.mark.asyncio
 class TestCoverageFinal2:
@@ -1809,6 +1878,7 @@ class TestCoverageFinal2:
 
     async def test_resolved_step_from_yaml(self):
         from taskpps.schemas.pipeline import TaskStep
+
         ts = TaskStep(run="echo hi", cd="/tmp", env={"X": "1"})
         rs = ResolvedStep.from_yaml(ts)
         assert rs.run == "echo hi"
@@ -1818,6 +1888,7 @@ class TestCoverageFinal2:
     async def test_apply_overrides_dict_final(self):
         data = {"config": {"host": "old"}}
         from taskpps.domain.context import set_dot_path
+
         set_dot_path(data, "config.host", "new")
         assert data["config"]["host"] == "new"
 
@@ -1829,14 +1900,17 @@ class TestCoverageFinal2:
         ctx = ExecutionContext(pipeline=p, run_id="r1")
         runner = PipelineRunner(run_id="r1", pipeline=p, context=ctx)
         runner._cancelled = True
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.RunRepository", return_value=mock_rr):
+        mock_sf, _mock_tr, mock_rr, _ = _make_async_session_mock()
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.RunRepository", return_value=mock_rr),
+        ):
             await runner.run()
 
     async def test_service_create_run_invalid_params(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
         with patch.object(svc.loader, "load") as mock_load:
             spec = PipelineYAML(name="test", tasks=[TaskYAML(name="t1", command="echo")])
@@ -1846,42 +1920,52 @@ class TestCoverageFinal2:
 
     async def test_service_get_run_not_found(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
+        mock_sf, _mock_tr, mock_rr, _ = _make_async_session_mock()
         mock_rr.get_run = AsyncMock(return_value=None)
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+        ):
             result = await svc.get_run("nonexistent")
             assert result is None
 
     async def test_service_cancel_run_not_found(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
+        mock_sf, _mock_tr, mock_rr, _ = _make_async_session_mock()
         mock_rr.get_run = AsyncMock(return_value=None)
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr), \
-             patch("taskpps.engine.runner.get_active_runner", return_value=None):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+            patch("taskpps.engine.runner.get_active_runner", return_value=None),
+        ):
             result = await svc.cancel_run("nonexistent")
             assert result is False
 
     async def test_service_cancel_run_wrong_status(self):
         from taskpps.services.pipeline_service import PipelineService
+
         svc = PipelineService()
-        mock_sf, mock_tr, mock_rr, mock_session = _make_async_session_mock()
+        mock_sf, _mock_tr, mock_rr, _mock_session = _make_async_session_mock()
         mock_run = MagicMock()
         mock_run.id = "r1"
         mock_run.status = "success"
         mock_rr.get_run = AsyncMock(return_value=mock_run)
-        with patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr), \
-             patch("taskpps.engine.runner.get_active_runner", return_value=None):
+        with (
+            patch("taskpps.services.pipeline_service.get_session_factory", return_value=mock_sf),
+            patch("taskpps.services.pipeline_service.RunRepository", return_value=mock_rr),
+            patch("taskpps.engine.runner.get_active_runner", return_value=None),
+        ):
             result = await svc.cancel_run("r1")
             assert result is False
 
     async def test_runner_execute_task_invoke_path(self, tmp_path):
         task = ResolvedTask(
-            name="t1", task_type="invoke",
+            name="t1",
+            task_type="invoke",
             invoke_task="my_module.my_func",
             invoke_args=[1, 2],
             invoke_kwargs={"key": "val"},
@@ -1898,14 +1982,17 @@ class TestCoverageFinal2:
         mock_executor.execute = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
-        mock_sf, mock_tr, mock_rr, _ = _make_async_session_mock()
+        mock_sf, mock_tr, _mock_rr, _ = _make_async_session_mock()
         from taskpps.executors.invoke import InvokeExecutor
-        with patch("taskpps.engine.runner.get_event_bus"), \
-             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path), \
-             patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf), \
-             patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr), \
-             patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-             patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()), \
-             patch.object(InvokeExecutor, "execute", new=mock_executor.execute):
+
+        with (
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_session_factory", return_value=mock_sf),
+            patch("taskpps.engine.runner.TaskRunRepository", return_value=mock_tr),
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_settings", return_value=_make_settings_mock()),
+            patch.object(InvokeExecutor, "execute", new=mock_executor.execute),
+        ):
             result = await runner._execute_task(task)
         assert result.success

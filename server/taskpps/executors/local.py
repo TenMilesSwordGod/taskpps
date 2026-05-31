@@ -4,7 +4,6 @@ import asyncio
 import os
 import re
 from pathlib import Path
-from typing import Dict, Optional
 
 from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
@@ -26,16 +25,16 @@ _DANGEROUS_PATTERNS = re.compile(
 
 class LocalExecutor(BaseExecutor):
     def __init__(self):
-        self._process: Optional[asyncio.subprocess.Process] = None
+        self._process: asyncio.subprocess.Process | None = None
         self._cancelled = False
 
     async def execute(
         self,
         command: str,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
         self._cancelled = False

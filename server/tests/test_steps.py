@@ -1,8 +1,7 @@
-import pytest
-from taskpps.schemas.pipeline import TaskYAML, TaskStep, OptionsYAML, PipelineYAML
-from taskpps.domain.pipeline import ResolvedTask, ResolvedStep
+from taskpps.domain.pipeline import ResolvedStep, ResolvedTask
 from taskpps.executors import create_executor
 from taskpps.executors.local import LocalExecutor
+from taskpps.schemas.pipeline import OptionsYAML, PipelineYAML, TaskStep, TaskYAML
 
 
 class TestTaskStepSchema:
@@ -169,10 +168,12 @@ class TestCreateExecutorSteps:
             steps=[ResolvedStep(run="echo hello")],
             host="myhost",
         )
-        from unittest.mock import patch
         import tempfile
+        from unittest.mock import patch
+
         with tempfile.TemporaryDirectory() as tmp_dir:
             from pathlib import Path
+
             agents_dir = Path(tmp_dir) / "agents"
             agents_dir.mkdir()
             agent_file = agents_dir / "myhost.yaml"
@@ -180,4 +181,5 @@ class TestCreateExecutorSteps:
             with patch("taskpps.loaders.agent_loader.get_agents_dir", return_value=agents_dir):
                 executor = create_executor(task)
                 from taskpps.executors.ssh import SSHExecutor
+
                 assert isinstance(executor, SSHExecutor)

@@ -1,13 +1,14 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock, call
+
 from taskpps.executors.ssh import SSHExecutor
-from taskpps.executors.base import ExecutorResult
 
 
 def test_ssh_build_env_exports():
-    ex = SSHExecutor(host="1.2.3.4", username="root", password="pass")
+    SSHExecutor(host="1.2.3.4", username="root", password="pass")
     import shlex
+
     env = {"FOO": "bar", "BAZ": "qux"}
     exports = " ".join(f"export {shlex.quote(k)}={shlex.quote(v)}" for k, v in env.items())
     assert "export FOO=bar" in exports

@@ -1,4 +1,3 @@
-import pytest
 from taskpps.i18n import Translator, get_translator, set_locale, t
 
 

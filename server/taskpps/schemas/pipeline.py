@@ -1,24 +1,24 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
 
 class InvokeSpec(BaseModel):
     task: str
-    args: List[Any] = Field(default_factory=list)
-    kwargs: Dict[str, Any] = Field(default_factory=dict)
+    args: list[Any] = Field(default_factory=list)
+    kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
 class TaskStep(BaseModel):
     run: str
-    cd: Optional[str] = None
-    env: Dict[str, str] = Field(default_factory=dict)
+    cd: str | None = None
+    env: dict[str, str] = Field(default_factory=dict)
 
 
 class GitSpec(BaseModel):
     repo: str
-    ref: Optional[str] = None
-    credential: Optional[str] = None
+    ref: str | None = None
+    credential: str | None = None
     dest: str = "/workspace/repo"
     depth: int = 1
     submodules: bool = False
@@ -28,36 +28,36 @@ class NexusSpec(BaseModel):
     action: str
     url: str
     repository: str
-    credential: Optional[str] = None
-    group_id: Optional[str] = None
-    artifact_id: Optional[str] = None
-    version: Optional[str] = None
+    credential: str | None = None
+    group_id: str | None = None
+    artifact_id: str | None = None
+    version: str | None = None
     packaging: str = "jar"
-    classifier: Optional[str] = None
-    files: Optional[List[str]] = None
-    dest: Optional[str] = None
-    query: Optional[str] = None
-    source_repo: Optional[str] = None
-    target_repo: Optional[str] = None
+    classifier: str | None = None
+    files: list[str] | None = None
+    dest: str | None = None
+    query: str | None = None
+    source_repo: str | None = None
+    target_repo: str | None = None
 
 
 class TaskYAML(BaseModel):
     name: str
-    command: Optional[str] = None
-    commands: Optional[List[str]] = None
-    invoke: Optional[InvokeSpec] = None
-    steps: Optional[List[TaskStep]] = None
-    git: Optional[GitSpec] = None
-    nexus: Optional[NexusSpec] = None
-    cwd: Optional[str] = None
-    host: Optional[str] = None
-    credential: Optional[str] = None
-    env: Dict[str, str] = Field(default_factory=dict)
-    timeout: Optional[int] = None
+    command: str | None = None
+    commands: list[str] | None = None
+    invoke: InvokeSpec | None = None
+    steps: list[TaskStep] | None = None
+    git: GitSpec | None = None
+    nexus: NexusSpec | None = None
+    cwd: str | None = None
+    host: str | None = None
+    credential: str | None = None
+    env: dict[str, str] = Field(default_factory=dict)
+    timeout: int | None = None
     retry: int = 0
-    on_failure: Optional[str] = None
-    depends_on: List[str] = Field(default_factory=list)
-    when: Optional[str] = None
+    on_failure: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
+    when: str | None = None
 
     def get_task_type(self) -> str:
         if self.invoke is not None:
@@ -70,7 +70,7 @@ class TaskYAML(BaseModel):
             return "nexus"
         return "command"
 
-    def get_effective_command(self) -> Optional[str]:
+    def get_effective_command(self) -> str | None:
         if self.command:
             return self.command
         if self.commands:
@@ -79,10 +79,10 @@ class TaskYAML(BaseModel):
 
 
 class PipelineConfig(BaseModel):
-    host: Optional[str] = None
-    credential: Optional[str] = None
-    env: Dict[str, str] = Field(default_factory=dict)
-    timeout: Optional[int] = None
+    host: str | None = None
+    credential: str | None = None
+    env: dict[str, str] = Field(default_factory=dict)
+    timeout: int | None = None
     retry: int = 0
     on_failure: str = "fail"
     execution_strategy: str = "sequential"
@@ -94,17 +94,17 @@ class OptionsYAML(PipelineConfig):
 
 class SubPipeline(BaseModel):
     name: str
-    config: Optional[PipelineConfig] = None
-    depends_on: List[str] = Field(default_factory=list)
-    tasks: List[TaskYAML]
+    config: PipelineConfig | None = None
+    depends_on: list[str] = Field(default_factory=list)
+    tasks: list[TaskYAML]
 
 
 class PipelineYAML(BaseModel):
     name: str
-    options: Optional[OptionsYAML] = None
-    config: Optional[PipelineConfig] = None
-    tasks: Optional[List[TaskYAML]] = None
-    pipelines: Optional[List[SubPipeline]] = None
+    options: OptionsYAML | None = None
+    config: PipelineConfig | None = None
+    tasks: list[TaskYAML] | None = None
+    pipelines: list[SubPipeline] | None = None
 
     @model_validator(mode="after")
     def _normalize(self) -> "PipelineYAML":

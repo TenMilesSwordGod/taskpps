@@ -1,27 +1,25 @@
-import os
 from pathlib import Path
 
-import pytest
-
 from taskpps.config import (
+    Settings,
     find_project_root,
-    set_project_root,
-    load_settings,
-    get_settings,
+    get_agents_dir,
+    get_credentials_dir,
     get_data_dir,
     get_db_path,
     get_logs_dir,
     get_pipelines_dir,
-    get_agents_dir,
-    get_credentials_dir,
-    get_tasks_dir,
     get_plugins_dir,
-    Settings,
+    get_settings,
+    get_tasks_dir,
+    load_settings,
+    set_project_root,
 )
 
 
 def test_find_project_root_cached():
     import taskpps.config as cfg
+
     old = cfg._project_root
     cfg._project_root = Path("/tmp/cached_root")
     try:
@@ -33,6 +31,7 @@ def test_find_project_root_cached():
 
 def test_find_project_root_no_config(tmp_path):
     import taskpps.config as cfg
+
     old = cfg._project_root
     cfg._project_root = None
     try:
@@ -44,6 +43,7 @@ def test_find_project_root_no_config(tmp_path):
 
 def test_set_project_root(tmp_path):
     import taskpps.config as cfg
+
     new_root = tmp_path / "new_project"
     new_root.mkdir()
     set_project_root(new_root)
@@ -65,6 +65,7 @@ def test_load_settings_nonexistent_path(tmp_path):
 
 def test_get_settings_auto_load():
     import taskpps.config as cfg
+
     old = cfg._settings
     cfg._settings = None
     try:
@@ -76,6 +77,7 @@ def test_get_settings_auto_load():
 
 def test_get_data_dir_creates(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:
@@ -88,6 +90,7 @@ def test_get_data_dir_creates(tmp_path, setup_project):
 
 def test_db_path_uses_data_dir(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:
@@ -100,6 +103,7 @@ def test_db_path_uses_data_dir(tmp_path, setup_project):
 
 def test_get_logs_dir_creates(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:
@@ -112,6 +116,7 @@ def test_get_logs_dir_creates(tmp_path, setup_project):
 
 def test_get_pipelines_dir_no_trailing_slash(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:
@@ -123,6 +128,7 @@ def test_get_pipelines_dir_no_trailing_slash(tmp_path, setup_project):
 
 def test_get_agents_dir(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:
@@ -134,6 +140,7 @@ def test_get_agents_dir(tmp_path, setup_project):
 
 def test_get_credentials_dir(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:
@@ -145,6 +152,7 @@ def test_get_credentials_dir(tmp_path, setup_project):
 
 def test_get_tasks_dir(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:
@@ -156,6 +164,7 @@ def test_get_tasks_dir(tmp_path, setup_project):
 
 def test_get_plugins_dir(tmp_path, setup_project):
     import taskpps.config as cfg
+
     old_root = cfg._project_root
     cfg._project_root = tmp_path
     try:

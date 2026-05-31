@@ -1,4 +1,5 @@
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 from blinker import Signal
 
@@ -7,7 +8,7 @@ class EventBus:
     _instance: Optional["EventBus"] = None
 
     def __init__(self):
-        self._signals: Dict[str, Signal] = {}
+        self._signals: dict[str, Signal] = {}
 
     @classmethod
     def get_instance(cls) -> "EventBus":

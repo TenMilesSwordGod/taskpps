@@ -1,8 +1,9 @@
+from unittest.mock import MagicMock
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-from taskpps.executors.ssh import SSHExecutor
+
 from taskpps.executors.base import BaseExecutor, ExecutorResult
+from taskpps.executors.ssh import SSHExecutor
 
 
 def test_base_executor_is_abstract():

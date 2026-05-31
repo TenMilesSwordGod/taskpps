@@ -1,20 +1,19 @@
-import pytest
 import asyncio
-from datetime import datetime
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+import contextlib
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from taskpps.db.engine import get_session_factory, reset_engine
-from taskpps.db.repository import RunRepository, TaskRunRepository
-from taskpps.models.run import RunStatus
-from taskpps.domain.context import _navigate_to_key, _set_key, set_dot_path, apply_overrides
-from taskpps.engine.runner import PipelineRunner
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.db.repository import RunRepository
 from taskpps.domain.context import ExecutionContext
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.engine.runner import PipelineRunner
 from taskpps.executors.base import ExecutorResult
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.ssh import SSHExecutor
 from taskpps.loaders.credential_loader import CredentialLoader
+from taskpps.models.run import RunStatus
 
 
 # --- db/repository.py:43 (list_runs with status filter) ---
@@ -27,9 +26,6 @@ async def test_list_runs_with_status(db_engine):
         assert len(runs) >= 1
         for r in runs:
             assert r.status == RunStatus.PENDING
-
-
-
 
 
 # --- engine/runner.py:67-68 (task name in level not in pipeline) ---
@@ -53,12 +49,14 @@ async def test_runner_task_not_found_in_level():
     task_repo = MagicMock()
     task_repo.update_task_status = AsyncMock()
 
-    with patch("taskpps.engine.runner.RunRepository", return_value=run_repo), \
-            patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.get_event_bus"), \
-            patch("taskpps.engine.runner.get_settings"), \
-            patch("taskpps.engine.runner.DAG", return_value=mock_dag_instance):
+    with (
+        patch("taskpps.engine.runner.RunRepository", return_value=run_repo),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+        patch("taskpps.engine.runner.DAG", return_value=mock_dag_instance),
+    ):
         mock_sf.return_value.return_value = mock_session
         await runner.run()
     assert True
@@ -88,13 +86,15 @@ async def test_runner_should_skip():
     task_repo = MagicMock()
     task_repo.update_task_status = AsyncMock()
 
-    with patch("taskpps.engine.runner.RunRepository", return_value=run_repo), \
-            patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-            patch("taskpps.engine.runner.get_logs_dir"), \
-            patch("taskpps.engine.runner.get_event_bus"), \
-            patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.RunRepository", return_value=run_repo),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         mock_sf.return_value.return_value = mock_session
         await runner.run()
 
@@ -122,20 +122,19 @@ async def test_runner_invoke_executor_path():
     task_repo = MagicMock()
     task_repo.update_task_status = AsyncMock()
 
-    with patch("taskpps.engine.runner.RunRepository", return_value=run_repo), \
-            patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-            patch("taskpps.engine.runner.get_logs_dir"), \
-            patch("taskpps.engine.runner.get_event_bus"), \
-            patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.RunRepository", return_value=run_repo),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         mock_sf.return_value.return_value = mock_session
         await runner.run()
 
     assert True
-
-
-
 
 
 # --- executors/invoke.py:63-65 (invoke decorator path) ---
@@ -148,12 +147,14 @@ def deco_func(ctx):
     return "ok"
 deco_func._task = True
 """)
-    with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir), \
-            patch("invoke.Context"):
+    with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir), patch("invoke.Context"):
         executor = InvokeExecutor()
         log_path = tmp_path / "deco.log"
         result = await executor.execute(
-            "", {}, log_path, invoke_task="deco_mod.deco_func",
+            "",
+            {},
+            log_path,
+            invoke_task="deco_mod.deco_func",
         )
         assert result.success
 
@@ -173,16 +174,12 @@ def slow_func():
 """)
 
     with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):
-        task = asyncio.create_task(
-            executor.execute("", {}, log_path, invoke_task="slow.slow_func", timeout=120)
-        )
+        task = asyncio.create_task(executor.execute("", {}, log_path, invoke_task="slow.slow_func", timeout=120))
         await asyncio.sleep(0.1)
         task.cancel()
         await asyncio.sleep(0.1)
-        try:
-            result = await task
-        except (asyncio.CancelledError, Exception):
-            pass
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
 
 
 # --- executors/ssh.py:55-66 (SSH execute code paths) ---
@@ -217,6 +214,7 @@ def test_credential_loader_load_all_yml_with_exception(tmp_path):
 async def test_lifespan_without_settings():
     import taskpps.config as cfg
     import taskpps.main as main
+
     old_settings = cfg._settings
     cfg._settings = None
     old_root = cfg._project_root
@@ -237,7 +235,7 @@ async def test_lifespan_without_settings():
 async def test_lifespan_close_db_not_external():
     import taskpps.config as cfg
     import taskpps.main as main
-    from taskpps.db.engine import reset_engine
+
     old_settings = cfg._settings
     old_root = cfg._project_root
     old_ext = main._external_engine
@@ -255,6 +253,7 @@ async def test_lifespan_close_db_not_external():
 # --- plugins/cron_trigger.py:60-69 (_run_loop callback path) ---
 def test_cron_trigger_run_loop_with_callback_path():
     from taskpps.plugins.cron_trigger import CronTrigger
+
     callback = MagicMock()
     trigger = CronTrigger(expression="* * * * *", pipeline_file="test.yaml", callback=callback)
     trigger._running = True
@@ -266,6 +265,7 @@ def test_cron_trigger_run_loop_with_callback_path():
 # --- services/plugin_manager.py:72-73 (plugin instantiation error) ---
 def test_plugin_manager_instantiation_fail(tmp_project):
     import taskpps.config as cfg
+
     plugins_dir = cfg.get_plugins_dir()
     plugins_dir.mkdir(parents=True, exist_ok=True)
     (plugins_dir / "fail_plugin.py").write_text("""
@@ -286,14 +286,16 @@ class InitFailPlugin(BasePlugin):
         pass
 """)
     from taskpps.services.plugin_manager import PluginManager
+
     pm = PluginManager()
     pm.discover_plugins()
 
 
 # --- services/plugin_manager.py:92 (trigger start check) ---
 def test_plugin_manager_start_triggers_with_running():
-    from taskpps.services.plugin_manager import PluginManager
     from taskpps.plugins.cron_trigger import CronTrigger
+    from taskpps.services.plugin_manager import PluginManager
+
     trigger = CronTrigger(expression="0 * * * *", pipeline_file="test.yaml")
     trigger._running = True
     trigger2 = CronTrigger(expression="*/5 * * * *", pipeline_file="test2.yaml")

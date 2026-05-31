@@ -1,12 +1,14 @@
 import pytest
-from taskpps.db.engine import get_engine, get_session_factory, reset_engine, set_engine
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
+
+from taskpps.db.engine import get_engine, get_session_factory, reset_engine, set_engine
 
 
 def test_reset_engine():
     reset_engine()
     from taskpps.db import engine as eng
+
     assert eng._engine is None
     assert eng._session_factory is None
 

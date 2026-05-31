@@ -1,40 +1,36 @@
-import pytest
-import asyncio
-import os
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from taskpps.domain.pipeline import (
-    ResolvedPipeline,
-    ResolvedTask,
-    ResolvedStep,
-    ResolvedSubPipeline,
-    _merge_config,
-)
-from taskpps.domain.dag import DAG, DAGCycleError
+import pytest
+
 from taskpps.domain.context import (
     ExecutionContext,
+    _navigate_to_key,
+    _set_key,
     apply_overrides,
     build_env,
     resolve_dot_path,
     set_dot_path,
-    _navigate_to_key,
-    _set_key,
 )
-from taskpps.schemas.pipeline import (
-    PipelineYAML,
-    PipelineConfig,
-    OptionsYAML,
-    TaskYAML,
-    TaskStep,
-    InvokeSpec,
-    SubPipeline,
+from taskpps.domain.dag import DAG, DAGCycleError
+from taskpps.domain.pipeline import (
+    ResolvedPipeline,
+    ResolvedStep,
+    ResolvedSubPipeline,
+    ResolvedTask,
+    _merge_config,
 )
 from taskpps.engine.runner import PipelineRunner, _evaluate_when, get_active_runner
-from taskpps.executors.base import ExecutorResult
-from taskpps.executors.local import LocalExecutor
-from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors import create_executor
+from taskpps.executors.base import ExecutorResult
+from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.local import LocalExecutor
+from taskpps.schemas.pipeline import (
+    OptionsYAML,
+    PipelineConfig,
+    PipelineYAML,
+    SubPipeline,
+    TaskYAML,
+)
 from taskpps.services.pipeline_service import PipelineService
 
 
@@ -308,9 +304,11 @@ async def test_execute_task_with_empty_task_run_id(tmp_path):
     runner = PipelineRunner(run_id="test123", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {}
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec:
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
@@ -335,9 +333,11 @@ async def test_execute_task_with_valid_task_run_id(tmp_path):
     runner = PipelineRunner(run_id="test123", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {"t1": "valid-task-id-123"}
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec:
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="hello")
@@ -398,11 +398,11 @@ class TestEvaluateWhen:
 
     def test_evaluate_when_malformed_no_operator(self):
         """Malformed expression without operator."""
-        assert _evaluate_when('${env.STAGE} prod', {}) is True
+        assert _evaluate_when("${env.STAGE} prod", {}) is True
 
     def test_evaluate_when_malformed_missing_quotes(self):
         """Malformed expression without quotes."""
-        assert _evaluate_when('${env.STAGE} == prod', {}) is True
+        assert _evaluate_when("${env.STAGE} == prod", {}) is True
 
 
 # ============================================================
@@ -589,10 +589,12 @@ async def test_execute_task_retry_zero(tmp_path):
     runner = PipelineRunner(run_id="test123", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {"t1": "valid-task-id"}
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec, \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=1, stderr="failed")
@@ -617,10 +619,12 @@ async def test_execute_task_retry_success_on_second_attempt(tmp_path):
     runner = PipelineRunner(run_id="test123", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {"t1": "valid-task-id"}
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec, \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.side_effect = [
@@ -648,10 +652,12 @@ async def test_execute_task_all_retries_exhausted(tmp_path):
     runner = PipelineRunner(run_id="test123", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {"t1": "valid-task-id"}
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec, \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.side_effect = [
@@ -806,11 +812,14 @@ class TestApplyOverrides:
             "options": {"host": "old", "timeout": 60},
             "tasks": [{"name": "t1", "timeout": 100}],
         }
-        result = apply_overrides(data, {
-            "options.host": "new",
-            "options.timeout": 120,
-            "tasks[0].timeout": 200,
-        })
+        result = apply_overrides(
+            data,
+            {
+                "options.host": "new",
+                "options.timeout": 120,
+                "tasks[0].timeout": 200,
+            },
+        )
         assert result["options"]["host"] == "new"
         assert result["options"]["timeout"] == 120
         assert result["tasks"][0]["timeout"] == 200
@@ -955,9 +964,7 @@ class TestResolvedPipeline:
 
     def test_pipeline_get_nonexistent_subpipeline(self):
         """Getting non-existent subpipeline returns None."""
-        pipeline = ResolvedPipeline(name="test", tasks=[
-            ResolvedTask(name="t1", task_type="command", command="echo")
-        ])
+        pipeline = ResolvedPipeline(name="test", tasks=[ResolvedTask(name="t1", task_type="command", command="echo")])
         assert pipeline.get_subpipeline_by_name("nonexistent") is None
 
     def test_pipeline_multiple_subpipelines(self):
@@ -1142,7 +1149,6 @@ def test_create_executor_invoke_type():
 @pytest.mark.asyncio
 async def test_pipeline_service_list_pipelines_empty(setup_project, tmp_project, db_engine):
     """List pipelines when pipelines dir exists but is empty."""
-    import shutil
     pipelines_dir = tmp_project / "pipelines"
     for f in pipelines_dir.iterdir():
         f.unlink()
@@ -1152,7 +1158,7 @@ async def test_pipeline_service_list_pipelines_empty(setup_project, tmp_project,
 
 
 # ============================================================
-# P0 Bug 23: PipelineYAML edge cases  
+# P0 Bug 23: PipelineYAML edge cases
 # ============================================================
 
 
@@ -1217,18 +1223,20 @@ class TestPipelineYAMLEdgeCases:
 def test_pipeline_loader_empty_file(tmp_path):
     """Empty YAML file should raise ValueError."""
     from taskpps.loaders.pipeline_loader import PipelineLoader
+
     pipelines_dir = tmp_path / "pipelines"
     pipelines_dir.mkdir()
     empty_file = pipelines_dir / "empty.yaml"
     empty_file.write_text("")
     loader = PipelineLoader(pipelines_dir)
-    with pytest.raises(ValueError, match="empty|空"):
+    with pytest.raises(ValueError, match=r"empty|空"):
         loader.load("empty.yaml")
 
 
 def test_pipeline_loader_nonexistent_dir(tmp_path):
     """Base dir that doesn't exist should give empty result."""
     from taskpps.loaders.pipeline_loader import PipelineLoader
+
     loader = PipelineLoader(tmp_path / "nonexistent")
     result = loader.load_all()
     assert result == {}
@@ -1363,9 +1371,11 @@ async def test_execute_task_steps_type(tmp_path):
     runner = PipelineRunner(run_id="test", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {"step-task": "task-id"}
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec:
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
@@ -1391,9 +1401,11 @@ async def test_execute_task_commands_type(tmp_path):
     runner = PipelineRunner(run_id="test", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {"cmd-task": "task-id"}
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec:
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
@@ -1523,9 +1535,11 @@ async def test_execute_subpipeline_on_failure_continue(tmp_path):
         "test.independent": "ti-id",
     }
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor") as mock_create_exec:
-        mock_session = _setup_session_mock(mock_factory)
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor") as mock_create_exec,
+    ):
+        _setup_session_mock(mock_factory)
 
         mock_executor = AsyncMock()
         mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")

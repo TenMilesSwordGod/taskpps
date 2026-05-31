@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
 
-from taskpps.config import get_logs_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
 from taskpps.i18n import t
-from taskpps.schemas.run import CreateRunRequest, RunResponse, CleanResponse, RunListResponse
+from taskpps.schemas.run import CleanResponse, CreateRunRequest, RunListResponse, RunResponse
 from taskpps.services.pipeline_service import PipelineService
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -25,13 +23,13 @@ async def create_run(body: CreateRunRequest):
         result = await _pipeline_service.create_run(body.pipeline, body.params)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/", response_model=RunListResponse)
 async def list_runs(
-    pipeline: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    pipeline: str | None = Query(None),
+    status: str | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
 ):
     runs_data = await _pipeline_service.list_runs(pipeline=pipeline, status=status, limit=limit)
@@ -49,8 +47,8 @@ async def get_run(run_id: str):
 @router.get("/{run_id}/logs")
 async def get_run_logs(
     run_id: str,
-    task: Optional[str] = Query(None),
-    tail: Optional[int] = Query(None, ge=1),
+    task: str | None = Query(None),
+    tail: int | None = Query(None, ge=1),
     follow: bool = Query(False),
 ):
     async with get_session_factory()() as session:
@@ -113,12 +111,18 @@ async def get_run_logs(
                         yield {"event": "log", "data": f"{task_name}: {new_content}"}
 
                     from taskpps.models.run import TaskStatus
+
                     async with get_session_factory()() as session:
                         task_repo = TaskRunRepository(session)
                         task_run = await task_repo.get_task_run(
                             next((t.id for t in task_runs if t.task_name == task_name), "")
                         )
-                        if task_run and task_run.status in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.SKIPPED):
+                        if task_run and task_run.status in (
+                            TaskStatus.SUCCESS,
+                            TaskStatus.FAILED,
+                            TaskStatus.CANCELLED,
+                            TaskStatus.SKIPPED,
+                        ):
                             pass
                         else:  # pragma: no cover
                             active = True  # pragma: no cover
@@ -141,8 +145,8 @@ async def cancel_run(run_id: str):
 
 @router.delete("/", response_model=CleanResponse)
 async def clean_runs(
-    older_than: Optional[int] = Query(None, description="Delete runs older than N days", ge=1),
-    keep: Optional[int] = Query(None, description="Keep only N most recent runs", ge=0),
+    older_than: int | None = Query(None, description="Delete runs older than N days", ge=1),
+    keep: int | None = Query(None, description="Keep only N most recent runs", ge=0),
     force: bool = Query(False, description="Delete all runs"),
 ):
     result = await _pipeline_service.clean_runs(older_than=older_than, keep=keep, force=force)

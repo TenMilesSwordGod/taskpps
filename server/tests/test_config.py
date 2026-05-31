@@ -1,4 +1,14 @@
-from taskpps.config import get_settings, load_settings, get_data_dir, get_db_path, get_logs_dir, get_pipelines_dir, get_agents_dir, get_credentials_dir, get_tasks_dir, get_plugins_dir
+from taskpps.config import (
+    get_agents_dir,
+    get_credentials_dir,
+    get_data_dir,
+    get_db_path,
+    get_logs_dir,
+    get_pipelines_dir,
+    get_plugins_dir,
+    get_settings,
+    get_tasks_dir,
+)
 
 
 def test_settings_defaults():

@@ -3,10 +3,13 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_agent_try_connect_local(client):
-    resp = await client.post("/api/agents/try-connect", json={
-        "agent_id": "api-agent-a",
-        "timeout": 5,
-    })
+    resp = await client.post(
+        "/api/agents/try-connect",
+        json={
+            "agent_id": "api-agent-a",
+            "timeout": 5,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ready"
@@ -16,17 +19,23 @@ async def test_agent_try_connect_local(client):
 
 @pytest.mark.asyncio
 async def test_agent_try_connect_not_found(client):
-    resp = await client.post("/api/agents/try-connect", json={
-        "agent_id": "nonexistent",
-    })
+    resp = await client.post(
+        "/api/agents/try-connect",
+        json={
+            "agent_id": "nonexistent",
+        },
+    )
     assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_agent_check_all(client):
-    resp = await client.post("/api/agents/check", json={
-        "timeout": 5,
-    })
+    resp = await client.post(
+        "/api/agents/check",
+        json={
+            "timeout": 5,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert "results" in data
@@ -36,10 +45,13 @@ async def test_agent_check_all(client):
 
 @pytest.mark.asyncio
 async def test_agent_check_single(client):
-    resp = await client.post("/api/agents/check", json={
-        "agent_id": "api-agent-a",
-        "timeout": 5,
-    })
+    resp = await client.post(
+        "/api/agents/check",
+        json={
+            "agent_id": "api-agent-a",
+            "timeout": 5,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["summary"]["total"] == 1
@@ -48,10 +60,13 @@ async def test_agent_check_single(client):
 
 @pytest.mark.asyncio
 async def test_agent_check_file_filter(client):
-    resp = await client.post("/api/agents/check", json={
-        "file_filter": "ssh",
-        "timeout": 5,
-    })
+    resp = await client.post(
+        "/api/agents/check",
+        json={
+            "file_filter": "ssh",
+            "timeout": 5,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     for r in data["results"]:
@@ -60,15 +75,18 @@ async def test_agent_check_file_filter(client):
 
 @pytest.mark.asyncio
 async def test_agent_check_stream(client):
-    resp = await client.post("/api/agents/check-stream", json={
-        "timeout": 5,
-    })
+    resp = await client.post(
+        "/api/agents/check-stream",
+        json={
+            "timeout": 5,
+        },
+    )
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
 
     body = resp.text
     lines = body.strip().split("\n")
-    data_lines = [l for l in lines if l.startswith("data: ")]
+    data_lines = [line for line in lines if line.startswith("data: ")]
 
     assert len(data_lines) >= 2
 
@@ -80,6 +98,7 @@ async def test_agent_check_stream(client):
             has_summary = True
         else:
             import json
+
             r = json.loads(content)
             assert "agent_id" in r
             assert "status" in r
@@ -91,15 +110,18 @@ async def test_agent_check_stream(client):
 
 @pytest.mark.asyncio
 async def test_agent_check_stream_single(client):
-    resp = await client.post("/api/agents/check-stream", json={
-        "agent_id": "api-agent-a",
-        "timeout": 5,
-    })
+    resp = await client.post(
+        "/api/agents/check-stream",
+        json={
+            "agent_id": "api-agent-a",
+            "timeout": 5,
+        },
+    )
     assert resp.status_code == 200
 
     body = resp.text
     lines = body.strip().split("\n")
-    data_lines = [l for l in lines if l.startswith("data: ")]
+    data_lines = [line for line in lines if line.startswith("data: ")]
 
     assert len(data_lines) == 2
     assert data_lines[0].startswith("data: ") and not data_lines[0].startswith("data: summary:")
@@ -108,19 +130,23 @@ async def test_agent_check_stream_single(client):
 
 @pytest.mark.asyncio
 async def test_agent_check_stream_file_filter(client):
-    resp = await client.post("/api/agents/check-stream", json={
-        "file_filter": "ssh",
-        "timeout": 5,
-    })
+    resp = await client.post(
+        "/api/agents/check-stream",
+        json={
+            "file_filter": "ssh",
+            "timeout": 5,
+        },
+    )
     assert resp.status_code == 200
 
     body = resp.text
     lines = body.strip().split("\n")
-    data_lines = [l for l in lines if l.startswith("data: ")]
+    data_lines = [line for line in lines if line.startswith("data: ")]
 
     for line in data_lines[:-1]:
         content = line.removeprefix("data: ")
         if not content.startswith("summary:"):
             import json
+
             r = json.loads(content)
             assert "ssh.yaml" in r["source_file"]

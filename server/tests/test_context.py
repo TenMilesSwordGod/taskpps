@@ -1,5 +1,6 @@
 import pytest
-from taskpps.domain.context import resolve_dot_path, set_dot_path, apply_overrides, _navigate_to_key
+
+from taskpps.domain.context import _navigate_to_key, apply_overrides, resolve_dot_path, set_dot_path
 
 
 def test_navigate_to_key_dict():

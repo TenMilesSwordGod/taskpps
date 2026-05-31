@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+import contextlib
 
 from taskpps.config import get_settings
 
-
-_zh: Dict[str, str] = {
+_zh: dict[str, str] = {
     # API
     "Run not found": "运行记录未找到",
     "Run not found or cannot be cancelled": "运行记录未找到或无法取消",
@@ -46,7 +45,7 @@ _zh: Dict[str, str] = {
 }
 
 
-_en: Dict[str, str] = {}
+_en: dict[str, str] = {}
 
 
 class Translator:
@@ -57,14 +56,12 @@ class Translator:
     def t(self, key: str, **kwargs) -> str:
         msg = self._translations.get(key, key)
         if kwargs:
-            try:
+            with contextlib.suppress(KeyError):
                 msg = msg.format(**kwargs)
-            except KeyError:
-                pass
         return msg
 
 
-_translator: Optional[Translator] = None
+_translator: Translator | None = None
 
 
 def get_translator() -> Translator:

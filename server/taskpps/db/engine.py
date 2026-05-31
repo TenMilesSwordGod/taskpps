@@ -1,8 +1,7 @@
 from sqlalchemy import event, text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from taskpps.config import get_db_path
 
@@ -65,9 +64,7 @@ async def _migrate_schema() -> None:
             existing = {row[1] for row in result.fetchall()}
             for col_name, col_def in columns:
                 if col_name not in existing:
-                    await conn.execute(text(
-                        f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"
-                    ))
+                    await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
 
 
 async def init_db() -> None:

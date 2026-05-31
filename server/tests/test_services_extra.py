@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
+import pytest
 
 from taskpps.services.pipeline_service import PipelineService
 from taskpps.services.plugin_manager import PluginManager
@@ -8,8 +9,8 @@ from taskpps.services.plugin_manager import PluginManager
 
 @pytest.mark.asyncio
 async def test_cancel_run_pending_status(setup_project, tmp_project, db_engine):
-    from taskpps.db.repository import RunRepository
     from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository
 
     svc = PipelineService()
     result = await svc.create_run("deploy.yaml")
@@ -25,11 +26,12 @@ async def test_cancel_run_pending_status(setup_project, tmp_project, db_engine):
 
 @pytest.mark.asyncio
 async def test_cancel_run_completed_status(setup_project, tmp_project, db_engine):
-    from taskpps.db.repository import RunRepository
+    import asyncio
+
     from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository
     from taskpps.engine.runner import get_active_runner
     from taskpps.models.run import RunStatus
-    import asyncio
 
     svc = PipelineService()
     result = await svc.create_run("deploy.yaml")
@@ -40,6 +42,7 @@ async def test_cancel_run_completed_status(setup_project, tmp_project, db_engine
     runner = get_active_runner(run_id)
     if runner:
         from taskpps.engine.runner import _active_runs
+
         if run_id in _active_runs:
             del _active_runs[run_id]
 
@@ -83,6 +86,7 @@ async def test_clean_runs_keep(setup_project, tmp_project, db_engine):
 @pytest.mark.asyncio
 async def test_clean_runs_with_logs(setup_project, tmp_project, db_engine):
     from taskpps.config import get_logs_dir
+
     svc = PipelineService()
     result = await svc.create_run("deploy.yaml")
     run_id = result["id"]

@@ -1,7 +1,6 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from taskpps.plugins.base import BasePlugin, TriggerPlugin, NotifierPlugin, ExecutorPlugin
+from taskpps.plugins.base import BasePlugin, ExecutorPlugin, NotifierPlugin, TriggerPlugin
 from taskpps.plugins.cron_trigger import CronTrigger
 from taskpps.services.plugin_manager import PluginManager
 
@@ -163,9 +162,8 @@ def test_plugin_manager_start_triggers_from_config(tmp_path):
 
 def test_plugin_manager_start_triggers_with_cron(tmp_path):
     from taskpps.config import Settings, TriggerConfig
-    settings = Settings(
-        triggers=[TriggerConfig(type="cron", schedule="0 * * * *", pipeline="deploy.yaml")]
-    )
+
+    settings = Settings(triggers=[TriggerConfig(type="cron", schedule="0 * * * *", pipeline="deploy.yaml")])
 
     pm = PluginManager()
     with patch("taskpps.services.plugin_manager.get_settings", return_value=settings):

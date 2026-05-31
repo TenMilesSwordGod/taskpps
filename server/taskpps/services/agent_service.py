@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import socket
 import time
-from typing import AsyncGenerator, List, Optional
+from collections.abc import AsyncGenerator
 
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
@@ -56,7 +56,7 @@ class AgentService:
         self._loader.clear_cache()
         all_agents = self._loader.load_all()
 
-        target: List[dict] = []
+        target: list[dict] = []
         for agent_id, agent_data in all_agents.items():
             if request.agent_id and agent_id != request.agent_id:
                 continue
@@ -83,10 +83,12 @@ class AgentService:
             else:
                 connected += 1
             import json
+
             yield f"data: {json.dumps(result.model_dump())}\n\n"
 
         summary = AgentCheckSummary(total=total, connected=connected, failed=failed)
         import json
+
         yield f"data: summary:{json.dumps(summary.model_dump())}\n\n"
 
     def _check_one(self, agent_data: dict, timeout: int) -> AgentCheckResult:
@@ -126,7 +128,7 @@ class AgentService:
                 latency_ms=latency_ms,
                 error=None,
             )
-        except socket.timeout:
+        except TimeoutError:
             latency_ms = int(timeout * 1000)
             return AgentCheckResult(
                 agent_id=agent_id,

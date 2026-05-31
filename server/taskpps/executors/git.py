@@ -4,7 +4,6 @@ import asyncio
 import os
 import shlex
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
@@ -14,8 +13,8 @@ class GitExecutor(BaseExecutor):
     def __init__(
         self,
         repo: str,
-        ref: Optional[str] = None,
-        credential: Optional[str] = None,
+        ref: str | None = None,
+        credential: str | None = None,
         dest: str = "/workspace/repo",
         depth: int = 1,
         submodules: bool = False,
@@ -31,10 +30,10 @@ class GitExecutor(BaseExecutor):
     async def execute(
         self,
         command: str,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
         self._cancelled = False
@@ -45,7 +44,12 @@ class GitExecutor(BaseExecutor):
             dest_path = Path(self.dest)
             if dest_path.exists() and list(dest_path.iterdir()):
                 with open(log_path, "a") as f:
-                    f.write(t("Destination '{dest}' already exists and is not empty, pulling latest changes\n", dest=self.dest))
+                    f.write(
+                        t(
+                            "Destination '{dest}' already exists and is not empty, pulling latest changes\n",
+                            dest=self.dest,
+                        )
+                    )
                 return _git_pull(self.dest, self.ref, log_path, merged_env, self.credential)
 
             dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,19 +79,19 @@ class GitExecutor(BaseExecutor):
         self._cancelled = True
 
 
-def _apply_credential_to_url(repo_url: str, credential: Optional[str], env: Dict[str, str]) -> str:
+def _apply_credential_to_url(repo_url: str, credential: str | None, env: dict[str, str]) -> str:
     if not credential:
         return repo_url
 
     token = env.get("GIT_TOKEN") or env.get(credential) or credential
     if repo_url.startswith("https://") and token:
         prefix = "https://"
-        rest = repo_url[len(prefix):]
+        rest = repo_url[len(prefix) :]
         return f"{prefix}oauth2:{token}@{rest}"
     return repo_url
 
 
-def _git_pull(dest: str, ref: str, log_path: Path, env: Dict[str, str], credential: Optional[str]) -> ExecutorResult:
+def _git_pull(dest: str, ref: str, log_path: Path, env: dict[str, str], credential: str | None) -> ExecutorResult:
     fetch_result = _run_subprocess(["git", "fetch", "origin", ref], log_path, env, cwd=dest)
     if not fetch_result.success:
         return fetch_result
@@ -99,7 +103,7 @@ def _git_pull(dest: str, ref: str, log_path: Path, env: Dict[str, str], credenti
     return _run_subprocess(["git", "pull", "origin", ref], log_path, env, cwd=dest)
 
 
-def _run_subprocess(args: list, log_path: Path, env: Dict[str, str], cwd: Optional[str] = None) -> ExecutorResult:
+def _run_subprocess(args: list, log_path: Path, env: dict[str, str], cwd: str | None = None) -> ExecutorResult:
     import subprocess
 
     with open(log_path, "a") as f:

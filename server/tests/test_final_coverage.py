@@ -1,9 +1,12 @@
-import pytest
 import asyncio
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from taskpps.domain.context import ExecutionContext
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.engine.runner import PipelineRunner
 from taskpps.executors.base import ExecutorResult
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.ssh import SSHExecutor
@@ -11,9 +14,6 @@ from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
 from taskpps.loaders.pipeline_loader import PipelineLoader
 from taskpps.plugins.cron_trigger import CronTrigger
-from taskpps.engine.runner import PipelineRunner
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
-from taskpps.domain.context import ExecutionContext
 
 
 # --- engine/runner.py:68 (should_skip check) ---
@@ -41,13 +41,15 @@ async def test_runner_skip_on_failure():
     task_repo.update_task_status = AsyncMock()
     task_repo.create_task_run = AsyncMock()
 
-    with patch("taskpps.engine.runner.RunRepository", return_value=run_repo), \
-            patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-            patch("taskpps.engine.runner.get_logs_dir"), \
-            patch("taskpps.engine.runner.get_event_bus"), \
-            patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.RunRepository", return_value=run_repo),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         mock_sf.return_value.return_value = mock_session
         await runner.run()
 
@@ -75,13 +77,15 @@ async def test_runner_executor_exception_in_gather():
     task_repo = MagicMock()
     task_repo.update_task_status = AsyncMock()
 
-    with patch("taskpps.engine.runner.RunRepository", return_value=run_repo), \
-            patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-            patch("taskpps.engine.runner.get_logs_dir"), \
-            patch("taskpps.engine.runner.get_event_bus"), \
-            patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.RunRepository", return_value=run_repo),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         mock_sf.return_value.return_value = mock_session
         await runner.run()
 
@@ -104,11 +108,13 @@ async def test_runner_exception_during_execution():
     run_repo = MagicMock()
     run_repo.update_run_status = AsyncMock()
 
-    with patch("taskpps.engine.runner.DAG") as mock_dag, \
-            patch("taskpps.engine.runner.RunRepository", return_value=run_repo), \
-            patch("taskpps.engine.runner.TaskRunRepository"), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.get_event_bus"):
+    with (
+        patch("taskpps.engine.runner.DAG") as mock_dag,
+        patch("taskpps.engine.runner.RunRepository", return_value=run_repo),
+        patch("taskpps.engine.runner.TaskRunRepository"),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.get_event_bus"),
+    ):
         dag_instance = MagicMock()
         dag_instance.get_execution_levels.side_effect = Exception("unexpected error")
         mock_dag.return_value = dag_instance
@@ -137,13 +143,15 @@ async def test_runner_invoke_executor_branch():
     run_repo = MagicMock()
     run_repo.update_run_status = AsyncMock()
 
-    with patch("taskpps.engine.runner.RunRepository", return_value=run_repo), \
-            patch("taskpps.engine.runner.TaskRunRepository"), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-            patch("taskpps.engine.runner.get_logs_dir"), \
-            patch("taskpps.engine.runner.get_event_bus"), \
-            patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.RunRepository", return_value=run_repo),
+        patch("taskpps.engine.runner.TaskRunRepository"),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         mock_sf.return_value.return_value = mock_session
         await runner.run()
 
@@ -168,10 +176,12 @@ async def test_runner_cancel_with_running_executors():
     task_repo = MagicMock()
     task_repo.cancel_pending_tasks = AsyncMock()
 
-    with patch("taskpps.engine.runner.RunRepository"), \
-            patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo), \
-            patch("taskpps.engine.runner.get_session_factory") as mock_sf, \
-            patch("taskpps.engine.runner.get_event_bus"):
+    with (
+        patch("taskpps.engine.runner.RunRepository"),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=task_repo),
+        patch("taskpps.engine.runner.get_session_factory") as mock_sf,
+        patch("taskpps.engine.runner.get_event_bus"),
+    ):
         mock_sf.return_value.return_value = mock_session
         await runner.cancel()
         mock_executor.cancel.assert_called_once()
@@ -191,7 +201,10 @@ def failing_func():
 
     with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):
         result = await executor.execute(
-            "", {}, log_path, invoke_task="err_module.failing_func",
+            "",
+            {},
+            log_path,
+            invoke_task="err_module.failing_func",
         )
     assert not result.success
     assert result.exit_code == 1
@@ -211,14 +224,13 @@ async def test_ssh_executor_connect_refused():
 @pytest.mark.asyncio
 async def test_ssh_executor_cancelled():
     ex = SSHExecutor(host="127.0.0.1", port=29999, username="test", password="pass")
-    with patch.object(ex, '_ensure_log_dir'):
-        with patch('asyncio.get_event_loop') as mock_evloop:
-            mock_loop = MagicMock()
-            mock_evloop.return_value = mock_loop
-            mock_loop.run_in_executor.side_effect = asyncio.CancelledError()
-            log_path = Path("/tmp/ssh_cancel.log")
-            result = await ex.execute("echo hi", {}, log_path)
-            assert result.exit_code == -1
+    with patch.object(ex, "_ensure_log_dir"), patch("asyncio.get_event_loop") as mock_evloop:
+        mock_loop = MagicMock()
+        mock_evloop.return_value = mock_loop
+        mock_loop.run_in_executor.side_effect = asyncio.CancelledError()
+        log_path = Path("/tmp/ssh_cancel.log")
+        result = await ex.execute("echo hi", {}, log_path)
+        assert result.exit_code == -1
 
 
 # --- loaders/agent_loader.py:49-50 (yml glob exception) ---
@@ -267,6 +279,7 @@ def test_cron_trigger_callback_execution():
 # --- services/plugin_manager.py:72-73 (instantiation error) ---
 def test_plugin_manager_try_load_instantiation_error(tmp_path):
     from taskpps.services.plugin_manager import PluginManager
+
     plugins_dir = tmp_path / "plugins"
     plugins_dir.mkdir()
     pyfile = plugins_dir / "bad_plugin.py"
@@ -292,6 +305,7 @@ class BrokenInitPlugin(BasePlugin):
 # --- services/plugin_manager.py:92 (trigger._running check) ---
 def test_plugin_manager_start_triggers_no_running_check():
     from taskpps.services.plugin_manager import PluginManager
+
     with patch("taskpps.services.plugin_manager.get_settings") as mock_gs:
         mock_gs.return_value.triggers = []
         pm = PluginManager()

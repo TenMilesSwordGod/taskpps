@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
-from typing import Dict, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,7 +7,7 @@ import pytest
 from taskpps.domain.context import ExecutionContext
 from taskpps.domain.pipeline import OptionsYAML, ResolvedPipeline, ResolvedTask
 from taskpps.engine.runner import PipelineRunner
-from taskpps.executors.base import BaseExecutor, ExecutorResult
+from taskpps.executors.base import ExecutorResult
 from taskpps.executors.git import GitExecutor
 
 
@@ -68,13 +65,15 @@ async def test_git_task_sets_workspace_in_context(tmp_path):
         dest=workspace_path,
     )
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor", return_value=git_executor), \
-         patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()), \
-         patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"), \
-         patch("taskpps.engine.runner.get_event_bus"), \
-         patch("taskpps.engine.runner.get_settings"), \
-         patch("taskpps.executors.git._run_subprocess", return_value=ExecutorResult(exit_code=0, stdout="cloned")):
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor", return_value=git_executor),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()),
+        patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+        patch("taskpps.executors.git._run_subprocess", return_value=ExecutorResult(exit_code=0, stdout="cloned")),
+    ):
         _setup_session_mock(mock_factory)
         result = await runner._execute_task(git_task, "checkout")
 
@@ -108,12 +107,14 @@ async def test_command_task_uses_workspace_as_cwd(tmp_path):
 
     mock_executor.execute.side_effect = _capture_execute
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-         patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()), \
-         patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"), \
-         patch("taskpps.engine.runner.get_event_bus"), \
-         patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()),
+        patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         _setup_session_mock(mock_factory)
         result = await runner._execute_task(command_task, "build")
 
@@ -150,12 +151,14 @@ async def test_command_task_explicit_cwd_overrides_workspace(tmp_path):
 
     mock_executor.execute.side_effect = _capture_execute
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-         patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()), \
-         patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"), \
-         patch("taskpps.engine.runner.get_event_bus"), \
-         patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()),
+        patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         _setup_session_mock(mock_factory)
         result = await runner._execute_task(command_task, "build")
 
@@ -186,12 +189,14 @@ async def test_no_workspace_cwd_is_none(tmp_path):
 
     mock_executor.execute.side_effect = _capture_execute
 
-    with patch("taskpps.engine.runner.get_session_factory") as mock_factory, \
-         patch("taskpps.engine.runner.create_executor", return_value=mock_executor), \
-         patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()), \
-         patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"), \
-         patch("taskpps.engine.runner.get_event_bus"), \
-         patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.engine.runner.get_session_factory") as mock_factory,
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.TaskRunRepository", return_value=AsyncMock()),
+        patch("taskpps.engine.runner.build_log_path", return_value=tmp_path / "test.log"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         _setup_session_mock(mock_factory)
         result = await runner._execute_task(command_task, "build")
 

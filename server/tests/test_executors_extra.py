@@ -1,14 +1,14 @@
-import pytest
 import asyncio
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from taskpps.domain.pipeline import ResolvedTask
 from taskpps.executors import create_executor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
-from taskpps.executors.local import LocalExecutor
 from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.local import LocalExecutor
 from taskpps.executors.ssh import SSHExecutor
-from taskpps.domain.pipeline import ResolvedTask
 
 
 def test_executor_result_success():
@@ -26,6 +26,9 @@ def test_base_executor_ensure_log_dir(tmp_path):
         async def execute(self, command, env, log_path, timeout=None, cwd=None):
             pass
 
+        async def cancel(self):
+            pass
+
     ex = TestExecutor()
     log_path = tmp_path / "sub" / "test.log"
     ex._ensure_log_dir(log_path)
@@ -35,6 +38,9 @@ def test_base_executor_ensure_log_dir(tmp_path):
 def test_base_executor_cancel():
     class TestExecutor(BaseExecutor):
         async def execute(self, command, env, log_path, timeout=None, cwd=None):
+            pass
+
+        async def cancel(self):
             pass
 
     ex = TestExecutor()
@@ -73,8 +79,10 @@ def test_create_executor_ssh_with_credential(tmp_path):
         credential="mycred",
     )
 
-    with patch("taskpps.loaders.agent_loader.get_agents_dir") as mock_get_agents_dir, \
-            patch("taskpps.loaders.credential_loader.get_credentials_dir") as mock_get_creds_dir:
+    with (
+        patch("taskpps.loaders.agent_loader.get_agents_dir") as mock_get_agents_dir,
+        patch("taskpps.loaders.credential_loader.get_credentials_dir") as mock_get_creds_dir,
+    ):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
         agent_file = agents_dir / "myhost.yaml"
@@ -118,8 +126,10 @@ def test_create_executor_ssh_credential_not_found(tmp_path):
         credential="nonexistent-cred",
     )
 
-    with patch("taskpps.loaders.agent_loader.get_agents_dir") as mock_get_agents_dir, \
-            patch("taskpps.loaders.credential_loader.get_credentials_dir") as mock_get_creds_dir:
+    with (
+        patch("taskpps.loaders.agent_loader.get_agents_dir") as mock_get_agents_dir,
+        patch("taskpps.loaders.credential_loader.get_credentials_dir") as mock_get_creds_dir,
+    ):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
         agent_file = agents_dir / "myhost.yaml"
@@ -198,7 +208,11 @@ def slow_func():
 
     with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):
         result = await executor.execute(
-            "", {}, log_path, timeout=1, invoke_task="slow_module.slow_func",
+            "",
+            {},
+            log_path,
+            timeout=1,
+            invoke_task="slow_module.slow_func",
         )
     assert not result.success
     assert result.exit_code == -1
@@ -218,7 +232,10 @@ async def test_invoke_executor_import_error(tmp_path):
     executor = InvokeExecutor()
     log_path = tmp_path / "import_err.log"
     result = await executor.execute(
-        "", {}, log_path, invoke_task="nonexistent_module.nonexistent_func",
+        "",
+        {},
+        log_path,
+        invoke_task="nonexistent_module.nonexistent_func",
     )
     assert not result.success
 
@@ -238,7 +255,11 @@ def greet(name="world"):
 
     with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):
         result = await executor.execute(
-            "", {}, log_path, invoke_task="hello_fn.greet", invoke_kwargs={"name": "test"},
+            "",
+            {},
+            log_path,
+            invoke_task="hello_fn.greet",
+            invoke_kwargs={"name": "test"},
         )
     assert result.success
     assert "hello test" in result.stdout
@@ -277,6 +298,7 @@ async def test_ssh_executor_cancel():
 async def test_ssh_executor_cancel_with_client():
     executor = SSHExecutor(host="127.0.0.1", port=29999, username="test")
     import paramiko
+
     client = paramiko.SSHClient()
     executor._client = client
     executor._channel = MagicMock()

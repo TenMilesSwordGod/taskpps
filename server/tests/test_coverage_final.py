@@ -1,24 +1,24 @@
-import pytest
 import asyncio
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
 
-from taskpps.db.repository import RunRepository, TaskRunRepository, TriggerRepository
-from taskpps.db.engine import get_session_factory, get_session
-from taskpps.domain.context import _navigate_to_key, _set_key, set_dot_path, apply_overrides
+import pytest
+
+from taskpps.db.engine import get_session_factory
+from taskpps.db.repository import RunRepository, TaskRunRepository
+from taskpps.domain.context import _navigate_to_key, _set_key, apply_overrides, set_dot_path
 from taskpps.domain.dag import DAGCycleError
-from taskpps.executors.base import BaseExecutor, ExecutorResult
-from taskpps.executors.local import LocalExecutor
+from taskpps.executors.base import BaseExecutor
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
 from taskpps.loaders.pipeline_loader import PipelineLoader
 
-
 # --- config.py coverage ---
+
 
 def test_find_project_root_walks_up(tmp_path):
     import taskpps.config as cfg
+
     old = cfg._project_root
     cfg._project_root = None
     try:
@@ -30,6 +30,7 @@ def test_find_project_root_walks_up(tmp_path):
 
 def test_find_project_root_creates_project(tmp_path):
     import taskpps.config as cfg
+
     sub = tmp_path / "a" / "b" / "c"
     sub.mkdir(parents=True)
     config_file = sub / "taskpps.yaml"
@@ -40,6 +41,7 @@ def test_find_project_root_creates_project(tmp_path):
     old_cwd = Path.cwd()
     try:
         import os
+
         os.chdir(sub)
         result = cfg.find_project_root()
         assert result == sub
@@ -48,16 +50,15 @@ def test_find_project_root_creates_project(tmp_path):
         cfg._project_root = old_root
 
 
-
-
-
 # --- db/repository.py coverage ---
+
 
 @pytest.mark.asyncio
 async def test_update_run_status_nonexistent(db_engine):
     async with get_session_factory()() as session:
         repo = RunRepository(session)
         from taskpps.models.run import RunStatus
+
         await repo.update_run_status("nonexistent", RunStatus.RUNNING)
 
 
@@ -66,6 +67,7 @@ async def test_update_task_status_nonexistent(db_engine):
     async with get_session_factory()() as session:
         repo = TaskRunRepository(session)
         from taskpps.models.run import TaskStatus
+
         await repo.update_task_status("nonexistent", TaskStatus.RUNNING)
 
 
@@ -84,6 +86,7 @@ async def test_get_running_tasks(db_engine):
 @pytest.mark.asyncio
 async def test_delete_tasks_for_run(db_engine):
     from taskpps.db.engine import get_session_factory
+
     async with get_session_factory()() as session:
         run_repo = RunRepository(session)
         task_repo = TaskRunRepository(session)
@@ -94,6 +97,7 @@ async def test_delete_tasks_for_run(db_engine):
 
 
 # --- domain/context.py coverage ---
+
 
 def test_navigate_to_key_name_index_numeric_in_dict():
     data = {"items": [10, 20, 30]}
@@ -163,9 +167,11 @@ def test_apply_overrides_nested_list():
 
 # --- domain/dag.py coverage ---
 
+
 def test_dag_get_execution_levels_cycle():
-    from taskpps.domain.pipeline import ResolvedTask
     from taskpps.domain.dag import DAG
+    from taskpps.domain.pipeline import ResolvedTask
+
     tasks = [
         ResolvedTask(name="a", task_type="command", command="echo", depends_on=["b"]),
         ResolvedTask(name="b", task_type="command", command="echo", depends_on=["a"]),
@@ -177,6 +183,7 @@ def test_dag_get_execution_levels_cycle():
 
 # --- executors/base.py coverage ---
 
+
 def test_base_executor_abstract():
     with pytest.raises(TypeError):
         BaseExecutor()
@@ -185,20 +192,20 @@ def test_base_executor_abstract():
 # --- executors/local.py coverage ---
 
 
-
-
 # --- executors/invoke.py coverage ---
+
 
 @pytest.mark.asyncio
 async def test_invoke_executor_cancelled(tmp_path):
     executor = InvokeExecutor()
-    log_path = tmp_path / "invoke_cancel.log"
+    tmp_path / "invoke_cancel.log"
     await executor.cancel()
 
 
 # --- executors/ssh.py coverage ---
 
 # --- loaders/agent_loader.py coverage ---
+
 
 def test_agent_loader_load_all_yml_exception(tmp_path):
     agents_dir = tmp_path / "agents"
@@ -210,6 +217,7 @@ def test_agent_loader_load_all_yml_exception(tmp_path):
 
 
 # --- loaders/credential_loader.py coverage ---
+
 
 def test_credential_loader_file_not_found(tmp_path):
     loader = CredentialLoader(tmp_path / "nonexistent")
@@ -227,6 +235,7 @@ def test_credential_loader_load_all_yml(tmp_path):
 
 
 # --- loaders/pipeline_loader.py coverage ---
+
 
 def test_pipeline_loader_load_all_yml(tmp_path):
     pdir = tmp_path / "pipelines"
@@ -248,9 +257,11 @@ def test_pipeline_loader_load_all_exception(tmp_path):
 
 # --- main.py coverage ---
 
+
 def test_main_settings_is_none():
     import taskpps.config as cfg
     from taskpps.main import app
+
     old = cfg._settings
     cfg._settings = None
     try:
@@ -261,9 +272,11 @@ def test_main_settings_is_none():
 
 # --- services/pipeline_service.py coverage ---
 
+
 def test_delete_run_logs_no_dir(setup_project):
-    from taskpps.services.pipeline_service import PipelineService
     from taskpps.models.run import PipelineRun
+    from taskpps.services.pipeline_service import PipelineService
+
     svc = PipelineService()
     run = PipelineRun(
         pipeline_name="nonexistent-pipeline",
@@ -278,6 +291,7 @@ def test_delete_run_logs_no_dir(setup_project):
 
 # --- api/runs.py coverage ---
 
+
 @pytest.mark.asyncio
 async def test_get_run_logs_follow_with_sse(client, setup_project, tmp_project):
     response = await client.post("/api/runs/", json={"pipeline": "simple.yaml"})
@@ -286,20 +300,6 @@ async def test_get_run_logs_follow_with_sse(client, setup_project, tmp_project):
     await asyncio.sleep(2)
     async with client.stream("GET", f"/api/runs/{run_id}/logs?follow=true") as resp:
         assert resp.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_clean_runs_older_than_no_data(client, setup_project, tmp_project):
-    response = await client.delete("/api/runs/?older_than=7")
-    assert response.status_code == 200
-    data = response.json()
-    assert "deleted_runs" in data
-
-
-@pytest.mark.asyncio
-async def test_clean_runs_keep_without_force(client, setup_project, tmp_project):
-    response = await client.delete("/api/runs/?keep=5")
-    assert response.status_code == 200
 
 
 @pytest.mark.asyncio

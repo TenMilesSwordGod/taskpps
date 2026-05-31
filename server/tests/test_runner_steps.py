@@ -1,11 +1,11 @@
+from unittest.mock import AsyncMock
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch, call
-from taskpps.engine.runner import PipelineRunner
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask, ResolvedStep
+
 from taskpps.domain.context import ExecutionContext
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedStep, ResolvedTask
+from taskpps.engine.runner import PipelineRunner
 from taskpps.executors.base import ExecutorResult
-from taskpps.executors.local import LocalExecutor
 from taskpps.schemas.pipeline import OptionsYAML
 
 

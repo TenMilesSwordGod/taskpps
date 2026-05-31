@@ -1,11 +1,10 @@
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+import pytest
+
 from taskpps.domain.context import ExecutionContext
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.engine.runner import PipelineRunner, get_active_runner
-from taskpps.domain.dag import DAGCycleError
 from taskpps.executors.base import ExecutorResult
 from taskpps.schemas.pipeline import OptionsYAML
 
@@ -42,8 +41,10 @@ def mock_session_factory(mock_repos):
             return run_repo
         return task_repo
 
-    with patch("taskpps.engine.runner.RunRepository") as mock_rr, \
-            patch("taskpps.engine.runner.TaskRunRepository") as mock_tr:
+    with (
+        patch("taskpps.engine.runner.RunRepository") as mock_rr,
+        patch("taskpps.engine.runner.TaskRunRepository") as mock_tr,
+    ):
         mock_rr.side_effect = lambda s: run_repo
         mock_tr.side_effect = lambda s: task_repo
 
@@ -56,7 +57,7 @@ def mock_session_factory(mock_repos):
 
 @pytest.mark.asyncio
 async def test_runner_run_unknown_dependency(mock_session_factory):
-    run_repo, task_repo = mock_session_factory
+    run_repo, _task_repo = mock_session_factory
     tasks = [
         ResolvedTask(name="a", task_type="command", command="echo", depends_on=["unknown"]),
     ]
@@ -71,7 +72,7 @@ async def test_runner_run_unknown_dependency(mock_session_factory):
 
 @pytest.mark.asyncio
 async def test_runner_run_success(mock_session_factory):
-    run_repo, task_repo = mock_session_factory
+    run_repo, _task_repo = mock_session_factory
     tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
     pipeline = make_pipeline(tasks=tasks)
     ctx = ExecutionContext(pipeline=pipeline, run_id="test2")
@@ -81,10 +82,12 @@ async def test_runner_run_success(mock_session_factory):
     mock_executor = AsyncMock()
     mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
 
-    with patch("taskpps.engine.runner.create_executor", return_value=mock_executor):
-        with patch("taskpps.engine.runner.get_logs_dir"):
-            with patch("taskpps.engine.runner.get_event_bus"):
-                await runner.run()
+    with (
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+    ):
+        await runner.run()
 
     assert run_repo.update_run_status.call_count >= 1
     assert run_repo.update_run_status.call_args[0][1] == "success"
@@ -92,7 +95,7 @@ async def test_runner_run_success(mock_session_factory):
 
 @pytest.mark.asyncio
 async def test_runner_cancel(mock_session_factory):
-    run_repo, task_repo = mock_session_factory
+    _run_repo, _task_repo = mock_session_factory
     tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
     pipeline = make_pipeline(tasks=tasks)
     ctx = ExecutionContext(pipeline=pipeline, run_id="test3")
@@ -106,7 +109,7 @@ async def test_runner_cancel(mock_session_factory):
 
 @pytest.mark.asyncio
 async def test_runner_run_with_executor_exception(mock_session_factory):
-    run_repo, task_repo = mock_session_factory
+    run_repo, _task_repo = mock_session_factory
     tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
     pipeline = make_pipeline(tasks=tasks)
     ctx = ExecutionContext(pipeline=pipeline, run_id="test4")
@@ -116,17 +119,19 @@ async def test_runner_run_with_executor_exception(mock_session_factory):
     mock_executor = AsyncMock()
     mock_executor.execute.side_effect = Exception("unexpected error")
 
-    with patch("taskpps.engine.runner.create_executor", return_value=mock_executor):
-        with patch("taskpps.engine.runner.get_logs_dir"):
-            with patch("taskpps.engine.runner.get_event_bus"):
-                await runner.run()
+    with (
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+    ):
+        await runner.run()
 
     assert run_repo.update_run_status.call_count >= 1
 
 
 @pytest.mark.asyncio
 async def test_runner_run_with_dependency_failure(mock_session_factory):
-    run_repo, task_repo = mock_session_factory
+    run_repo, _task_repo = mock_session_factory
     tasks = [
         ResolvedTask(name="t1", task_type="command", command="exit 1"),
         ResolvedTask(name="t2", task_type="command", command="echo should not run", depends_on=["t1"]),
@@ -139,17 +144,19 @@ async def test_runner_run_with_dependency_failure(mock_session_factory):
     mock_executor = AsyncMock()
     mock_executor.execute.return_value = ExecutorResult(exit_code=1, stderr="failed")
 
-    with patch("taskpps.engine.runner.create_executor", return_value=mock_executor):
-        with patch("taskpps.engine.runner.get_logs_dir"):
-            with patch("taskpps.engine.runner.get_event_bus"):
-                await runner.run()
+    with (
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+    ):
+        await runner.run()
 
     assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
 
 @pytest.mark.asyncio
 async def test_runner_run_skip_dependency_failed(mock_session_factory):
-    run_repo, task_repo = mock_session_factory
+    _run_repo, task_repo = mock_session_factory
     tasks = [
         ResolvedTask(name="t1", task_type="command", command="exit 1"),
         ResolvedTask(name="t2", task_type="command", command="echo dep", depends_on=["t1"]),
@@ -162,18 +169,20 @@ async def test_runner_run_skip_dependency_failed(mock_session_factory):
     mock_executor = AsyncMock()
     mock_executor.execute.return_value = ExecutorResult(exit_code=1, stderr="failed")
 
-    with patch("taskpps.engine.runner.create_executor", return_value=mock_executor):
-        with patch("taskpps.engine.runner.get_logs_dir"):
-            with patch("taskpps.engine.runner.get_event_bus"):
-                with patch("taskpps.engine.runner.get_settings"):
-                    await runner.run()
+    with (
+        patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
+        await runner.run()
 
     assert task_repo.update_task_status.call_count >= 1
 
 
 @pytest.mark.asyncio
 async def test_runner_run_cancelled_during_execution(mock_session_factory):
-    run_repo, task_repo = mock_session_factory
+    run_repo, _task_repo = mock_session_factory
     tasks = [
         ResolvedTask(name="t1", task_type="command", command="echo hi"),
         ResolvedTask(name="t2", task_type="command", command="echo there", depends_on=["t1"]),
@@ -206,17 +215,19 @@ async def test_runner_unexpected_error_init(mock_session_factory):
 @pytest.mark.asyncio
 async def test_runner_unexpected_error_sets_failed_status(mock_session_factory):
     """内层 try 意外异常应标记 run 为 FAILED 而非 SUCCESS"""
-    run_repo, task_repo = mock_session_factory
+    run_repo, _task_repo = mock_session_factory
     tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
     pipeline = make_pipeline(tasks=tasks)
     ctx = ExecutionContext(pipeline=pipeline, run_id="test9")
     runner = PipelineRunner(run_id="test9", pipeline=pipeline, context=ctx)
     runner._task_run_ids = {"t1": "tr1"}
 
-    with patch("taskpps.domain.dag.DAG.get_execution_levels", side_effect=RuntimeError("dag crash")), \
-         patch("taskpps.engine.runner.get_event_bus"), \
-         patch("taskpps.engine.runner.get_logs_dir"), \
-         patch("taskpps.engine.runner.get_settings"):
+    with (
+        patch("taskpps.domain.dag.DAG.get_execution_levels", side_effect=RuntimeError("dag crash")),
+        patch("taskpps.engine.runner.get_event_bus"),
+        patch("taskpps.engine.runner.get_logs_dir"),
+        patch("taskpps.engine.runner.get_settings"),
+    ):
         await runner.run()
 
     assert runner._unexpected_error is True

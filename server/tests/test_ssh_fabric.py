@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from taskpps.executors.base import ExecutorResult
 from taskpps.executors.ssh import SSHExecutor
 
 
@@ -128,7 +126,7 @@ async def test_ssh_executor_execute_no_cwd(tmp_path):
     mock_conn.close = MagicMock()
 
     with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
-        result = await executor.execute("ls", {}, log_path)
+        await executor.execute("ls", {}, log_path)
 
     mock_conn.cd.assert_called_once_with(".")
 

@@ -1,11 +1,12 @@
-import pytest
 from pathlib import Path
+
+import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import SQLModel
 
 from taskpps.db import _get_repos
+from taskpps.db.engine import close_db, get_engine, init_db, reset_engine, set_engine
 from taskpps.db.repository import RunRepository, TaskRunRepository, TriggerRepository
-from taskpps.db.engine import get_engine, init_db, close_db, get_engine, reset_engine, set_engine
-from sqlmodel import SQLModel
 
 
 def test_get_repos():
@@ -17,6 +18,7 @@ def test_get_repos():
 async def test_get_engine_creates_new(tmp_path):
     reset_engine()
     from taskpps.config import _project_root
+
     old_root = _project_root
     _project_root = tmp_path
     try:
@@ -54,6 +56,7 @@ async def test_close_db(tmp_path):
     set_engine(engine)
     await close_db()
     from taskpps.db.engine import _engine, _session_factory
+
     assert _engine is None
     assert _session_factory is None
 
@@ -77,6 +80,7 @@ async def test_get_session(tmp_path):
         await conn.run_sync(SQLModel.metadata.create_all)
 
     from taskpps.db.engine import get_session
+
     async for session in get_session():
         assert session is not None
         break
@@ -89,6 +93,7 @@ async def test_get_session(tmp_path):
 async def test_get_engine_reuses():
     reset_engine()
     from taskpps.config import _project_root
+
     old_root = _project_root
     _project_root = Path("/tmp")
     try:

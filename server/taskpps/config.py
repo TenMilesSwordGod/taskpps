@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -12,7 +10,7 @@ from pydantic import BaseModel, Field
 class ServerConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 26521
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class ExecutorConfig(BaseModel):
@@ -22,12 +20,12 @@ class ExecutorConfig(BaseModel):
 
 
 class PluginsConfig(BaseModel):
-    paths: List[str] = Field(default_factory=lambda: ["plugins"])
+    paths: list[str] = Field(default_factory=lambda: ["plugins"])
 
 
 class TriggerConfig(BaseModel):
     type: str
-    schedule: Optional[str] = None
+    schedule: str | None = None
     pipeline: str
 
 
@@ -35,15 +33,15 @@ class Settings(BaseModel):
     locale: str = "zh"
     server: ServerConfig = Field(default_factory=ServerConfig)
     executor: ExecutorConfig = Field(default_factory=ExecutorConfig)
-    env: Dict[str, str] = Field(default_factory=dict)
+    env: dict[str, str] = Field(default_factory=dict)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
-    triggers: List[TriggerConfig] = Field(default_factory=list)
+    triggers: list[TriggerConfig] = Field(default_factory=list)
 
     model_config = {"extra": "allow"}
 
 
-_settings: Optional[Settings] = None
-_project_root: Optional[Path] = None
+_settings: Settings | None = None
+_project_root: Path | None = None
 
 
 def find_project_root() -> Path:
@@ -69,7 +67,7 @@ def set_project_root(path: Path) -> None:
     _project_root = path.resolve()
 
 
-def load_settings(config_path: Optional[str] = None) -> Settings:
+def load_settings(config_path: str | None = None) -> Settings:
     global _settings
     if config_path is not None:
         p = Path(config_path)
@@ -140,7 +138,7 @@ def get_workspaces_dir() -> Path:
 
 
 def compute_pipeline_id(pipeline_file: str) -> str:
-    return Path(pipeline_file).with_suffix('').as_posix().replace('/', '_')
+    return Path(pipeline_file).with_suffix("").as_posix().replace("/", "_")
 
 
 def compute_pipeline_version(pipeline_file: str) -> str:
@@ -165,7 +163,7 @@ def build_log_path(pipeline_id: str, pipeline_version: str, run_id: str, task_na
 
 def build_legacy_log_path(pipeline_file: str, run_id: str, task_run_id: str) -> Path:
     logs_dir = get_logs_dir()
-    log_rel_dir = Path(pipeline_file).with_suffix('') if pipeline_file else Path('unknown')
+    log_rel_dir = Path(pipeline_file).with_suffix("") if pipeline_file else Path("unknown")
     log_dir = logs_dir / log_rel_dir / run_id / task_run_id
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir / "output.log"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class BasePlugin(ABC):
@@ -35,7 +35,7 @@ class TriggerPlugin(BasePlugin):
 
 class NotifierPlugin(BasePlugin):
     @abstractmethod
-    def notify(self, event: str, data: Dict[str, Any]) -> None:  # pragma: no cover
+    def notify(self, event: str, data: dict[str, Any]) -> None:  # pragma: no cover
         ...
 
 

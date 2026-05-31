@@ -1,21 +1,14 @@
 import asyncio
-import os
-import shutil
-import tempfile
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from taskpps.config import set_project_root, load_settings, get_settings
-from taskpps.db.engine import init_db, close_db, get_engine, reset_engine, set_engine
-from taskpps.main import app
-from taskpps.models.run import PipelineRun, TaskRun
-from taskpps.models.trigger import Trigger
 from sqlmodel import SQLModel
+
+from taskpps.db.engine import get_engine, reset_engine, set_engine
+from taskpps.main import app
 
 
 @pytest.fixture(scope="session")
@@ -116,37 +109,19 @@ def tmp_project(tmp_path_factory):
 
     timeout_yaml = pipelines_dir / "timeout_test.yaml"
     timeout_yaml.write_text(
-        "name: timeout_test\n"
-        "options: {}\n"
-        "tasks:\n"
-        "  - name: slow-task\n"
-        "    command: sleep 30\n"
-        "    timeout: 2\n"
+        "name: timeout_test\noptions: {}\ntasks:\n  - name: slow-task\n    command: sleep 30\n    timeout: 2\n"
     )
 
     invoke_yaml = pipelines_dir / "invoke_test.yaml"
     invoke_yaml.write_text(
-        "name: invoke_test\n"
-        "options: {}\n"
-        "tasks:\n"
-        "  - name: hello\n"
-        "    invoke:\n"
-        "      task: sample_tasks.hello\n"
+        "name: invoke_test\noptions: {}\ntasks:\n  - name: hello\n    invoke:\n      task: sample_tasks.hello\n"
     )
 
     sample_tasks = tasks_dir / "sample_tasks.py"
-    sample_tasks.write_text(
-        "def hello():\n"
-        "    print('hello from invoke')\n"
-        "    return 'hello'\n"
-    )
+    sample_tasks.write_text("def hello():\n    print('hello from invoke')\n    return 'hello'\n")
 
     agent_yaml = agents_dir / "staging-server.yaml"
-    agent_yaml.write_text(
-        "host: 127.0.0.1\n"
-        "port: 22\n"
-        "username: test\n"
-    )
+    agent_yaml.write_text("host: 127.0.0.1\nport: 22\nusername: test\n")
 
     agent_list_yaml = agents_dir / "ssh.yaml"
     agent_list_yaml.write_text(
@@ -164,9 +139,7 @@ def tmp_project(tmp_path_factory):
     )
 
     cred_yaml = credentials_dir / "default-cred.yaml"
-    cred_yaml.write_text(
-        "password: testpass\n"
-    )
+    cred_yaml.write_text("password: testpass\n")
 
     return project_dir
 
@@ -174,6 +147,7 @@ def tmp_project(tmp_path_factory):
 @pytest.fixture(autouse=True)
 def setup_project(tmp_project):
     import taskpps.config as cfg
+
     cfg._project_root = tmp_project
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
@@ -184,6 +158,7 @@ def setup_project(tmp_project):
 @pytest_asyncio.fixture
 async def db_engine(setup_project, tmp_path):
     from taskpps.main import mark_external_engine
+
     mark_external_engine()
     db_file = tmp_path / "test.db"
     engine = create_async_engine(

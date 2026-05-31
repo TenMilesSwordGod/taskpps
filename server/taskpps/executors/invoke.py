@@ -5,10 +5,10 @@ import importlib
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.config import get_tasks_dir
+from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
 
 
@@ -19,13 +19,13 @@ class InvokeExecutor(BaseExecutor):
     async def execute(
         self,
         command: str,
-        env: Dict[str, str],
+        env: dict[str, str],
         log_path: Path,
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
-        invoke_task: Optional[str] = None,
-        invoke_args: Optional[List[Any]] = None,
-        invoke_kwargs: Optional[Dict[str, Any]] = None,
+        timeout: int | None = None,
+        cwd: str | None = None,
+        invoke_task: str | None = None,
+        invoke_args: list[Any] | None = None,
+        invoke_kwargs: dict[str, Any] | None = None,
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
         self._cancelled = False
@@ -53,12 +53,11 @@ class InvokeExecutor(BaseExecutor):
                 return ExecutorResult(exit_code=1, stderr=str(e))
 
             try:
-                from invoke import task as invoke_task_decorator
-
                 merged_env = {**os.environ, **env}
 
                 if getattr(func, "_task", None) is not None:
                     from invoke import Context
+
                     ctx = Context(env=merged_env)
                     result = func(ctx, *args, **kwargs)
                 else:

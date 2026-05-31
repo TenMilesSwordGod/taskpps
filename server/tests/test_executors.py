@@ -1,10 +1,10 @@
 import pytest
-from pathlib import Path
-from taskpps.executors.base import BaseExecutor, ExecutorResult
-from taskpps.executors.local import LocalExecutor
-from taskpps.executors.invoke import InvokeExecutor
-from taskpps.executors import create_executor
+
 from taskpps.domain.pipeline import ResolvedTask
+from taskpps.executors import create_executor
+from taskpps.executors.base import ExecutorResult
+from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.local import LocalExecutor
 
 
 def test_executor_result_success():
