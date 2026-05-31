@@ -20,21 +20,11 @@ func (m Model) View() string {
 	header := renderHeader(m.width)
 	footer := renderFooter(m.width, m)
 
-	leftFocused := m.focusedPanel == FocusRunList
-	rightFocused := m.focusedPanel == FocusRightPanel
-
-	leftStyle := components.LeftPanelStyle.Width(m.dims.leftPanelW).Height(m.dims.panelH)
-	if leftFocused {
-		leftStyle = components.FocusedLeftPanelStyle.Width(m.dims.leftPanelW).Height(m.dims.panelH)
+	leftTitle := components.TitleStyle.Render("Runs")
+	if m.focusedPanel == FocusRunList {
+		leftTitle = components.CursorStyle.Render("Runs")
 	}
-
-	rightStyle := components.RightPanelStyle.Width(m.dims.rightPanelW).Height(m.dims.panelH)
-	if rightFocused {
-		rightStyle = components.FocusedRightPanelStyle.Width(m.dims.rightPanelW).Height(m.dims.panelH)
-	}
-
-	leftContent := components.TitleStyle.Render("Runs") + "\n" + m.runList.View()
-	leftPanel := leftStyle.Render(leftContent)
+	leftContent := leftTitle + "\n" + m.runList.View()
 
 	tabs := renderTabs(m.rightTab, m.dims.rightContentW)
 	var rightContent string
@@ -43,10 +33,47 @@ func (m Model) View() string {
 	} else {
 		rightContent = tabs + "\n" + m.logViewer.View()
 	}
-	rightPanel := rightStyle.Render(rightContent)
 
-	divider := components.DividerStyle.Render("│")
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, divider, rightPanel)
+	leftLines := strings.Split(leftContent, "\n")
+	rightLines := strings.Split(rightContent, "\n")
+
+	contentH := m.dims.contentH
+	for len(leftLines) < contentH {
+		leftLines = append(leftLines, "")
+	}
+	if len(leftLines) > contentH {
+		leftLines = leftLines[:contentH]
+	}
+	for len(rightLines) < contentH {
+		rightLines = append(rightLines, "")
+	}
+	if len(rightLines) > contentH {
+		rightLines = rightLines[:contentH]
+	}
+
+	var innerB strings.Builder
+	for i := 0; i < contentH; i++ {
+		innerB.WriteString(padRightVisual(leftLines[i], m.dims.leftContentW))
+		innerB.WriteString(components.DividerStyle.Render("│"))
+		innerB.WriteString(padRightVisual(rightLines[i], m.dims.rightContentW))
+		if i < contentH-1 {
+			innerB.WriteString("\n")
+		}
+	}
+
+	borderColor := components.ColorBorder
+	if m.focusedPanel == FocusRunList {
+		borderColor = components.ColorCyan
+	}
+
+	outerStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Width(m.dims.innerW).
+		Height(m.dims.panelH)
+
+	panels := outerStyle.Render(innerB.String())
 
 	var b strings.Builder
 	b.WriteString(header)
@@ -56,6 +83,17 @@ func (m Model) View() string {
 	b.WriteString(footer)
 
 	return b.String()
+}
+
+func padRightVisual(line string, width int) string {
+	visualW := lipgloss.Width(line)
+	if visualW > width {
+		return components.TruncateLine(line, width)
+	}
+	if visualW < width {
+		return line + strings.Repeat(" ", width-visualW)
+	}
+	return line
 }
 
 func renderTabs(activeTab RightPanelTab, width int) string {

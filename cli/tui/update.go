@@ -219,14 +219,20 @@ func (m *Model) resizeComponents() {
 	}
 
 	borderH := 2
-	leftOverhead := 3
-	rightOverhead := 3
+	paddingW := 2
+	borderW := 2
 	dividerW := 1
 
-	totalOverhead := leftOverhead + dividerW + rightOverhead
-	totalContentW := m.width - totalOverhead
-	if totalContentW < 42 {
-		totalContentW = 42
+	contentH := availableH - borderH
+	if contentH < 3 {
+		contentH = 3
+	}
+
+	innerW := m.width - borderW - paddingW
+	totalContentW := innerW - dividerW
+	if totalContentW < 36 {
+		totalContentW = 36
+		innerW = totalContentW + dividerW
 	}
 
 	leftContentW := totalContentW * 28 / 100
@@ -235,25 +241,16 @@ func (m *Model) resizeComponents() {
 		leftContentW = 14
 		rightContentW = totalContentW - leftContentW
 	}
-	if rightContentW < 22 {
-		rightContentW = 22
+	if rightContentW < 20 {
+		rightContentW = 20
 		leftContentW = totalContentW - rightContentW
 		if leftContentW < 14 {
 			leftContentW = 14
 		}
 	}
 
-	leftPanelW := leftContentW + leftOverhead
-	rightPanelW := rightContentW + rightOverhead
-
-	contentH := availableH - borderH
-	if contentH < 3 {
-		contentH = 3
-	}
-
 	m.dims = layoutDims{
-		leftPanelW:    leftPanelW,
-		rightPanelW:   rightPanelW,
+		innerW:        innerW,
 		leftContentW:  leftContentW,
 		rightContentW: rightContentW,
 		panelH:        availableH,
