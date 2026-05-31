@@ -175,8 +175,11 @@ func TestViewRenderFooter(t *testing.T) {
 	if !strings.Contains(footer, "Runs:") {
 		t.Errorf("footer should show Runs count, got: %s", footer)
 	}
-	if !strings.Contains(footer, "Polling every 2s") {
-		t.Errorf("footer should show polling info, got: %s", footer)
+	if !strings.Contains(footer, "Tasks:") {
+		t.Errorf("footer should show Tasks count, got: %s", footer)
+	}
+	if !strings.Contains(footer, "quit") {
+		t.Errorf("footer should show key hints, got: %s", footer)
 	}
 }
 
@@ -185,11 +188,8 @@ func TestViewHeader(t *testing.T) {
 	if !strings.Contains(header, "ppsctl watch") {
 		t.Errorf("header should contain title, got: %s", header)
 	}
-	if !strings.Contains(header, "[q]uit") {
-		t.Errorf("header should contain key hints, got: %s", header)
-	}
-	if !strings.Contains(header, "tab") {
-		t.Errorf("header should contain tab hint, got: %s", header)
+	if !strings.Contains(header, "pipeline task monitor") {
+		t.Errorf("header should contain subtitle, got: %s", header)
 	}
 }
 
