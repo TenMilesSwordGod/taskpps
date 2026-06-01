@@ -22,26 +22,27 @@ func computeViewHash(s string) string {
 }
 
 func (m Model) View() string {
-	if m.quit {
+	s := m.state
+	if s.Quit {
 		return ""
 	}
 
-	if !m.ready {
+	if !s.Ready {
 		return "Initializing...\n"
 	}
 
-	header := renderHeader(m.width)
-	footer := renderFooter(m.width, m)
+	header := renderHeader(s.Width)
+	footer := renderFooter(s.Width, s, &m)
 
 	leftTitle := components.TitleStyle.Render("Runs")
-	if m.focusedPanel == FocusRunList {
+	if s.FocusedPanel == FocusRunList {
 		leftTitle = components.CursorStyle.Render("Runs")
 	}
 	leftContent := leftTitle + "\n" + m.runList.View()
 
-	tabs := renderTabs(m.rightTab, m.dims.rightContentW)
+	tabs := renderTabs(s.RightTab, s.Dims.rightContentW)
 	var rightContent string
-	if m.rightTab == TabDetail {
+	if s.RightTab == TabDetail {
 		rightContent = tabs + "\n" + m.runDetail.View()
 	} else {
 		rightContent = tabs + "\n" + m.logViewer.View()
@@ -50,7 +51,7 @@ func (m Model) View() string {
 	leftLines := strings.Split(leftContent, "\n")
 	rightLines := strings.Split(rightContent, "\n")
 
-	contentH := m.dims.contentH
+	contentH := s.Dims.contentH
 	for len(leftLines) < contentH {
 		leftLines = append(leftLines, "")
 	}
@@ -67,9 +68,9 @@ func (m Model) View() string {
 	var innerB strings.Builder
 	for i := 0; i < contentH; i++ {
 		innerB.WriteString(" ")
-		innerB.WriteString(padRightVisual(leftLines[i], m.dims.leftContentW))
+		innerB.WriteString(padRightVisual(leftLines[i], s.Dims.leftContentW))
 		innerB.WriteString(components.DividerStyle.Render("│"))
-		innerB.WriteString(padRightVisual(rightLines[i], m.dims.rightContentW))
+		innerB.WriteString(padRightVisual(rightLines[i], s.Dims.rightContentW))
 		innerB.WriteString(" ")
 		if i < contentH-1 {
 			innerB.WriteString("\n")
@@ -81,8 +82,8 @@ func (m Model) View() string {
 	outerStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Width(m.dims.innerW).
-		Height(m.dims.contentH)
+		Width(s.Dims.innerW).
+		Height(s.Dims.contentH)
 
 	panels := outerStyle.Render(innerB.String())
 
@@ -176,7 +177,7 @@ func renderHeader(width int) string {
 	return left + spacer + right
 }
 
-func renderFooter(width int, m Model) string {
+func renderFooter(width int, s AppState, m *Model) string {
 	bg := lipgloss.NewStyle().Background(components.ColorBarBg)
 
 	keyStyle := lipgloss.NewStyle().Background(components.ColorBarBg).Foreground(components.ColorWhite).Bold(true)
@@ -185,7 +186,7 @@ func renderFooter(width int, m Model) string {
 	sep := sepStyle.Render(" │ ")
 
 	var hints []string
-	switch m.focusedPanel {
+	switch s.FocusedPanel {
 	case FocusRunList:
 		hints = []string{
 			keyStyle.Render("↑↓") + descStyle.Render("nav"),
@@ -195,7 +196,7 @@ func renderFooter(width int, m Model) string {
 			keyStyle.Render("q") + descStyle.Render("quit"),
 		}
 	case FocusRightPanel:
-		if m.rightTab == TabDetail {
+		if s.RightTab == TabDetail {
 			cLabel := "expand"
 			if m.runDetail.HasExpanded() {
 				cLabel = "collapse"
@@ -244,8 +245,8 @@ func renderFooter(width int, m Model) string {
 
 	statusText := fmt.Sprintf(" Runs:%d Tasks:%d/%d %ds ", total, tasksDone, totalTasks, refreshInterval)
 	statusWidth := lipgloss.Width(statusText)
-	if m.errMsg != "" {
-		errText := fmt.Sprintf(" ERR:%s ", truncateStr(m.errMsg, 20))
+	if s.ErrorMsg != "" {
+		errText := fmt.Sprintf(" ERR:%s ", truncateStr(s.ErrorMsg, 20))
 		statusWidth += lipgloss.Width(errText)
 	}
 
@@ -256,9 +257,9 @@ func renderFooter(width int, m Model) string {
 
 	hintsStr := bg.Render(" ") + strings.Join(hints, sep)
 	statusStr := bg.Copy().Foreground(components.ColorDim).Render(statusText)
-	if m.errMsg != "" {
+	if s.ErrorMsg != "" {
 		errStr := bg.Copy().Foreground(components.ColorFailed).Bold(true).Render(
-			fmt.Sprintf(" ERR:%s ", truncateStr(m.errMsg, 20)))
+			fmt.Sprintf(" ERR:%s ", truncateStr(s.ErrorMsg, 20)))
 		statusStr = errStr + statusStr
 	}
 	spacer := bg.Render(strings.Repeat(" ", padW))

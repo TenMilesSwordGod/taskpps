@@ -183,31 +183,31 @@ func TestDeepFormatTimeSingleChar(t *testing.T) {
 func TestDeepResizeComponentsLayoutMath(t *testing.T) {
 	t.Run("width_36_minimum_totalContentW", func(t *testing.T) {
 		m := makeTestModel()
-		m.width = 39
-		m.height = 20
+		m.state.Width = 39
+		m.state.Height = 20
 		m.resizeComponents()
-		if m.dims.leftContentW < 14 {
-			t.Errorf("leftContentW = %d, want >= 14", m.dims.leftContentW)
+		if m.state.Dims.leftContentW < 14 {
+			t.Errorf("leftContentW = %d, want >= 14", m.state.Dims.leftContentW)
 		}
-		if m.dims.rightContentW < 20 {
-			t.Errorf("rightContentW = %d, want >= 20", m.dims.rightContentW)
+		if m.state.Dims.rightContentW < 20 {
+			t.Errorf("rightContentW = %d, want >= 20", m.state.Dims.rightContentW)
 		}
 	})
 
 	t.Run("width_42_minimum_effective", func(t *testing.T) {
 		m := makeTestModel()
-		m.width = 42
-		m.height = 20
+		m.state.Width = 42
+		m.state.Height = 20
 		m.resizeComponents()
-		if m.dims.leftContentW < 14 {
-			t.Errorf("leftContentW = %d, want >= 14", m.dims.leftContentW)
+		if m.state.Dims.leftContentW < 14 {
+			t.Errorf("leftContentW = %d, want >= 14", m.state.Dims.leftContentW)
 		}
 	})
 
 	t.Run("width_1_extreme", func(t *testing.T) {
 		m := makeTestModel()
-		m.width = 1
-		m.height = 1
+		m.state.Width = 1
+		m.state.Height = 1
 		m.resizeComponents()
 		view := m.View()
 		if view == "" {
@@ -217,35 +217,35 @@ func TestDeepResizeComponentsLayoutMath(t *testing.T) {
 
 	t.Run("height_1_extreme", func(t *testing.T) {
 		m := makeTestModel()
-		m.width = 120
-		m.height = 1
+		m.state.Width = 120
+		m.state.Height = 1
 		m.resizeComponents()
-		if m.dims.contentH < 3 {
-			t.Errorf("contentH should be clamped to 3, got %d", m.dims.contentH)
+		if m.state.Dims.contentH < 3 {
+			t.Errorf("contentH should be clamped to 3, got %d", m.state.Dims.contentH)
 		}
 	})
 
 	t.Run("height_7_minimum_for_content", func(t *testing.T) {
 		m := makeTestModel()
-		m.width = 120
-		m.height = 7
+		m.state.Width = 120
+		m.state.Height = 7
 		m.resizeComponents()
-		if m.dims.contentH < 3 {
-			t.Errorf("contentH should be at least 3, got %d", m.dims.contentH)
+		if m.state.Dims.contentH < 3 {
+			t.Errorf("contentH should be at least 3, got %d", m.state.Dims.contentH)
 		}
 	})
 
 	t.Run("left_right_sum_equals_totalContentW", func(t *testing.T) {
 		for w := 42; w <= 250; w++ {
 			m := makeTestModel()
-			m.width = w
-			m.height = 30
+			m.state.Width = w
+			m.state.Height = 30
 			m.resizeComponents()
-			sum := m.dims.leftContentW + m.dims.rightContentW
-			expectedTotal := m.dims.innerW - 2 - 1
+			sum := m.state.Dims.leftContentW + m.state.Dims.rightContentW
+			expectedTotal := m.state.Dims.innerW - 2 - 1
 			if sum != expectedTotal {
 				t.Errorf("width=%d: left(%d)+right(%d)=%d, expected total=%d",
-					w, m.dims.leftContentW, m.dims.rightContentW, sum, expectedTotal)
+					w, m.state.Dims.leftContentW, m.state.Dims.rightContentW, sum, expectedTotal)
 				return
 			}
 		}
@@ -253,13 +253,13 @@ func TestDeepResizeComponentsLayoutMath(t *testing.T) {
 
 	t.Run("integer_division_28_percent", func(t *testing.T) {
 		m := makeTestModel()
-		m.width = 80
-		m.height = 24
+		m.state.Width = 80
+		m.state.Height = 24
 		m.resizeComponents()
-		totalContentW := m.dims.leftContentW + m.dims.rightContentW
+		totalContentW := m.state.Dims.leftContentW + m.state.Dims.rightContentW
 		expectedLeft := totalContentW * 28 / 100
-		if m.dims.leftContentW != expectedLeft && m.dims.leftContentW >= 14 && m.dims.rightContentW >= 20 {
-			t.Logf("leftContentW=%d, expected 28%%=%d (clamping may apply)", m.dims.leftContentW, expectedLeft)
+		if m.state.Dims.leftContentW != expectedLeft && m.state.Dims.leftContentW >= 14 && m.state.Dims.rightContentW >= 20 {
+			t.Logf("leftContentW=%d, expected 28%%=%d (clamping may apply)", m.state.Dims.leftContentW, expectedLeft)
 		}
 	})
 }
@@ -356,14 +356,14 @@ func TestDeepRenderFooterAllPanelTabCombos(t *testing.T) {
 	for _, combo := range combos {
 		t.Run(combo.name, func(t *testing.T) {
 			m := makeTestModel()
-			m.ready = true
-			m.width = 120
-			m.height = 40
+			m.state.Ready = true
+			m.state.Width = 120
+			m.state.Height = 40
 			m.resizeComponents()
-			m.focusedPanel = combo.panel
-			m.rightTab = combo.tab
+			m.state.FocusedPanel = combo.panel
+			m.state.RightTab = combo.tab
 
-			footer := renderFooter(120, m)
+			footer := renderFooter(120, m.state, &m)
 			if footer == "" {
 				t.Error("footer should not be empty")
 			}
@@ -376,17 +376,17 @@ func TestDeepRenderFooterVeryNarrow(t *testing.T) {
 	defer lipgloss.SetColorProfile(termenv.TrueColor)
 
 	m := makeTestModel()
-	m.ready = true
-	m.width = 30
-	m.height = 15
+	m.state.Ready = true
+	m.state.Width = 30
+	m.state.Height = 15
 	m.resizeComponents()
-	m.errMsg = "very long error message that should be truncated"
-	m.runs = testutil.MakeTestRuns()
-	m.runList.SetRuns(m.runs)
+	m.state.ErrorMsg = "very long error message that should be truncated"
+	m.state.Runs = testutil.MakeTestRuns()
+	m.runList.SetRuns(m.state.Runs)
 	m.runList.SetCursor(0)
-	m.runDetail.SetRun(&m.runs[0])
+	m.runDetail.SetRun(&m.state.Runs[0])
 
-	footer := renderFooter(30, m)
+	footer := renderFooter(30, m.state, &m)
 	if footer == "" {
 		t.Error("footer should render even when very narrow")
 	}
@@ -654,17 +654,17 @@ func TestDeepViewComplexStateCombinations(t *testing.T) {
 
 	t.Run("ready_with_error_and_runs_logs_tab", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.width = 120
-		m.height = 40
+		m.state.Ready = true
+		m.state.Width = 120
+		m.state.Height = 40
 		m.resizeComponents()
-		m.errMsg = "test error"
-		m.runs = testutil.MakeTestRuns()
-		m.runList.SetRuns(m.runs)
+		m.state.ErrorMsg = "test error"
+		m.state.Runs = testutil.MakeTestRuns()
+		m.runList.SetRuns(m.state.Runs)
 		m.runList.SetCursor(0)
-		m.runDetail.SetRun(&m.runs[0])
-		m.focusedPanel = FocusRightPanel
-		m.rightTab = TabLogs
+		m.runDetail.SetRun(&m.state.Runs[0])
+		m.state.FocusedPanel = FocusRightPanel
+		m.state.RightTab = TabLogs
 		m.logViewer.SetContent("log output here")
 
 		view := m.View()
@@ -675,12 +675,12 @@ func TestDeepViewComplexStateCombinations(t *testing.T) {
 
 	t.Run("ready_with_no_runs_logs_tab", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.width = 120
-		m.height = 40
+		m.state.Ready = true
+		m.state.Width = 120
+		m.state.Height = 40
 		m.resizeComponents()
-		m.focusedPanel = FocusRightPanel
-		m.rightTab = TabLogs
+		m.state.FocusedPanel = FocusRightPanel
+		m.state.RightTab = TabLogs
 
 		view := m.View()
 		if view == "" {
@@ -690,14 +690,14 @@ func TestDeepViewComplexStateCombinations(t *testing.T) {
 
 	t.Run("ready_with_runs_detail_no_task_selected", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.width = 120
-		m.height = 40
+		m.state.Ready = true
+		m.state.Width = 120
+		m.state.Height = 40
 		m.resizeComponents()
-		m.runs = testutil.MakeTestRuns()
-		m.runList.SetRuns(m.runs)
-		m.focusedPanel = FocusRightPanel
-		m.rightTab = TabDetail
+		m.state.Runs = testutil.MakeTestRuns()
+		m.runList.SetRuns(m.state.Runs)
+		m.state.FocusedPanel = FocusRightPanel
+		m.state.RightTab = TabDetail
 
 		view := m.View()
 		if view == "" {
@@ -707,11 +707,11 @@ func TestDeepViewComplexStateCombinations(t *testing.T) {
 
 	t.Run("extreme_narrow_with_error", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.width = 15
-		m.height = 8
+		m.state.Ready = true
+		m.state.Width = 15
+		m.state.Height = 8
 		m.resizeComponents()
-		m.errMsg = "error"
+		m.state.ErrorMsg = "error"
 
 		view := m.View()
 		if view == "" {
@@ -722,21 +722,21 @@ func TestDeepViewComplexStateCombinations(t *testing.T) {
 
 func TestDeepResizeComponentsNegativeAvailableH(t *testing.T) {
 	m := makeTestModel()
-	m.width = 120
-	m.height = 0
+	m.state.Width = 120
+	m.state.Height = 0
 	m.resizeComponents()
-	if m.dims.contentH < 3 {
-		t.Errorf("contentH should be clamped to 3, got %d", m.dims.contentH)
+	if m.state.Dims.contentH < 3 {
+		t.Errorf("contentH should be clamped to 3, got %d", m.state.Dims.contentH)
 	}
 }
 
 func TestDeepResizeComponentsNegativeInnerW(t *testing.T) {
 	m := makeTestModel()
-	m.width = 0
-	m.height = 20
+	m.state.Width = 0
+	m.state.Height = 20
 	m.resizeComponents()
-	if m.dims.innerW <= 0 {
-		t.Errorf("innerW should be positive, got %d", m.dims.innerW)
+	if m.state.Dims.innerW <= 0 {
+		t.Errorf("innerW should be positive, got %d", m.state.Dims.innerW)
 	}
 }
 

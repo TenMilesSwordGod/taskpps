@@ -19,7 +19,7 @@ func TestViewNotReady(t *testing.T) {
 
 func TestViewQuitting(t *testing.T) {
 	m := makeTestModel()
-	m.quit = true
+	m.state.Quit = true
 	view := m.View()
 	if view != "" {
 		t.Errorf("view should be empty when quitting, got: %s", view)
@@ -28,9 +28,9 @@ func TestViewQuitting(t *testing.T) {
 
 func TestViewReady(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	view := m.View()
@@ -44,11 +44,11 @@ func TestViewReady(t *testing.T) {
 
 func TestViewWithError(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
-	m.errMsg = "Connection refused"
+	m.state.ErrorMsg = "Connection refused"
 
 	view := m.View()
 	if !strings.Contains(view, "ERR:") {
@@ -58,16 +58,16 @@ func TestViewWithError(t *testing.T) {
 
 func TestViewWithRuns(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 150
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 150
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := []models.Run{
 		{ID: "abc12345", PipelineName: "deploy", Status: models.RunStatusRunning},
 		{ID: "def67890", PipelineName: "build", Status: models.RunStatusSuccess},
 	}
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
 
 	view := m.View()
@@ -78,19 +78,19 @@ func TestViewWithRuns(t *testing.T) {
 
 func TestViewPanelFocus(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 150
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 150
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := []models.Run{
 		{ID: "abc12345", PipelineName: "deploy", Status: models.RunStatusRunning},
 	}
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
 
 	t.Run("focus_runlist", func(t *testing.T) {
-		m.focusedPanel = FocusRunList
+		m.state.FocusedPanel = FocusRunList
 		view := m.View()
 		if view == "" {
 			t.Error("view should not be empty with RunList focus")
@@ -98,7 +98,7 @@ func TestViewPanelFocus(t *testing.T) {
 	})
 
 	t.Run("focus_rundetail", func(t *testing.T) {
-		m.focusedPanel = FocusRightPanel
+		m.state.FocusedPanel = FocusRightPanel
 		view := m.View()
 		if view == "" {
 			t.Error("view should not be empty with RightPanel focus")
@@ -106,7 +106,7 @@ func TestViewPanelFocus(t *testing.T) {
 	})
 
 	t.Run("focus_logviewer", func(t *testing.T) {
-		m.focusedPanel = FocusRightPanel
+		m.state.FocusedPanel = FocusRightPanel
 		view := m.View()
 		if view == "" {
 			t.Error("view should not be empty with RightPanel focus")
@@ -116,9 +116,9 @@ func TestViewPanelFocus(t *testing.T) {
 
 func TestViewNarrowTerminal(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 80
-	m.height = 30
+	m.state.Ready = true
+	m.state.Width = 80
+	m.state.Height = 30
 	m.resizeComponents()
 
 	view := m.View()
@@ -129,9 +129,9 @@ func TestViewNarrowTerminal(t *testing.T) {
 
 func TestViewWideTerminal(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 200
-	m.height = 50
+	m.state.Ready = true
+	m.state.Width = 200
+	m.state.Height = 50
 	m.resizeComponents()
 
 	view := m.View()
@@ -142,11 +142,11 @@ func TestViewWideTerminal(t *testing.T) {
 
 func TestViewEmptyRuns(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
-	m.runs = nil
+	m.state.Runs = nil
 	m.runList.SetRuns(nil)
 
 	view := m.View()
@@ -161,14 +161,14 @@ func TestViewRenderFooter(t *testing.T) {
 	}
 	c := client.New(cfg)
 	m := NewModel(c, "")
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
-	m.runs = []models.Run{{ID: "1", PipelineName: "test", Status: models.RunStatusRunning}}
-	m.runList.SetRuns(m.runs)
+	m.state.Runs = []models.Run{{ID: "1", PipelineName: "test", Status: models.RunStatusRunning}}
+	m.runList.SetRuns(m.state.Runs)
 
-	footer := renderFooter(120, m)
+	footer := renderFooter(120, m.state, &m)
 	if !strings.Contains(footer, "Runs:") {
 		t.Errorf("footer should show Runs count, got: %s", footer)
 	}

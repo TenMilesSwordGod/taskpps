@@ -274,7 +274,7 @@ func TestBugRunDetailUpdateContentWithNegativeWidth(t *testing.T) {
 
 func TestBugResizeComponentsPassesZeroOrNegativeWidthToComponents(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
+	m.state.Ready = true
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -283,8 +283,8 @@ func TestBugResizeComponentsPassesZeroOrNegativeWidthToComponents(t *testing.T) 
 	}()
 
 	for w := 0; w <= 5; w++ {
-		m.width = w
-		m.height = 10
+		m.state.Width = w
+		m.state.Height = 10
 		m.resizeComponents()
 		_ = m.View()
 	}
@@ -348,9 +348,9 @@ func TestBugRunDetailWidth3StringsRepeat(t *testing.T) {
 
 func TestBugViewWithZeroWidthNoPanic(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.runs = testutil.MakeTestRuns()
-	m.runList.SetRuns(m.runs)
+	m.state.Ready = true
+	m.state.Runs = testutil.MakeTestRuns()
+	m.runList.SetRuns(m.state.Runs)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -358,19 +358,19 @@ func TestBugViewWithZeroWidthNoPanic(t *testing.T) {
 		}
 	}()
 
-	m.width = 0
-	m.height = 10
+	m.state.Width = 0
+	m.state.Height = 10
 	m.resizeComponents()
 	_ = m.View()
 }
 
 func TestBugViewWithWidth1NoPanic(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.runs = testutil.MakeTestRuns()
-	m.runList.SetRuns(m.runs)
+	m.state.Ready = true
+	m.state.Runs = testutil.MakeTestRuns()
+	m.runList.SetRuns(m.state.Runs)
 	m.runList.SetCursor(0)
-	m.runDetail.SetRun(&m.runs[0])
+	m.runDetail.SetRun(&m.state.Runs[0])
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -378,8 +378,8 @@ func TestBugViewWithWidth1NoPanic(t *testing.T) {
 		}
 	}()
 
-	m.width = 1
-	m.height = 10
+	m.state.Width = 1
+	m.state.Height = 10
 	m.resizeComponents()
 	_ = m.View()
 }
@@ -434,7 +434,7 @@ func TestBugRenderFooterWithZeroWidth(t *testing.T) {
 	defer lipgloss.SetColorProfile(termenv.TrueColor)
 
 	m := makeTestModel()
-	m.ready = true
+	m.state.Ready = true
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -442,7 +442,7 @@ func TestBugRenderFooterWithZeroWidth(t *testing.T) {
 		}
 	}()
 
-	footer := renderFooter(0, m)
+	footer := renderFooter(0, m.state, &m)
 	_ = footer
 }
 

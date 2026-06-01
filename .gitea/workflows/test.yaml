@@ -118,8 +118,10 @@ jobs:
           go-version-file: cli/go.mod
           cache: true
 
-      - name: Test
-        run: go test ./... -v -coverprofile=coverage.out
+      - name: Unit test with coverage
+        run: |
+          go test ./tui ./tui/components -v -count=1 -coverprofile=coverage.out -timeout 120s
+          go tool cover -func=coverage.out | tail -1
 
       - name: Build
         run: go build -o taskpps-cli .
@@ -129,3 +131,48 @@ jobs:
         with:
           name: taskpps-cli-linux
           path: cli/taskpps-cli
+
+  fuzz-go:
+    name: Go Fuzz Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache: true
+
+      - name: Fuzz test - model & update
+        run: |
+          go test ./tui -fuzz='^FuzzModelUpdate$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzModelUpdateWithLongData$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzModelUpdateWithRuns$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzModelUpdateWithSmallWindow$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzModelViewWithResize$' -fuzztime=180s -timeout=200s
+
+      - name: Fuzz test - components
+        run: |
+          go test ./tui -fuzz='^FuzzRunListUpdate$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzRunDetailUpdate$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzLogViewerContent$' -fuzztime=180s -timeout=200s
+
+      - name: Fuzz test - helpers
+        run: |
+          go test ./tui -fuzz='^FuzzTruncateLine$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzTruncateStr$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzPadRightVisual$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzMakeProgressBar$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzStatusIcon$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzFormatTime$' -fuzztime=180s -timeout=200s
+          go test ./tui -fuzz='^FuzzFormatTimeNil$' -fuzztime=180s -timeout=200s
+
+      - name: Fuzz test - merge & data
+        run: |
+          go test ./tui -fuzz='^FuzzMergeRuns$' -fuzztime=180s -timeout=200s

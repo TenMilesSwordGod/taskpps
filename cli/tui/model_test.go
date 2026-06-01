@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/taskpps/ppsctl/client"
 	"github.com/taskpps/ppsctl/config"
 	"github.com/taskpps/ppsctl/models"
@@ -16,13 +17,13 @@ func TestNewModel(t *testing.T) {
 	c := client.New(cfg)
 	m := NewModel(c, "")
 
-	if m.focusedPanel != FocusRunList {
-		t.Errorf("focusedPanel = %v, want FocusRunList", m.focusedPanel)
+	if m.state.FocusedPanel != FocusRunList {
+		t.Errorf("focusedPanel = %v, want FocusRunList", m.state.FocusedPanel)
 	}
 	if m.client == nil {
 		t.Error("client should not be nil")
 	}
-	if m.quit {
+	if m.state.Quit {
 		t.Error("quit should be false")
 	}
 }
@@ -41,24 +42,26 @@ func TestNewModelWithTargetRun(t *testing.T) {
 
 func TestPanelFocus(t *testing.T) {
 	t.Run("focusNext", func(t *testing.T) {
-		m := Model{focusedPanel: FocusRunList}
+		m := Model{state: NewAppState()}
+		m.state.FocusedPanel = FocusRunList
 		if m.focusNext() != FocusRightPanel {
 			t.Error("focusNext from RunList should go to RightPanel")
 		}
 
-		m.focusedPanel = FocusRightPanel
+		m.state.FocusedPanel = FocusRightPanel
 		if m.focusNext() != FocusRunList {
 			t.Error("focusNext from RightPanel should go to RunList")
 		}
 	})
 
 	t.Run("focusPrev", func(t *testing.T) {
-		m := Model{focusedPanel: FocusRunList}
+		m := Model{state: NewAppState()}
+		m.state.FocusedPanel = FocusRunList
 		if m.focusPrev() != FocusRightPanel {
 			t.Error("focusPrev from RunList should go to RightPanel")
 		}
 
-		m.focusedPanel = FocusRightPanel
+		m.state.FocusedPanel = FocusRightPanel
 		if m.focusPrev() != FocusRunList {
 			t.Error("focusPrev from RightPanel should go to RunList")
 		}
@@ -83,12 +86,12 @@ func TestModelQuit(t *testing.T) {
 		Server: config.ServerConfig{Host: "localhost", Port: 8080},
 	}), "")
 
-	if m.quit {
+	if m.state.Quit {
 		t.Error("quit should be false initially")
 	}
 
-	m.quit = true
-	if !m.quit {
+	m.state.Quit = true
+	if !m.state.Quit {
 		t.Error("quit should be true after setting")
 	}
 }
@@ -108,7 +111,7 @@ func TestRenderFooter(t *testing.T) {
 	m := NewModel(c, "")
 
 	t.Run("empty", func(t *testing.T) {
-		result := renderFooter(100, m)
+		result := renderFooter(100, m.state, &m)
 		if result == "" {
 			t.Error("renderFooter should not return empty")
 		}
@@ -116,7 +119,7 @@ func TestRenderFooter(t *testing.T) {
 
 	t.Run("with_tasks", func(t *testing.T) {
 		m2 := NewModel(c, "")
-		m2.runs = []models.Run{
+		m2.state.Runs = []models.Run{
 			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning,
 				Tasks: []models.TaskRun{
 					{TaskName: "build", Status: models.TaskStatusSuccess},
@@ -124,11 +127,11 @@ func TestRenderFooter(t *testing.T) {
 					{TaskName: "deploy", Status: models.TaskStatusFailed},
 				}},
 		}
-		m2.runList.SetRuns(m2.runs)
+		m2.runList.SetRuns(m2.state.Runs)
 		m2.runList.SetCursor(0)
-		m2.runDetail.SetRun(&m2.runs[0])
+		m2.runDetail.SetRun(&m2.state.Runs[0])
 
-		result := renderFooter(100, m2)
+		result := renderFooter(100, m2.state, &m2)
 		if result == "" {
 			t.Error("renderFooter should not return empty")
 		}
@@ -173,8 +176,8 @@ func TestResizeComponents(t *testing.T) {
 	c := client.New(cfg)
 	m := NewModel(c, "")
 
-	m.width = 150
-	m.height = 40
+	m.state.Width = 150
+	m.state.Height = 40
 	m.resizeComponents()
 
 	view := m.runList.View()
@@ -189,5 +192,39 @@ func TestResizeComponents(t *testing.T) {
 }
 
 func TestStartWatch(t *testing.T) {
-	t.Skip("StartWatch requires terminal, tested via integration")
+	t.Run("quit_with_q", func(t *testing.T) {
+		c := makeTestClient()
+		input := strings.NewReader("q\n")
+		err := StartWatch(c, "", tea.WithInput(input), tea.WithoutRenderer())
+		if err != nil {
+			t.Logf("StartWatch error (expected from test client): %v", err)
+		}
+	})
+
+	t.Run("quit_with_ctrl_c", func(t *testing.T) {
+		c := makeTestClient()
+		input := strings.NewReader("\x03")
+		err := StartWatch(c, "", tea.WithInput(input), tea.WithoutRenderer())
+		if err != nil {
+			t.Logf("StartWatch ctrl+c error: %v", err)
+		}
+	})
+
+	t.Run("quit_with_esc", func(t *testing.T) {
+		c := makeTestClient()
+		input := strings.NewReader("\x1b")
+		err := StartWatch(c, "", tea.WithInput(input), tea.WithoutRenderer())
+		if err != nil {
+			t.Logf("StartWatch esc error: %v", err)
+		}
+	})
+
+	t.Run("error_path", func(t *testing.T) {
+		c := makeTestClient()
+		input := strings.NewReader("q\n")
+		err := StartWatch(c, "", tea.WithInput(input), tea.WithoutRenderer(), tea.WithAltScreen())
+		if err != nil {
+			t.Logf("StartWatch with both renderer options: %v", err)
+		}
+	})
 }

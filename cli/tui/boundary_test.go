@@ -41,13 +41,13 @@ func TestBoundaryWindowSize20x8(t *testing.T) {
 	if view == "" {
 		t.Error("View should not panic for 20x8")
 	}
-	if model.dims.leftContentW < 0 {
+	if model.state.Dims.leftContentW < 0 {
 		t.Error("leftContentW should not be negative")
 	}
-	if model.dims.rightContentW < 0 {
+	if model.state.Dims.rightContentW < 0 {
 		t.Error("rightContentW should not be negative")
 	}
-	if model.dims.contentH < 0 {
+	if model.state.Dims.contentH < 0 {
 		t.Error("contentH should not be negative")
 	}
 }
@@ -82,13 +82,13 @@ func TestBoundaryWindowSizeNormal(t *testing.T) {
 	m2, _ := m.Update(msg)
 	model := m2.(Model)
 
-	if model.dims.leftContentW <= 0 {
-		t.Errorf("leftContentW = %d, want > 0", model.dims.leftContentW)
+	if model.state.Dims.leftContentW <= 0 {
+		t.Errorf("leftContentW = %d, want > 0", model.state.Dims.leftContentW)
 	}
-	if model.dims.rightContentW <= 0 {
-		t.Errorf("rightContentW = %d, want > 0", model.dims.rightContentW)
+	if model.state.Dims.rightContentW <= 0 {
+		t.Errorf("rightContentW = %d, want > 0", model.state.Dims.rightContentW)
 	}
-	leftPct := model.dims.leftContentW * 100 / (model.dims.leftContentW + model.dims.rightContentW)
+	leftPct := model.state.Dims.leftContentW * 100 / (model.state.Dims.leftContentW + model.state.Dims.rightContentW)
 	if leftPct < 20 || leftPct > 40 {
 		t.Errorf("left panel percentage = %d%%, expected around 28%%", leftPct)
 	}
@@ -100,11 +100,11 @@ func TestBoundaryWindowSizeWide(t *testing.T) {
 	m2, _ := m.Update(msg)
 	model := m2.(Model)
 
-	if model.dims.leftContentW < 14 {
-		t.Errorf("leftContentW = %d, want >= 14", model.dims.leftContentW)
+	if model.state.Dims.leftContentW < 14 {
+		t.Errorf("leftContentW = %d, want >= 14", model.state.Dims.leftContentW)
 	}
-	if model.dims.rightContentW < 20 {
-		t.Errorf("rightContentW = %d, want >= 20", model.dims.rightContentW)
+	if model.state.Dims.rightContentW < 20 {
+		t.Errorf("rightContentW = %d, want >= 20", model.state.Dims.rightContentW)
 	}
 }
 
@@ -131,22 +131,22 @@ func TestBoundaryDynamicResize(t *testing.T) {
 
 func TestBoundaryFirstResizeSetsReady(t *testing.T) {
 	m := makeTestModel()
-	if m.ready {
+	if m.state.Ready {
 		t.Error("model should not be ready before first WindowSizeMsg")
 	}
 
 	msg := tea.WindowSizeMsg{Width: 120, Height: 40}
 	m2, _ := m.Update(msg)
 	model := m2.(Model)
-	if !model.ready {
+	if !model.state.Ready {
 		t.Error("model should be ready after first WindowSizeMsg")
 	}
 }
 
 func TestBoundarySingleColumnLayout(t *testing.T) {
 	m := makeTestModel()
-	m.width = 30
-	m.height = 20
+	m.state.Width = 30
+	m.state.Height = 20
 	m.resizeComponents()
 
 	view := m.View()
@@ -157,14 +157,14 @@ func TestBoundarySingleColumnLayout(t *testing.T) {
 
 func TestBoundaryLongRunID(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	longRun := testutil.MakeLongIDRun()
-	m.runs = []models.Run{longRun}
-	m.runList.SetRuns(m.runs)
+	m.state.Runs = []models.Run{longRun}
+	m.runList.SetRuns(m.state.Runs)
 
 	view := m.runList.View()
 	if view == "" {
@@ -172,22 +172,22 @@ func TestBoundaryLongRunID(t *testing.T) {
 	}
 	for _, line := range strings.Split(view, "\n") {
 		visualW := lipglossWidth(line)
-		if visualW > m.dims.leftContentW+10 {
-			t.Errorf("line overflows: visual width %d > content width %d", visualW, m.dims.leftContentW)
+		if visualW > m.state.Dims.leftContentW+10 {
+			t.Errorf("line overflows: visual width %d > content width %d", visualW, m.state.Dims.leftContentW)
 		}
 	}
 }
 
 func TestBoundaryLongPipelineName(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	longRun := testutil.MakeLongPipelineNameRun()
-	m.runs = []models.Run{longRun}
-	m.runList.SetRuns(m.runs)
+	m.state.Runs = []models.Run{longRun}
+	m.runList.SetRuns(m.state.Runs)
 
 	view := m.runList.View()
 	if view == "" {
@@ -197,14 +197,14 @@ func TestBoundaryLongPipelineName(t *testing.T) {
 
 func TestBoundaryEmptyPipelineName(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	emptyRun := testutil.MakeEmptyPipelineNameRun()
-	m.runs = []models.Run{emptyRun}
-	m.runList.SetRuns(m.runs)
+	m.state.Runs = []models.Run{emptyRun}
+	m.runList.SetRuns(m.state.Runs)
 
 	view := m.runList.View()
 	if view == "" {
@@ -214,14 +214,14 @@ func TestBoundaryEmptyPipelineName(t *testing.T) {
 
 func TestBoundarySingleCharID(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	tinyRun := testutil.MakeSingleCharIDRun()
-	m.runs = []models.Run{tinyRun}
-	m.runList.SetRuns(m.runs)
+	m.state.Runs = []models.Run{tinyRun}
+	m.runList.SetRuns(m.state.Runs)
 
 	view := m.runList.View()
 	if view == "" {
@@ -231,14 +231,14 @@ func TestBoundarySingleCharID(t *testing.T) {
 
 func TestBoundaryNilTasksSlice(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	run := models.Run{ID: "no-tasks", PipelineName: "test", Status: models.RunStatusRunning, Tasks: nil}
-	m.runs = []models.Run{run}
-	m.runList.SetRuns(m.runs)
+	m.state.Runs = []models.Run{run}
+	m.runList.SetRuns(m.state.Runs)
 	m.runDetail.SetRun(&run)
 
 	detailView := m.runDetail.View()
@@ -249,9 +249,9 @@ func TestBoundaryNilTasksSlice(t *testing.T) {
 
 func TestBoundaryLongLogLine(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	longLine := testutil.MakeLongSingleLineLog(1000)
@@ -266,13 +266,13 @@ func TestBoundaryLongLogLine(t *testing.T) {
 
 func TestBoundaryLongErrorMessage(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
-	m.errMsg = strings.Repeat("E", 500)
-	footer := renderFooter(120, m)
+	m.state.ErrorMsg = strings.Repeat("E", 500)
+	footer := renderFooter(120, m.state, &m)
 	if footer == "" {
 		t.Error("Footer should render with long error message")
 	}
@@ -283,18 +283,18 @@ func TestBoundaryLongErrorMessage(t *testing.T) {
 
 func TestBoundaryFooterOverflow(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 60
-	m.height = 20
+	m.state.Ready = true
+	m.state.Width = 60
+	m.state.Height = 20
 	m.resizeComponents()
 
-	m.errMsg = strings.Repeat("E", 500)
-	m.runs = testutil.MakeTestRuns()
-	m.runList.SetRuns(m.runs)
+	m.state.ErrorMsg = strings.Repeat("E", 500)
+	m.state.Runs = testutil.MakeTestRuns()
+	m.runList.SetRuns(m.state.Runs)
 	m.runList.SetCursor(0)
-	m.runDetail.SetRun(&m.runs[0])
+	m.runDetail.SetRun(&m.state.Runs[0])
 
-	footer := renderFooter(60, m)
+	footer := renderFooter(60, m.state, &m)
 	if footer == "" {
 		t.Error("Footer should render even when content overflows")
 	}
@@ -391,7 +391,7 @@ func TestBoundaryMergeRunsPreservesTasksWhenNewHasNone(t *testing.T) {
 
 func TestBoundaryStateMachineQuitView(t *testing.T) {
 	m := makeTestModel()
-	m.quit = true
+	m.state.Quit = true
 	view := m.View()
 	if view != "" {
 		t.Errorf("View should return empty string when quit=true, got %q", view)
@@ -400,50 +400,50 @@ func TestBoundaryStateMachineQuitView(t *testing.T) {
 
 func TestBoundaryStateMachineNotReadyQuit(t *testing.T) {
 	m := makeTestModel()
-	if m.ready {
+	if m.state.Ready {
 		t.Error("model should not be ready initially")
 	}
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
 	m2, _ := m.Update(msg)
 	model := m2.(Model)
-	if !model.quit {
+	if !model.state.Quit {
 		t.Error("q key should quit even when not ready")
 	}
 }
 
 func TestBoundaryStateMachineEmptyPipelinePN(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.focusedPanel = FocusRightPanel
-	m.runs = nil
+	m.state.Ready = true
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.Runs = nil
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
 	m2, _ := m.Update(msg)
 	model := m2.(Model)
-	if model.quit {
+	if model.state.Quit {
 		t.Error("p key on empty runs should not crash or quit")
 	}
 
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
 	m3, _ := model.Update(msg)
 	model2 := m3.(Model)
-	if model2.quit {
+	if model2.state.Quit {
 		t.Error("n key on empty runs should not crash or quit")
 	}
 }
 
 func TestBoundaryStateMachineEmptyTaskEnter(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabDetail
+	m.state.Ready = true
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabDetail
 	m.runDetail.SetRun(&models.Run{ID: "abc", Status: models.RunStatusRunning, Tasks: nil})
 
 	msg := tea.KeyMsg{Type: tea.KeyEnter}
 	m2, _ := m.Update(msg)
 	model := m2.(Model)
-	if model.rightTab != TabDetail {
+	if model.state.RightTab != TabDetail {
 		t.Error("Enter on empty tasks should not switch tab")
 	}
 }
@@ -451,69 +451,69 @@ func TestBoundaryStateMachineEmptyTaskEnter(t *testing.T) {
 func TestBoundaryStateMachineEscMultiLayer(t *testing.T) {
 	t.Run("esc_from_logs_to_detail", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.focusedPanel = FocusRightPanel
-		m.rightTab = TabLogs
+		m.state.Ready = true
+		m.state.FocusedPanel = FocusRightPanel
+		m.state.RightTab = TabLogs
 
 		msg := tea.KeyMsg{Type: tea.KeyEsc}
 		m2, _ := m.Update(msg)
 		model := m2.(Model)
-		if model.rightTab != TabDetail {
+		if model.state.RightTab != TabDetail {
 			t.Error("Esc from Logs should go to Detail")
 		}
-		if model.focusedPanel != FocusRightPanel {
+		if model.state.FocusedPanel != FocusRightPanel {
 			t.Error("Esc from Logs should stay on RightPanel")
 		}
 	})
 
 	t.Run("esc_from_detail_to_runlist", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.focusedPanel = FocusRightPanel
-		m.rightTab = TabDetail
+		m.state.Ready = true
+		m.state.FocusedPanel = FocusRightPanel
+		m.state.RightTab = TabDetail
 
 		msg := tea.KeyMsg{Type: tea.KeyEsc}
 		m2, _ := m.Update(msg)
 		model := m2.(Model)
-		if model.focusedPanel != FocusRunList {
+		if model.state.FocusedPanel != FocusRunList {
 			t.Error("Esc from Detail should go to RunList")
 		}
 	})
 
 	t.Run("esc_from_runlist_quits", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.focusedPanel = FocusRunList
+		m.state.Ready = true
+		m.state.FocusedPanel = FocusRunList
 
 		msg := tea.KeyMsg{Type: tea.KeyEsc}
 		m2, _ := m.Update(msg)
 		model := m2.(Model)
-		if !model.quit {
+		if !model.state.Quit {
 			t.Error("Esc from RunList should quit")
 		}
 	})
 
 	t.Run("full_esc_chain", func(t *testing.T) {
 		m := makeTestModel()
-		m.ready = true
-		m.focusedPanel = FocusRightPanel
-		m.rightTab = TabLogs
+		m.state.Ready = true
+		m.state.FocusedPanel = FocusRightPanel
+		m.state.RightTab = TabLogs
 
 		m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 		m = m2.(Model)
-		if m.rightTab != TabDetail {
+		if m.state.RightTab != TabDetail {
 			t.Error("Step 1: Esc from Logs should go to Detail")
 		}
 
 		m2, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 		m = m2.(Model)
-		if m.focusedPanel != FocusRunList {
+		if m.state.FocusedPanel != FocusRunList {
 			t.Error("Step 2: Esc from Detail should go to RunList")
 		}
 
 		m2, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 		m = m2.(Model)
-		if !m.quit {
+		if !m.state.Quit {
 			t.Error("Step 3: Esc from RunList should quit")
 		}
 	})
@@ -521,7 +521,7 @@ func TestBoundaryStateMachineEscMultiLayer(t *testing.T) {
 
 func TestBoundaryRefreshKeyReturnsBothCmds(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
+	m.state.Ready = true
 	m.runDetail.SetRun(&models.Run{ID: "abc", PipelineName: "test", Status: models.RunStatusRunning})
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
@@ -534,22 +534,22 @@ func TestBoundaryRefreshKeyReturnsBothCmds(t *testing.T) {
 func TestBoundaryPanelFocusBoundary(t *testing.T) {
 	t.Run("h_on_runlist_no_change", func(t *testing.T) {
 		m := makeTestModel()
-		m.focusedPanel = FocusRunList
+		m.state.FocusedPanel = FocusRunList
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
 		m2, _ := m.Update(msg)
 		model := m2.(Model)
-		if model.focusedPanel != FocusRunList {
+		if model.state.FocusedPanel != FocusRunList {
 			t.Error("h on RunList should not change focus")
 		}
 	})
 
 	t.Run("l_on_rightpanel_no_change", func(t *testing.T) {
 		m := makeTestModel()
-		m.focusedPanel = FocusRightPanel
+		m.state.FocusedPanel = FocusRightPanel
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
 		m2, _ := m.Update(msg)
 		model := m2.(Model)
-		if model.focusedPanel != FocusRightPanel {
+		if model.state.FocusedPanel != FocusRightPanel {
 			t.Error("l on RightPanel should not change focus")
 		}
 	})
@@ -557,9 +557,9 @@ func TestBoundaryPanelFocusBoundary(t *testing.T) {
 
 func TestBoundaryRunDetailCursorOverflow(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	m.runDetail.SetRun(&models.Run{
@@ -580,9 +580,9 @@ func TestBoundaryRunDetailCursorOverflow(t *testing.T) {
 
 func TestBoundaryRunListCursorOverflow(t *testing.T) {
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := []models.Run{{ID: "r1"}, {ID: "r2"}}

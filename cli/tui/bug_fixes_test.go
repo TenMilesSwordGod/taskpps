@@ -17,15 +17,15 @@ func makeTestModelWithRuns() Model {
 	}
 	c := client.New(cfg)
 	m := NewModel(c, "")
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
-	m.runs = []models.Run{
+	m.state.Runs = []models.Run{
 		{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
 		{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
 	}
-	m.runList.SetRuns(m.runs)
+	m.runList.SetRuns(m.state.Runs)
 	return m
 }
 
@@ -35,12 +35,12 @@ func TestBug6_ViewportHeightMismatch(t *testing.T) {
 	}
 	c := client.New(cfg)
 	m := NewModel(c, "")
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
-	contentH := m.dims.contentH
+	contentH := m.state.Dims.contentH
 
 	view := m.View()
 	lines := strings.Split(view, "\n")
@@ -161,10 +161,10 @@ func TestBug5_ProgressBarRounding(t *testing.T) {
 
 func TestBug7_FooterWidthCalculation(t *testing.T) {
 	m := makeTestModelWithRuns()
-	m.focusedPanel = FocusRunList
-	m.errMsg = ""
+	m.state.FocusedPanel = FocusRunList
+	m.state.ErrorMsg = ""
 
-	footer := renderFooter(120, m)
+	footer := renderFooter(120, m.state, &m)
 	if footer == "" {
 		t.Error("footer should not be empty")
 	}
@@ -178,10 +178,10 @@ func TestBug7_FooterWidthCalculation(t *testing.T) {
 
 func TestBug7_FooterWithError(t *testing.T) {
 	m := makeTestModelWithRuns()
-	m.focusedPanel = FocusRunList
-	m.errMsg = "connection refused"
+	m.state.FocusedPanel = FocusRunList
+	m.state.ErrorMsg = "connection refused"
 
-	footer := renderFooter(120, m)
+	footer := renderFooter(120, m.state, &m)
 	if !strings.Contains(footer, "ERR:") {
 		t.Errorf("footer should contain ERR with error message, got: %s", footer)
 	}
@@ -189,10 +189,10 @@ func TestBug7_FooterWithError(t *testing.T) {
 
 func TestBug7_FooterRightPanel(t *testing.T) {
 	m := makeTestModelWithRuns()
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabDetail
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabDetail
 
-	footer := renderFooter(120, m)
+	footer := renderFooter(120, m.state, &m)
 	if !strings.Contains(footer, "expand") {
 		t.Errorf("footer should contain expand hint for detail tab, got: %s", footer)
 	}
@@ -200,10 +200,10 @@ func TestBug7_FooterRightPanel(t *testing.T) {
 
 func TestBug7_FooterLogsTab(t *testing.T) {
 	m := makeTestModelWithRuns()
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabLogs
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabLogs
 
-	footer := renderFooter(120, m)
+	footer := renderFooter(120, m.state, &m)
 	if !strings.Contains(footer, "scroll") {
 		t.Errorf("footer should contain scroll hint for logs tab, got: %s", footer)
 	}
@@ -211,8 +211,8 @@ func TestBug7_FooterLogsTab(t *testing.T) {
 
 func TestBug8_TickDoesNotFetchLogsForDoneTask(t *testing.T) {
 	m := makeTestModelWithRuns()
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabLogs
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabLogs
 	m.runDetail.SetRun(&models.Run{
 		ID:     "abc",
 		Status: models.RunStatusSuccess,
@@ -230,8 +230,8 @@ func TestBug8_TickDoesNotFetchLogsForDoneTask(t *testing.T) {
 
 func TestBug8_TickFetchesLogsForRunningTask(t *testing.T) {
 	m := makeTestModelWithRuns()
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabLogs
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabLogs
 	m.runDetail.SetRun(&models.Run{
 		ID:     "abc",
 		Status: models.RunStatusRunning,
@@ -345,19 +345,19 @@ func TestIntegration_FullNavigationFlow(t *testing.T) {
 
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model := m2.(Model)
-	if model.focusedPanel != FocusRightPanel {
-		t.Errorf("should focus right panel after enter, got %v", model.focusedPanel)
+	if model.state.FocusedPanel != FocusRightPanel {
+		t.Errorf("should focus right panel after enter, got %v", model.state.FocusedPanel)
 	}
 
 	m3, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	model2 := m3.(Model)
-	if model2.rightTab != TabLogs {
-		t.Errorf("should switch to logs tab, got %v", model2.rightTab)
+	if model2.state.RightTab != TabLogs {
+		t.Errorf("should switch to logs tab, got %v", model2.state.RightTab)
 	}
 
 	m4, _ := model2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
 	model3 := m4.(Model)
-	if model3.rightTab != TabDetail {
-		t.Errorf("should switch back to detail tab, got %v", model3.rightTab)
+	if model3.state.RightTab != TabDetail {
+		t.Errorf("should switch back to detail tab, got %v", model3.state.RightTab)
 	}
 }
