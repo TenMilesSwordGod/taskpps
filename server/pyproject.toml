@@ -35,6 +35,18 @@ taskpps-server = "taskpps.main:cli"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
+[tool.coverage.run]
+omit = [
+    "taskpps/executors/nexus.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
