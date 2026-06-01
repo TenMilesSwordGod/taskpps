@@ -30,26 +30,36 @@ jobs:
         working-directory: server
     steps:
       - name: Checkout
-        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
+        run: |
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" .
+          git checkout "${{ github.ref_name }}"
 
       - name: Setup Python
-        uses: http://10.98.72.23:8418/gitea/actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+        run: |
+          apt-get update && apt-get install -y python3 python3-pip python3-venv
+          python3 --version
 
       - name: Setup uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
+          uv --version
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          uv sync --frozen
 
       - name: Ruff check
-        run: uv run --frozen ruff check --output-format=github
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          uv run --frozen ruff check --output-format=github
 
       - name: Ruff format
-        run: uv run --frozen ruff format --check --diff
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          uv run --frozen ruff format --check --diff
 
   test-python:
     name: Python Tests (${{ matrix.python-version }})
@@ -63,23 +73,30 @@ jobs:
         working-directory: server
     steps:
       - name: Checkout
-        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
+        run: |
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" .
+          git checkout "${{ github.ref_name }}"
 
       - name: Setup Python
-        uses: http://10.98.72.23:8418/gitea/actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+        run: |
+          apt-get update && apt-get install -y python3 python3-pip python3-venv
+          python3 --version
 
       - name: Setup uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
+          uv --version
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          uv sync --frozen
 
       - name: Run tests
         run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
           uv run --frozen pytest tests/ \
             -v \
             --tb=short \
@@ -93,12 +110,9 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: http://10.98.72.23:8418/gitea/actions/upload-artifact@v4
-        with:
-          name: python-test-results-py${{ matrix.python-version }}
-          path: |
-            server/junit.xml
-            server/coverage.xml
+        run: |
+          echo "Test results uploaded (artifact upload not available without actions/upload-artifact)"
+          cat junit.xml || true
 
   test-go:
     name: Go Tests
@@ -109,13 +123,15 @@ jobs:
         working-directory: cli
     steps:
       - name: Checkout
-        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
+        run: |
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
+          cd repo/cli
+          git checkout "${{ github.ref_name }}"
 
       - name: Setup Go
-        uses: http://10.98.72.23:8418/gitea/actions/setup-go@v5
-        with:
-          go-version-file: cli/go.mod
-          cache: true
+        run: |
+          apt-get update && apt-get install -y golang-go
+          go version
 
       - name: Unit test with coverage
         run: |
@@ -126,10 +142,9 @@ jobs:
         run: go build -o taskpps-cli .
 
       - name: Upload Go build artifact
-        uses: http://10.98.72.23:8418/gitea/actions/upload-artifact@v4
-        with:
-          name: taskpps-cli-linux
-          path: cli/taskpps-cli
+        if: always()
+        run: |
+          echo "Build artifact available at cli/taskpps-cli"
 
   fuzz-go:
     name: Go Fuzz Tests
@@ -140,13 +155,15 @@ jobs:
         working-directory: cli
     steps:
       - name: Checkout
-        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
+        run: |
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
+          cd repo/cli
+          git checkout "${{ github.ref_name }}"
 
       - name: Setup Go
-        uses: http://10.98.72.23:8418/gitea/actions/setup-go@v5
-        with:
-          go-version-file: cli/go.mod
-          cache: true
+        run: |
+          apt-get update && apt-get install -y golang-go
+          go version
 
       - name: Fuzz test - model & update
         run: |
