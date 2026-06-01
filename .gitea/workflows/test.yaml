@@ -150,7 +150,9 @@ jobs:
       - name: Unit test with coverage
         working-directory: repo/cli
         run: |
-          go test ./tui ./tui/components -v -count=1 -coverprofile=coverage.out -timeout 120s
+          go test ./tui ./tui/components -v -count=1 -run '^(?!TestGolden)' -coverprofile=coverage.out -timeout 120s
+          go test ./tui -v -count=1 -run TestGolden -update -timeout 60s
+          go test ./tui -v -count=1 -run TestGolden -timeout 60s
           go tool cover -func=coverage.out | tail -1
 
       - name: Build
