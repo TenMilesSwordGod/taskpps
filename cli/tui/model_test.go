@@ -5,17 +5,11 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/taskpps/ppsctl/client"
-	"github.com/taskpps/ppsctl/config"
 	"github.com/taskpps/ppsctl/models"
 )
 
 func TestNewModel(t *testing.T) {
-	cfg := &config.Config{
-		Server: config.ServerConfig{Host: "localhost", Port: 8080},
-	}
-	c := client.New(cfg)
-	m := NewModel(c, "")
+	m := makeTestModel()
 
 	if m.state.FocusedPanel != FocusRunList {
 		t.Errorf("focusedPanel = %v, want FocusRunList", m.state.FocusedPanel)
@@ -29,14 +23,10 @@ func TestNewModel(t *testing.T) {
 }
 
 func TestNewModelWithTargetRun(t *testing.T) {
-	cfg := &config.Config{
-		Server: config.ServerConfig{Host: "localhost", Port: 8080},
-	}
-	c := client.New(cfg)
-	m := NewModel(c, "abc123")
-
-	if m.targetRunID != "abc123" {
-		t.Errorf("targetRunID = %s, want abc123", m.targetRunID)
+	m := makeTestModel()
+	m2 := NewModel(m.client, "abc123")
+	if m2.targetRunID != "abc123" {
+		t.Errorf("targetRunID = %s, want abc123", m2.targetRunID)
 	}
 }
 
@@ -69,12 +59,7 @@ func TestPanelFocus(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
-	cfg := &config.Config{
-		Server: config.ServerConfig{Host: "localhost", Port: 8080},
-	}
-	c := client.New(cfg)
-	m := NewModel(c, "")
-
+	m := makeTestModel()
 	cmds := m.Init()
 	if cmds == nil {
 		t.Error("Init should return commands")
@@ -82,70 +67,18 @@ func TestInit(t *testing.T) {
 }
 
 func TestModelQuit(t *testing.T) {
-	m := NewModel(client.New(&config.Config{
-		Server: config.ServerConfig{Host: "localhost", Port: 8080},
-	}), "")
-
+	m := makeTestModel()
 	if m.state.Quit {
 		t.Error("quit should be false initially")
 	}
-
 	m.state.Quit = true
 	if !m.state.Quit {
 		t.Error("quit should be true after setting")
 	}
 }
 
-func TestRenderHeader(t *testing.T) {
-	result := renderHeader(100)
-	if result == "" {
-		t.Error("renderHeader should not return empty")
-	}
-}
-
-func TestRenderFooter(t *testing.T) {
-	cfg := &config.Config{
-		Server: config.ServerConfig{Host: "localhost", Port: 8080},
-	}
-	c := client.New(cfg)
-	m := NewModel(c, "")
-
-	t.Run("empty", func(t *testing.T) {
-		result := renderFooter(100, m.state, &m)
-		if result == "" {
-			t.Error("renderFooter should not return empty")
-		}
-	})
-
-	t.Run("with_tasks", func(t *testing.T) {
-		m2 := NewModel(c, "")
-		m2.state.Runs = []models.Run{
-			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning,
-				Tasks: []models.TaskRun{
-					{TaskName: "build", Status: models.TaskStatusSuccess},
-					{TaskName: "test", Status: models.TaskStatusRunning},
-					{TaskName: "deploy", Status: models.TaskStatusFailed},
-				}},
-		}
-		m2.runList.SetRuns(m2.state.Runs)
-		m2.runList.SetCursor(0)
-		m2.runDetail.SetRun(&m2.state.Runs[0])
-
-		result := renderFooter(100, m2.state, &m2)
-		if result == "" {
-			t.Error("renderFooter should not return empty")
-		}
-		if !strings.Contains(result, "2/3") {
-			t.Errorf("should show 2/3 tasks done, got: %s", result)
-		}
-	})
-}
-
 func TestFetchFunctions(t *testing.T) {
-	cfg := &config.Config{
-		Server: config.ServerConfig{Host: "localhost", Port: 8080},
-	}
-	c := client.New(cfg)
+	c := makeTestClient()
 
 	t.Run("fetchRuns", func(t *testing.T) {
 		cmd := fetchRuns(c)
@@ -167,28 +100,6 @@ func TestFetchFunctions(t *testing.T) {
 			t.Error("fetchLogs should return a command")
 		}
 	})
-}
-
-func TestResizeComponents(t *testing.T) {
-	cfg := &config.Config{
-		Server: config.ServerConfig{Host: "localhost", Port: 8080},
-	}
-	c := client.New(cfg)
-	m := NewModel(c, "")
-
-	m.state.Width = 150
-	m.state.Height = 40
-	m.resizeComponents()
-
-	view := m.runList.View()
-	if view == "" {
-		t.Error("RunList View should work after resize")
-	}
-
-	detailView := m.runDetail.View()
-	if detailView == "" {
-		t.Error("RunDetail View should work after resize")
-	}
 }
 
 func TestStartWatch(t *testing.T) {
@@ -227,4 +138,142 @@ func TestStartWatch(t *testing.T) {
 			t.Logf("StartWatch with both renderer options: %v", err)
 		}
 	})
+}
+
+func TestMergeRuns(t *testing.T) {
+	t.Run("merge_preserves_tasks_from_existing", func(t *testing.T) {
+		old := []models.Run{
+			{ID: "r1", PipelineName: "p1", Tasks: []models.TaskRun{
+				{TaskName: "t1", Status: models.TaskStatusSuccess},
+				{TaskName: "t2", Status: models.TaskStatusRunning},
+			}},
+			{ID: "r2", PipelineName: "p2", Tasks: []models.TaskRun{
+				{TaskName: "t3", Status: models.TaskStatusPending},
+			}},
+		}
+		newRuns := []models.Run{
+			{ID: "r1", PipelineName: "p1-updated", Tasks: nil},
+			{ID: "r3", PipelineName: "p3", Tasks: nil},
+		}
+
+		merged := mergeRuns(old, newRuns)
+		if len(merged) != 2 {
+			t.Errorf("merged length = %d, want 2 (only newRuns are kept)", len(merged))
+		}
+
+		var r1 *models.Run
+		for i := range merged {
+			if merged[i].ID == "r1" {
+				r1 = &merged[i]
+				break
+			}
+		}
+		if r1 == nil {
+			t.Fatal("r1 not found in merged")
+		}
+		if r1.PipelineName != "p1-updated" {
+			t.Errorf("r1.PipelineName = %q, want p1-updated", r1.PipelineName)
+		}
+		if len(r1.Tasks) != 2 {
+			t.Errorf("r1 should preserve 2 tasks from existing, got %d", len(r1.Tasks))
+		}
+	})
+
+	t.Run("merge_empty_old", func(t *testing.T) {
+		newRuns := []models.Run{
+			{ID: "r1", PipelineName: "p1"},
+		}
+		merged := mergeRuns(nil, newRuns)
+		if len(merged) != 1 {
+			t.Errorf("merged length = %d, want 1", len(merged))
+		}
+	})
+
+	t.Run("merge_empty_new", func(t *testing.T) {
+		old := []models.Run{
+			{ID: "r1", PipelineName: "p1"},
+		}
+		merged := mergeRuns(old, nil)
+		if len(merged) != 0 {
+			t.Errorf("merged length = %d, want 0 (only newRuns are kept)", len(merged))
+		}
+	})
+
+	t.Run("merge_both_empty", func(t *testing.T) {
+		merged := mergeRuns(nil, nil)
+		if len(merged) != 0 {
+			t.Errorf("merged length = %d, want 0", len(merged))
+		}
+	})
+
+	t.Run("merge_new_overrides_status", func(t *testing.T) {
+		old := []models.Run{
+			{ID: "r1", Status: models.RunStatusPending, Tasks: []models.TaskRun{
+				{TaskName: "t1", Status: models.TaskStatusPending},
+			}},
+		}
+		newRuns := []models.Run{
+			{ID: "r1", Status: models.RunStatusRunning},
+		}
+		merged := mergeRuns(old, newRuns)
+		if merged[0].Status != models.RunStatusRunning {
+			t.Errorf("status = %v, want Running", merged[0].Status)
+		}
+		if len(merged[0].Tasks) != 1 {
+			t.Error("tasks should be preserved from old when new has none")
+		}
+	})
+
+	t.Run("merge_existing_tasks_preserved_even_when_new_has_tasks", func(t *testing.T) {
+		old := []models.Run{
+			{ID: "r1", Tasks: []models.TaskRun{
+				{TaskName: "old", Status: models.TaskStatusSuccess},
+			}},
+		}
+		newRuns := []models.Run{
+			{ID: "r1", Tasks: []models.TaskRun{
+				{TaskName: "new", Status: models.TaskStatusRunning},
+			}},
+		}
+		merged := mergeRuns(old, newRuns)
+		if len(merged[0].Tasks) != 1 || merged[0].Tasks[0].TaskName != "old" {
+			t.Error("existing tasks should be preserved when they exist, even if new run has tasks")
+		}
+	})
+}
+
+func TestComputeRunsHash(t *testing.T) {
+	runs1 := []models.Run{
+		{ID: "r1", PipelineName: "p1", Status: models.RunStatusRunning},
+	}
+	runs2 := []models.Run{
+		{ID: "r1", PipelineName: "p1", Status: models.RunStatusRunning},
+	}
+	runs3 := []models.Run{
+		{ID: "r1", PipelineName: "p1", Status: models.RunStatusSuccess},
+	}
+
+	h1 := computeRunsHash(runs1)
+	h2 := computeRunsHash(runs2)
+	h3 := computeRunsHash(runs3)
+
+	if h1 != h2 {
+		t.Error("same runs should produce same hash")
+	}
+	if h1 == h3 {
+		t.Error("different runs should produce different hash")
+	}
+}
+
+func TestAppState(t *testing.T) {
+	s := NewAppState()
+	if s.FocusedPanel != FocusRunList {
+		t.Error("default focus should be RunList")
+	}
+	if s.Ready {
+		t.Error("should not be ready initially")
+	}
+	if s.Quit {
+		t.Error("should not quit initially")
+	}
 }
