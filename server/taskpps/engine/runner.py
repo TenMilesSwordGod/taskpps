@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from taskpps.config import build_log_path, get_settings, get_workspaces_dir
+from taskpps.config import build_log_path, get_logs_dir, get_settings, get_workspaces_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext
