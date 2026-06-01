@@ -14,8 +14,18 @@ async def test_pipeline_service_list_pipelines(tmp_project, db_engine):
     cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+    # Debug output
+    print(f"DEBUG: tmp_project = {tmp_project}")
+    print(f"DEBUG: cfg._project_root = {cfg._project_root}")
+    print(f"DEBUG: cfg.find_project_root() = {cfg.find_project_root()}")
+    print(f"DEBUG: cfg.get_pipelines_dir() = {cfg.get_pipelines_dir()}")
+    print(f"DEBUG: pipelines dir exists = {cfg.get_pipelines_dir().exists()}")
+    if cfg.get_pipelines_dir().exists():
+        print(f"DEBUG: pipelines dir contents = {list(cfg.get_pipelines_dir().glob('*.yaml'))}")
     svc = PipelineService()
+    print(f"DEBUG: svc.loader.base_dir = {svc.loader.base_dir}")
     pipelines = svc.list_pipelines()
+    print(f"DEBUG: pipelines = {pipelines}")
     assert isinstance(pipelines, list)
     assert "deploy" in pipelines
     assert "simple" in pipelines
