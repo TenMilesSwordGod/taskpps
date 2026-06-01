@@ -7,8 +7,17 @@ from taskpps.services.pipeline_service import PipelineService
 from taskpps.services.plugin_manager import PluginManager
 
 
+def _setup_config(tmp_project):
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+
 @pytest.mark.asyncio
 async def test_cancel_run_pending_status(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     from taskpps.db.engine import get_session_factory
     from taskpps.db.repository import RunRepository
 
@@ -26,6 +35,7 @@ async def test_cancel_run_pending_status(setup_project, tmp_project, db_engine):
 
 @pytest.mark.asyncio
 async def test_cancel_run_completed_status(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     import asyncio
 
     from taskpps.db.engine import get_session_factory
@@ -56,6 +66,7 @@ async def test_cancel_run_completed_status(setup_project, tmp_project, db_engine
 
 @pytest.mark.asyncio
 async def test_clean_runs_older_than(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     from taskpps.db.engine import get_session_factory
     from taskpps.db.repository import RunRepository
 
@@ -75,6 +86,7 @@ async def test_clean_runs_older_than(setup_project, tmp_project, db_engine):
 
 @pytest.mark.asyncio
 async def test_clean_runs_keep(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     svc = PipelineService()
     await svc.create_run("deploy.yaml")
     await svc.create_run("deploy.yaml")
@@ -85,6 +97,7 @@ async def test_clean_runs_keep(setup_project, tmp_project, db_engine):
 
 @pytest.mark.asyncio
 async def test_clean_runs_with_logs(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     from taskpps.config import get_logs_dir
 
     svc = PipelineService()
@@ -103,6 +116,7 @@ async def test_clean_runs_with_logs(setup_project, tmp_project, db_engine):
 
 @pytest.mark.asyncio
 async def test_pipeline_service_create_with_params(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     svc = PipelineService()
     result = await svc.create_run("deploy.yaml", params={"options.timeout": 120})
     assert "id" in result
@@ -110,6 +124,7 @@ async def test_pipeline_service_create_with_params(setup_project, tmp_project, d
 
 @pytest.mark.asyncio
 async def test_pipeline_service_create_with_bad_params(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     svc = PipelineService()
     with pytest.raises(ValueError):
         await svc.create_run("deploy.yaml", params={"nonexistent.path": "value"})
@@ -117,6 +132,7 @@ async def test_pipeline_service_create_with_bad_params(setup_project, tmp_projec
 
 @pytest.mark.asyncio
 async def test_pipeline_service_list_pipelines(setup_project, tmp_project, db_engine):
+    _setup_config(tmp_project)
     svc = PipelineService()
     pipelines = svc.list_pipelines()
     assert len(pipelines) >= 2

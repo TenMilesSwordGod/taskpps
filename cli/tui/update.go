@@ -13,6 +13,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
+	s := &m.state
 	rec := GetDebugRecorder()
 	debugEnabled := rec.IsEnabled()
 
@@ -60,7 +61,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tickMsg:
 			rec.RecordEvent("TICK", fmt.Sprintf("focused=%d rightTab=%d pendingRender=%v runs=%d",
-				m.focusedPanel, m.rightTab, m.pendingRender, len(m.runs)))
+				s.FocusedPanel, s.RightTab, m.pendingRender, len(s.Runs)))
 		case debounceTickMsg:
 			rec.RecordEvent("DEBOUNCE", "render flushed")
 		}
@@ -68,10 +69,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		if !m.ready {
-			m.ready = true
+		s.Width = msg.Width
+		s.Height = msg.Height
+		if !s.Ready {
+			s.Ready = true
 		}
 		m.resizeComponents()
 
@@ -79,56 +80,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recordUserActivity()
 		switch msg.String() {
 		case "q", "ctrl+c":
-			m.quit = true
+			s.Quit = true
 			return m, tea.Quit
 
 		case "esc":
-			oldPanel, oldTab := m.focusedPanel, m.rightTab
-			if m.focusedPanel == FocusRightPanel {
+			oldPanel, oldTab := s.FocusedPanel, s.RightTab
+			if s.FocusedPanel == FocusRightPanel {
 				m.navigateBack()
 			} else {
-				m.quit = true
+				s.Quit = true
 				return m, tea.Quit
 			}
 			if debugEnabled {
 				rec.RecordEvent("NAV", fmt.Sprintf("esc: focus %d→%d tab %d→%d",
-					oldPanel, m.focusedPanel, oldTab, m.rightTab))
+					oldPanel, s.FocusedPanel, oldTab, s.RightTab))
 			}
 
 		case "b":
-			oldPanel, oldTab := m.focusedPanel, m.rightTab
+			oldPanel, oldTab := s.FocusedPanel, s.RightTab
 			m.navigateBack()
 			if debugEnabled {
 				rec.RecordEvent("NAV", fmt.Sprintf("back: focus %d→%d tab %d→%d",
-					oldPanel, m.focusedPanel, oldTab, m.rightTab))
+					oldPanel, s.FocusedPanel, oldTab, s.RightTab))
 			}
 
 		case "tab":
-			oldFocus := m.focusedPanel
-			m.focusedPanel = m.focusNext()
+			oldFocus := s.FocusedPanel
+			s.FocusedPanel = m.focusNext()
 			if debugEnabled {
-				rec.RecordEvent("FOCUS", fmt.Sprintf("tab: %d→%d", oldFocus, m.focusedPanel))
+				rec.RecordEvent("FOCUS", fmt.Sprintf("tab: %d→%d", oldFocus, s.FocusedPanel))
 			}
 
 		case "shift+tab":
-			oldFocus := m.focusedPanel
-			m.focusedPanel = m.focusPrev()
+			oldFocus := s.FocusedPanel
+			s.FocusedPanel = m.focusPrev()
 			if debugEnabled {
-				rec.RecordEvent("FOCUS", fmt.Sprintf("shift+tab: %d→%d", oldFocus, m.focusedPanel))
+				rec.RecordEvent("FOCUS", fmt.Sprintf("shift+tab: %d→%d", oldFocus, s.FocusedPanel))
 			}
 
 		case "t", "T":
-			if m.focusedPanel == FocusRightPanel {
-				oldTab := m.rightTab
-				m.rightTab = m.cycleTab()
+			if s.FocusedPanel == FocusRightPanel {
+				oldTab := s.RightTab
+				s.RightTab = m.cycleTab()
 				if debugEnabled {
-					rec.RecordEvent("TAB", fmt.Sprintf("cycle: %d→%d", oldTab, m.rightTab))
+					rec.RecordEvent("TAB", fmt.Sprintf("cycle: %d→%d", oldTab, s.RightTab))
 				}
-				if m.rightTab == TabLogs {
+				if s.RightTab == TabLogs {
 					m.runDetail.CollapseAll()
+					s.DetailExpanded = make(map[int]bool)
 					if m.runDetail.SelectedRun() != nil {
 						task := m.runDetail.SelectedTask()
 						if task != nil {
+							s.LogLoading = true
 							m.logViewer.SetLoading(true)
 							cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
 						}
@@ -137,12 +140,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "c":
-			if m.focusedPanel == FocusRightPanel && m.rightTab == TabDetail {
+			if s.FocusedPanel == FocusRightPanel && s.RightTab == TabDetail {
 				wasExpanded := m.runDetail.HasExpanded()
 				if wasExpanded {
 					m.runDetail.CollapseAll()
+					s.DetailExpanded = make(map[int]bool)
 				} else {
 					m.runDetail.ExpandAll()
+					s.DetailExpanded = make(map[int]bool)
+					if s.SelectedRun != nil {
+						for i := range s.SelectedRun.Tasks {
+							s.DetailExpanded[i] = true
+						}
+					}
 				}
 				if debugEnabled {
 					rec.RecordEvent("EXPAND", fmt.Sprintf("c key: was_expanded=%v now_expanded=%v",
@@ -151,7 +161,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "p":
-			if m.focusedPanel == FocusRightPanel {
+			if s.FocusedPanel == FocusRightPanel {
 				if prevCmd := m.navigatePrevPipeline(); prevCmd != nil {
 					cmds = append(cmds, prevCmd)
 				}
@@ -161,7 +171,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "n":
-			if m.focusedPanel == FocusRightPanel {
+			if s.FocusedPanel == FocusRightPanel {
 				if nextCmd := m.navigateNextPipeline(); nextCmd != nil {
 					cmds = append(cmds, nextCmd)
 				}
@@ -181,7 +191,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 
 		case "enter":
-			if m.focusedPanel == FocusRunList {
+			if s.FocusedPanel == FocusRunList {
 				sel := m.runList.SelectedRun()
 				if sel != nil {
 					idShort := sel.ID
@@ -193,13 +203,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.runDetail.SetLoading(true)
 					m.runDetail.SetRun(sel)
-					m.focusedPanel = FocusRightPanel
-					m.rightTab = TabDetail
+					s.SelectedRun = sel
+					s.LogLoading = false
+					s.FocusedPanel = FocusRightPanel
+					s.RightTab = TabDetail
 					cmds = append(cmds, fetchRun(m.client, sel.ID))
 					return m, tea.Batch(cmds...)
 				}
-			} else if m.focusedPanel == FocusRightPanel {
-				if m.rightTab == TabDetail {
+			} else if s.FocusedPanel == FocusRightPanel {
+				if s.RightTab == TabDetail {
 					flatBefore := m.runDetail.FlatCount()
 					detailCmd := m.runDetail.Update(msg)
 					if debugEnabled && flatBefore != m.runDetail.FlatCount() {
@@ -211,11 +223,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					task := m.runDetail.SelectedTask()
 					if task != nil {
+						s.SelectedTask = task
 						if debugEnabled {
 							rec.RecordEvent("ENTER", fmt.Sprintf("expand task=%s", task.TaskName))
 						}
 						m.runDetail.CollapseAll()
-						m.rightTab = TabLogs
+						s.DetailExpanded = make(map[int]bool)
+						s.RightTab = TabLogs
+						s.LogLoading = true
 						cmds = append(cmds, fetchLogs(m.client, m.runDetail.SelectedRun().ID, task.TaskName))
 					}
 				}
@@ -224,7 +239,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			if debugEnabled {
 				rec.RecordEvent("DISPATCH", fmt.Sprintf("key=%q to panel=%d tab=%d",
-					msg.String(), m.focusedPanel, m.rightTab))
+					msg.String(), s.FocusedPanel, s.RightTab))
 			}
 			cmd = m.dispatchKey(msg)
 			if cmd != nil {
@@ -234,45 +249,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case runsFetchedMsg:
 		if msg.err != nil {
-			m.errMsg = msg.err.Error()
+			s.ErrorMsg = msg.err.Error()
 			return m, nil
 		}
 
 		newHash := computeRunsHash(msg.runs)
-		if newHash == m.runsHash {
+		if newHash == s.RunsHash {
 			if debugEnabled {
-				oldShort := m.runsHash
+				oldShort := s.RunsHash
 				newShort := newHash
-				if len(oldShort) > 12 { oldShort = oldShort[:12] }
-				if len(newShort) > 12 { newShort = newShort[:12] }
+				if len(oldShort) > 12 {
+					oldShort = oldShort[:12]
+				}
+				if len(newShort) > 12 {
+					newShort = newShort[:12]
+				}
 				rec.RecordEvent("HASH", fmt.Sprintf("runs unchanged old=%s new=%s", oldShort, newShort))
 			}
 			return m, nil
 		}
 		if debugEnabled {
-			oldShort := m.runsHash
+			oldShort := s.RunsHash
 			newShort := newHash
-			if len(oldShort) > 12 { oldShort = oldShort[:12] }
-			if len(newShort) > 12 { newShort = newShort[:12] }
+			if len(oldShort) > 12 {
+				oldShort = oldShort[:12]
+			}
+			if len(newShort) > 12 {
+				newShort = newShort[:12]
+			}
 			rec.RecordEvent("HASH", fmt.Sprintf("runs changed old=%s new=%s", oldShort, newShort))
 		}
-		m.runsHash = newHash
-		m.errMsg = ""
-		beforeCount := len(m.runs)
-		m.runs = mergeRuns(m.runs, msg.runs)
+		s.RunsHash = newHash
+		s.ErrorMsg = ""
+		beforeCount := len(s.Runs)
+		s.Runs = mergeRuns(s.Runs, msg.runs)
 		if debugEnabled {
 			rec.RecordEvent("MERGE", fmt.Sprintf("runs: before=%d fetched=%d merged=%d",
-				beforeCount, len(msg.runs), len(m.runs)))
+				beforeCount, len(msg.runs), len(s.Runs)))
 		}
-		m.runList.SetRuns(m.runs)
+		m.runList.SetRuns(s.Runs)
 
 		if m.targetRunID != "" {
-			for i, r := range m.runs {
+			for i, r := range s.Runs {
 				if r.ID == m.targetRunID {
 					m.runList.SetCursor(i)
-					m.runDetail.SetRun(&m.runs[i])
-					m.focusedPanel = FocusRightPanel
-					m.rightTab = TabDetail
+					s.RunListCursor = i
+					m.runDetail.SetRun(&s.Runs[i])
+					s.SelectedRun = &s.Runs[i]
+					s.FocusedPanel = FocusRightPanel
+					s.RightTab = TabDetail
 					cmds = append(cmds, fetchRun(m.client, r.ID))
 					m.targetRunID = ""
 					break
@@ -292,41 +317,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case runFetchedMsg:
 		if msg.err != nil {
-			m.errMsg = msg.err.Error()
+			s.ErrorMsg = msg.err.Error()
 			m.runDetail.SetLoading(false)
 			return m, nil
 		}
 
 		newHash := computeRunHash(msg.run)
-		if newHash == m.runHash {
+		if newHash == s.RunHash {
 			if debugEnabled {
-				oldShort := m.runHash
+				oldShort := s.RunHash
 				newShort := newHash
-				if len(oldShort) > 12 { oldShort = oldShort[:12] }
-				if len(newShort) > 12 { newShort = newShort[:12] }
+				if len(oldShort) > 12 {
+					oldShort = oldShort[:12]
+				}
+				if len(newShort) > 12 {
+					newShort = newShort[:12]
+				}
 				rec.RecordEvent("HASH", fmt.Sprintf("run unchanged old=%s new=%s", oldShort, newShort))
 			}
 			return m, nil
 		}
 		if debugEnabled {
-			oldShort := m.runHash
+			oldShort := s.RunHash
 			newShort := newHash
-			if len(oldShort) > 12 { oldShort = oldShort[:12] }
-			if len(newShort) > 12 { newShort = newShort[:12] }
+			if len(oldShort) > 12 {
+				oldShort = oldShort[:12]
+			}
+			if len(newShort) > 12 {
+				newShort = newShort[:12]
+			}
 			rec.RecordEvent("HASH", fmt.Sprintf("run changed old=%s new=%s", oldShort, newShort))
 		}
-		m.runHash = newHash
-		m.errMsg = ""
+		s.RunHash = newHash
+		s.ErrorMsg = ""
 		m.runDetail.SetLoading(false)
 		m.runDetail.SetRun(msg.run)
 		if msg.run != nil {
-			for i, r := range m.runs {
+			s.SelectedRun = msg.run
+			for i, r := range s.Runs {
 				if r.ID == msg.run.ID {
-					m.runs[i] = *msg.run
+					s.Runs[i] = *msg.run
 					break
 				}
 			}
-			m.runList.SetRuns(m.runs)
+			m.runList.SetRuns(s.Runs)
 		}
 
 		if !m.pendingRender {
@@ -341,17 +375,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case logsFetchedMsg:
 		if msg.err != nil {
-			m.errMsg = msg.err.Error()
+			s.ErrorMsg = msg.err.Error()
 			m.logViewer.SetLoading(false)
 			m.logViewer.SetContent(components.ErrorStyle.Render("Error: ") + msg.err.Error())
+			s.LogLoading = false
+			s.LogContent = components.ErrorStyle.Render("Error: ") + msg.err.Error()
 		} else {
-			m.errMsg = ""
+			s.ErrorMsg = ""
 			m.logViewer.SetLoading(false)
+			s.LogLoading = false
 			var content string
 			for taskName, log := range msg.logs {
 				content += components.LabelStyle.Render("["+taskName+"]") + "\n" + log + "\n"
 			}
 			m.logViewer.SetContent(content)
+			s.LogContent = content
 		}
 
 		if !m.pendingRender {
@@ -379,7 +417,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sel := m.runDetail.SelectedRun()
 		if sel != nil {
 			cmds = append(cmds, fetchRun(m.client, sel.ID))
-			if m.rightTab == TabLogs {
+			if s.RightTab == TabLogs {
 				task := m.runDetail.SelectedTask()
 				if task != nil && task.Status == models.TaskStatusRunning {
 					cmds = append(cmds, fetchLogs(m.client, sel.ID, task.TaskName))
@@ -388,7 +426,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if debugEnabled {
 			rec.RecordEvent("TICK", fmt.Sprintf("active: fetching runs+run%s",
-				map[bool]string{true: "+logs", false: ""}[m.rightTab == TabLogs]))
+				map[bool]string{true: "+logs", false: ""}[s.RightTab == TabLogs]))
 		}
 		cmds = append(cmds, tea.Tick(time.Duration(refreshInterval)*time.Second, func(_ time.Time) tea.Msg {
 			return tickMsg{}
@@ -411,21 +449,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 	rec := GetDebugRecorder()
 	debugEnabled := rec.IsEnabled()
+	s := &m.state
 
-	switch m.focusedPanel {
+	switch s.FocusedPanel {
 	case FocusRunList:
 		var cmd tea.Cmd
 		oldCursor := m.runList.Cursor()
 		m.runList, cmd = m.runList.Update(msg)
+		s.RunListCursor = m.runList.Cursor()
 		if debugEnabled && oldCursor != m.runList.Cursor() {
 			rec.RecordEvent("CURSOR", fmt.Sprintf("runlist: %d→%d total=%d",
 				oldCursor, m.runList.Cursor(), m.runList.Len()))
 		}
 		return cmd
 	case FocusRightPanel:
-		if m.rightTab == TabDetail {
+		if s.RightTab == TabDetail {
 			oldCursor := m.runDetail.Cursor()
 			detailCmd := m.runDetail.Update(msg)
+			s.DetailCursor = m.runDetail.Cursor()
 			if debugEnabled && oldCursor != m.runDetail.Cursor() {
 				rec.RecordEvent("CURSOR", fmt.Sprintf("detail: %d→%d items=%d",
 					oldCursor, m.runDetail.Cursor(), m.runDetail.FlatCount()))
@@ -435,7 +476,8 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 			}
 			run := m.runDetail.SelectedRun()
 			task := m.runDetail.SelectedTask()
-			if run != nil && task != nil && m.rightTab == TabDetail && !m.logViewer.IsLoading() {
+			if run != nil && task != nil && s.RightTab == TabDetail && !m.logViewer.IsLoading() {
+				s.SelectedTask = task
 				preFetchLogs := func() tea.Msg {
 					logs, err := fetchLogsSync(m.client, run.ID, task.TaskName)
 					if err != nil {
@@ -453,9 +495,10 @@ func (m *Model) dispatchKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) resizeComponents() {
+	s := &m.state
 	headerH := 1
 	footerH := 1
-	availableH := m.height - headerH - footerH
+	availableH := s.Height - headerH - footerH
 	if availableH < 5 {
 		availableH = 5
 	}
@@ -470,7 +513,7 @@ func (m *Model) resizeComponents() {
 		contentH = 3
 	}
 
-	innerW := m.width - borderW
+	innerW := s.Width - borderW
 	totalContentW := innerW - manualPadW - dividerW
 	if totalContentW < 36 {
 		totalContentW = 36
@@ -491,7 +534,7 @@ func (m *Model) resizeComponents() {
 		}
 	}
 
-	m.dims = layoutDims{
+	s.Dims = layoutDims{
 		innerW:        innerW,
 		leftContentW:  leftContentW,
 		rightContentW: rightContentW,

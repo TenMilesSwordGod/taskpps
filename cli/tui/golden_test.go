@@ -23,11 +23,11 @@ func TestGoldenInitLoading(t *testing.T) {
 func TestGoldenEmptyRuns(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
-	m.runs = nil
+	m.state.Runs = nil
 	m.runList.SetRuns(nil)
 
 	view := m.View()
@@ -37,15 +37,15 @@ func TestGoldenEmptyRuns(t *testing.T) {
 func TestGoldenNormalRunsFocusLeft(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := testutil.MakeTestRuns()
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
-	m.focusedPanel = FocusRunList
+	m.state.FocusedPanel = FocusRunList
 
 	view := m.View()
 	testutil.AssertGolden(t, view, "normal_runs_focus_left.golden")
@@ -54,18 +54,18 @@ func TestGoldenNormalRunsFocusLeft(t *testing.T) {
 func TestGoldenRunDetailExpanded(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := testutil.MakeTestRuns()
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
 	m.runList.SetCursor(0)
 	m.runDetail.SetRun(&runs[0])
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabDetail
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabDetail
 	m.runDetail.ExpandAll()
 
 	view := m.View()
@@ -75,18 +75,18 @@ func TestGoldenRunDetailExpanded(t *testing.T) {
 func TestGoldenLogViewer(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := testutil.MakeTestRuns()
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
 	m.runList.SetCursor(0)
 	m.runDetail.SetRun(&runs[0])
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabLogs
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabLogs
 	m.logViewer.SetContent("[build] Building project...\n[build] Compiling main.go\n[test] Running tests...\n[test] All tests passed")
 
 	view := m.View()
@@ -96,15 +96,15 @@ func TestGoldenLogViewer(t *testing.T) {
 func TestGoldenNarrowTerminal(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 80
-	m.height = 25
+	m.state.Ready = true
+	m.state.Width = 80
+	m.state.Height = 25
 	m.resizeComponents()
 
 	runs := testutil.MakeTestRuns()
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
-	m.focusedPanel = FocusRunList
+	m.state.FocusedPanel = FocusRunList
 
 	view := m.View()
 	testutil.AssertGolden(t, view, "narrow_terminal.golden")
@@ -113,18 +113,18 @@ func TestGoldenNarrowTerminal(t *testing.T) {
 func TestGoldenWideTerminal(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 200
-	m.height = 50
+	m.state.Ready = true
+	m.state.Width = 200
+	m.state.Height = 50
 	m.resizeComponents()
 
 	runs := testutil.MakeMixedPipelineRuns()
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
 	m.runList.SetCursor(2)
 	m.runDetail.SetRun(&runs[2])
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabDetail
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabDetail
 
 	view := m.View()
 	testutil.AssertGolden(t, view, "wide_terminal.golden")
@@ -133,16 +133,16 @@ func TestGoldenWideTerminal(t *testing.T) {
 func TestGoldenErrorState(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := []models.Run{{ID: "err-run", PipelineName: "failing", Status: models.RunStatusFailed}}
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
-	m.errMsg = "connection refused: server unreachable"
-	m.focusedPanel = FocusRunList
+	m.state.ErrorMsg = "connection refused: server unreachable"
+	m.state.FocusedPanel = FocusRunList
 
 	view := m.View()
 	testutil.AssertGolden(t, view, "error_state.golden")
@@ -151,15 +151,15 @@ func TestGoldenErrorState(t *testing.T) {
 func TestGoldenMixedPipelines(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	runs := testutil.MakeMixedPipelineRuns()
-	m.runs = runs
+	m.state.Runs = runs
 	m.runList.SetRuns(runs)
-	m.focusedPanel = FocusRunList
+	m.state.FocusedPanel = FocusRunList
 
 	view := m.View()
 	testutil.AssertGolden(t, view, "mixed_pipelines.golden")
@@ -168,18 +168,18 @@ func TestGoldenMixedPipelines(t *testing.T) {
 func TestGoldenAllTaskStatuses(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.ready = true
-	m.width = 120
-	m.height = 40
+	m.state.Ready = true
+	m.state.Width = 120
+	m.state.Height = 40
 	m.resizeComponents()
 
 	run := testutil.MakeTestRunAllStatuses()
-	m.runs = []models.Run{run}
-	m.runList.SetRuns(m.runs)
+	m.state.Runs = []models.Run{run}
+	m.runList.SetRuns(m.state.Runs)
 	m.runList.SetCursor(0)
 	m.runDetail.SetRun(&run)
-	m.focusedPanel = FocusRightPanel
-	m.rightTab = TabDetail
+	m.state.FocusedPanel = FocusRightPanel
+	m.state.RightTab = TabDetail
 	m.runDetail.ExpandAll()
 
 	view := m.View()
@@ -189,7 +189,7 @@ func TestGoldenAllTaskStatuses(t *testing.T) {
 func TestGoldenQuitting(t *testing.T) {
 	initGoldenTest()
 	m := makeTestModel()
-	m.quit = true
+	m.state.Quit = true
 	view := m.View()
 	testutil.AssertGolden(t, view, "quitting.golden")
 }

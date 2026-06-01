@@ -35,42 +35,31 @@ type layoutDims struct {
 }
 
 type Model struct {
-	runList   components.RunListModel
-	runDetail components.RunDetailModel
-	logViewer components.LogViewerModel
+	state AppState
 
-	focusedPanel PanelFocus
-	rightTab     RightPanelTab
+	runList      components.RunListModel
+	runDetail    components.RunDetailModel
+	logViewer    components.LogViewerModel
 
 	client      *client.Client
 	targetRunID string
 
-	runs   []models.Run
-	errMsg string
-
-	width  int
-	height int
-	ready  bool
-	quit   bool
-	dims   layoutDims
-
 	lastUserActivityTime time.Time
 	debounceTimer        *time.Timer
 	pendingRender        bool
-	runsHash             string
-	runHash              string
 }
 
-func StartWatch(c *client.Client, runID string) error {
+func StartWatch(c *client.Client, runID string, opts ...tea.ProgramOption) error {
 	m := NewModel(c, runID)
 
-	// Check if debug recording should be enabled (verbose >= 4)
 	recorder := GetDebugRecorder()
 	if recorder.IsEnabled() {
 		recorder.RecordEvent("START", "Starting watch command")
 	}
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	defaultOpts := []tea.ProgramOption{tea.WithAltScreen()}
+	allOpts := append(defaultOpts, opts...)
+	p := tea.NewProgram(m, allOpts...)
 	_, err := p.Run()
 
 	exitCode := 0
@@ -84,12 +73,12 @@ func StartWatch(c *client.Client, runID string) error {
 
 func NewModel(c *client.Client, runID string) Model {
 	return Model{
-		runList:      components.NewRunListModel(),
-		runDetail:    components.NewRunDetailModel(),
-		logViewer:    components.NewLogViewerModel(),
-		focusedPanel: FocusRunList,
-		client:       c,
-		targetRunID:  runID,
+		state:       NewAppState(),
+		runList:     components.NewRunListModel(),
+		runDetail:   components.NewRunDetailModel(),
+		logViewer:   components.NewLogViewerModel(),
+		client:      c,
+		targetRunID: runID,
 	}
 }
 
@@ -139,7 +128,7 @@ func fetchLogsSync(c *client.Client, runID, taskName string) (map[string]string,
 }
 
 func (m Model) focusNext() PanelFocus {
-	if m.focusedPanel == FocusRunList {
+	if m.state.FocusedPanel == FocusRunList {
 		return FocusRightPanel
 	}
 	return FocusRunList
@@ -150,24 +139,26 @@ func (m Model) focusPrev() PanelFocus {
 }
 
 func (m Model) cycleTab() RightPanelTab {
-	if m.rightTab == TabDetail {
+	if m.state.RightTab == TabDetail {
 		return TabLogs
 	}
 	return TabDetail
 }
 
 func (m *Model) navigateBack() {
-	if m.focusedPanel == FocusRightPanel {
-		if m.rightTab == TabLogs {
-			m.rightTab = TabDetail
+	s := &m.state
+	if s.FocusedPanel == FocusRightPanel {
+		if s.RightTab == TabLogs {
+			s.RightTab = TabDetail
 		} else {
-			m.focusedPanel = FocusRunList
+			s.FocusedPanel = FocusRunList
 		}
 	}
 }
 
 func (m *Model) navigatePrevPipeline() tea.Cmd {
-	if len(m.runs) == 0 {
+	s := &m.state
+	if len(s.Runs) == 0 {
 		return nil
 	}
 	cur := m.runList.SelectedRun()
@@ -175,7 +166,7 @@ func (m *Model) navigatePrevPipeline() tea.Cmd {
 		return nil
 	}
 	curIdx := -1
-	for i, r := range m.runs {
+	for i, r := range s.Runs {
 		if r.ID == cur.ID {
 			curIdx = i
 			break
@@ -184,15 +175,18 @@ func (m *Model) navigatePrevPipeline() tea.Cmd {
 	if curIdx <= 0 {
 		return nil
 	}
-	prevRun := &m.runs[curIdx-1]
+	s.RunListCursor = curIdx - 1
 	m.runList.SetCursor(curIdx - 1)
+	prevRun := &s.Runs[curIdx-1]
 	m.runDetail.SetRun(prevRun)
-	m.rightTab = TabDetail
+	s.SelectedRun = prevRun
+	s.RightTab = TabDetail
 	return fetchRun(m.client, prevRun.ID)
 }
 
 func (m *Model) navigateNextPipeline() tea.Cmd {
-	if len(m.runs) == 0 {
+	s := &m.state
+	if len(s.Runs) == 0 {
 		return nil
 	}
 	cur := m.runList.SelectedRun()
@@ -200,19 +194,21 @@ func (m *Model) navigateNextPipeline() tea.Cmd {
 		return nil
 	}
 	curIdx := -1
-	for i, r := range m.runs {
+	for i, r := range s.Runs {
 		if r.ID == cur.ID {
 			curIdx = i
 			break
 		}
 	}
-	if curIdx >= len(m.runs)-1 {
+	if curIdx >= len(s.Runs)-1 {
 		return nil
 	}
-	nextRun := &m.runs[curIdx+1]
+	s.RunListCursor = curIdx + 1
 	m.runList.SetCursor(curIdx + 1)
+	nextRun := &s.Runs[curIdx+1]
 	m.runDetail.SetRun(nextRun)
-	m.rightTab = TabDetail
+	s.SelectedRun = nextRun
+	s.RightTab = TabDetail
 	return fetchRun(m.client, nextRun.ID)
 }
 
@@ -245,4 +241,37 @@ func (m *Model) shouldSkipTick() bool {
 		return false
 	}
 	return time.Since(m.lastUserActivityTime) < userActivityCooldown
+}
+
+func (m *Model) syncComponentsFromState() {
+	s := m.state
+	m.runList.SetRuns(s.Runs)
+	m.runList.SetCursor(s.RunListCursor)
+
+	if s.SelectedRun != nil {
+		cp := *s.SelectedRun
+		m.runDetail.SetRun(&cp)
+		m.runDetail.SetCursor(s.DetailCursor)
+		for k := range s.DetailExpanded {
+			_ = k
+		}
+		for k := range s.SubExpanded {
+			_ = k
+		}
+	}
+
+	m.logViewer.SetContent(s.LogContent)
+	m.logViewer.SetLoading(s.LogLoading)
+}
+
+func (m *Model) syncStateFromComponents() {
+	s := &m.state
+	s.RunListCursor = m.runList.Cursor()
+	s.DetailCursor = m.runDetail.Cursor()
+	if sel := m.runDetail.SelectedRun(); sel != nil {
+		s.SelectedRun = sel
+	}
+	if task := m.runDetail.SelectedTask(); task != nil {
+		s.SelectedTask = task
+	}
 }

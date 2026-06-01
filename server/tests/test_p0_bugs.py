@@ -1165,11 +1165,17 @@ def test_create_executor_invoke_type():
 async def test_pipeline_service_list_pipelines_empty(setup_project, tmp_project, db_engine):
     """List pipelines when pipelines dir exists but is empty."""
     pipelines_dir = tmp_project / "pipelines"
+    saved_files = {}
     for f in pipelines_dir.iterdir():
+        saved_files[f.name] = f.read_text()
         f.unlink()
-    svc = PipelineService()
-    pipelines = svc.list_pipelines()
-    assert pipelines == []
+    try:
+        svc = PipelineService()
+        pipelines = svc.list_pipelines()
+        assert pipelines == []
+    finally:
+        for name, content in saved_files.items():
+            (pipelines_dir / name).write_text(content)
 
 
 # ============================================================

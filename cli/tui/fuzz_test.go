@@ -26,9 +26,9 @@ func FuzzModelUpdate(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		m := makeTestModel()
-		m.ready = true
-		m.width = 120
-		m.height = 40
+		m.state.Ready = true
+		m.state.Width = 120
+		m.state.Height = 40
 		m.resizeComponents()
 
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(input)}
@@ -172,9 +172,9 @@ func FuzzModelUpdateWithRuns(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		m := makeTestModel()
-		m.ready = true
-		m.width = 120
-		m.height = 40
+		m.state.Ready = true
+		m.state.Width = 120
+		m.state.Height = 40
 		m.resizeComponents()
 
 		runs := []models.Run{
@@ -182,7 +182,7 @@ func FuzzModelUpdateWithRuns(f *testing.F) {
 			{ID: "r2", PipelineName: "build", Status: models.RunStatusSuccess},
 			{ID: "r3", PipelineName: "test", Status: models.RunStatusFailed},
 		}
-		m.runs = runs
+		m.state.Runs = runs
 		m.runList.SetRuns(runs)
 
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(input)}
@@ -214,15 +214,15 @@ func FuzzModelUpdateWithSmallWindow(f *testing.F) {
 		}
 
 		m := makeTestModel()
-		m.ready = true
-		m.width = width
-		m.height = height
+		m.state.Ready = true
+		m.state.Width = width
+		m.state.Height = height
 		m.resizeComponents()
 
 		runs := []models.Run{
 			{ID: "r1", PipelineName: "deploy", Status: models.RunStatusRunning},
 		}
-		m.runs = runs
+		m.state.Runs = runs
 		m.runList.SetRuns(runs)
 
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(input)}
@@ -245,15 +245,15 @@ func FuzzModelUpdateWithLongData(f *testing.F) {
 		}
 
 		m := makeTestModel()
-		m.ready = true
-		m.width = 120
-		m.height = 40
+		m.state.Ready = true
+		m.state.Width = 120
+		m.state.Height = 40
 		m.resizeComponents()
 
 		runs := []models.Run{
 			{ID: runID, PipelineName: pipelineName, Status: models.RunStatusRunning},
 		}
-		m.runs = runs
+		m.state.Runs = runs
 		m.runList.SetRuns(runs)
 
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(input)}
