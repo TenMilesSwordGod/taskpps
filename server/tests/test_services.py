@@ -8,7 +8,11 @@ from taskpps.services.trigger_service import TriggerService
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_list_pipelines(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_list_pipelines(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     pipelines = svc.list_pipelines()
     assert isinstance(pipelines, list)
@@ -17,7 +21,11 @@ async def test_pipeline_service_list_pipelines(setup_project, tmp_project, db_en
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_create_and_get(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_create_and_get(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     result = await svc.create_run("deploy.yaml")
     assert "id" in result
@@ -30,28 +38,44 @@ async def test_pipeline_service_create_and_get(setup_project, tmp_project, db_en
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_get_nonexistent(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_get_nonexistent(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     result = await svc.get_run("nonexistent")
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_create_invalid(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_create_invalid(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     with pytest.raises(ValueError):
         await svc.create_run("nonexistent.yaml")
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_create_cycle(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_create_cycle(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     with pytest.raises(ValueError):
         await svc.create_run("cycle.yaml")
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_list_runs(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_list_runs(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     await svc.create_run("deploy.yaml")
     result = await svc.list_runs()
@@ -59,7 +83,11 @@ async def test_pipeline_service_list_runs(setup_project, tmp_project, db_engine)
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_list_runs_filter(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_list_runs_filter(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     await svc.create_run("deploy.yaml")
     result = await svc.list_runs(pipeline="deploy")
@@ -70,21 +98,33 @@ async def test_pipeline_service_list_runs_filter(setup_project, tmp_project, db_
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_cancel_nonexistent(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_cancel_nonexistent(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     result = await svc.cancel_run("nonexistent")
     assert result is False
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_clean_no_params(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_clean_no_params(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     result = await svc.clean_runs()
     assert result == {"deleted_runs": 0, "deleted_logs": 0}
 
 
 @pytest.mark.asyncio
-async def test_trigger_service_create_and_list(setup_project, tmp_project, db_engine):
+async def test_trigger_service_create_and_list(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = TriggerService()
     result = await svc.create_trigger("cron", {"schedule": "0 * * * *"}, "deploy.yaml")
     assert hasattr(result, "id")
@@ -94,15 +134,23 @@ async def test_trigger_service_create_and_list(setup_project, tmp_project, db_en
 
 
 @pytest.mark.asyncio
-async def test_trigger_service_delete_nonexistent(setup_project, tmp_project, db_engine):
+async def test_trigger_service_delete_nonexistent(tmp_project, db_engine):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = TriggerService()
     result = await svc.delete_trigger("nonexistent")
     assert result is False
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_params_parsing_get(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_params_parsing_get(tmp_project, db_engine):
     """Test that params are parsed correctly from JSON string in get_run"""
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     params = {"key1": "value1", "key2": {"nested": "value"}}
 
@@ -119,8 +167,12 @@ async def test_pipeline_service_params_parsing_get(setup_project, tmp_project, d
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_params_parsing_list(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_params_parsing_list(tmp_project, db_engine):
     """Test that params are parsed correctly from JSON string in list_runs"""
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
     params = {"options": {"host": "test-server"}}
 
@@ -137,8 +189,12 @@ async def test_pipeline_service_params_parsing_list(setup_project, tmp_project, 
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_empty_params(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_empty_params(tmp_project, db_engine):
     """Test empty params are handled correctly"""
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
 
     # Create run without params
@@ -151,8 +207,12 @@ async def test_pipeline_service_empty_params(setup_project, tmp_project, db_engi
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_null_params(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_null_params(tmp_project, db_engine):
     """Test null/None params are handled correctly"""
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
 
     # Create run with None params
@@ -165,7 +225,7 @@ async def test_pipeline_service_null_params(setup_project, tmp_project, db_engin
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_invalid_json_params_edge_case(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_invalid_json_params_edge_case(tmp_project, db_engine):
     """Test edge case with invalid JSON params"""
     PipelineService()
 
@@ -199,8 +259,12 @@ async def test_pipeline_service_invalid_json_params_edge_case(setup_project, tmp
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_many_list_runs(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_many_list_runs(tmp_project, db_engine):
     """Test list_runs with multiple runs"""
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
 
     # Create multiple runs
@@ -214,8 +278,12 @@ async def test_pipeline_service_many_list_runs(setup_project, tmp_project, db_en
 
 
 @pytest.mark.asyncio
-async def test_pipeline_service_list_with_limit(setup_project, tmp_project, db_engine):
+async def test_pipeline_service_list_with_limit(tmp_project, db_engine):
     """Test list_runs limit"""
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
 
     # Create multiple runs
@@ -227,13 +295,21 @@ async def test_pipeline_service_list_with_limit(setup_project, tmp_project, db_e
     assert len(result["items"]) == 2
 
 
-def test_plugin_manager_discover(setup_project, tmp_project):
+def test_plugin_manager_discover(tmp_project):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     pm = PluginManager()
     pm.discover_plugins()
     assert isinstance(pm.list_plugins(), list)
 
 
-def test_plugin_manager_start_stop_triggers(setup_project, tmp_project):
+def test_plugin_manager_start_stop_triggers(tmp_project):
+    import taskpps.config as cfg
+    cfg._project_root = tmp_project
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     pm = PluginManager()
     pm.start_triggers(callback=lambda x: None)
     pm.stop_all()
