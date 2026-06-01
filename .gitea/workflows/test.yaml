@@ -30,18 +30,17 @@ jobs:
         working-directory: server
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: http://10.98.72.23:8418/gitea/actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-suffix: lint
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -64,18 +63,17 @@ jobs:
         working-directory: server
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: http://10.98.72.23:8418/gitea/actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-suffix: py${{ matrix.python-version }}
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -95,7 +93,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: http://10.98.72.23:8418/gitea/actions/upload-artifact@v4
         with:
           name: python-test-results-py${{ matrix.python-version }}
           path: |
@@ -111,10 +109,10 @@ jobs:
         working-directory: cli
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: http://10.98.72.23:8418/gitea/actions/setup-go@v5
         with:
           go-version-file: cli/go.mod
           cache: true
@@ -128,7 +126,7 @@ jobs:
         run: go build -o taskpps-cli .
 
       - name: Upload Go build artifact
-        uses: actions/upload-artifact@v4
+        uses: http://10.98.72.23:8418/gitea/actions/upload-artifact@v4
         with:
           name: taskpps-cli-linux
           path: cli/taskpps-cli
@@ -142,10 +140,10 @@ jobs:
         working-directory: cli
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: http://10.98.72.23:8418/gitea/actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: http://10.98.72.23:8418/gitea/actions/setup-go@v5
         with:
           go-version-file: cli/go.mod
           cache: true
