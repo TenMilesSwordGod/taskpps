@@ -25,21 +25,21 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: server
     steps:
       - name: Checkout
         run: |
-          git clone "${{ github.server_url }}/${{ github.repository }}.git" .
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
+          cd repo
           git checkout "${{ github.ref_name }}"
 
       - name: Setup Python
+        working-directory: repo/server
         run: |
           apt-get update && apt-get install -y python3 python3-pip python3-venv
           python3 --version
 
       - name: Setup uv
+        working-directory: repo/server
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
@@ -47,16 +47,19 @@ jobs:
           uv --version
 
       - name: Install dependencies
+        working-directory: repo/server
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           uv sync --frozen
 
       - name: Ruff check
+        working-directory: repo/server
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           uv run --frozen ruff check --output-format=github
 
       - name: Ruff format
+        working-directory: repo/server
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           uv run --frozen ruff format --check --diff
@@ -68,21 +71,21 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
-    defaults:
-      run:
-        working-directory: server
     steps:
       - name: Checkout
         run: |
-          git clone "${{ github.server_url }}/${{ github.repository }}.git" .
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
+          cd repo
           git checkout "${{ github.ref_name }}"
 
       - name: Setup Python
+        working-directory: repo/server
         run: |
           apt-get update && apt-get install -y python3 python3-pip python3-venv
           python3 --version
 
       - name: Setup uv
+        working-directory: repo/server
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
@@ -90,11 +93,13 @@ jobs:
           uv --version
 
       - name: Install dependencies
+        working-directory: repo/server
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           uv sync --frozen
 
       - name: Run tests
+        working-directory: repo/server
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           uv run --frozen pytest tests/ \
@@ -110,6 +115,7 @@ jobs:
 
       - name: Upload test results
         if: always()
+        working-directory: repo/server
         run: |
           echo "Test results uploaded (artifact upload not available without actions/upload-artifact)"
           cat junit.xml || true
@@ -118,14 +124,11 @@ jobs:
     name: Go Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: cli
     steps:
       - name: Checkout
         run: |
           git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
-          cd repo/cli
+          cd repo
           git checkout "${{ github.ref_name }}"
 
       - name: Setup Go
@@ -134,15 +137,18 @@ jobs:
           go version
 
       - name: Unit test with coverage
+        working-directory: repo/cli
         run: |
           go test ./tui ./tui/components -v -count=1 -coverprofile=coverage.out -timeout 120s
           go tool cover -func=coverage.out | tail -1
 
       - name: Build
+        working-directory: repo/cli
         run: go build -o taskpps-cli .
 
       - name: Upload Go build artifact
         if: always()
+        working-directory: repo/cli
         run: |
           echo "Build artifact available at cli/taskpps-cli"
 
@@ -150,14 +156,11 @@ jobs:
     name: Go Fuzz Tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    defaults:
-      run:
-        working-directory: cli
     steps:
       - name: Checkout
         run: |
           git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
-          cd repo/cli
+          cd repo
           git checkout "${{ github.ref_name }}"
 
       - name: Setup Go
@@ -166,6 +169,7 @@ jobs:
           go version
 
       - name: Fuzz test - model & update
+        working-directory: repo/cli
         run: |
           go test ./tui -fuzz='^FuzzModelUpdate$' -fuzztime=180s -timeout=200s
           go test ./tui -fuzz='^FuzzModelUpdateWithLongData$' -fuzztime=180s -timeout=200s
@@ -174,12 +178,14 @@ jobs:
           go test ./tui -fuzz='^FuzzModelViewWithResize$' -fuzztime=180s -timeout=200s
 
       - name: Fuzz test - components
+        working-directory: repo/cli
         run: |
           go test ./tui -fuzz='^FuzzRunListUpdate$' -fuzztime=180s -timeout=200s
           go test ./tui -fuzz='^FuzzRunDetailUpdate$' -fuzztime=180s -timeout=200s
           go test ./tui -fuzz='^FuzzLogViewerContent$' -fuzztime=180s -timeout=200s
 
       - name: Fuzz test - helpers
+        working-directory: repo/cli
         run: |
           go test ./tui -fuzz='^FuzzTruncateLine$' -fuzztime=180s -timeout=200s
           go test ./tui -fuzz='^FuzzTruncateStr$' -fuzztime=180s -timeout=200s
@@ -190,5 +196,6 @@ jobs:
           go test ./tui -fuzz='^FuzzFormatTimeNil$' -fuzztime=180s -timeout=200s
 
       - name: Fuzz test - merge & data
+        working-directory: repo/cli
         run: |
           go test ./tui -fuzz='^FuzzMergeRuns$' -fuzztime=180s -timeout=200s
