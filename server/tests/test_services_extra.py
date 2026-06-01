@@ -9,6 +9,7 @@ from taskpps.services.plugin_manager import PluginManager
 
 def _setup_config(tmp_project):
     import taskpps.config as cfg
+
     cfg._project_root = tmp_project
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
