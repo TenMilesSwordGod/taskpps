@@ -30,7 +30,10 @@ jobs:
         run: |
           git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
           cd repo
+          git fetch origin
           git checkout "${{ github.ref_name }}"
+          git pull origin "${{ github.ref_name }}"
+          git log --oneline -3
 
       - name: Setup Python
         working-directory: repo/server
@@ -76,7 +79,10 @@ jobs:
         run: |
           git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
           cd repo
+          git fetch origin
           git checkout "${{ github.ref_name }}"
+          git pull origin "${{ github.ref_name }}"
+          git log --oneline -3
 
       - name: Setup Python
         working-directory: repo/server
@@ -129,7 +135,10 @@ jobs:
         run: |
           git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
           cd repo
+          git fetch origin
           git checkout "${{ github.ref_name }}"
+          git pull origin "${{ github.ref_name }}"
+          git log --oneline -3
 
       - name: Setup Go
         run: |
@@ -161,7 +170,10 @@ jobs:
         run: |
           git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
           cd repo
+          git fetch origin
           git checkout "${{ github.ref_name }}"
+          git pull origin "${{ github.ref_name }}"
+          git log --oneline -3
 
       - name: Setup Go
         run: |
