@@ -42,26 +42,26 @@ jobs:
         working-directory: repo/server
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/bin:$PATH"
           uv --version
 
       - name: Install dependencies
         working-directory: repo/server
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           uv sync --frozen
 
       - name: Ruff check
         working-directory: repo/server
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           uv run --frozen ruff check --output-format=github
 
       - name: Ruff format
         working-directory: repo/server
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           uv run --frozen ruff format --check --diff
 
   test-python:
@@ -88,20 +88,20 @@ jobs:
         working-directory: repo/server
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/bin:$PATH"
           uv --version
 
       - name: Install dependencies
         working-directory: repo/server
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           uv sync --frozen
 
       - name: Run tests
         working-directory: repo/server
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           uv run --frozen pytest tests/ \
             -v \
             --tb=short \
