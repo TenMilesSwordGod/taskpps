@@ -11,7 +11,7 @@ from taskpps.services.trigger_service import TriggerService
 async def test_pipeline_service_list_pipelines(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -25,7 +25,7 @@ async def test_pipeline_service_list_pipelines(tmp_project, db_engine):
 async def test_pipeline_service_create_and_get(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -43,7 +43,7 @@ async def test_pipeline_service_create_and_get(tmp_project, db_engine):
 async def test_pipeline_service_get_nonexistent(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -55,7 +55,7 @@ async def test_pipeline_service_get_nonexistent(tmp_project, db_engine):
 async def test_pipeline_service_create_invalid(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -67,7 +67,7 @@ async def test_pipeline_service_create_invalid(tmp_project, db_engine):
 async def test_pipeline_service_create_cycle(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -79,7 +79,7 @@ async def test_pipeline_service_create_cycle(tmp_project, db_engine):
 async def test_pipeline_service_list_runs(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -92,7 +92,7 @@ async def test_pipeline_service_list_runs(tmp_project, db_engine):
 async def test_pipeline_service_list_runs_filter(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -108,7 +108,7 @@ async def test_pipeline_service_list_runs_filter(tmp_project, db_engine):
 async def test_pipeline_service_cancel_nonexistent(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -120,7 +120,7 @@ async def test_pipeline_service_cancel_nonexistent(tmp_project, db_engine):
 async def test_pipeline_service_clean_no_params(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -132,7 +132,7 @@ async def test_pipeline_service_clean_no_params(tmp_project, db_engine):
 async def test_trigger_service_create_and_list(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = TriggerService()
@@ -147,7 +147,7 @@ async def test_trigger_service_create_and_list(tmp_project, db_engine):
 async def test_trigger_service_delete_nonexistent(tmp_project, db_engine):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = TriggerService()
@@ -160,7 +160,7 @@ async def test_pipeline_service_params_parsing_get(tmp_project, db_engine):
     """Test that params are parsed correctly from JSON string in get_run"""
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -183,7 +183,7 @@ async def test_pipeline_service_params_parsing_list(tmp_project, db_engine):
     """Test that params are parsed correctly from JSON string in list_runs"""
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -206,7 +206,7 @@ async def test_pipeline_service_empty_params(tmp_project, db_engine):
     """Test empty params are handled correctly"""
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -225,7 +225,7 @@ async def test_pipeline_service_null_params(tmp_project, db_engine):
     """Test null/None params are handled correctly"""
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -278,7 +278,7 @@ async def test_pipeline_service_many_list_runs(tmp_project, db_engine):
     """Test list_runs with multiple runs"""
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -298,7 +298,7 @@ async def test_pipeline_service_list_with_limit(tmp_project, db_engine):
     """Test list_runs limit"""
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     svc = PipelineService()
@@ -315,7 +315,7 @@ async def test_pipeline_service_list_with_limit(tmp_project, db_engine):
 def test_plugin_manager_discover(tmp_project):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     pm = PluginManager()
@@ -326,7 +326,7 @@ def test_plugin_manager_discover(tmp_project):
 def test_plugin_manager_start_stop_triggers(tmp_project):
     import taskpps.config as cfg
 
-    cfg._project_root = tmp_project
+    cfg.set_project_root(tmp_project)
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     pm = PluginManager()
