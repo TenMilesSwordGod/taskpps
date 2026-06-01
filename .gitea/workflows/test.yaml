@@ -144,6 +144,8 @@ jobs:
         run: |
           apt-get update && apt-get install -y golang-go
           go version
+          export GOPROXY=https://goproxy.cn,direct
+          echo "GOPROXY=$GOPROXY" >> $GITHUB_ENV
 
       - name: Unit test with coverage
         working-directory: repo/cli
@@ -179,6 +181,8 @@ jobs:
         run: |
           apt-get update && apt-get install -y golang-go
           go version
+          export GOPROXY=https://goproxy.cn,direct
+          echo "GOPROXY=$GOPROXY" >> $GITHUB_ENV
 
       - name: Fuzz test - model & update
         working-directory: repo/cli
