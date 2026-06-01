@@ -185,6 +185,11 @@ jobs:
           export GOPROXY=https://goproxy.cn,direct
           echo "GOPROXY=$GOPROXY" >> $GITHUB_ENV
 
+      - name: Update golden files
+        working-directory: repo/cli
+        run: |
+          go test ./tui -run TestGolden -update -timeout 60s
+
       - name: Fuzz test - model & update
         working-directory: repo/cli
         run: |
