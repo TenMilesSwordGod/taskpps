@@ -1128,6 +1128,7 @@ class TestPipelineServiceNew:
                 mock_run.id = "run-id"
                 mock_run.pipeline_name = "multi"
                 mock_run.status = "pending"
+                mock_rr.return_value.get_last_run_by_pipeline = AsyncMock(return_value=None)
                 mock_rr.return_value.create_run = AsyncMock(return_value=mock_run)
 
                 mock_task_run = MagicMock()
@@ -1265,6 +1266,7 @@ class TestCoverageFinal:
             mock_run.id = "run-id"
             mock_run.pipeline_name = "test"
             mock_run.status = "pending"
+            mock_rr.get_last_run_by_pipeline = AsyncMock(return_value=None)
             mock_rr.create_run = AsyncMock(return_value=mock_run)
             mock_task_run = MagicMock()
             mock_task_run.id = "tr1"
