@@ -3,7 +3,7 @@
 │ Runs                            │▸ Detail · Logs                                                                   │
 │ > ▶ multi-status run-all-      │> ▶ running  multi-status                                                         │
 │                                                                                                                      │
-│     01-15T10:30:00 ████...  │  id:run-all-stat  time:01-15T10:30:00                                             │
+│     01-15T10:30:00 ████▓...│  id:run-all-stat  time:01-15T10:30:00                                             │
 │                                                                                                                      │
 │                                 │──────────────────────────────                       │
 │                                 │> ▼ default ████████▓▓░░░ 4/6                                           │

@@ -50,7 +50,7 @@ func (m *RunListModel) SetRuns(runs []models.Run) {
 }
 
 func (m *RunListModel) SetSize(w, h int) {
-	m.width = w - 1
+	m.width = w
 	if m.width < 0 {
 		m.width = 0
 	}
@@ -194,7 +194,11 @@ func (m *RunListModel) updateContent() {
 
 func (m RunListModel) View() string {
 	if m.ready {
-		return m.viewport.View()
+		content := m.viewport.View()
+		if content == "" {
+			return DimStyle.Render("  (no runs)")
+		}
+		return content
 	}
 	return DimStyle.Render("  (no runs)")
 }

@@ -98,7 +98,7 @@ func (m *RunDetailModel) SetLoading(loading bool) {
 }
 
 func (m *RunDetailModel) SetSize(w, h int) {
-	m.width = w - 1
+	m.width = w
 	if m.width < 0 {
 		m.width = 0
 	}
@@ -536,7 +536,11 @@ func (m RunDetailModel) View() string {
 		if m.loading {
 			return m.renderLoadingState()
 		}
-		return m.viewport.View()
+		content := m.viewport.View()
+		if content == "" {
+			return DimStyle.Render("  (select a run)")
+		}
+		return content
 	}
 	return DimStyle.Render("  (select a run)")
 }

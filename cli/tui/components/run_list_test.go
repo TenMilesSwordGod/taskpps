@@ -54,8 +54,8 @@ func TestRunListSetRunsCursorAdjust(t *testing.T) {
 func TestRunListSetSize(t *testing.T) {
 	m := NewRunListModel()
 	m.SetSize(50, 20)
-	if m.width != 49 || m.height != 20 {
-		t.Errorf("size = (%d,%d), want (49,20)", m.width, m.height)
+	if m.width != 50 || m.height != 20 {
+		t.Errorf("size = (%d,%d), want (50,20)", m.width, m.height)
 	}
 }
 

@@ -66,6 +66,7 @@ func (m Model) View() string {
 	}
 
 	var innerB strings.Builder
+	innerB.Grow(contentH * (s.Dims.leftContentW + s.Dims.rightContentW + 4))
 	for i := 0; i < contentH; i++ {
 		innerB.WriteString(" ")
 		innerB.WriteString(padRightVisual(leftLines[i], s.Dims.leftContentW))
@@ -88,6 +89,7 @@ func (m Model) View() string {
 	panels := outerStyle.Render(innerB.String())
 
 	var b strings.Builder
+	b.Grow(len(header) + len(panels) + len(footer) + 4)
 	b.WriteString(header)
 	b.WriteString("\n")
 	b.WriteString(panels)

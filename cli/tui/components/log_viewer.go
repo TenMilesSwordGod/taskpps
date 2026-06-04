@@ -38,7 +38,7 @@ func processLines(lines []string, width int) []string {
 }
 
 func (m *LogViewerModel) SetSize(w, h int) {
-	m.width = w - 1
+	m.width = w
 	if m.width < 0 {
 		m.width = 0
 	}
@@ -51,7 +51,7 @@ func (m *LogViewerModel) SetSize(w, h int) {
 		m.viewport.Width = w
 		m.viewport.Height = h
 	}
-	processedLines := processLines(m.lines, w)
+	processedLines := processLines(m.lines, m.width)
 	m.viewport.SetContent(strings.Join(processedLines, "\n"))
 	m.viewport.GotoBottom()
 }
@@ -123,7 +123,14 @@ func (m LogViewerModel) View() string {
 	}
 
 	if m.ready {
-		b.WriteString(m.viewport.View())
+		content := m.viewport.View()
+		if content == "" {
+			b.WriteString("\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("(no output)"))
+			b.WriteString("\n")
+		} else {
+			b.WriteString(content)
+		}
 	} else {
 		maxLines := 20
 		var displayLines []string

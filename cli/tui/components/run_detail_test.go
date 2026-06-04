@@ -212,8 +212,8 @@ func TestRunDetailView(t *testing.T) {
 	t.Run("SetSize", func(t *testing.T) {
 		m := NewRunDetailModel()
 		m.SetSize(80, 24)
-		if m.width != 79 || m.height != 24 {
-			t.Errorf("size = (%d,%d), want (79,24)", m.width, m.height)
+		if m.width != 80 || m.height != 24 {
+			t.Errorf("size = (%d,%d), want (80,24)", m.width, m.height)
 		}
 	})
 }

@@ -3,15 +3,15 @@
 │ Runs                            │▸ Detail · Logs                                                                   │
 │ > ▶ deploy run-abc1            │> ▶ running  deploy                                                               │
 │                                                                                                                      │
-│     01-15T10:30:00 ██▓▓░... │  id:run-abc12345  time:01-15T10:30:00                                             │
+│     01-15T10:30:00 ██▓▓░░...│  id:run-abc12345  time:01-15T10:30:00                                             │
 │                                                                                                                      │
 │   ✔ build run-def6              │──────────────────────────────                       │
 │                                                                                                                      │
-│     01-15T10:30:00 ████...  │> ▼ build ██████▓▓▓▓▓▓░ 1/2                                           │
+│     01-15T10:30:00 █████...│> ▼ build ██████▓▓▓▓▓▓░ 1/2                                           │
 │                                                                                                                      │
 │   ✘ test-pipeline run-ghi1      │  ├─ ✔ build success exit:0                                                      │
 │                                                                                                                      │
-│     01-15T10:30:00 ████...  │  │  type:local  ·  start:01-15T10:30:00  ·  end:01-15T11:45:00                 │
+│     01-15T10:30:00 █████...│  │  type:local  ·  start:01-15T10:30:00  ·  end:01-15T11:45:00                 │
 │                                                                                                                      │
 │                                 │  └─ ▶ test running                                                             │
 │                                 │      type:local  ·  start:01-15T10:30:00                                         │

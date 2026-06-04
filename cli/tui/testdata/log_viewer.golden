@@ -3,15 +3,15 @@
 │ Runs                            │Detail · ▸ Logs                                                                   │
 │ > ▶ deploy run-abc1            │[build] Building project...                                                        │
 │                                                                                                                      │
-│     01-15T10:30:00 ██▓▓░... │[build] Compiling main.go                                                          │
+│     01-15T10:30:00 ██▓▓░░...│[build] Compiling main.go                                                          │
 │                                                                                                                      │
 │   ✔ build run-def6              │[test] Running tests...                                                            │
 │                                                                                                                      │
-│     01-15T10:30:00 ████...  │[test] All tests passed                                                            │
+│     01-15T10:30:00 █████...│[test] All tests passed                                                            │
 │                                                                                                                      │
 │   ✘ test-pipeline run-ghi1      │                                                                                   │
 │                                                                                                                      │
-│     01-15T10:30:00 ████...  │                                                                                   │
+│     01-15T10:30:00 █████...│                                                                                   │
 │                                                                                                                      │
 │                                 │                                                                                   │
 │                                 │                                                                                   │
