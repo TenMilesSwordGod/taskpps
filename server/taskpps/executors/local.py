@@ -5,6 +5,7 @@ import base64
 import os
 import re
 import signal
+import traceback
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,6 +67,24 @@ class LocalExecutor(BaseExecutor):
         self._ensure_log_dir(log_path)
         self._cancelled = False
 
+        self._write_log(
+            log_path,
+            f"[DEBUG] ===== LocalExecutor.execute() START =====\n",
+        )
+        self._write_log(
+            log_path,
+            f"[DEBUG] {datetime.now(timezone.utc).isoformat()} execute() called\n",
+        )
+        self._write_log(log_path, f"[DEBUG] command length: {len(command)} chars\n")
+        self._write_log(
+            log_path,
+            f"[DEBUG] command first 500 chars: {command[:500]}\n",
+        )
+        self._write_log(log_path, f"[DEBUG] timeout: {timeout}\n")
+        self._write_log(log_path, f"[DEBUG] cwd: {cwd}\n")
+        self._write_log(log_path, f"[DEBUG] env keys: {list(env.keys())}\n")
+        self._write_log(log_path, f"[DEBUG] log_path: {log_path}\n")
+
         if _DANGEROUS_PATTERNS.search(command):
             error_msg = t("Command contains dangerous pattern")
             self._write_log(log_path, f"[ERROR] {error_msg}\n[ERROR] Command: {command[:200]}\n")
@@ -91,8 +110,29 @@ class LocalExecutor(BaseExecutor):
         self._wrapper_script.write_text(wrapper_content, encoding="utf-8")
         self._wrapper_script.chmod(0o755)
 
+        self._write_log(
+            log_path,
+            f"[DEBUG] wrapper_script: {self._wrapper_script}\n",
+        )
+        self._write_log(
+            log_path,
+            f"[DEBUG] wrapper_script exists: {self._wrapper_script.exists()}\n",
+        )
+        self._write_log(
+            log_path,
+            f"[DEBUG] wrapper_script size: {self._wrapper_script.stat().st_size} bytes\n",
+        )
+        self._write_log(
+            log_path,
+            f"[DEBUG] exit_code_file: {self._exit_code_file}\n",
+        )
+
         if self._exit_code_file.exists():
             self._exit_code_file.unlink()
+            self._write_log(
+                log_path,
+                f"[DEBUG] removed pre-existing exit_code_file\n",
+            )
 
         shell = get_settings().executor.shell
 
@@ -112,6 +152,10 @@ class LocalExecutor(BaseExecutor):
             )
 
         try:
+            self._write_log(
+                log_path,
+                f"[DEBUG] about to create_subprocess_exec: {shell} {self._wrapper_script}\n",
+            )
             self._process = await asyncio.create_subprocess_exec(
                 shell,
                 str(self._wrapper_script),
@@ -121,9 +165,20 @@ class LocalExecutor(BaseExecutor):
                 cwd=cwd,
                 preexec_fn=os.setsid,
             )
+            self._write_log(
+                log_path,
+                f"[DEBUG] create_subprocess_exec returned, PID: {self._process.pid}\n",
+            )
+            self._write_log(
+                log_path,
+                f"[DEBUG] process.returncode immediately: {self._process.returncode}\n",
+            )
         except Exception as e:
             error_msg = f"Failed to create subprocess: {e}"
             self._write_log(log_path, f"[ERROR] {error_msg}\n")
+            self._write_log(
+                log_path, f"[DEBUG] traceback:\n{traceback.format_exc()}\n"
+            )
             self._cleanup_temp_files()
             return ExecutorResult(exit_code=1, stderr=error_msg)
 
@@ -146,18 +201,40 @@ class LocalExecutor(BaseExecutor):
                         f.flush()
             except Exception as e:
                 self._write_log(
-                    log_path, f"[ERROR] Error reading process output: {e}\n"
+                    log_path,
+                    f"[ERROR] Error reading process output: {e}\n",
+                )
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] _read_and_write traceback:\n{traceback.format_exc()}\n",
                 )
 
         try:
             read_task = asyncio.create_task(_read_and_write())
+            self._write_log(
+                log_path,
+                f"[DEBUG] read_task created, entering wait phase\n",
+            )
+
             if timeout is not None and timeout > 0:
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] waiting for process with timeout={timeout}s\n",
+                )
                 try:
                     await asyncio.wait_for(self._process.wait(), timeout=timeout)
+                    self._write_log(
+                        log_path,
+                        f"[DEBUG] process.wait() completed normally\n",
+                    )
                 except asyncio.TimeoutError:
                     self._write_log(
                         log_path,
                         f"[ERROR] Process timed out after {timeout}s\n",
+                    )
+                    self._write_log(
+                        log_path,
+                        f"[DEBUG] process.returncode at timeout: {self._process.returncode}\n",
                     )
                     self._kill_process_tree(self._process.pid, signal.SIGKILL)
                     try:
@@ -173,27 +250,87 @@ class LocalExecutor(BaseExecutor):
                         exit_code=-1, stdout="".join(output_lines)
                     )
             else:
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] waiting for process (no timeout)\n",
+                )
                 await self._process.wait()
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] process.wait() completed (no timeout path)\n",
+                )
 
+            self._write_log(
+                log_path,
+                f"[DEBUG] about to await read_task\n",
+            )
             await read_task
+            self._write_log(
+                log_path,
+                f"[DEBUG] read_task completed\n",
+            )
 
             exit_code = self._process.returncode
 
+            self._write_log(
+                log_path,
+                f"[DEBUG] process.returncode = {exit_code!r} (type={type(exit_code).__name__})\n",
+            )
+
             if exit_code is None:
-                exit_code = await self._poll_exit_code_file(timeout=10)
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] returncode is None, checking exit_code_file\n",
+                )
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] exit_code_file exists: {self._exit_code_file.exists()}\n",
+                )
+                if self._exit_code_file.exists():
+                    try:
+                        raw = self._exit_code_file.read_text()
+                        self._write_log(
+                            log_path,
+                            f"[DEBUG] exit_code_file content: {raw!r}\n",
+                        )
+                    except Exception as e:
+                        self._write_log(
+                            log_path,
+                            f"[DEBUG] failed to read exit_code_file: {e}\n",
+                        )
+                exit_code = await self._poll_exit_code_file(
+                    timeout=10, log_path=log_path
+                )
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] _poll_exit_code_file returned: {exit_code!r}\n",
+                )
 
             if exit_code is None:
                 self._write_log(
                     log_path,
                     "[ERROR] Process did not complete properly (exit code is None)\n",
                 )
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] final fallback: exit_code_file exists={self._exit_code_file.exists()}\n",
+                )
                 exit_code = -1
 
             self._write_log(
-                log_path, f"[INFO] Process exited with code: {exit_code}\n"
+                log_path,
+                f"[INFO] Process exited with code: {exit_code}\n",
+            )
+            self._write_log(
+                log_path,
+                f"[DEBUG] output_lines count: {len(output_lines)}\n",
             )
 
         except asyncio.CancelledError:
+            self._write_log(
+                log_path,
+                f"[DEBUG] CancelledError caught\n",
+            )
             self._write_log(log_path, "[WARN] Task was cancelled\n")
             if self._process and self._process.returncode is None:
                 self._kill_process_tree(self._process.pid, signal.SIGTERM)
@@ -213,31 +350,106 @@ class LocalExecutor(BaseExecutor):
         except Exception as e:
             error_msg = f"Unexpected execution error: {e}"
             self._write_log(log_path, f"[ERROR] {error_msg}\n")
+            self._write_log(
+                log_path,
+                f"[DEBUG] unexpected exception traceback:\n{traceback.format_exc()}\n",
+            )
             self._cleanup_temp_files()
             return ExecutorResult(exit_code=1, stderr=error_msg)
         finally:
+            self._write_log(
+                log_path,
+                f"[DEBUG] finally block: setting self._process = None\n",
+            )
             self._process = None
 
+        self._write_log(
+            log_path,
+            f"[DEBUG] about to cleanup_temp_files\n",
+        )
         self._cleanup_temp_files()
+
+        self._write_log(
+            log_path,
+            f"[DEBUG] returning ExecutorResult(exit_code={exit_code})\n",
+        )
+        self._write_log(
+            log_path,
+            f"[DEBUG] ===== LocalExecutor.execute() END =====\n",
+        )
 
         return ExecutorResult(
             exit_code=exit_code,
             stdout="".join(output_lines),
         )
 
-    async def _poll_exit_code_file(self, timeout: int = 10) -> int | None:
-        if not self._exit_code_file or not self._exit_code_file.exists():
+    async def _poll_exit_code_file(
+        self, timeout: int = 10, log_path: Path | None = None
+    ) -> int | None:
+        if not self._exit_code_file:
+            if log_path:
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] _poll_exit_code_file: self._exit_code_file is None\n",
+                )
+            return None
+        if not self._exit_code_file.exists():
+            if log_path:
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] _poll_exit_code_file: file does not exist: {self._exit_code_file}\n",
+                )
             return None
 
+        if log_path:
+            self._write_log(
+                log_path,
+                f"[DEBUG] _poll_exit_code_file: starting poll, timeout={timeout}s, file={self._exit_code_file}\n",
+            )
+
         deadline = asyncio.get_event_loop().time() + timeout
+        poll_count = 0
         while asyncio.get_event_loop().time() < deadline:
+            poll_count += 1
             try:
                 content = self._exit_code_file.read_text().strip()
+                if log_path and poll_count <= 3:
+                    self._write_log(
+                        log_path,
+                        f"[DEBUG] _poll_exit_code_file: poll#{poll_count} content={content!r}\n",
+                    )
                 if content:
-                    return int(content)
-            except (ValueError, OSError):
-                pass
+                    result = int(content)
+                    if log_path:
+                        self._write_log(
+                            log_path,
+                            f"[DEBUG] _poll_exit_code_file: got exit code {result} after {poll_count} polls\n",
+                        )
+                    return result
+            except (ValueError, OSError) as e:
+                if log_path:
+                    self._write_log(
+                        log_path,
+                        f"[DEBUG] _poll_exit_code_file: poll#{poll_count} exception: {e}\n",
+                    )
             await asyncio.sleep(0.5)
+
+        if log_path:
+            self._write_log(
+                log_path,
+                f"[DEBUG] _poll_exit_code_file: timed out after {poll_count} polls\n",
+            )
+            try:
+                final_content = self._exit_code_file.read_text()
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] _poll_exit_code_file: final file content={final_content!r}\n",
+                )
+            except Exception as e:
+                self._write_log(
+                    log_path,
+                    f"[DEBUG] _poll_exit_code_file: final read failed: {e}\n",
+                )
 
         return None
 

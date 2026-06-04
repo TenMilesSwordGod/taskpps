@@ -376,6 +376,9 @@ class PipelineRunner:
         env["TASKPPS_RUN_ID"] = self.run_id
         env["TASKPPS_TASK_ID"] = task_run_id or qualified_name
 
+        logger.debug(f"[DEBUG-EXEC] _execute_task '{qualified_name}': task_type={task.task_type}, command={task.command!r:.200}, commands={task.commands}, steps={task.steps}, cwd={task.cwd}")
+        logger.debug(f"[DEBUG-EXEC] _execute_task '{qualified_name}': timeout={task.timeout}, retry={task.retry}, log_path={log_path}")
+
         when_env = {**self.pipeline.top_config.env, **task.env, **self.context.env}
         if not _evaluate_when(task.when, when_env):
             async with get_session_factory()() as session:
@@ -410,8 +413,11 @@ class PipelineRunner:
 
             effective_cwd = task.cwd or self.context.get_workspace()
 
+            logger.debug(f"[DEBUG-EXEC] _execute_task '{qualified_name}': attempt={attempt}, executor={type(executor).__name__}, effective_cwd={effective_cwd}")
+
             try:
                 if isinstance(executor, InvokeExecutor):
+                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': InvokeExecutor path")
                     result = await executor.execute(
                         command="",
                         env=env,
@@ -422,6 +428,7 @@ class PipelineRunner:
                         invoke_kwargs=task.invoke_kwargs,
                     )
                 elif isinstance(executor, (GitExecutor, NexusExecutor)):
+                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': {type(executor).__name__} path")
                     if isinstance(executor, GitExecutor) and (not executor.dest or executor.dest == "/workspace/repo"):
                         workspace_dir = get_workspaces_dir() / self.run_id / "repo"
                         workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -435,12 +442,16 @@ class PipelineRunner:
                     if isinstance(executor, GitExecutor) and result.success:
                         self.context.set_workspace(task.name, executor.dest)
                 elif task.task_type == "steps" and task.steps:
+                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': steps path, {len(task.steps)} steps")
                     result = await self._execute_steps(executor, task, env, log_path, timeout, effective_cwd)
                 elif task.commands:
+                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': commands path, {len(task.commands)} commands")
                     result = await self._execute_commands(executor, task, env, log_path, timeout, effective_cwd)
                 else:
+                    cmd = task.command or ""
+                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': single command path, cmd={cmd!r:.200}")
                     result = await executor.execute(
-                        command=task.command or "",
+                        command=cmd,
                         env=env,
                         log_path=log_path,
                         timeout=timeout,
@@ -454,6 +465,9 @@ class PipelineRunner:
 
             self._running_executors.pop(task.name, None)
             last_result = result
+
+            logger.debug(f"[DEBUG-EXEC] '{qualified_name}': result exit_code={result.exit_code}, success={result.success}, stderr={result.stderr!r:.200}")
+            self._write_pipeline_log("DEBUG", f"Task '{qualified_name}' result: exit_code={result.exit_code}, success={result.success}")
 
             if result.success:
                 break
