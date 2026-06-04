@@ -261,3 +261,113 @@ class TestSubstituteEnvVars:
     def test_int(self):
         result = substitute_env_vars(42, {})
         assert result == 42
+
+    def test_env_prefix(self):
+        env = {"DUT_IP": "192.168.1.100"}
+        result = substitute_env_vars("echo ${env.DUT_IP}", env)
+        assert result == "echo 192.168.1.100"
+
+    def test_env_prefix_missing(self):
+        result = substitute_env_vars("echo ${env.MISSING}", {})
+        assert result == "echo ${env.MISSING}"
+
+    def test_load_with_env_prefix_and_no_env_param(self, tmp_path, monkeypatch):
+        # 测试没有显式传入 env 参数时，仍然可以通过 settings.env 和 os.environ 替换
+        monkeypatch.setenv("SYS_ENV", "sys_value")
+        
+        # 模拟 settings.env
+        import taskpps.config
+        from taskpps.config import Settings
+        original_settings = taskpps.config._settings
+        try:
+            taskpps.config._settings = Settings(env={"SETTINGS_ENV": "settings_value"})
+            
+            pipelines_dir = tmp_path / "pipelines"
+            pipelines_dir.mkdir()
+            p = pipelines_dir / "env_prefix_test.yaml"
+            p.write_text("""name: env_prefix_test
+tasks:
+  - name: step1
+    command: echo ${env.SYS_ENV} ${env.SETTINGS_ENV} ${env.MISSING}
+""")
+            loader = PipelineLoader(pipelines_dir)
+            # 没有传入 env 参数！
+            spec = loader.load("env_prefix_test.yaml")
+            assert spec.tasks[0].command == "echo sys_value settings_value ${env.MISSING}"
+        finally:
+            taskpps.config._settings = original_settings
+
+    def test_load_with_env_prefix_and_params(self, tmp_path, monkeypatch):
+        # 测试传入 env 参数时的优先级
+        monkeypatch.setenv("SYS_ENV", "sys_value")
+        
+        # 模拟 settings.env
+        import taskpps.config
+        from taskpps.config import Settings
+        original_settings = taskpps.config._settings
+        try:
+            taskpps.config._settings = Settings(env={"SETTINGS_ENV": "settings_value", "OVERLAPPED": "settings_val"})
+            
+            pipelines_dir = tmp_path / "pipelines"
+            pipelines_dir.mkdir()
+            p = pipelines_dir / "env_priority_test.yaml"
+            p.write_text("""name: env_priority_test
+tasks:
+  - name: step1
+    command: echo ${env.PARAM_ENV} ${env.SETTINGS_ENV} ${env.SYS_ENV} ${env.OVERLAPPED}
+""")
+            loader = PipelineLoader(pipelines_dir)
+            # 传入 env 参数，包含与 settings.env 重叠的变量
+            spec = loader.load("env_priority_test.yaml", env={
+                "PARAM_ENV": "param_value",
+                "OVERLAPPED": "param_val"
+            })
+            # 优先级：传入的 env > settings.env > os.environ
+            assert spec.tasks[0].command == "echo param_value settings_value sys_value param_val"
+        finally:
+            taskpps.config._settings = original_settings
+
+    def test_load_always_substitute_vars(self, tmp_path, monkeypatch):
+        # 测试即使没有 env 参数，也会执行变量替换
+        monkeypatch.setenv("TEST_VAR", "os_value")
+        
+        pipelines_dir = tmp_path / "pipelines"
+        pipelines_dir.mkdir()
+        p = pipelines_dir / "always_substitute.yaml"
+        p.write_text("""name: always_substitute
+tasks:
+  - name: step1
+    command: echo ${TEST_VAR}
+""")
+        loader = PipelineLoader(pipelines_dir)
+        # 没有传入 env 参数
+        spec = loader.load("always_substitute.yaml")
+        assert spec.tasks[0].command == "echo os_value"
+
+    def test_no_env_prefix_also_uses_settings_and_os(self, tmp_path, monkeypatch):
+        # 测试没有 env. 前缀的变量也会按同样的优先级查找
+        monkeypatch.setenv("SYS_NO_PREFIX", "sys_no_prefix")
+        
+        # 模拟 settings.env
+        import taskpps.config
+        from taskpps.config import Settings
+        original_settings = taskpps.config._settings
+        try:
+            taskpps.config._settings = Settings(env={"SETTINGS_NO_PREFIX": "settings_no_prefix", "OVERLAP_NO_PREFIX": "settings_np"})
+            
+            pipelines_dir = tmp_path / "pipelines"
+            pipelines_dir.mkdir()
+            p = pipelines_dir / "no_prefix_test.yaml"
+            p.write_text("""name: no_prefix_test
+tasks:
+  - name: step1
+    command: echo ${PARAM_NO_PREFIX} ${SETTINGS_NO_PREFIX} ${SYS_NO_PREFIX} ${OVERLAP_NO_PREFIX}
+""")
+            loader = PipelineLoader(pipelines_dir)
+            spec = loader.load("no_prefix_test.yaml", env={
+                "PARAM_NO_PREFIX": "param_no_prefix",
+                "OVERLAP_NO_PREFIX": "param_np"
+            })
+            assert spec.tasks[0].command == "echo param_no_prefix settings_no_prefix sys_no_prefix param_np"
+        finally:
+            taskpps.config._settings = original_settings

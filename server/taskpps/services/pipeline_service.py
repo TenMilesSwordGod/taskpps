@@ -32,7 +32,18 @@ class PipelineService:
 
     async def create_run(self, pipeline_file: str, params: dict[str, Any] | None = None) -> dict:
         try:
-            spec = self.loader.load(pipeline_file)
+            # 构建完整的 env 字典，包含从 settings 和 params 提取的环境变量
+            from taskpps.config import get_settings
+            settings = get_settings()
+            loader_env = settings.env.copy()
+            
+            # 如果有 params，提取其中的 config.env
+            if params:
+                config_env = params.get("config", {}).get("env", {})
+                if isinstance(config_env, dict):
+                    loader_env.update(config_env)
+            
+            spec = self.loader.load(pipeline_file, loader_env)
         except FileNotFoundError as e:
             raise ValueError(str(e)) from e
         except Exception as e:

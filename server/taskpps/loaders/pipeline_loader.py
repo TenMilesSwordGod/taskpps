@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from taskpps.config import get_pipelines_dir
+from taskpps.config import get_pipelines_dir, get_settings
 from taskpps.i18n import t
 from taskpps.schemas.pipeline import PipelineYAML
 
@@ -66,11 +66,21 @@ def _resolve_variable_match(match, env: dict[str, str]) -> str:
 
     elif ref.startswith("env."):
         key = ref[4:]
-        return os.environ.get(key, env.get(key, match.group(0)))
+        # 按优先级查找：传入的 env > settings.env > os.environ
+        if key in env:
+            return env[key]
+        settings = get_settings()
+        if key in settings.env:
+            return settings.env[key]
+        return os.environ.get(key, match.group(0))
 
     else:
+        # 按优先级查找：传入的 env > settings.env > os.environ
         if ref in env:
             return env[ref]
+        settings = get_settings()
+        if ref in settings.env:
+            return settings.env[ref]
         if ref in os.environ:
             return os.environ[ref]
         return match.group(0)
@@ -116,8 +126,8 @@ class PipelineLoader:
         if data is None:
             raise ValueError(t("Pipeline file is empty: {path}", path=pipeline_file))
 
-        if env:
-            data = substitute_env_vars(data, env)
+        # 始终执行变量替换，即使 env 为空也支持 settings.env 和 os.environ
+        data = substitute_env_vars(data, env or {})
 
         return PipelineYAML(**data)
 
