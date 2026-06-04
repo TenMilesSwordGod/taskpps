@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================================
-# TaskPPS Update Script
+# TaskPPS Update Script (pip + gunicorn)
 # ============================================================================
 # Usage: sudo ./scripts/update.sh
 # Pull latest code, update dependencies, and restart service
@@ -11,6 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SERVICE_NAME="taskpps"
+VENV_DIR="/opt/taskpps/server/.venv"
 
 # Colors
 RED='\033[0;31m'
@@ -54,6 +55,7 @@ update_code() {
         --exclude='__pycache__' \
         --exclude='*.pyc' \
         --exclude='.pytest_cache' \
+        --exclude='.venv' \
         --exclude='node_modules' \
         "$PROJECT_ROOT/" /opt/taskpps/
 
@@ -62,34 +64,38 @@ update_code() {
 }
 
 update_deps() {
-    log_step "Updating dependencies..."
+    log_step "Updating dependencies with pip..."
+
+    cd /opt/taskpps/server
 
     su -s /bin/bash taskpps -c "
-        cd /opt/taskpps/server
-        uv sync --no-dev
+        export HOME=/var/lib/taskpps
+        source ${VENV_DIR}/bin/activate
+        pip install --upgrade pip setuptools wheel
+        pip install -r requirements.txt 2>/dev/null || pip install -e '.[dev]'
     "
 
     log_info "Dependencies updated"
 }
 
 restart_service() {
-    log_step "Restarting service..."
+    log_step "Restarting gunicorn service..."
     systemctl daemon-reload
     systemctl restart "$SERVICE_NAME"
 
-    sleep 2
+    sleep 3
 
     if systemctl is-active --quiet "$SERVICE_NAME"; then
         log_info "Service restarted successfully!"
     else
         log_error "Service failed to restart!"
-        journalctl -u "$SERVICE_NAME" --no-pager -n 20
+        journalctl -u "$SERVICE_NAME" --no-pager -n 30
         exit 1
     fi
 }
 
 main() {
-    log_info "Starting TaskPPS update..."
+    log_info "Starting TaskPPS update (pip + gunicorn)..."
 
     check_root
     backup_config

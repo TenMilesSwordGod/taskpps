@@ -9,6 +9,7 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
+    "gunicorn",
     "sqlmodel>=0.0.22",
     "aiosqlite",
     "pydantic>=2.0",

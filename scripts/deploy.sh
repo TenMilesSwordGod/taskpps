@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================================
-# TaskPPS Deployment Script with Systemd
+# TaskPPS Deployment Script (pip + gunicorn)
 # ============================================================================
 # Usage: sudo ./scripts/deploy.sh [install|uninstall|status|restart|logs]
 # ============================================================================
@@ -11,6 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SERVICE_NAME="taskpps"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+VENV_DIR="/opt/taskpps/server/.venv"
+PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 
 # Colors
 RED='\033[0;31m'
@@ -47,42 +49,39 @@ detect_os() {
     fi
 }
 
-# Install Python and dependencies
+# Install Python and system dependencies
 install_python_deps() {
     local os_type
     os_type=$(detect_os)
 
-    log_step "Installing Python dependencies..."
+    log_step "Installing Python and system dependencies..."
 
     case $os_type in
         debian)
             apt-get update -qq
-            apt-get install -y -qq python3 python3-pip python3-venv curl rsync
+            apt-get install -y -qq python3 python3-pip python3-venv python3-dev curl rsync gcc
             ;;
         rhel)
-            yum install -y python3 python3-pip curl rsync
+            yum install -y python3 python3-pip python3-devel curl rsync gcc
             ;;
         arch)
-            pacman -Sy --noconfirm python python-pip curl rsync
+            pacman -Sy --noconfirm python python-pip curl rsync gcc
             ;;
         *)
-            log_warn "Unknown OS, assuming Python 3 and uv are already installed"
+            log_warn "Unknown OS, assuming Python 3 is already installed"
             ;;
     esac
 
-    # Install uv if not present (uv is not available in standard package repos)
-    if ! command -v uv &>/dev/null; then
-        log_step "Installing uv package manager..."
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        export PATH="$HOME/.local/bin:$PATH"
-    fi
+    # Upgrade pip to latest and set China mirror globally
+    log_step "Configuring pip with China mirror..."
+    pip3 config set global.index-url "$PIP_MIRROR" 2>/dev/null || true
 }
 
 # Create system user
 create_user() {
     if ! id -u taskpps &>/dev/null; then
         log_step "Creating system user 'taskpps'..."
-        useradd --system --user-group --home-dir /var/lib/taskpps --shell /bin/false taskpps
+        useradd --system --user-group --home-dir /var/lib/taskpps --shell /bin/bash taskpps
     else
         log_info "System user 'taskpps' already exists"
     fi
@@ -112,47 +111,43 @@ setup_directories() {
         --exclude='__pycache__' \
         --exclude='*.pyc' \
         --exclude='.pytest_cache' \
+        --exclude='.venv' \
         --exclude='node_modules' \
         "$PROJECT_ROOT/" /opt/taskpps/
 
     chown -R taskpps:taskpps /opt/taskpps
 }
 
-# Install Python dependencies with uv
+# Install Python dependencies with pip + venv
 install_project_deps() {
-    log_step "Installing project dependencies..."
+    log_step "Creating virtual environment and installing dependencies..."
 
     cd /opt/taskpps/server
 
-    # Ensure taskpps owns the directory for uv to create .venv
-    chown -R taskpps:taskpps /opt/taskpps
+    # Remove old venv/uv artifacts if any
+    rm -rf .venv .uv.lock
 
-    # Ensure taskpps has a proper home directory for uv to install Python
-    mkdir -p /var/lib/taskpps
-    chown taskpps:taskpps /var/lib/taskpps
-
-    # Remove broken .venv that points to vncuser's Python
-    if [[ -d /opt/taskpps/server/.venv ]]; then
-        rm -rf /opt/taskpps/server/.venv
-    fi
-
-    # Install Python and dependencies as taskpps user with proper HOME
+    # Create venv as taskpps user
     su -s /bin/bash taskpps -c "
         export HOME=/var/lib/taskpps
-        export PATH=\$HOME/.local/bin:\$PATH
         cd /opt/taskpps/server
-        uv python install 3.11 || true
-        uv sync --no-dev
+        python3 -m venv ${VENV_DIR}
+        source ${VENV_DIR}/bin/activate
+        pip install --upgrade pip setuptools wheel
+        pip install -r requirements.txt || pip install -e '.[dev]'
     "
+
+    chown -R taskpps:taskpps /opt/taskpps/server/.venv
+    log_info "Dependencies installed successfully"
 }
 
-# Generate systemd service file
+# Generate systemd service file (gunicorn + uvicorn worker)
 generate_service_file() {
-    log_step "Generating systemd service file..."
+    log_step "Generating systemd service file (gunicorn)..."
 
-    cat > "$SERVICE_FILE" << 'EOF'
+    cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=TaskPPS Pipeline Server
+Description=TaskPPS Pipeline Server (Gunicorn)
 Documentation=https://github.com/liheng/taskpps
 After=network.target
 Wants=network.target
@@ -163,8 +158,9 @@ User=taskpps
 Group=taskpps
 WorkingDirectory=/opt/taskpps/server
 Environment=PYTHONPATH=/opt/taskpps/server
-Environment=PATH=/opt/taskpps/server/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=${VENV_DIR}/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HOME=/var/lib/taskpps
+Environment=TASKPPS_CONFIG=/opt/taskpps/taskpps.yaml
 
 # Security hardening
 NoNewPrivileges=true
@@ -197,8 +193,20 @@ StartLimitBurst=3
 TimeoutStopSec=30
 KillSignal=SIGTERM
 
-ExecStart=/opt/taskpps/server/.venv/bin/python -m taskpps
-ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=${VENV_DIR}/bin/gunicorn \\
+    taskpps.main:app \\
+    --worker-class uvicorn.workers.UvicornWorker \\
+    --bind 127.0.0.1:26521 \\
+    --workers 2 \\
+    --worker-tmp-dir /dev/shm \\
+    --timeout 120 \\
+    --graceful-timeout 30 \\
+    --access-logfile /var/log/taskpps/access.log \\
+    --error-logfile /var/log/taskpps/error.log \\
+    --log-level info \\
+    --capture-output
+
+ExecReload=/bin/kill -HUP \$MAINPID
 
 [Install]
 WantedBy=multi-user.target
@@ -219,7 +227,6 @@ generate_config() {
 
     log_step "Generating default configuration..."
 
-    # Generate random API key
     local api_key
     api_key=$(openssl rand -hex 32)
 
@@ -268,14 +275,14 @@ start_service() {
     log_step "Starting $SERVICE_NAME service..."
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
     systemctl start "$SERVICE_NAME"
-    sleep 2
+    sleep 3
 
     if systemctl is-active --quiet "$SERVICE_NAME"; then
         log_info "Service started successfully!"
         systemctl status "$SERVICE_NAME" --no-pager
     else
         log_error "Service failed to start!"
-        journalctl -u "$SERVICE_NAME" --no-pager -n 20
+        journalctl -u "$SERVICE_NAME" --no-pager -n 30
         exit 1
     fi
 }
@@ -320,7 +327,7 @@ restart_service() {
 
 # Full installation
 install() {
-    log_info "Starting TaskPPS deployment..."
+    log_info "Starting TaskPPS deployment (pip + gunicorn)..."
     log_info "Project root: $PROJECT_ROOT"
 
     check_root
@@ -338,6 +345,8 @@ install() {
     log_info "========================================"
     log_info "Service:    systemctl status $SERVICE_NAME"
     log_info "Logs:       journalctl -u $SERVICE_NAME -f"
+    log_info "Access log: tail -f /var/log/taskpps/access.log"
+    log_info "Error log:  tail -f /var/log/taskpps/error.log"
     log_info "Config:     /opt/taskpps/taskpps.yaml"
     log_info "Data:       /var/lib/taskpps"
     log_info "Logs dir:   /var/log/taskpps"
