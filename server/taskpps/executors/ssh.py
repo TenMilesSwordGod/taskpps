@@ -82,7 +82,11 @@ class SSHExecutor(BaseExecutor):
 
                 return exit_code, combined, error
             except Exception as e:
-                return -1, "", str(e)
+                # 异常时也要保存日志
+                error_msg = str(e)
+                with open(log_path, "w") as f:
+                    f.write(error_msg)
+                return -1, error_msg, error_msg
             finally:
                 try:
                     if self._connection:

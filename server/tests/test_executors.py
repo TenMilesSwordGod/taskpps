@@ -547,6 +547,13 @@ class TestSSHExecutor:
         result = await executor.execute("echo hello", {}, log_path)
         assert not result.success
         assert result.exit_code == -1
+        
+        # 验证即使异常，日志文件也被创建并写入内容
+        assert log_path.exists(), "日志文件在异常时也应该被创建"
+        with open(log_path, "r") as f:
+            log_content = f.read()
+        assert len(log_content) > 0, "日志文件应该包含内容"
+        assert log_content == result.stdout, "日志内容应该与返回的输出一致"
 
     @pytest.mark.asyncio
     async def test_cancel_no_connection(self):
