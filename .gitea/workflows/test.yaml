@@ -73,7 +73,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - name: Checkout
         run: |
@@ -111,9 +111,6 @@ jobs:
           uv run --frozen pytest tests/ \
             -v \
             --tb=short \
-            -m "not slow" \
-            --ignore=tests/test_api.py \
-            --ignore=tests/test_runner_steps.py \
             --junitxml=junit.xml \
             --cov=taskpps \
             --cov-report=xml:coverage.xml \

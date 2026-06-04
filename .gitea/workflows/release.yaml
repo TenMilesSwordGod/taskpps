@@ -35,6 +35,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      - name: Run tests before build
+        run: |
+          uv run --frozen pytest tests/ \
+            -v \
+            --tb=short \
+            --cov=taskpps \
+            --cov-report=term-missing
+
       - name: Build wheel
         run: uv build
 
@@ -64,6 +72,11 @@ jobs:
         with:
           go-version-file: cli/go.mod
           cache: true
+
+      - name: Run Go tests
+        run: |
+          go test ./tui -v -count=1 -run TestGolden -update -timeout 60s
+          go test ./tui ./tui/components -v -count=1 -timeout 120s
 
       - name: Build
         env:
