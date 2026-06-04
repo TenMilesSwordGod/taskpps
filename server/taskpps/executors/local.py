@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import os
 import re
 import signal
+import sys
 import traceback
 import uuid
 from datetime import datetime, timezone
@@ -13,6 +15,8 @@ from pathlib import Path
 from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
+
+logger = logging.getLogger(__name__)
 
 _DANGEROUS_PATTERNS = re.compile(
     r"(\brm\s+-rf\s+/|"
@@ -92,6 +96,17 @@ class LocalExecutor(BaseExecutor):
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
         self._cancelled = False
+
+        print(
+            f"[DEBUG-EXECUTOR] execute() called | log_path={log_path} | "
+            f"command_len={len(command)} | timeout={timeout} | cwd={cwd}",
+            file=sys.stderr,
+            flush=True,
+        )
+        logger.debug(
+            f"[DEBUG-EXECUTOR] execute() called | log_path={log_path} | "
+            f"command_len={len(command)} | timeout={timeout} | cwd={cwd}"
+        )
 
         self._write_log(
             log_path,
@@ -247,10 +262,14 @@ class LocalExecutor(BaseExecutor):
                     f"[DEBUG] waiting for process with timeout={timeout}s\n",
                 )
                 try:
-                    await asyncio.wait_for(self._process.wait(), timeout=timeout)
+                    deadline = asyncio.get_event_loop().time() + timeout
+                    while self._process.returncode is None:
+                        if asyncio.get_event_loop().time() >= deadline:
+                            raise asyncio.TimeoutError()
+                        await asyncio.sleep(0.1)
                     self._write_log(
                         log_path,
-                        f"[DEBUG] process.wait() completed normally\n",
+                        f"[DEBUG] process completed, returncode={self._process.returncode}\n",
                     )
                 except asyncio.TimeoutError:
                     self._write_log(
@@ -279,10 +298,11 @@ class LocalExecutor(BaseExecutor):
                     log_path,
                     f"[DEBUG] waiting for process (no timeout)\n",
                 )
-                await self._process.wait()
+                while self._process.returncode is None:
+                    await asyncio.sleep(0.1)
                 self._write_log(
                     log_path,
-                    f"[DEBUG] process.wait() completed (no timeout path)\n",
+                    f"[DEBUG] process completed (no timeout path), returncode={self._process.returncode}\n",
                 )
 
             self._write_log(
@@ -500,8 +520,14 @@ class LocalExecutor(BaseExecutor):
         try:
             with open(log_path, "a") as f:
                 f.write(message)
-        except Exception:
-            pass
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(
+                f"[DEBUG-EXECUTOR] _write_log FAILED: {e} | path={log_path}",
+                file=sys.stderr,
+                flush=True,
+            )
 
     async def cancel(self) -> None:
         self._cancelled = True

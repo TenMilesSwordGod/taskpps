@@ -345,6 +345,189 @@ echo "all_done"
         assert result.success
         assert "DONE" in result.stdout
 
+    @pytest.mark.asyncio
+    async def test_debug_logs_written_to_file(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "debug.log"
+        result = await executor.execute("echo HELLO", {}, log_path, timeout=10)
+        assert result.success
+        log_content = log_path.read_text()
+        assert "[DEBUG] ===== LocalExecutor.execute() START =====" in log_content
+        assert "[DEBUG] wrapper_script:" in log_content
+        assert "[DEBUG] create_subprocess_exec returned" in log_content
+        assert "[DEBUG] process.returncode" in log_content
+        assert "[DEBUG] ===== LocalExecutor.execute() END =====" in log_content
+
+    @pytest.mark.asyncio
+    async def test_debug_logs_written_for_daemon(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "daemon_debug.log"
+        cmd = '(sleep 1; echo DAEMON; exit 0) & wait $!; echo DONE'
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        log_content = log_path.read_text()
+        assert "[DEBUG] ===== LocalExecutor.execute() START =====" in log_content
+        assert "[DEBUG] process.returncode" in log_content
+        assert "[INFO] Process exited with code: 0" in log_content
+        assert "[DEBUG] ===== LocalExecutor.execute() END =====" in log_content
+        assert "DAEMON" in log_content
+        assert "DONE" in log_content
+
+    @pytest.mark.asyncio
+    async def test_write_log_creates_file(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "subdir" / "test.log"
+        executor._ensure_log_dir(log_path)
+        executor._write_log(log_path, "test message\n")
+        assert log_path.exists()
+        assert "test message" in log_path.read_text()
+
+    @pytest.mark.asyncio
+    async def test_write_log_appends(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "append.log"
+        executor._write_log(log_path, "line1\n")
+        executor._write_log(log_path, "line2\n")
+        content = log_path.read_text()
+        assert "line1" in content
+        assert "line2" in content
+
+
+class TestLocalExecutorProductionScenario:
+    @pytest.mark.asyncio
+    async def test_auto_robot_daemon_with_env_and_cwd(self, tmp_path):
+        script = tmp_path / "auto_robot.py"
+        script.write_text(
+            "import subprocess, sys, time, os\n"
+            "print('start to run auto-robot')\n"
+            "print('Set project to: ebox')\n"
+            "print(f'arguments: {sys.argv[1:]}')\n"
+            "p = subprocess.Popen(['sleep', '120'])\n"
+            f"print(f'device_monitor PID: {{p.pid}}')\n"
+            "print('device_monitor successfully')\n"
+            "sys.stdout.flush()\n"
+            "time.sleep(0.5)\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "aosp.log"
+        env = {"TASKPPS_RUN_ID": "test123", "TASKPPS_TASK_ID": "aosp_task"}
+        cmd = f"python3 {script} -K off -d /tmp/report --loglevel DEBUG"
+        result = await executor.execute(cmd, env, log_path, timeout=10, cwd=str(tmp_path))
+        assert result.success
+        assert result.exit_code == 0
+        assert "start to run auto-robot" in result.stdout
+        assert "device_monitor successfully" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_auto_robot_fork_bomb_pattern(self, tmp_path):
+        script = tmp_path / "auto_robot_fork.py"
+        script.write_text(
+            "import subprocess, sys, time\n"
+            "print('start to run auto-robot')\n"
+            "procs = []\n"
+            "for i in range(3):\n"
+            "    p = subprocess.Popen(['sleep', '60'])\n"
+            "    procs.append(p)\n"
+            "    print(f'monitor_{i} PID: {p.pid}')\n"
+            "print('all monitors started')\n"
+            "sys.stdout.flush()\n"
+            "time.sleep(0.5)\n"
+            "print('auto-robot parent exiting')\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "fork.log"
+        result = await executor.execute(f"python3 {script}", {}, log_path, timeout=15)
+        assert result.success
+        assert result.exit_code == 0
+        assert "auto-robot parent exiting" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_auto_robot_with_pipeline_env_vars(self, tmp_path):
+        script = tmp_path / "env_check.py"
+        script.write_text(
+            "import os\n"
+            "run_id = os.environ.get('TASKPPS_RUN_ID', 'MISSING')\n"
+            "task_id = os.environ.get('TASKPPS_TASK_ID', 'MISSING')\n"
+            "print(f'RUN_ID={run_id}')\n"
+            "print(f'TASK_ID={task_id}')\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "env.log"
+        env = {
+            "TASKPPS_RUN_ID": "bddf5a89a207",
+            "TASKPPS_TASK_ID": "Automation Weekly Tests.AOSP",
+        }
+        result = await executor.execute(
+            f"python3 {script}", env, log_path, timeout=10
+        )
+        assert result.success
+        assert "RUN_ID=bddf5a89a207" in result.stdout
+        assert "TASK_ID=Automation Weekly Tests.AOSP" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_auto_robot_rapid_start_exit(self, tmp_path):
+        script = tmp_path / "rapid.py"
+        script.write_text(
+            "import subprocess, time\n"
+            "print('start to run auto-robot')\n"
+            "p = subprocess.Popen(['sleep', '120'])\n"
+            "print(f'PID: {p.pid}')\n"
+            "time.sleep(0.3)\n"
+            "print('parent done')\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "rapid.log"
+        result = await executor.execute(f"python3 {script}", {}, log_path, timeout=10)
+        assert result.success
+        assert result.exit_code == 0
+
+    @pytest.mark.asyncio
+    async def test_auto_robot_multiline_command_with_cd(self, tmp_path):
+        report_dir = tmp_path / "report"
+        report_dir.mkdir()
+        script = tmp_path / "auto_robot.py"
+        script.write_text(
+            "import os, sys\n"
+            "print(f'CWD: {os.getcwd()}')\n"
+            "print(f'REPORT: {sys.argv[1] if len(sys.argv) > 1 else \"none\"}')\n"
+            "print('done')\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "cd.log"
+        cmd = f"cd {tmp_path} && python3 auto_robot.py {report_dir}"
+        result = await executor.execute(cmd, {}, log_path, timeout=10, cwd=str(tmp_path))
+        assert result.success
+        assert "done" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_debug_logs_present_for_production_scenario(self, tmp_path):
+        script = tmp_path / "prod.py"
+        script.write_text(
+            "import subprocess, time\n"
+            "print('start to run auto-robot')\n"
+            "p = subprocess.Popen(['sleep', '60'])\n"
+            "print(f'device_monitor PID: {p.pid}')\n"
+            "print('device_monitor successfully')\n"
+            "time.sleep(0.5)\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "prod.log"
+        env = {"TASKPPS_RUN_ID": "test_run", "TASKPPS_TASK_ID": "aosp"}
+        result = await executor.execute(
+            f"python3 {script}", env, log_path, timeout=15
+        )
+        assert result.success
+        log_content = log_path.read_text()
+        assert "[DEBUG] ===== LocalExecutor.execute() START =====" in log_content
+        assert "[DEBUG] wrapper_script:" in log_content
+        assert "[DEBUG] exit_code_file:" in log_content
+        assert "[DEBUG] create_subprocess_exec returned" in log_content
+        assert "[DEBUG] process.returncode" in log_content
+        assert "[INFO] Process exited with code: 0" in log_content
+        assert "[DEBUG] ===== LocalExecutor.execute() END =====" in log_content
+        assert "start to run auto-robot" in log_content
+        assert "device_monitor successfully" in log_content
+
 
 class TestInvokeExecutor:
     @pytest.mark.asyncio
