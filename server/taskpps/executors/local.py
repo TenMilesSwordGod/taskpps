@@ -31,6 +31,8 @@ _WRAPPER_TEMPLATE = """\
 #!/bin/bash
 set -o pipefail
 
+trap '' HUP
+
 __taskpps_exit_code_file="{exit_code_file}"
 
 __taskpps_cleanup() {{
@@ -47,6 +49,30 @@ __taskpps_rc=$?
 rm -f "$__taskpps_src"
 exit $__taskpps_rc
 """
+
+
+def _collect_descendants(pid: int) -> list[int]:
+    descendants: list[int] = []
+    try:
+        for entry in os.scandir("/proc"):
+            if not entry.name.isdigit():
+                continue
+            try:
+                child_pid = int(entry.name)
+                if child_pid == pid:
+                    continue
+                stat_path = f"/proc/{child_pid}/stat"
+                with open(stat_path) as f:
+                    stat = f.read()
+                ppid = int(stat.split(") ")[1].split(" ")[1])
+                if ppid == pid:
+                    descendants.append(child_pid)
+                    descendants.extend(_collect_descendants(child_pid))
+            except (OSError, ValueError, IndexError):
+                continue
+    except OSError:
+        pass
+    return descendants
 
 
 class LocalExecutor(BaseExecutor):
@@ -163,7 +189,6 @@ class LocalExecutor(BaseExecutor):
                 stderr=asyncio.subprocess.STDOUT,
                 env=merged_env,
                 cwd=cwd,
-                preexec_fn=os.setsid,
             )
             self._write_log(
                 log_path,
@@ -454,12 +479,10 @@ class LocalExecutor(BaseExecutor):
         return None
 
     def _kill_process_tree(self, pid: int, sig: int) -> None:
-        try:
-            pgid = os.getpgid(pid)
-            os.killpg(pgid, sig)
-        except (ProcessLookupError, PermissionError, OSError):
+        pids = [pid] + _collect_descendants(pid)
+        for p in reversed(pids):
             try:
-                os.kill(pid, sig)
+                os.kill(p, sig)
             except (ProcessLookupError, PermissionError, OSError):
                 pass
 

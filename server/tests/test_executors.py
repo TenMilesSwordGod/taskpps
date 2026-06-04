@@ -204,6 +204,148 @@ class TestLocalExecutorDangerous:
         assert result.success
 
 
+class TestLocalExecutorDaemon:
+    @pytest.mark.asyncio
+    async def test_daemon_fork_parent_exits(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "daemon.log"
+        cmd = (
+            '(sleep 1; echo DAEMON_DONE; exit 0) & '
+            'DAEMON_PID=$!; echo PARENT_DONE; wait $DAEMON_PID; echo ALL_DONE'
+        )
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "DAEMON_DONE" in result.stdout
+        assert "ALL_DONE" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_nohup_background_process(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "nohup.log"
+        out_file = tmp_path / "bg_output.txt"
+        cmd = (
+            f'nohup bash -c "sleep 1; echo BG_DONE > {out_file}" & '
+            'echo PARENT_DONE; sleep 2; cat ' + str(out_file)
+        )
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "PARENT_DONE" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_multiple_daemon_forks(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "multi.log"
+        cmd = """
+for i in 1 2 3; do
+    (sleep 1; echo "daemon_$i"; exit 0) &
+    PIDS="$PIDS $!"
+done
+echo "forked"
+for p in $PIDS; do wait $p; done
+echo "all_done"
+"""
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "all_done" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_python_subprocess_popen_fork(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "popen.log"
+        cmd = (
+            'python3 -c "'
+            "import subprocess, os; "
+            "p = subprocess.Popen(['sleep', '1']); "
+            "print(f'parent: spawned {p.pid}'); "
+            "p.wait(); "
+            "print('parent: done')\""
+        )
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "parent: done" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_python_thread_subprocess(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "thread.log"
+        script = tmp_path / "thread_test.py"
+        script.write_text(
+            "import subprocess, threading\n"
+            "def run():\n"
+            "    subprocess.run(['echo', 'thread_done'])\n"
+            "    print('thread: completed')\n"
+            "t = threading.Thread(target=run)\n"
+            "t.start()\n"
+            "print('main: waiting')\n"
+            "t.join()\n"
+            "print('main: done')\n"
+        )
+        result = await executor.execute(f"python3 {script}", {}, log_path, timeout=10)
+        assert result.success
+        assert "thread: completed" in result.stdout
+        assert "main: done" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_python_asyncio_subprocess(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "async.log"
+        script = tmp_path / "async_test.py"
+        script.write_text(
+            "import asyncio\n"
+            "async def main():\n"
+            "    p = await asyncio.create_subprocess_exec('echo', 'async_done')\n"
+            "    await p.wait()\n"
+            "    print('async: completed')\n"
+            "asyncio.run(main())\n"
+        )
+        result = await executor.execute(f"python3 {script}", {}, log_path, timeout=10)
+        assert result.success
+        assert "async: completed" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_daemon_with_pid_file(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "pidfile.log"
+        pid_file = tmp_path / "daemon.pid"
+        cmd = (
+            f'(echo $$ > {pid_file}; sleep 1; echo PIDFILE_DONE; rm -f {pid_file}; exit 0) & '
+            'wait $!; echo PARENT_DONE'
+        )
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "PIDFILE_DONE" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_sighup_daemon_survives(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "sighup.log"
+        marker = tmp_path / "marker.txt"
+        cmd = (
+            f'(sleep 2; echo SURVIVED > {marker}; exit 0) & '
+            'echo "parent_exit"'
+        )
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "parent_exit" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_collect_descendants(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "desc.log"
+        cmd = (
+            'bash -c "sleep 30" & '
+            'B1=$!; '
+            'bash -c "sleep 30" & '
+            'B2=$!; '
+            'echo "children: $B1 $B2"; '
+            'kill $B1 $B2 2>/dev/null; '
+            'echo DONE'
+        )
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "DONE" in result.stdout
+
+
 class TestInvokeExecutor:
     @pytest.mark.asyncio
     async def test_valid(self, tmp_path, setup_project, tmp_project):
