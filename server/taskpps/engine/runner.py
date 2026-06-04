@@ -373,6 +373,8 @@ class PipelineRunner:
             log_path = Path(self._task_run_ids.get(qualified_name, "console.log"))
 
         env = self.context.get_task_env(task)
+        env["TASKPPS_RUN_ID"] = self.run_id
+        env["TASKPPS_TASK_ID"] = task_run_id or qualified_name
 
         when_env = {**self.pipeline.top_config.env, **task.env, **self.context.env}
         if not _evaluate_when(task.when, when_env):
