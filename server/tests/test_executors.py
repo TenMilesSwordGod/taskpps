@@ -350,48 +350,61 @@ class TestSSHExecutor:
         kwargs = executor._make_connect_kwargs()
         assert kwargs == {}
 
+    @staticmethod
+    def _build_mock_paramiko(output: str = "", exit_code: int = 0):
+        mock_channel = MagicMock()
+        encoded = output.encode("utf-8") if output else b""
+        mock_channel.recv.side_effect = [encoded, b""]
+        mock_channel.recv_stderr_ready.return_value = False
+        mock_channel.recv_ready.return_value = False
+        mock_channel.exit_status_ready.side_effect = [False, True]
+        mock_channel.recv_exit_status.return_value = exit_code
+
+        mock_transport = MagicMock()
+        mock_transport.open_session.return_value = mock_channel
+
+        mock_client = MagicMock()
+        mock_client.get_transport.return_value = mock_transport
+
+        return mock_client, mock_channel
+
     @pytest.mark.asyncio
     async def test_execute_success(self, tmp_path):
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="192.168.1.1", port=22, username="root", password="secret")
 
-        mock_result = MagicMock()
-        mock_result.stdout = "hello world"
-        mock_result.stderr = ""
-        mock_result.exited = 0
+        mock_client, mock_channel = self._build_mock_paramiko("hello world", 0)
 
-        mock_conn = MagicMock()
-        mock_conn.run.return_value = mock_result
-        mock_conn.cd.return_value.__enter__ = MagicMock(return_value=None)
-        mock_conn.cd.return_value.__exit__ = MagicMock(return_value=False)
-        mock_conn.close = MagicMock()
-
-        with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
+        with (
+            patch("taskpps.executors.ssh.paramiko") as mock_paramiko,
+            patch("taskpps.executors.ssh.select") as mock_select,
+        ):
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+            mock_select.select.return_value = ([mock_channel], [], [])
             result = await executor.execute("ls", {}, log_path, cwd="/workspace/repo")
 
         assert result.success
         assert result.exit_code == 0
         assert "hello world" in result.stdout
-        mock_conn.run.assert_called_once()
-        mock_conn.cd.assert_called_once_with("/workspace/repo")
+        mock_client.connect.assert_called_once()
+        cmd_arg = mock_client.get_transport().open_session().exec_command.call_args[0][0]
+        assert "/workspace/repo" in cmd_arg
 
     @pytest.mark.asyncio
     async def test_execute_failure(self, tmp_path):
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="192.168.1.1", port=22, username="root", password="secret")
 
-        mock_result = MagicMock()
-        mock_result.stdout = ""
-        mock_result.stderr = "command not found"
-        mock_result.exited = 127
+        mock_client, mock_channel = self._build_mock_paramiko("", 127)
 
-        mock_conn = MagicMock()
-        mock_conn.run.return_value = mock_result
-        mock_conn.cd.return_value.__enter__ = MagicMock(return_value=None)
-        mock_conn.cd.return_value.__exit__ = MagicMock(return_value=False)
-        mock_conn.close = MagicMock()
-
-        with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
+        with (
+            patch("taskpps.executors.ssh.paramiko") as mock_paramiko,
+            patch("taskpps.executors.ssh.select") as mock_select,
+        ):
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+            mock_select.select.return_value = ([mock_channel], [], [])
             result = await executor.execute("badcmd", {}, log_path)
 
         assert not result.success
@@ -402,7 +415,11 @@ class TestSSHExecutor:
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="192.168.1.1", port=22, username="root", password="secret")
 
-        with patch("taskpps.executors.ssh.Connection", side_effect=Exception("Connection refused")):
+        with patch("taskpps.executors.ssh.paramiko") as mock_paramiko:
+            mock_client = MagicMock()
+            mock_client.connect.side_effect = Exception("Connection refused")
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
             result = await executor.execute("ls", {}, log_path)
 
         assert not result.success
@@ -414,50 +431,46 @@ class TestSSHExecutor:
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="h", password="p")
 
-        mock_result = MagicMock()
-        mock_result.stdout = "ok"
-        mock_result.stderr = ""
-        mock_result.exited = 0
+        mock_client, mock_channel = self._build_mock_paramiko("ok", 0)
 
-        mock_conn = MagicMock()
-        mock_conn.run.return_value = mock_result
-        mock_conn.cd.return_value.__enter__ = MagicMock(return_value=None)
-        mock_conn.cd.return_value.__exit__ = MagicMock(return_value=False)
-        mock_conn.close = MagicMock()
-
-        with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
+        with (
+            patch("taskpps.executors.ssh.paramiko") as mock_paramiko,
+            patch("taskpps.executors.ssh.select") as mock_select,
+        ):
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+            mock_select.select.return_value = ([mock_channel], [], [])
             await executor.execute("ls", {}, log_path)
 
-        mock_conn.cd.assert_called_once_with(".")
+        cmd_arg = mock_client.get_transport().open_session().exec_command.call_args[0][0]
+        assert "cd" in cmd_arg and "." in cmd_arg
 
     @pytest.mark.asyncio
     async def test_cancel_with_connection(self):
         executor = SSHExecutor(host="h", password="p")
-        mock_conn = MagicMock()
-        executor._connection = mock_conn
+        mock_client = MagicMock()
+        executor._client = mock_client
 
         await executor.cancel()
-        mock_conn.close.assert_called_once()
+        mock_client.close.assert_called_once()
+        assert executor._client is None
 
     @pytest.mark.asyncio
     async def test_execute_with_key_path(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", key_path="/path/to/key")
         assert ex.key_path == "/path/to/key"
 
-        mock_result = MagicMock()
-        mock_result.stdout = "hello world"
-        mock_result.stderr = ""
-        mock_result.exited = 0
-
-        mock_conn = MagicMock()
-        mock_conn.run.return_value = mock_result
-        mock_conn.cd.return_value.__enter__ = MagicMock(return_value=None)
-        mock_conn.cd.return_value.__exit__ = MagicMock(return_value=False)
-        mock_conn.close = MagicMock()
+        mock_client, mock_channel = self._build_mock_paramiko("hello world", 0)
 
         log_path = tmp_path / "ssh_test.log"
 
-        with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
+        with (
+            patch("taskpps.executors.ssh.paramiko") as mock_paramiko,
+            patch("taskpps.executors.ssh.select") as mock_select,
+        ):
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+            mock_select.select.return_value = ([mock_channel], [], [])
             result = await ex.execute("echo hello", {"ENV": "test"}, log_path, timeout=30)
 
         assert result.exit_code == 0
@@ -468,44 +481,38 @@ class TestSSHExecutor:
     async def test_execute_script_and_cleanup(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", password="pass")
 
-        mock_result = MagicMock()
-        mock_result.stdout = "done"
-        mock_result.stderr = ""
-        mock_result.exited = 0
-
-        mock_conn = MagicMock()
-        mock_conn.run.return_value = mock_result
-        mock_conn.cd.return_value.__enter__ = MagicMock(return_value=None)
-        mock_conn.cd.return_value.__exit__ = MagicMock(return_value=False)
-        mock_conn.close = MagicMock()
+        mock_client, mock_channel = self._build_mock_paramiko("done", 0)
 
         log_path = tmp_path / "ssh_upload.log"
 
-        with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
+        with (
+            patch("taskpps.executors.ssh.paramiko") as mock_paramiko,
+            patch("taskpps.executors.ssh.select") as mock_select,
+        ):
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+            mock_select.select.return_value = ([mock_channel], [], [])
             result = await ex.execute("echo done", {}, log_path)
 
         assert result.exit_code == 0
-        mock_conn.run.assert_called_once()
-        mock_conn.close.assert_called_once()
+        mock_client.get_transport().open_session().exec_command.assert_called_once()
+        mock_client.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_execute_run_failure(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", password="pass")
 
-        mock_result = MagicMock()
-        mock_result.stdout = "output"
-        mock_result.stderr = "error"
-        mock_result.exited = 1
-
-        mock_conn = MagicMock()
-        mock_conn.run.return_value = mock_result
-        mock_conn.cd.return_value.__enter__ = MagicMock(return_value=None)
-        mock_conn.cd.return_value.__exit__ = MagicMock(return_value=False)
-        mock_conn.close = MagicMock()
+        mock_client, mock_channel = self._build_mock_paramiko("output", 1)
 
         log_path = tmp_path / "ssh_remove_fail.log"
 
-        with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
+        with (
+            patch("taskpps.executors.ssh.paramiko") as mock_paramiko,
+            patch("taskpps.executors.ssh.select") as mock_select,
+        ):
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+            mock_select.select.return_value = ([mock_channel], [], [])
             result = await ex.execute("cmd", {}, log_path)
 
         assert result.exit_code == 1
@@ -514,24 +521,22 @@ class TestSSHExecutor:
     async def test_execute_with_cwd(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", password="pass")
 
-        mock_result = MagicMock()
-        mock_result.stdout = "done"
-        mock_result.stderr = ""
-        mock_result.exited = 0
-
-        mock_conn = MagicMock()
-        mock_conn.run.return_value = mock_result
-        mock_conn.cd.return_value.__enter__ = MagicMock(return_value=None)
-        mock_conn.cd.return_value.__exit__ = MagicMock(return_value=False)
-        mock_conn.close = MagicMock()
+        mock_client, mock_channel = self._build_mock_paramiko("done", 0)
 
         log_path = tmp_path / "ssh_cwd.log"
 
-        with patch("taskpps.executors.ssh.Connection", return_value=mock_conn):
+        with (
+            patch("taskpps.executors.ssh.paramiko") as mock_paramiko,
+            patch("taskpps.executors.ssh.select") as mock_select,
+        ):
+            mock_paramiko.SSHClient.return_value = mock_client
+            mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+            mock_select.select.return_value = ([mock_channel], [], [])
             result = await ex.execute("pwd", {}, log_path, cwd="/var/www")
 
         assert result.exit_code == 0
-        mock_conn.cd.assert_called_once_with("/var/www")
+        cmd_arg = mock_client.get_transport().open_session().exec_command.call_args[0][0]
+        assert "/var/www" in cmd_arg
 
     @pytest.mark.asyncio
     async def test_execute_with_cwd_exception(self, tmp_path):
@@ -563,13 +568,10 @@ class TestSSHExecutor:
     @pytest.mark.asyncio
     async def test_cancel_with_client(self):
         executor = SSHExecutor(host="127.0.0.1", port=29999, username="test")
-        import paramiko
-
-        client = paramiko.SSHClient()
-        executor._client = client
+        executor._client = MagicMock()
         executor._channel = MagicMock()
         await executor.cancel()
-        assert executor._client is not None
+        assert executor._client is None
 
     @pytest.mark.asyncio
     async def test_cancel_close_exception(self):

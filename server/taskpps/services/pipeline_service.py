@@ -293,7 +293,7 @@ class PipelineService:
         if run_dir.exists():
             for item in run_dir.iterdir():
                 if item.is_dir():
-                    log_file = item / "output.log"
+                    log_file = item / "console.log"
                     if log_file.exists():
                         count += 1
             shutil.rmtree(run_dir)

@@ -158,7 +158,7 @@ def build_log_path(pipeline_id: str, pipeline_version: str, run_id: str, task_na
     logs_dir = get_logs_dir()
     log_dir = logs_dir / pipeline_id / f"v_{pipeline_version}" / "builds" / run_id / task_name
     log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir / "output.log"
+    return log_dir / "console.log"
 
 
 def build_legacy_log_path(pipeline_file: str, run_id: str, task_run_id: str) -> Path:
@@ -166,4 +166,4 @@ def build_legacy_log_path(pipeline_file: str, run_id: str, task_run_id: str) -> 
     log_rel_dir = Path(pipeline_file).with_suffix("") if pipeline_file else Path("unknown")
     log_dir = logs_dir / log_rel_dir / run_id / task_run_id
     log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir / "output.log"
+    return log_dir / "console.log"

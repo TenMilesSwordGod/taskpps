@@ -18,7 +18,6 @@ dependencies = [
     "pyyaml",
     "croniter",
     "sse-starlette",
-    "fabric>=3.2.3",
     "httpx>=0.28.1",
 ]
 
