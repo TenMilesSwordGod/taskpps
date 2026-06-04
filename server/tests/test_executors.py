@@ -346,48 +346,44 @@ echo "all_done"
         assert "DONE" in result.stdout
 
     @pytest.mark.asyncio
-    async def test_debug_logs_written_to_file(self, tmp_path):
+    async def test_version_marker_in_log(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "debug.log"
         result = await executor.execute("echo HELLO", {}, log_path, timeout=10)
         assert result.success
         log_content = log_path.read_text()
-        assert "[DEBUG] ===== LocalExecutor.execute() START =====" in log_content
-        assert "[DEBUG] wrapper_script:" in log_content
-        assert "[DEBUG] create_subprocess_exec returned" in log_content
-        assert "[DEBUG] process.returncode" in log_content
-        assert "[DEBUG] ===== LocalExecutor.execute() END =====" in log_content
+        assert "[VERSION] executor=v4-direct" in log_content
+        assert "[INFO] Process started, PID:" in log_content
+        assert "[INFO] Exit code: 0" in log_content
 
     @pytest.mark.asyncio
-    async def test_debug_logs_written_for_daemon(self, tmp_path):
+    async def test_logs_written_for_daemon(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "daemon_debug.log"
         cmd = '(sleep 1; echo DAEMON; exit 0) & wait $!; echo DONE'
         result = await executor.execute(cmd, {}, log_path, timeout=10)
         assert result.success
         log_content = log_path.read_text()
-        assert "[DEBUG] ===== LocalExecutor.execute() START =====" in log_content
-        assert "[DEBUG] process.returncode" in log_content
-        assert "[INFO] Process exited with code: 0" in log_content
-        assert "[DEBUG] ===== LocalExecutor.execute() END =====" in log_content
+        assert "[VERSION] executor=v4-direct" in log_content
+        assert "[INFO] Exit code: 0" in log_content
         assert "DAEMON" in log_content
         assert "DONE" in log_content
 
     @pytest.mark.asyncio
-    async def test_write_log_creates_file(self, tmp_path):
+    async def test_log_direct_creates_file(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "subdir" / "test.log"
         executor._ensure_log_dir(log_path)
-        executor._write_log(log_path, "test message\n")
+        executor._log_direct(log_path, "test message\n")
         assert log_path.exists()
         assert "test message" in log_path.read_text()
 
     @pytest.mark.asyncio
-    async def test_write_log_appends(self, tmp_path):
+    async def test_log_direct_appends(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "append.log"
-        executor._write_log(log_path, "line1\n")
-        executor._write_log(log_path, "line2\n")
+        executor._log_direct(log_path, "line1\n")
+        executor._log_direct(log_path, "line2\n")
         content = log_path.read_text()
         assert "line1" in content
         assert "line2" in content
@@ -518,13 +514,9 @@ class TestLocalExecutorProductionScenario:
         )
         assert result.success
         log_content = log_path.read_text()
-        assert "[DEBUG] ===== LocalExecutor.execute() START =====" in log_content
-        assert "[DEBUG] wrapper_script:" in log_content
-        assert "[DEBUG] exit_code_file:" in log_content
-        assert "[DEBUG] create_subprocess_exec returned" in log_content
-        assert "[DEBUG] process.returncode" in log_content
-        assert "[INFO] Process exited with code: 0" in log_content
-        assert "[DEBUG] ===== LocalExecutor.execute() END =====" in log_content
+        assert "[VERSION] executor=v4-direct" in log_content
+        assert "[INFO] Process started, PID:" in log_content
+        assert "[INFO] Exit code: 0" in log_content
         assert "start to run auto-robot" in log_content
         assert "device_monitor successfully" in log_content
 
