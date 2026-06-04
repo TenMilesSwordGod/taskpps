@@ -83,8 +83,4 @@ known-first-party = ["taskpps"]
 quote-style = "double"
 indent-style = "space"
 
-[tool.uv]
-python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone"
-[[tool.uv.index]]
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
+
