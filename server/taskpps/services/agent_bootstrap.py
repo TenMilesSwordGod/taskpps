@@ -196,12 +196,9 @@ class AgentBootstrap:
         try:
             from taskpps.config import get_settings
             settings = get_settings()
-            agent_config = getattr(settings, "agent", None)
-            if agent_config:
-                return getattr(agent_config, "ws_port", 28765)
+            return settings.server.port
         except Exception:
-            pass
-        return 28765
+            return 26521
 
     async def _wait_for_handshake(self, manager: AgentManager, agent_id: str) -> None:
         while True:
