@@ -328,6 +328,30 @@ class TestPipelineRunnerBoundary:
         assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
     @pytest.mark.asyncio
+    async def test_negative_exit_code_logs_signal_message(self, mock_session_factory):
+        tasks = [ResolvedTask(name="t1", task_type="command", command="kill -9 $$")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_neg_log")
+        runner = PipelineRunner(run_id="test_neg_log", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=-9, stderr="killed by SIGKILL")
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch.object(runner, "_write_pipeline_log") as mock_log,
+        ):
+            await runner.run()
+
+        mock_log.assert_any_call(
+            "FAILED",
+            "Task 'test.t1' failed with exit code: -9 (process was killed by signal or did not start properly)",
+        )
+
+    @pytest.mark.asyncio
     async def test_multiple_tasks_sequential_all_succeed(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [
@@ -581,7 +605,9 @@ class TestPipelineRunnerBoundary:
     async def test_ssh_executor_with_nonexistent_local_path_preserved(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         remote_only_cwd = "/remote/machine/only/path"
-        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd=remote_only_cwd, host="remote-host")]
+        tasks = [
+            ResolvedTask(name="t1", task_type="command", command="echo hi", cwd=remote_only_cwd, host="remote-host")
+        ]
         pipeline = make_pipeline(tasks=tasks)
         ctx = ExecutionContext(pipeline=pipeline, run_id="test_ssh_remote_only")
         runner = PipelineRunner(run_id="test_ssh_remote_only", pipeline=pipeline, context=ctx)
