@@ -1751,7 +1751,7 @@ class TestCreateExecutor:
             agents_dir = tmp_path / "agents"
             agents_dir.mkdir()
             agent_file = agents_dir / "myhost.yaml"
-            agent_file.write_text("host: 1.2.3.4\nport: 2222\nusername: admin\n")
+            agent_file.write_text("host: 1.2.3.4\nport: 2222\nusername: admin\nexecution_agent: false\n")
             mock_get_agents_dir.return_value = agents_dir
 
             executor = create_executor(task)
@@ -1776,7 +1776,7 @@ class TestCreateExecutor:
             agents_dir = tmp_path / "agents"
             agents_dir.mkdir()
             agent_file = agents_dir / "myhost.yaml"
-            agent_file.write_text("host: 1.2.3.4\nport: 2222\nusername: admin\n")
+            agent_file.write_text("host: 1.2.3.4\nport: 2222\nusername: admin\nexecution_agent: false\n")
             mock_get_agents_dir.return_value = agents_dir
 
             creds_dir = tmp_path / "credentials"
@@ -1821,7 +1821,7 @@ class TestCreateExecutor:
             agents_dir = tmp_path / "agents"
             agents_dir.mkdir()
             agent_file = agents_dir / "myhost.yaml"
-            agent_file.write_text("host: 1.2.3.4\nport: 2222\nusername: admin\n")
+            agent_file.write_text("host: 1.2.3.4\nport: 2222\nusername: admin\nexecution_agent: false\n")
             mock_get_agents_dir.return_value = agents_dir
 
             creds_dir = tmp_path / "credentials"

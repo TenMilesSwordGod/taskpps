@@ -73,27 +73,7 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
 
         if agent_data.get("execution_agent", True):
             manager = AgentManager.instance()
-
-            if not manager.is_connected(task.host):
-                if agent_data.get("agent_auto_bootstrap", True):
-                    try:
-                        from taskpps.services.agent_bootstrap import AgentBootstrap
-                        bootstrap = AgentBootstrap()
-                        import asyncio
-                        try:
-                            loop = asyncio.get_running_loop()
-                        except RuntimeError:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                        loop.run_until_complete(bootstrap.bootstrap(task.host))
-                    except Exception as e:
-                        logger.warning("Agent '%s' bootstrap failed: %s, falling back to SSHExecutor", task.host, e)
-                        return _make_ssh_executor(host, port, username, agent_data, task)
-                else:
-                    logger.info("Agent '%s' not connected, falling back to SSHExecutor (@deprecated)", task.host)
-                    return _make_ssh_executor(host, port, username, agent_data, task)
-
-            return AgentExecutor(agent_id=task.host, manager=manager)
+            return AgentExecutor(agent_id=task.host, manager=manager, agent_data=agent_data)
 
         return _make_ssh_executor(host, port, username, agent_data, task)
 

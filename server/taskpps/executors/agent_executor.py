@@ -14,11 +14,32 @@ logger = logging.getLogger(__name__)
 
 
 class AgentExecutor(BaseExecutor):
-    def __init__(self, agent_id: str, manager: AgentManager):
+    def __init__(self, agent_id: str, manager: AgentManager, agent_data: dict | None = None):
         self._agent_id = agent_id
         self._manager = manager
+        self._agent_data = agent_data
         self._command_id: str | None = None
         self._cancelled = False
+        self._bootstrapped = False
+
+    async def _ensure_connected(self, log_path: Path) -> bool:
+        if self._manager.is_connected(self._agent_id):
+            return True
+
+        if not self._agent_data or not self._agent_data.get("agent_auto_bootstrap", True):
+            self._log(log_path, f"[ERROR] Agent '{self._agent_id}' not connected\n")
+            return False
+
+        self._log(log_path, f"[INFO] Agent '{self._agent_id}' not connected, bootstrapping...\n")
+        try:
+            from taskpps.services.agent_bootstrap import AgentBootstrap
+            bootstrap = AgentBootstrap()
+            result = await bootstrap.bootstrap(self._agent_id)
+            self._log(log_path, f"[INFO] Agent bootstrap result: {result}\n")
+            return result.get("success", False)
+        except Exception as e:
+            self._log(log_path, f"[ERROR] Agent bootstrap failed: {e}\n")
+            return False
 
     async def execute(
         self,
@@ -31,6 +52,12 @@ class AgentExecutor(BaseExecutor):
         self._cancelled = False
         command_id = str(uuid.uuid4())
         self._command_id = command_id
+
+        if not await self._ensure_connected(log_path):
+            return ExecutorResult(
+                exit_code=-1,
+                stderr=f"Agent '{self._agent_id}' is not connected",
+            )
 
         effective_timeout = timeout or get_settings().executor.default_timeout
         effective_cwd = cwd or os.getcwd()

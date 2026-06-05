@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import time
 
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
@@ -60,7 +59,7 @@ class AgentBootstrap:
                 await self._deploy_binary(ssh, host, agent_binary_path)
                 await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
 
-            server_url = f"ws://{self._get_server_host()}:{self._get_ws_port()}"
+            server_url = f"ws://{self._get_server_host(agent_data)}:{self._get_ws_port()}/api/ws/agent"
 
             pid = await self._start_agent_daemon(
                 ssh, agent_binary_path, agent_id, agent_secret, server_url, agent_data
@@ -160,19 +159,38 @@ class AgentBootstrap:
         if exit_code != 0:
             raise AgentBootstrapError(t("Failed to start agent: {error}", error=stderr or stdout))
 
-        time.sleep(2)
+        await asyncio.sleep(2)
         exit_code, pid_str, _ = await self._ssh_exec(client, f"cat {pid_file}")
         if exit_code != 0:
             raise AgentBootstrapError(t("Failed to read PID file"))
         return int(pid_str.strip())
 
-    def _get_server_host(self) -> str:
+    def _get_server_host(self, agent_data: dict = None) -> str:
+        if agent_data:
+            explicit = agent_data.get("server_ws_host", "")
+            if explicit:
+                return explicit
+
         settings = __import__("taskpps.config", fromlist=["get_settings"]).get_settings()
         host = settings.server.host
         if host == "0.0.0.0":
             import socket
+            hostname = socket.gethostname()
+            try:
+                return socket.gethostbyname(hostname)
+            except Exception:
+                return hostname
+        if host == "127.0.0.1":
+            import socket
+            hostname = socket.gethostname()
+            try:
+                ip = socket.gethostbyname(hostname)
+                if ip != "127.0.0.1":
+                    return ip
+            except Exception:
+                pass
             return socket.gethostbyname(socket.gethostname())
-        return host if host != "127.0.0.1" else "localhost"
+        return host
 
     def _get_ws_port(self) -> int:
         try:
