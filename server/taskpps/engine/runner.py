@@ -107,6 +107,22 @@ class PipelineRunner:
                         )
                     f.write("\n")
 
+    def _write_separator(self, char: str, label: str = "") -> None:
+        """Write a full-width separator line with an optional label."""
+        if self._pipeline_log_path:
+            W = 80
+            try:
+                with open(self._pipeline_log_path, "a") as f:
+                    f.write(char * W + "\n")
+                    if label:
+                        padding = (W - len(label)) // 2
+                        f.write(
+                            char + " " * max(padding - 1, 0) + label + " " * max(W - padding - len(label) - 1, 0) + "\n"
+                        )
+                        f.write(char * W + "\n")
+            except Exception as e:
+                logger.error(f"Failed to write separator to pipeline log: {e}")
+
     def _write_pipeline_log(self, level: str, message: str) -> None:
         """Write a message to the pipeline-level console.log."""
         if self._pipeline_log_path:
@@ -312,7 +328,7 @@ class PipelineRunner:
             len(sub.tasks),
         )
         self.context.get_subpipeline_env(sub)
-        self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} start ===")
+        self._write_separator("=", f"[subpipeline] {sub_name} start")
         self._write_pipeline_log("INFO", f"Starting SubPipeline '{sub_name}' with {len(sub.tasks)} tasks")
 
         try:
@@ -322,7 +338,7 @@ class PipelineRunner:
             error_msg = f"SubPipeline '{sub_name}' DAG error: {e}"
             logger.error(t(error_msg))
             self._write_pipeline_log("ERROR", error_msg)
-            self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} end ===")
+            self._write_separator("=", f"[subpipeline] {sub_name} end")
             return {"success": False, "error": str(e)}
 
         self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' has {len(levels)} execution levels")
@@ -414,14 +430,14 @@ class PipelineRunner:
             self._write_pipeline_log(
                 "FAILED", f"SubPipeline '{sub_name}' finished with {len(failed_tasks)} failed tasks"
             )
-            self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} end ===")
+            self._write_separator("=", f"[subpipeline] {sub_name} end")
             return {"success": False, "failed_tasks": list(failed_tasks)}
 
         self._write_pipeline_log(
             "SUCCESS",
             f"SubPipeline '{sub_name}' completed successfully ({len(completed_tasks)}/{len(sub.tasks)} tasks)",
         )
-        self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} end ===")
+        self._write_separator("=", f"[subpipeline] {sub_name} end")
         return {"success": True}
 
     async def _execute_task(self, task: ResolvedTask, sub_name: str = "") -> ExecutorResult:
@@ -456,7 +472,7 @@ class PipelineRunner:
             self._write_pipeline_log("SKIP", f"Task '{qualified_name}' skipped (when condition not met)")
             return ExecutorResult(exit_code=0, stdout="Task skipped (when condition not met)")
 
-        self._write_pipeline_log("LINE", f"--- [task] {qualified_name} start ---")
+        self._write_separator("-", f"[task] {qualified_name} start")
         self._write_pipeline_log(
             "INFO", f"Executing task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})"
         )
@@ -605,7 +621,7 @@ class PipelineRunner:
             if last_result.stderr:
                 self._write_pipeline_log("ERROR", f"Error output: {last_result.stderr[:500]}")
 
-        self._write_pipeline_log("LINE", f"--- [task] {qualified_name} end ---")
+        self._write_separator("-", f"[task] {qualified_name} end")
         return last_result
 
     async def _execute_commands(
