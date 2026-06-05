@@ -22,18 +22,20 @@ type Executor struct {
 	mu          sync.Mutex
 	runningCmds map[string]*runningCmd
 	shell       string
+	defaultDir  string
 	onStdout    func(commandID, data string)
 	onStderr    func(commandID, data string)
 	onResult    func(result ExecResult)
 }
 
-func NewExecutor(shell string, onStdout, onStderr func(string, string), onResult func(ExecResult)) *Executor {
+func NewExecutor(shell string, defaultDir string, onStdout, onStderr func(string, string), onResult func(ExecResult)) *Executor {
 	if shell == "" {
 		shell = "/bin/bash"
 	}
 	return &Executor{
 		runningCmds: make(map[string]*runningCmd),
 		shell:       shell,
+		defaultDir:  defaultDir,
 		onStdout:    onStdout,
 		onStderr:    onStderr,
 		onResult:    onResult,
@@ -62,6 +64,8 @@ func (e *Executor) Execute(req ExecCommand) {
 
 	if req.Cwd != "" {
 		cmd.Dir = req.Cwd
+	} else if e.defaultDir != "" {
+		cmd.Dir = e.defaultDir
 	}
 	if req.Env != nil {
 		cmd.Env = mergeEnv(osEnviron(), req.Env)

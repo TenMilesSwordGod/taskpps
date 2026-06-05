@@ -57,15 +57,18 @@ class AgentBootstrap:
                 default_binary = "/usr/local/bin/taskpps-agent"
                 default_log_dir = "/var/log/taskpps"
                 default_pid_file = "/var/run/taskpps-agent.pid"
+                default_work_dir = "/opt/taskpps"
             else:
                 work_dir = f"{remote_home}/.taskpps"
                 default_binary = f"{work_dir}/taskpps-agent"
                 default_log_dir = f"{work_dir}/logs"
                 default_pid_file = f"{work_dir}/agent.pid"
+                default_work_dir = work_dir
 
             agent_binary_path = agent_data.get("agent_binary_path", default_binary)
             agent_log_dir = agent_data.get("agent_log_dir", default_log_dir)
             agent_pid_file = agent_data.get("agent_pid_file", default_pid_file)
+            agent_work_dir = agent_data.get("agent_work_dir", default_work_dir)
             agent_secret = agent_data.get("agent_secret", "")
 
             server_host = self._get_server_host(agent_data)
@@ -225,6 +228,7 @@ class AgentBootstrap:
                                    agent_id: str, secret: str, server_url: str,
                                    agent_data: dict) -> int:
         log_file = f"{log_dir}/agent.log"
+        work_dir = agent_data.get("agent_work_dir", "")
 
         cmd = (
             f"mkdir -p {log_dir} && "
@@ -232,6 +236,8 @@ class AgentBootstrap:
         )
         if secret:
             cmd += f" --secret {secret}"
+        if work_dir:
+            cmd += f" --work-dir {work_dir}"
         cmd += f" --log-file {log_file} --daemon --pid-file {pid_file}"
 
         exit_code, stdout, stderr = await self._ssh_exec(client, cmd)

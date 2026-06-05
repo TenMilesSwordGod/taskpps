@@ -21,6 +21,7 @@ type AgentConfig struct {
 	AgentID   string
 	Secret    string
 	Shell     string
+	WorkDir   string
 }
 
 func NewAgent(config *AgentConfig) *Agent {
@@ -33,6 +34,7 @@ func NewAgent(config *AgentConfig) *Agent {
 	a.wsClient = NewWsClient(config.ServerURL, config.AgentID, config.Secret, hostname, os.Getpid(), runtime.GOOS, runtime.GOARCH)
 	a.executor = NewExecutor(
 		config.Shell,
+		config.WorkDir,
 		a.onStdout,
 		a.onStderr,
 		a.onResult,

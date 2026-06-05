@@ -109,6 +109,14 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
     if conn is None:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not connected")
 
+    cwd = body.cwd or ""
+    if not cwd:
+        from taskpps.loaders.agent_loader import AgentLoader
+        loader = AgentLoader()
+        agent_data = loader.get(agent_id)
+        if agent_data and agent_data.get("agent_work_dir"):
+            cwd = agent_data["agent_work_dir"]
+
     command_id = str(uuid.uuid4())
     start_time = time.monotonic()
 
@@ -126,7 +134,7 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
             command_id,
             body.command,
             body.env or {},
-            body.cwd or "",
+            cwd,
             body.timeout,
         )
     except Exception as e:

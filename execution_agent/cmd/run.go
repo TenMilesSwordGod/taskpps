@@ -19,6 +19,7 @@ var (
 	shell     string
 	pidFile   string
 	logFile   string
+	workDir   string
 	daemon    bool
 )
 
@@ -39,6 +40,7 @@ func init() {
 	runCmd.Flags().StringVar(&agentID, "agent-id", "", "Agent ID (默认为主机名)")
 	runCmd.Flags().StringVar(&secret, "secret", "", "预共享密钥")
 	runCmd.Flags().StringVar(&shell, "shell", "/bin/bash", "Shell 路径")
+	runCmd.Flags().StringVar(&workDir, "work-dir", "", "默认工作目录(执行命令时的 cwd)")
 	runCmd.Flags().StringVar(&pidFile, "pid-file", "/var/run/taskpps-agent.pid", "PID 文件路径")
 	runCmd.Flags().StringVar(&logFile, "log-file", "", "日志文件路径")
 	runCmd.Flags().BoolVar(&daemon, "daemon", false, "以 daemon 模式运行")
@@ -66,6 +68,7 @@ func runForeground() error {
 		AgentID:   agentID,
 		Secret:    secret,
 		Shell:     shell,
+		WorkDir:   workDir,
 	}
 
 	a := agent.NewAgent(agentConfig)
@@ -147,6 +150,9 @@ func buildConfig() *config.Config {
 	}
 	if shell != "" {
 		cfg.Shell = shell
+	}
+	if workDir != "" {
+		cfg.WorkDir = workDir
 	}
 	if pidFile != "" {
 		cfg.PidFile = pidFile

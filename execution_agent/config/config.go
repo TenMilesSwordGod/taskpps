@@ -9,6 +9,7 @@ type Config struct {
 	AgentID   string
 	Secret    string
 	Shell     string
+	WorkDir   string
 	PidFile   string
 	LogFile   string
 	Daemon    bool

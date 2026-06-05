@@ -60,7 +60,12 @@ class AgentExecutor(BaseExecutor):
             )
 
         effective_timeout = timeout or get_settings().executor.default_timeout
-        effective_cwd = cwd or os.getcwd()
+        if cwd:
+            effective_cwd = cwd
+        elif self._agent_data and self._agent_data.get("agent_work_dir"):
+            effective_cwd = self._agent_data["agent_work_dir"]
+        else:
+            effective_cwd = ""
 
         self._log(log_path, f"[INFO] AgentExecutor: agent={self._agent_id} command_id={command_id}\n")
         self._log(log_path, f"[INFO] Command: {command[:500]}\n")
