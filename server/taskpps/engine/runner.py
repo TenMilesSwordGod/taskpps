@@ -27,6 +27,7 @@ from taskpps.executors import create_executor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
+from taskpps.executors.local import LocalExecutor
 from taskpps.executors.nexus import NexusExecutor
 from taskpps.i18n import t
 from taskpps.models.run import RunStatus, TaskStatus
@@ -441,7 +442,7 @@ class PipelineRunner:
             logger.debug(f"[DEBUG-EXEC] _execute_task '{qualified_name}': attempt={attempt}, executor={type(executor).__name__}, effective_cwd={effective_cwd}")
 
             try:
-                if effective_cwd and not os.path.isdir(effective_cwd):
+                if effective_cwd and isinstance(executor, LocalExecutor) and not os.path.isdir(effective_cwd):
                     self._write_pipeline_log("WARN", f"Task '{qualified_name}' cwd does not exist: {effective_cwd}, using current dir")
                     effective_cwd = os.getcwd()
 

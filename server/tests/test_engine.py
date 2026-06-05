@@ -1,3 +1,4 @@
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -6,6 +7,8 @@ from taskpps.domain.context import ExecutionContext
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedSubPipeline, ResolvedTask
 from taskpps.engine.runner import PipelineRunner, get_active_runner
 from taskpps.executors.base import ExecutorResult
+from taskpps.executors.local import LocalExecutor
+from taskpps.executors.ssh import SSHExecutor
 from taskpps.schemas.pipeline import OptionsYAML, PipelineConfig
 
 
@@ -479,6 +482,125 @@ class TestPipelineRunnerBoundary:
             await runner.run()
 
         assert run_repo.update_run_status.call_args[0][1] == "success"
+
+    @pytest.mark.asyncio
+    async def test_cwd_not_overridden_for_non_local_executor(self, tmp_path, mock_session_factory):
+        run_repo, _task_repo = mock_session_factory
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd="/nonexistent/path/xyz")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cwd_ssh")
+        runner = PipelineRunner(run_id="test_cwd_ssh", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+        call_kwargs = mock_executor.execute.call_args[1]
+        assert call_kwargs.get("cwd") == "/nonexistent/path/xyz"
+
+    @pytest.mark.asyncio
+    async def test_cwd_overridden_for_local_executor(self, tmp_path, mock_session_factory):
+        run_repo, _task_repo = mock_session_factory
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd="/nonexistent/path/xyz")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cwd_local")
+        runner = PipelineRunner(run_id="test_cwd_local", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+
+        executor = LocalExecutor()
+        executor.execute = AsyncMock(return_value=ExecutorResult(exit_code=0, stdout="ok"))
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+        call_kwargs = executor.execute.call_args[1]
+        assert call_kwargs.get("cwd") == os.getcwd()
+
+    @pytest.mark.asyncio
+    async def test_cwd_preserved_when_valid_for_local_executor(self, tmp_path, mock_session_factory):
+        run_repo, _task_repo = mock_session_factory
+        valid_cwd = str(tmp_path)
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd=valid_cwd)]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cwd_valid")
+        runner = PipelineRunner(run_id="test_cwd_valid", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+
+        executor = LocalExecutor()
+        executor.execute = AsyncMock(return_value=ExecutorResult(exit_code=0, stdout="ok"))
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+        call_kwargs = executor.execute.call_args[1]
+        assert call_kwargs.get("cwd") == valid_cwd
+
+    @pytest.mark.asyncio
+    async def test_ssh_executor_with_remote_cwd_not_overridden(self, tmp_path, mock_session_factory):
+        run_repo, _task_repo = mock_session_factory
+        remote_cwd = "/home/auto/heng"
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd=remote_cwd, host="remote-host")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_ssh_cwd")
+        runner = PipelineRunner(run_id="test_ssh_cwd", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+
+        ssh_executor = SSHExecutor(host="remote-host")
+        ssh_executor.execute = AsyncMock(return_value=ExecutorResult(exit_code=0, stdout="ok"))
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=ssh_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+        call_kwargs = ssh_executor.execute.call_args[1]
+        assert call_kwargs.get("cwd") == remote_cwd
+
+    @pytest.mark.asyncio
+    async def test_ssh_executor_with_nonexistent_local_path_preserved(self, tmp_path, mock_session_factory):
+        run_repo, _task_repo = mock_session_factory
+        remote_only_cwd = "/remote/machine/only/path"
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd=remote_only_cwd, host="remote-host")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_ssh_remote_only")
+        runner = PipelineRunner(run_id="test_ssh_remote_only", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+
+        ssh_executor = SSHExecutor(host="remote-host")
+        ssh_executor.execute = AsyncMock(return_value=ExecutorResult(exit_code=0, stdout="ok"))
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=ssh_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+        call_kwargs = ssh_executor.execute.call_args[1]
+        assert call_kwargs.get("cwd") == remote_only_cwd
+        assert call_kwargs.get("cwd") != os.getcwd()
 
     @pytest.mark.asyncio
     async def test_task_with_commands_list(self, mock_session_factory):
