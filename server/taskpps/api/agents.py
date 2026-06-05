@@ -93,12 +93,7 @@ async def deploy_agent(body: AgentDeployRequest):
     try:
         from taskpps.services.agent_bootstrap import AgentBootstrap
         bootstrap = AgentBootstrap()
-        import asyncio
-        result = await asyncio.to_thread(
-            lambda: asyncio.get_event_loop().run_until_complete(
-                bootstrap.bootstrap(body.agent_id)
-            )
-        )
+        await bootstrap.bootstrap(body.agent_id)
         return AgentDeployResult(success=True, agent_id=body.agent_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

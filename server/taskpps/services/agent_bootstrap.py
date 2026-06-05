@@ -37,7 +37,6 @@ class AgentBootstrap:
         credential_id = agent_data.get("credential_id", "")
         agent_binary_path = agent_data.get("agent_binary_path", "/usr/local/bin/taskpps-agent")
         agent_secret = agent_data.get("agent_secret", "")
-        agent_version = agent_data.get("agent_version", "1.0.0")
 
         if not host or host in ("localhost", "127.0.0.1", "::1"):
             return {"success": True, "agent_pid": 0, "message": "local agent"}
@@ -79,11 +78,11 @@ class AgentBootstrap:
             )
             logger.info("Agent '%s' handshake completed", agent_id)
             return {"success": True, "agent_pid": 0}
-        except asyncio.TimeoutError:
-            raise AgentBootstrapError(t("Agent '{id}' handshake timeout after bootstrap", id=agent_id))
+        except asyncio.TimeoutError as e:
+            raise AgentBootstrapError(t("Agent '{id}' handshake timeout after bootstrap", id=agent_id)) from e
 
     async def _ssh_connect(self, host: str, port: int, username: str,
-                           password: str | None, key_path: str | None) -> "SSHClient":
+                           password: str | None, key_path: str | None):
         import paramiko
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -94,28 +93,28 @@ class AgentBootstrap:
         elif password:
             connect_kwargs["password"] = password
 
-        result = await asyncio.to_thread(
+        await asyncio.to_thread(
             client.connect, hostname=host, port=port, username=username, **connect_kwargs
         )
         return client
 
-    async def _ssh_close(self, client: "SSHClient") -> None:
+    async def _ssh_close(self, client) -> None:
         try:
             client.close()
         except Exception:
             pass
 
-    async def _ssh_exec(self, client: "SSHClient", command: str) -> tuple[int, str, str]:
+    async def _ssh_exec(self, client, command: str) -> tuple[int, str, str]:
         def _run():
-            stdin, stdout, stderr = client.exec_command(command, timeout=10)
+            _stdin, stdout, stderr = client.exec_command(command, timeout=10)
             return stdout.channel.recv_exit_status(), stdout.read().decode(), stderr.read().decode()
         return await asyncio.to_thread(_run)
 
-    async def _check_binary(self, client: "SSHClient", path: str) -> bool:
+    async def _check_binary(self, client, path: str) -> bool:
         exit_code, _, _ = await self._ssh_exec(client, f"test -x {path}")
         return exit_code == 0
 
-    async def _deploy_binary(self, client: "SSHClient", host: str, dest_path: str) -> None:
+    async def _deploy_binary(self, client, host: str, dest_path: str) -> None:
         import platform
         arch = platform.machine()
         if arch == "x86_64":
@@ -143,7 +142,7 @@ class AgentBootstrap:
         finally:
             sftp.close()
 
-    async def _start_agent_daemon(self, client: "SSHClient", binary_path: str,
+    async def _start_agent_daemon(self, client, binary_path: str,
                                    agent_id: str, secret: str, server_url: str,
                                    agent_data: dict) -> int:
         log_file = agent_data.get("agent_log_dir", "/var/log/taskpps") + "/agent.log"

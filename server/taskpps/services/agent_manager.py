@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import uuid
 from collections.abc import Callable
 
 from fastapi import WebSocket
@@ -26,7 +24,7 @@ class AgentConnection:
         self.agent_pid = 0
         self.connected_at = 0.0
         self.last_heartbeat = 0.0
-        self._pending_commands: dict[str, "asyncio.Future[dict]"] = {}
+        self._pending_commands: dict[str, asyncio.Future[dict]] = {}
         self._output_callbacks: dict[str, Callable] = {}
         self._send_lock = asyncio.Lock()
 
@@ -46,7 +44,7 @@ class AgentConnection:
     async def send_cancel(self, command_id: str) -> None:
         await self.send_msg("cancel_command", {"command_id": command_id})
 
-    def register_pending(self, command_id: str) -> "asyncio.Future[dict]":
+    def register_pending(self, command_id: str) -> asyncio.Future[dict]:
         fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()
         self._pending_commands[command_id] = fut
         return fut
@@ -73,14 +71,14 @@ class AgentConnection:
 
 
 class AgentManager:
-    _instance: "AgentManager | None" = None
+    _instance: AgentManager | None = None
 
     def __init__(self):
         self._connections: dict[str, AgentConnection] = {}
         self._active = True
 
     @classmethod
-    def instance(cls) -> "AgentManager":
+    def instance(cls) -> AgentManager:
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -111,14 +109,13 @@ class AgentManager:
             raise ValueError(t("Expected handshake_request, got {type}", type=msg_type))
 
         agent_id = payload.get("agent_id", "")
-        secret = payload.get("secret", "")
+        _secret = payload.get("secret", "")
         version = payload.get("version", "")
 
         if expected_agent_id and agent_id != expected_agent_id:
             await ws.close(code=4003, reason=f"agent_id mismatch: expected {expected_agent_id}")
             raise ValueError(f"agent_id mismatch: {agent_id} != {expected_agent_id}")
 
-        import os
         hostname_info = payload.get("hostname", "") or ""
         agent_pid = payload.get("agent_pid", 0) or 0
 
@@ -174,7 +171,7 @@ class AgentManager:
             return
         await conn.send_cancel(command_id)
 
-    def create_pending(self, agent_id: str, command_id: str) -> "asyncio.Future[dict]":
+    def create_pending(self, agent_id: str, command_id: str) -> asyncio.Future[dict]:
         conn = self._connections.get(agent_id)
         if conn is None:
             fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()

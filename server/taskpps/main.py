@@ -5,8 +5,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from taskpps.api import agents, health, runs, triggers
-from taskpps.api import ws_agent
+from taskpps.api import agents, health, runs, triggers, ws_agent
 from taskpps.config import get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale, t
