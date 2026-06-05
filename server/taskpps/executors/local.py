@@ -154,8 +154,14 @@ class LocalExecutor(BaseExecutor):
                     await asyncio.sleep(0.1)
 
             await self._process.wait()
-            exit_code = self._process.returncode
-            logger.info("LocalExecutor: process finished PID=%d exit_code=%s", self._process.pid, exit_code)
+            if self._cancelled:
+                exit_code = -1
+            else:
+                exit_code = self._process.returncode
+            logger.info(
+                "LocalExecutor: process finished PID=%d exit_code=%s (cancelled=%s)",
+                self._process.pid, exit_code, self._cancelled,
+            )
 
         except asyncio.TimeoutError:
             self._log_direct(log_path, f"[ERROR] Task exceeded timeout of {timeout}s\n")
