@@ -11,7 +11,7 @@ func TestExecutorSuccess(t *testing.T) {
 	var receivedResult *ExecResult
 	resultCh := make(chan ExecResult, 1)
 
-	executor := NewExecutor("/bin/sh",
+	executor := NewExecutor("/bin/sh", "/tmp",
 		func(cid, data string) {},
 		func(cid, data string) {},
 		func(result ExecResult) {
@@ -44,7 +44,7 @@ func TestExecutorSuccess(t *testing.T) {
 func TestExecutorFailure(t *testing.T) {
 	resultCh := make(chan ExecResult, 1)
 
-	executor := NewExecutor("/bin/sh",
+	executor := NewExecutor("/bin/sh", "/tmp",
 		func(cid, data string) {},
 		func(cid, data string) {},
 		func(result ExecResult) {
@@ -73,7 +73,7 @@ func TestExecutorFailure(t *testing.T) {
 func TestExecutorTimeout(t *testing.T) {
 	resultCh := make(chan ExecResult, 1)
 
-	executor := NewExecutor("/bin/sh",
+	executor := NewExecutor("/bin/sh", "/tmp",
 		func(cid, data string) {},
 		func(cid, data string) {},
 		func(result ExecResult) {
@@ -106,7 +106,7 @@ func TestExecutorTimeout(t *testing.T) {
 func TestExecutorCancel(t *testing.T) {
 	resultCh := make(chan ExecResult, 1)
 
-	executor := NewExecutor("/bin/sh",
+	executor := NewExecutor("/bin/sh", "/tmp",
 		func(cid, data string) {},
 		func(cid, data string) {},
 		func(result ExecResult) {
@@ -139,7 +139,7 @@ func TestExecutorEnv(t *testing.T) {
 	resultCh := make(chan ExecResult, 1)
 	var stdout string
 
-	executor := NewExecutor("/bin/sh",
+	executor := NewExecutor("/bin/sh", "/tmp",
 		func(cid, data string) {
 			stdout += data
 		},
@@ -168,7 +168,7 @@ func TestExecutorEnv(t *testing.T) {
 }
 
 func TestExecutorCommands(t *testing.T) {
-	executor := NewExecutor("/bin/sh", nil, nil, nil)
+	executor := NewExecutor("/bin/sh", "/tmp", nil, nil, nil)
 
 	executor.Execute(ExecCommand{CommandID: "a", Command: "sleep 10"})
 	executor.Execute(ExecCommand{CommandID: "b", Command: "echo done"})
@@ -190,7 +190,7 @@ func contains(s, substr string) bool {
 func TestExecutorStartError(t *testing.T) {
 	resultCh := make(chan ExecResult, 1)
 
-	executor := NewExecutor("/nonexistent/shell",
+	executor := NewExecutor("/nonexistent/shell", "",
 		func(cid, data string) {},
 		func(cid, data string) {},
 		func(result ExecResult) {
