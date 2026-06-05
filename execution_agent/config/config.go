@@ -17,7 +17,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	hostname, _ := os.Hostname()
 	return &Config{
-		ServerURL: "ws://localhost:28765",
+		ServerURL: "ws://localhost:26521/api/ws/agent",
 		AgentID:   hostname,
 		Secret:    "",
 		Shell:     "/bin/bash",

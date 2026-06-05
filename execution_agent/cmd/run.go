@@ -35,7 +35,7 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	runCmd.Flags().StringVar(&serverURL, "server", "ws://localhost:28765", "taskpps server WebSocket URL")
+	runCmd.Flags().StringVar(&serverURL, "server", "ws://localhost:26521/api/ws/agent", "taskpps server WebSocket URL")
 	runCmd.Flags().StringVar(&agentID, "agent-id", "", "Agent ID (默认为主机名)")
 	runCmd.Flags().StringVar(&secret, "secret", "", "预共享密钥")
 	runCmd.Flags().StringVar(&shell, "shell", "/bin/bash", "Shell 路径")
