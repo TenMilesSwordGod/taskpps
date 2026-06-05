@@ -93,6 +93,7 @@ class LocalExecutor(BaseExecutor):
         wrapped_command = f"trap '' HUP; {command}"
 
         self._log_direct(log_path, f"[INFO] Shell: {shell} -c <command>\n")
+        logger.info("LocalExecutor: starting subprocess, shell=%s, timeout=%s, cwd=%s", shell, timeout, cwd or os.getcwd())
         try:
             self._process = await asyncio.create_subprocess_exec(
                 shell,
@@ -104,9 +105,11 @@ class LocalExecutor(BaseExecutor):
                 cwd=cwd,
             )
             self._log_direct(log_path, f"[INFO] Process started, PID: {self._process.pid}\n")
+            logger.info("LocalExecutor: subprocess started PID=%d", self._process.pid)
         except Exception as e:
             error_msg = f"Failed to create subprocess: {e}"
             self._log_direct(log_path, f"[ERROR] {error_msg}\n")
+            logger.error("LocalExecutor: subprocess creation failed: %s", e)
             return ExecutorResult(exit_code=1, stderr=error_msg)
 
         output_lines: list[str] = []
@@ -142,11 +145,14 @@ class LocalExecutor(BaseExecutor):
                         raise asyncio.CancelledError()
                     await asyncio.sleep(0.1)
 
+            await self._process.wait()
             exit_code = self._process.returncode
+            logger.info("LocalExecutor: process finished PID=%d exit_code=%s", self._process.pid, exit_code)
 
         except asyncio.TimeoutError:
             self._log_direct(log_path,
                              f"[ERROR] Task exceeded timeout of {timeout}s\n")
+            logger.warning("LocalExecutor: timeout PID=%d after %ds", self._process.pid, timeout)
             self._kill_process_tree(self._process.pid, signal.SIGKILL)
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=5)
@@ -159,12 +165,14 @@ class LocalExecutor(BaseExecutor):
 
         except asyncio.CancelledError:
             self._log_direct(log_path, "[WARN] Task was cancelled\n")
+            logger.info("LocalExecutor: cancelled PID=%d returncode=%s", self._process.pid, self._process.returncode)
             if self._process.returncode is None:
                 self._kill_process_tree(self._process.pid, signal.SIGTERM)
                 try:
                     await asyncio.wait_for(self._process.wait(), timeout=5)
                 except Exception:
                     self._kill_process_tree(self._process.pid, signal.SIGKILL)
+                    logger.warning("LocalExecutor: SIGTERM failed, escalating to SIGKILL PID=%d", self._process.pid)
                     try:
                         await self._process.wait()
                     except Exception:
@@ -174,13 +182,40 @@ class LocalExecutor(BaseExecutor):
             self._log_direct(log_path, msg + "\n")
             return ExecutorResult(exit_code=-1, stdout="".join(output_lines))
 
+        except Exception as e:
+            self._log_direct(log_path, f"[ERROR] Unexpected error in executor: {e}\n")
+            logger.exception("LocalExecutor: unexpected error in executor PID=%s", self._process.pid if self._process else "N/A")
+            if self._process is not None and self._process.returncode is None:
+                try:
+                    self._kill_process_tree(self._process.pid, signal.SIGKILL)
+                    await asyncio.wait_for(self._process.wait(), timeout=5)
+                except Exception:
+                    pass
+            return ExecutorResult(exit_code=1, stderr=str(e))
+
         finally:
             await read_task
             self._process = None
 
+        if exit_code is None:
+            self._log_direct(log_path, "[WARN] Process exited with no return code, assuming signal death (exit_code=-1)\n")
+            logger.warning("LocalExecutor: exit_code is None, assuming signal death")
+            return ExecutorResult(exit_code=-1, stdout="".join(output_lines))
+
+        if exit_code < 0:
+            signal_num = -exit_code
+            signal_names = {
+                1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 4: "SIGILL",
+                6: "SIGABRT", 8: "SIGFPE", 9: "SIGKILL", 11: "SIGSEGV",
+                13: "SIGPIPE", 14: "SIGALRM", 15: "SIGTERM", 17: "SIGCHLD",
+            }
+            sig_name = signal_names.get(signal_num, f"signal {signal_num}")
+            self._log_direct(log_path, f"[ERROR] Process killed by {sig_name} (exit_code={exit_code})\n")
+            logger.warning("LocalExecutor: process killed by %s exit_code=%d", sig_name, exit_code)
+
         self._log_direct(log_path, f"[INFO] Exit code: {exit_code}\n")
         return ExecutorResult(
-            exit_code=exit_code if exit_code is not None else -1,
+            exit_code=exit_code,
             stdout="".join(output_lines),
         )
 
@@ -206,5 +241,8 @@ class LocalExecutor(BaseExecutor):
 
     async def cancel(self) -> None:
         self._cancelled = True
+        logger.info("LocalExecutor.cancel: cancelled=True, process=%s returncode=%s",
+                     self._process.pid if self._process else "None",
+                     self._process.returncode if self._process else "N/A")
         if self._process and self._process.returncode is None:
             self._kill_process_tree(self._process.pid, signal.SIGTERM)

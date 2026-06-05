@@ -112,11 +112,14 @@ class PipelineRunner:
 
     async def run(self) -> None:
         if not self.pipeline.subpipelines:
+            logger.info("PipelineRunner: no subpipelines, returning immediately")
             return
 
         _active_runs[self.run_id] = self
         self._start_time = datetime.now(timezone.utc)
         self._init_pipeline_log()
+
+        logger.info("PipelineRunner: starting pipeline '%s' run_id=%s", self.pipeline.name, self.run_id)
 
         try:
             event_bus = get_event_bus()
@@ -129,8 +132,19 @@ class PipelineRunner:
                 run_repo = RunRepository(session)
                 await run_repo.update_run_status(self.run_id, RunStatus.RUNNING, started_at=self._start_time)
 
-            sub_levels = self._build_subpipeline_levels()
-            self._write_pipeline_log("INFO", f"Execution levels: {len(sub_levels)}")
+            try:
+                sub_levels = self._build_subpipeline_levels()
+                logger.info("PipelineRunner: built %d execution levels", len(sub_levels))
+            except Exception as e:
+                error_msg = f"Failed to build subpipeline execution levels: {e}"
+                logger.exception(error_msg)
+                self._write_pipeline_log("ERROR", error_msg)
+                self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
+                self._unexpected_error = True
+                sub_levels = []
+
+            if sub_levels:
+                self._write_pipeline_log("INFO", f"Execution levels: {len(sub_levels)}")
 
             failed_subpipelines: set[str] = set()
             completed_subpipelines: set[str] = set()
@@ -216,6 +230,7 @@ class PipelineRunner:
                 else:
                     final_status = RunStatus.SUCCESS
                     self._write_pipeline_log("SUCCESS", f"Pipeline completed successfully after {duration}")
+                logger.info("PipelineRunner: finished run_id=%s status=%s duration=%s", self.run_id, final_status.value, duration)
 
                 await run_repo.update_run_status(self.run_id, final_status, finished_at=end_time)
 
@@ -271,8 +286,10 @@ class PipelineRunner:
     async def _execute_subpipeline(self, sub_name: str) -> dict:
         sub = self.pipeline.get_subpipeline_by_name(sub_name)
         if sub is None:
+            logger.error("PipelineRunner: subpipeline '%s' not found", sub_name)
             return {"success": False, "error": f"SubPipeline '{sub_name}' not found"}
 
+        logger.info("PipelineRunner: executing subpipeline '%s' strategy=%s tasks=%d", sub_name, sub.config.execution_strategy, len(sub.tasks))
         self.context.get_subpipeline_env(sub)
         self._write_pipeline_log("INFO", f"Starting SubPipeline '{sub_name}' with {len(sub.tasks)} tasks")
 
@@ -347,8 +364,15 @@ class PipelineRunner:
                     qualified_name = f"{sub.name}.{task.name}"
                     if isinstance(result, Exception) or (isinstance(result, ExecutorResult) and not result.success):
                         failed_tasks.add(qualified_name)
-                        exit_code = result.exit_code if isinstance(result, ExecutorResult) else -1
-                        self._write_pipeline_log("FAILED", f"Task '{qualified_name}' failed with exit code: {exit_code}")
+                        if isinstance(result, ExecutorResult):
+                            exit_code = result.exit_code
+                            if exit_code == -1:
+                                self._write_pipeline_log("FAILED", f"Task '{qualified_name}' failed with exit code: {exit_code} (process was killed by signal or did not start properly)")
+                            else:
+                                self._write_pipeline_log("FAILED", f"Task '{qualified_name}' failed with exit code: {exit_code}")
+                        else:
+                            exit_code = -1
+                            self._write_pipeline_log("FAILED", f"Task '{qualified_name}' failed with unexpected exception: {result}")
                     else:
                         completed_tasks.add(qualified_name)
                         exit_code = result.exit_code if isinstance(result, ExecutorResult) else 0
@@ -381,6 +405,7 @@ class PipelineRunner:
 
         when_env = {**self.pipeline.top_config.env, **task.env, **self.context.env}
         if not _evaluate_when(task.when, when_env):
+            logger.info("PipelineRunner: task '%s' skipped due to when condition", qualified_name)
             async with get_session_factory()() as session:
                 task_repo = TaskRunRepository(session)
                 if task_run_id:
@@ -416,8 +441,13 @@ class PipelineRunner:
             logger.debug(f"[DEBUG-EXEC] _execute_task '{qualified_name}': attempt={attempt}, executor={type(executor).__name__}, effective_cwd={effective_cwd}")
 
             try:
+                if effective_cwd and not os.path.isdir(effective_cwd):
+                    self._write_pipeline_log("WARN", f"Task '{qualified_name}' cwd does not exist: {effective_cwd}, using current dir")
+                    effective_cwd = os.getcwd()
+
                 if isinstance(executor, InvokeExecutor):
                     logger.debug(f"[DEBUG-EXEC] '{qualified_name}': InvokeExecutor path")
+                    logger.info("PipelineRunner: task '%s' dispatching to InvokeExecutor", qualified_name)
                     result = await executor.execute(
                         command="",
                         env=env,
@@ -429,6 +459,7 @@ class PipelineRunner:
                     )
                 elif isinstance(executor, (GitExecutor, NexusExecutor)):
                     logger.debug(f"[DEBUG-EXEC] '{qualified_name}': {type(executor).__name__} path")
+                    logger.info("PipelineRunner: task '%s' dispatching to %s", qualified_name, type(executor).__name__)
                     if isinstance(executor, GitExecutor) and (not executor.dest or executor.dest == "/workspace/repo"):
                         workspace_dir = get_workspaces_dir() / self.run_id / "repo"
                         workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -443,13 +474,18 @@ class PipelineRunner:
                         self.context.set_workspace(task.name, executor.dest)
                 elif task.task_type == "steps" and task.steps:
                     logger.debug(f"[DEBUG-EXEC] '{qualified_name}': steps path, {len(task.steps)} steps")
+                    logger.info("PipelineRunner: task '%s' dispatching to steps executor (%d steps)", qualified_name, len(task.steps))
                     result = await self._execute_steps(executor, task, env, log_path, timeout, effective_cwd)
                 elif task.commands:
                     logger.debug(f"[DEBUG-EXEC] '{qualified_name}': commands path, {len(task.commands)} commands")
+                    logger.info("PipelineRunner: task '%s' dispatching to commands executor (%d commands)", qualified_name, len(task.commands))
                     result = await self._execute_commands(executor, task, env, log_path, timeout, effective_cwd)
                 else:
                     cmd = task.command or ""
+                    if not cmd.strip():
+                        self._write_pipeline_log("WARN", f"Task '{qualified_name}' has an empty command")
                     logger.debug(f"[DEBUG-EXEC] '{qualified_name}': single command path, cmd={cmd!r:.200}")
+                    logger.info("PipelineRunner: task '%s' dispatching to single command executor", qualified_name)
                     result = await executor.execute(
                         command=cmd,
                         env=env,
@@ -461,6 +497,7 @@ class PipelineRunner:
                 error_msg = f"Unexpected error executing task '{qualified_name}': {e}"
                 logger.exception(error_msg)
                 self._write_pipeline_log("ERROR", error_msg)
+                self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
                 result = ExecutorResult(exit_code=1, stderr=str(e))
 
             self._running_executors.pop(task.name, None)
@@ -580,6 +617,7 @@ class PipelineRunner:
 
     async def cancel(self) -> None:
         self._cancelled = True
+        logger.info("PipelineRunner.cancel: run_id=%s", self.run_id)
         self._write_pipeline_log("WARN", "Pipeline cancellation requested")
         event_bus = get_event_bus()
         event_bus.emit(SIGNAL_RUN_CANCELLED, sender=self, run_id=self.run_id)

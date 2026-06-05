@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import logging
 import os
 import sys
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import Any
 from taskpps.config import get_tasks_dir
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
+
+logger = logging.getLogger(__name__)
 
 
 class InvokeExecutor(BaseExecutor):
@@ -40,6 +43,7 @@ class InvokeExecutor(BaseExecutor):
         module_name, func_name = parts
         args = invoke_args or []
         kwargs = invoke_kwargs or {}
+        logger.info("InvokeExecutor: module=%s func=%s args=%s kwargs=%s", module_name, func_name, args, kwargs)
 
         def _run_invoke():
             tasks_dir = str(get_tasks_dir())
@@ -50,17 +54,20 @@ class InvokeExecutor(BaseExecutor):
                 module = importlib.import_module(module_name)
                 func = getattr(module, func_name)
             except (ImportError, AttributeError) as e:
+                logger.error("InvokeExecutor: failed to import %s.%s: %s", module_name, func_name, e)
                 return ExecutorResult(exit_code=1, stderr=str(e))
 
             try:
                 merged_env = {**os.environ, **env}
 
                 if getattr(func, "_task", None) is not None:
+                    logger.info("InvokeExecutor: running invoke task %s.%s", module_name, func_name)
                     from invoke import Context
 
                     ctx = Context(env=merged_env)
                     result = func(ctx, *args, **kwargs)
                 else:
+                    logger.info("InvokeExecutor: running plain function %s.%s", module_name, func_name)
                     old_env = {}
                     for k, v in merged_env.items():
                         old_env[k] = os.environ.get(k)
@@ -80,6 +87,7 @@ class InvokeExecutor(BaseExecutor):
                 return ExecutorResult(exit_code=0, stdout=output)
             except Exception as e:
                 error_msg = str(e)
+                logger.error("InvokeExecutor: function %s.%s raised: %s", module_name, func_name, error_msg)
                 with open(log_path, "w") as f:
                     f.write(error_msg)
                 return ExecutorResult(exit_code=1, stderr=error_msg)
@@ -94,14 +102,17 @@ class InvokeExecutor(BaseExecutor):
             return result
         except asyncio.TimeoutError:
             msg = t("Invoke task exceeded timeout of {timeout}s", timeout=timeout)
+            logger.warning("InvokeExecutor: timeout after %ds for %s.%s", timeout, module_name, func_name)
             with open(log_path, "a") as f:
                 f.write(msg)
             return ExecutorResult(exit_code=-1, stderr=msg)
         except asyncio.CancelledError:
             msg = t("Invoke task was cancelled")
+            logger.info("InvokeExecutor: cancelled %s.%s", module_name, func_name)
             with open(log_path, "a") as f:
                 f.write(msg)
             return ExecutorResult(exit_code=-1, stderr=msg)
 
     async def cancel(self) -> None:
+        logger.info("InvokeExecutor.cancel: cancelled=True")
         self._cancelled = True

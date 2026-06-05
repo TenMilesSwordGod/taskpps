@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shlex
 from pathlib import Path
 
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
+
+logger = logging.getLogger(__name__)
 
 
 class GitExecutor(BaseExecutor):
@@ -43,6 +46,7 @@ class GitExecutor(BaseExecutor):
         def _run_git_clone():
             dest_path = Path(self.dest)
             if dest_path.exists() and list(dest_path.iterdir()):
+                logger.info("GitExecutor: dest exists, pulling latest on %s ref=%s", self.dest, self.ref)
                 with open(log_path, "a") as f:
                     f.write(
                         t(
@@ -52,6 +56,7 @@ class GitExecutor(BaseExecutor):
                     )
                 return _git_pull(self.dest, self.ref, log_path, merged_env, self.credential)
 
+            logger.info("GitExecutor: cloning %s branch=%s depth=%d", self.repo, self.ref, self.depth)
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
             clone_args = ["git", "clone", "--depth", str(self.depth)]
@@ -71,6 +76,7 @@ class GitExecutor(BaseExecutor):
             return result
         except asyncio.CancelledError:
             msg = t("Git task was cancelled")
+            logger.info("GitExecutor: task cancelled repo=%s", self.repo)
             with open(log_path, "a") as f:
                 f.write(msg)
             return ExecutorResult(exit_code=-1, stderr=msg)
@@ -92,12 +98,15 @@ def _apply_credential_to_url(repo_url: str, credential: str | None, env: dict[st
 
 
 def _git_pull(dest: str, ref: str, log_path: Path, env: dict[str, str], credential: str | None) -> ExecutorResult:
+    logger.info("GitExecutor._git_pull: dest=%s ref=%s", dest, ref)
     fetch_result = _run_subprocess(["git", "fetch", "origin", ref], log_path, env, cwd=dest)
     if not fetch_result.success:
+        logger.warning("GitExecutor._git_pull: fetch failed exit_code=%d", fetch_result.exit_code)
         return fetch_result
 
     checkout_result = _run_subprocess(["git", "checkout", ref], log_path, env, cwd=dest)
     if not checkout_result.success:
+        logger.warning("GitExecutor._git_pull: checkout failed exit_code=%d", checkout_result.exit_code)
         return checkout_result
 
     return _run_subprocess(["git", "pull", "origin", ref], log_path, env, cwd=dest)
@@ -105,6 +114,8 @@ def _git_pull(dest: str, ref: str, log_path: Path, env: dict[str, str], credenti
 
 def _run_subprocess(args: list, log_path: Path, env: dict[str, str], cwd: str | None = None) -> ExecutorResult:
     import subprocess
+
+    logger.info("GitExecutor._run_subprocess: %s cwd=%s", shlex.join(args), cwd or ".")
 
     with open(log_path, "a") as f:
         f.write(f"+ {shlex.join(args)}\n")
@@ -118,6 +129,7 @@ def _run_subprocess(args: list, log_path: Path, env: dict[str, str], cwd: str | 
             cwd=cwd,
             timeout=600,
         )
+        logger.info("GitExecutor._run_subprocess: completed exit_code=%d", proc.returncode)
         with open(log_path, "a") as f:
             if proc.stdout:
                 f.write(proc.stdout)
@@ -131,11 +143,13 @@ def _run_subprocess(args: list, log_path: Path, env: dict[str, str], cwd: str | 
         )
     except subprocess.TimeoutExpired as e:
         msg = f"Git operation timed out: {e}"
+        logger.warning("GitExecutor._run_subprocess: timeout after 600s")
         with open(log_path, "a") as f:
             f.write(msg)
         return ExecutorResult(exit_code=-1, stderr=msg)
     except FileNotFoundError:
         msg = t("git command not found. Please ensure git is installed.")
+        logger.error("GitExecutor._run_subprocess: git not found")
         with open(log_path, "a") as f:
             f.write(msg)
         return ExecutorResult(exit_code=1, stderr=msg)

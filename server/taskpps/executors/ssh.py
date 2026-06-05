@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import select
 import shlex
 from pathlib import Path
@@ -10,6 +11,8 @@ import paramiko
 from taskpps.config import get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
+
+logger = logging.getLogger(__name__)
 
 
 class SSHExecutor(BaseExecutor):
@@ -62,6 +65,7 @@ class SSHExecutor(BaseExecutor):
                     **connect_kwargs,
                 )
                 self._client = client
+                logger.info("SSHExecutor: connected to %s@%s:%d", self.username, self.host, self.port)
 
                 env_exports = " ".join(f"export {shlex.quote(k)}={shlex.quote(v)}" for k, v in env.items())
                 effective_cwd = cwd or "."
@@ -84,6 +88,7 @@ class SSHExecutor(BaseExecutor):
                 channel.settimeout(1.0)
                 channel.exec_command(full_command)
                 self._channel = channel
+                logger.info("SSHExecutor: channel opened on %s, cmd=%s...", self.host, full_command[:200])
 
                 combined_output = ""
                 current_line = ""
@@ -132,10 +137,12 @@ class SSHExecutor(BaseExecutor):
                         combined_output += current_line
 
                     exit_code = channel.recv_exit_status()
+                    logger.info("SSHExecutor: command finished on %s exit_code=%d", self.host, exit_code)
                     return exit_code, combined_output, combined_output
 
             except Exception as e:
                 error_msg = str(e)
+                logger.error("SSHExecutor: execution failed on %s: %s", self.host, error_msg)
                 with open(log_path, "a") as f:
                     f.write(error_msg)
                 return -1, error_msg, error_msg
@@ -157,6 +164,7 @@ class SSHExecutor(BaseExecutor):
             loop = asyncio.get_event_loop()
             exit_code, output, error = await loop.run_in_executor(None, _run_ssh)
         except asyncio.CancelledError:
+            logger.info("SSHExecutor: task cancelled on %s", self.host)
             self._channel = None
             if self._client:
                 try:
@@ -169,6 +177,7 @@ class SSHExecutor(BaseExecutor):
         return ExecutorResult(exit_code=exit_code, stdout=output, stderr=error)
 
     async def cancel(self) -> None:
+        logger.info("SSHExecutor.cancel: closing connection to %s", self.host)
         self._channel = None
         if self._client:
             try:

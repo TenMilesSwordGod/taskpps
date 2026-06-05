@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
+import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -389,6 +391,728 @@ echo "all_done"
         assert "line2" in content
 
 
+class TestLocalExecutorBoundary:
+    @pytest.mark.asyncio
+    async def test_empty_command(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "empty.log"
+        result = await executor.execute("", {}, log_path)
+        assert result.success
+        assert result.exit_code == 0
+
+    @pytest.mark.asyncio
+    async def test_whitespace_only_command(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "ws.log"
+        result = await executor.execute("   ", {}, log_path)
+        assert result.success
+        assert result.exit_code == 0
+
+    @pytest.mark.asyncio
+    async def test_command_not_found(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "nf.log"
+        result = await executor.execute("nonexistent_cmd_xyz", {}, log_path)
+        assert not result.success
+        assert result.exit_code == 127
+
+    @pytest.mark.asyncio
+    async def test_nonzero_exit_code(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "nz.log"
+        result = await executor.execute("exit 99", {}, log_path)
+        assert not result.success
+        assert result.exit_code == 99
+
+    @pytest.mark.asyncio
+    async def test_process_self_kill(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "selfkill.log"
+        result = await executor.execute("kill -9 $$", {}, log_path)
+        assert not result.success
+        assert result.exit_code < 0 or result.exit_code > 128
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_cwd(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "badcwd.log"
+        cwd = "/nonexistent/path/xyz"
+        result = await executor.execute("echo hello", {}, log_path, cwd=cwd)
+        assert not result.success
+
+    @pytest.mark.asyncio
+    async def test_command_with_special_characters(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "special.log"
+        result = await executor.execute("echo 'hello \"world\" $HOME'", {}, log_path)
+        assert result.success
+        assert "hello" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_command_with_pipes(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "pipe.log"
+        result = await executor.execute("echo hello | grep hello", {}, log_path)
+        assert result.success
+        assert "hello" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_rapid_exit_process(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "rapid.log"
+        result = await executor.execute("true", {}, log_path)
+        assert result.success
+        assert result.exit_code == 0
+
+    @pytest.mark.asyncio
+    async def test_rapid_fail_process(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "rapid_fail.log"
+        result = await executor.execute("false", {}, log_path)
+        assert not result.success
+        assert result.exit_code == 1
+
+    @pytest.mark.asyncio
+    async def test_large_output(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "large.log"
+        result = await executor.execute("for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo line_$i; done", {}, log_path)
+        assert result.success
+        assert "line_1" in result.stdout
+        assert "line_20" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_stderr_output(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "stderr.log"
+        result = await executor.execute("echo stderr_msg >&2; echo stdout_msg", {}, log_path)
+        assert result.success
+        assert "stderr_msg" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_command_with_variable_expansion(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "expand.log"
+        result = await executor.execute("echo $HOME", {}, log_path)
+        assert result.success
+        assert len(result.stdout.strip()) > 0
+
+    @pytest.mark.asyncio
+    async def test_command_with_env_override(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "envovr.log"
+        env = {"MY_CUSTOM_VAR": "custom_value", "PATH": os.environ.get("PATH", "/usr/bin")}
+        result = await executor.execute("echo $MY_CUSTOM_VAR", env, log_path)
+        assert result.success
+        assert "custom_value" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_multiline_command(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "multi.log"
+        cmd = "echo line1\necho line2\necho line3"
+        result = await executor.execute(cmd, {}, log_path)
+        assert result.success
+        assert "line1" in result.stdout
+        assert "line2" in result.stdout
+        assert "line3" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_command_with_cd_and_run(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "cd_run.log"
+        subdir = tmp_path / "sub"
+        subdir.mkdir()
+        result = await executor.execute(f"cd {subdir} && pwd", {}, log_path, cwd=str(tmp_path))
+        assert result.success
+        assert str(subdir) in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_command_exit_code_propagates_correctly(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "exit_prop.log"
+        for code in [0, 1, 2, 42, 100, 255]:
+            result = await executor.execute(f"exit {code}", {}, log_path)
+            assert result.exit_code == code
+            assert result.success == (code == 0)
+
+    @pytest.mark.asyncio
+    async def test_timeout_with_fast_command(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "fast_timeout.log"
+        result = await executor.execute("echo fast", {}, log_path, timeout=600)
+        assert result.success
+        assert result.exit_code == 0
+        assert "fast" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_multiple_rapid_commands(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "multi_rapid.log"
+        for i in range(10):
+            result = await executor.execute(f"echo cmd_{i}", {}, log_path)
+            assert result.success
+            assert f"cmd_{i}" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_interrupted_sleep(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "intsleep.log"
+
+        async def run():
+            return await executor.execute("sleep 30", {}, log_path, timeout=1)
+
+        task = asyncio.create_task(run())
+        await asyncio.sleep(1.5)
+        result = await task
+        assert not result.success
+        assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_shell_trap_hup_works(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "traphup.log"
+        cmd = "bash -c 'trap \"echo GOT_HUP\" HUP; kill -HUP $$; echo AFTER_HUP'"
+        result = await executor.execute(cmd, {}, log_path, timeout=10)
+        assert result.success
+        assert "AFTER_HUP" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_command_with_null_bytes_in_output(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "nullbyte.log"
+        result = await executor.execute("printf 'before\\x00after\\n'", {}, log_path, timeout=10)
+        assert result.success
+        assert "before" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_executor_version_in_log(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "ver.log"
+        await executor.execute("echo test", {}, log_path)
+        assert log_path.exists()
+        content = log_path.read_text()
+        assert "[VERSION] executor=v4-direct" in content
+        assert "[INFO] Command length:" in content
+        assert "[INFO] Shell:" in content
+
+
+class TestLocalExecutorExitCodeCoverage:
+    @pytest.mark.asyncio
+    async def test_timeout_produces_exit_code_neg1(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "timeout.log"
+        result = await executor.execute("sleep 10", {}, log_path, timeout=1)
+        assert not result.success
+        assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_cancel_produces_exit_code_neg1(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "canceled.log"
+
+        async def delayed():
+            return await executor.execute("sleep 30", {}, log_path, timeout=None)
+
+        task = asyncio.create_task(delayed())
+        await asyncio.sleep(0.3)
+        await executor.cancel()
+        result = await task
+        assert not result.success
+        assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_cancel_no_timeout_produces_exit_code_neg1(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "cancel_no_t.log"
+
+        async def delayed():
+            return await executor.execute("sleep 30", {}, log_path, timeout=None)
+
+        task = asyncio.create_task(delayed())
+        await asyncio.sleep(0.3)
+        await executor.cancel()
+        result = await task
+        assert not result.success
+        assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_process_killed_by_signal_yields_negative_exit(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "sigkill.log"
+        result = await executor.execute("kill -9 $$", {}, log_path, timeout=10)
+        assert not result.success
+        assert result.exit_code < 0 or result.exit_code > 128
+
+    @pytest.mark.asyncio
+    async def test_signal_death_logs_signal_name(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "sig_log.log"
+        await executor.execute("kill -9 $$", {}, log_path, timeout=10)
+        content = log_path.read_text()
+        assert "SIGKILL" in content or "exit_code=-9" in content
+
+    @pytest.mark.asyncio
+    async def test_subprocess_creation_failure(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "spawn_fail.log"
+        with patch("asyncio.create_subprocess_exec", side_effect=OSError("cannot spawn")):
+            result = await executor.execute("echo hi", {}, log_path)
+        assert not result.success
+        assert result.exit_code == 1
+        assert "cannot spawn" in result.stderr
+
+    @pytest.mark.asyncio
+    async def test_executor_cancel_kills_process_tree(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "kill_tree.log"
+
+        async def delayed():
+            return await executor.execute("sleep 30", {}, log_path, timeout=None)
+
+        task = asyncio.create_task(delayed())
+        await asyncio.sleep(0.3)
+
+        with patch.object(executor, "_kill_process_tree") as mock_kill:
+            await executor.cancel()
+            mock_kill.assert_called_once()
+
+        result = await task
+        assert not result.success
+
+    @pytest.mark.asyncio
+    async def test_cancel_with_already_finished_process(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "cancel_fin.log"
+        await executor.execute("echo done", {}, log_path, timeout=10)
+        await executor.cancel()
+        assert executor._process is None
+
+    @pytest.mark.asyncio
+    async def test_kill_process_tree_handles_permission_error(self, tmp_path):
+        executor = LocalExecutor()
+        from taskpps.executors.local import _collect_descendants
+
+        with patch("taskpps.executors.local._collect_descendants", return_value=[12345]):
+            with patch("os.kill", side_effect=PermissionError("denied")):
+                executor._kill_process_tree(99999, signal.SIGTERM)
+
+    @pytest.mark.asyncio
+    async def test_collect_descendants_handles_oserror(self, tmp_path):
+        from taskpps.executors.local import _collect_descendants
+        with patch("os.scandir", side_effect=OSError("proc unavailable")):
+            result = _collect_descendants(1)
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_collect_descendants_handles_bad_stat(self, tmp_path):
+        from taskpps.executors.local import _collect_descendants
+        with (
+            patch("os.scandir") as mock_scandir,
+            patch("builtins.open", side_effect=OSError("cannot read")),
+        ):
+            mock_entry = MagicMock()
+            mock_entry.name = "12345"
+            mock_entry.is_dir.return_value = False
+            mock_scandir.return_value.__enter__.return_value = [mock_entry]
+            result = _collect_descendants(1)
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_log_direct_handles_exception(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "log_err.log"
+        with patch("builtins.open", side_effect=OSError("disk full")):
+            executor._log_direct(log_path, "test message\n")
+
+    @pytest.mark.asyncio
+    async def test_read_and_write_handles_exception(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "rw_err.log"
+
+        async def delayed():
+            return await executor.execute("sleep 10", {}, log_path, timeout=30)
+
+        task = asyncio.create_task(delayed())
+        await asyncio.sleep(0.3)
+        await executor.cancel()
+        result = await task
+        assert not result.success
+
+    @pytest.mark.asyncio
+    async def test_timeout_wait_for_exception_caught(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "twait.log"
+
+        with (
+            patch.object(executor, "_kill_process_tree") as mock_kill,
+            patch.object(asyncio, "wait_for", side_effect=asyncio.TimeoutError()),
+        ):
+            result = await executor.execute("sleep 10", {}, log_path, timeout=1)
+            assert not result.success
+            assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_sigterm_then_sigkill(self, tmp_path):
+        executor = LocalExecutor()
+        log_path = tmp_path / "sigterm_kill.log"
+
+        async def delayed():
+            return await executor.execute("sleep 30", {}, log_path, timeout=None)
+
+        task = asyncio.create_task(delayed())
+        await asyncio.sleep(0.3)
+
+        with patch.object(executor, "_kill_process_tree") as mock_kill:
+            await executor.cancel()
+            assert mock_kill.call_count >= 1
+
+        result = await task
+        assert not result.success
+
+    @pytest.mark.asyncio
+    async def test_subprocess_fails_with_nonexistent_shell(self, tmp_path):
+        with patch("taskpps.executors.local.get_settings") as mock_settings:
+            mock_settings.return_value.executor.shell = "/nonexistent/shell"
+            executor = LocalExecutor()
+            log_path = tmp_path / "bad_shell.log"
+            result = await executor.execute("echo hi", {}, log_path)
+            assert not result.success
+            assert result.exit_code == 1
+
+
+class TestSSHExecutorExitCodeCoverage:
+    def test_ssh_transport_none_raises(self, tmp_path):
+        log_path = tmp_path / "ssh_trans.log"
+        executor = SSHExecutor(host="1.2.3.4", password="p")
+
+        mock_client = MagicMock()
+        mock_client.get_transport.return_value = None
+
+        with patch("taskpps.executors.ssh.paramiko") as mock_paramiko:
+            mock_paramiko.SSHClient.return_value = mock_client
+            result = asyncio.run(executor.execute("cmd", {}, log_path))
+            assert not result.success
+            assert result.exit_code == -1
+
+    def test_ssh_client_none_during_read(self, tmp_path):
+        log_path = tmp_path / "ssh_none.log"
+        executor = SSHExecutor(host="1.2.3.4", password="p")
+
+        mock_client = MagicMock()
+        mock_client.get_transport.return_value = MagicMock()
+        mock_channel = MagicMock()
+        mock_client.get_transport().open_session.return_value = mock_channel
+        mock_channel.recv.return_value = b"hello\n"
+        mock_channel.recv_ready.return_value = False
+        mock_channel.recv_stderr_ready.return_value = False
+        mock_channel.exit_status_ready.return_value = False
+        mock_channel.recv_exit_status.return_value = 0
+
+        with patch("taskpps.executors.ssh.paramiko") as mock_paramiko:
+            mock_paramiko.SSHClient.return_value = mock_client
+            with patch("taskpps.executors.ssh.select") as mock_select:
+                mock_select.select.return_value = ([mock_channel], [], [])
+
+                def set_client_none(*args, **kwargs):
+                    executor._client = None
+                    return ([mock_channel], [], [])
+
+                mock_select.select.side_effect = [
+                    ([mock_channel], [], []),
+                    set_client_none,
+                    ([mock_channel], [], []),
+                ]
+
+                result = asyncio.run(executor.execute("cmd", {}, log_path))
+                assert not result.success
+                assert result.exit_code == -1
+
+    def test_ssh_cancelled_error(self, tmp_path):
+        log_path = tmp_path / "ssh_cancel.log"
+        executor = SSHExecutor(host="1.2.3.4", password="p")
+
+        with patch("taskpps.executors.ssh.paramiko") as mock_paramiko:
+            mock_client = MagicMock()
+            mock_client.connect.side_effect = asyncio.CancelledError()
+            mock_paramiko.SSHClient.return_value = mock_client
+
+            result = asyncio.run(executor.execute("cmd", {}, log_path))
+            assert not result.success
+            assert result.exit_code == -1
+
+    def test_ssh_channel_close_exception(self, tmp_path):
+        log_path = tmp_path / "ssh_chclose.log"
+        executor = SSHExecutor(host="1.2.3.4", password="p")
+
+        mock_client = MagicMock()
+        mock_client.get_transport.return_value = MagicMock()
+        mock_channel = MagicMock()
+        mock_channel.close.side_effect = Exception("close failed")
+        mock_client.get_transport().open_session.return_value = mock_channel
+        mock_channel.recv.return_value = b""
+        mock_channel.recv_ready.return_value = False
+        mock_channel.recv_stderr_ready.return_value = False
+        mock_channel.exit_status_ready.return_value = True
+        mock_channel.recv_exit_status.return_value = 0
+
+        with patch("taskpps.executors.ssh.paramiko") as mock_paramiko:
+            mock_paramiko.SSHClient.return_value = mock_client
+            with patch("taskpps.executors.ssh.select") as mock_select:
+                mock_select.select.return_value = ([mock_channel], [], [])
+                result = asyncio.run(executor.execute("cmd", {}, log_path))
+                assert result.success
+                assert result.exit_code == 0
+
+    def test_ssh_client_close_exception(self, tmp_path):
+        log_path = tmp_path / "ssh_clclose.log"
+        executor = SSHExecutor(host="1.2.3.4", password="p")
+
+        mock_client = MagicMock()
+        mock_client.close.side_effect = Exception("client close failed")
+        mock_client.get_transport.return_value = MagicMock()
+        mock_channel = MagicMock()
+        mock_client.get_transport().open_session.return_value = mock_channel
+        mock_channel.recv.return_value = b""
+        mock_channel.recv_ready.return_value = False
+        mock_channel.recv_stderr_ready.return_value = False
+        mock_channel.exit_status_ready.return_value = True
+        mock_channel.recv_exit_status.return_value = 0
+
+        with patch("taskpps.executors.ssh.paramiko") as mock_paramiko:
+            mock_paramiko.SSHClient.return_value = mock_client
+            with patch("taskpps.executors.ssh.select") as mock_select:
+                mock_select.select.return_value = ([mock_channel], [], [])
+                result = asyncio.run(executor.execute("cmd", {}, log_path))
+                assert result.success
+                assert result.exit_code == 0
+
+    def test_ssh_cancel_handles_close_exception(self, tmp_path):
+        executor = SSHExecutor(host="1.2.3.4", password="p")
+        mock_client = MagicMock()
+        mock_client.close.side_effect = Exception("close error")
+        executor._client = mock_client
+        executor._channel = MagicMock()
+        asyncio.run(executor.cancel())
+        assert executor._client is None
+
+    def test_ssh_execute_with_stderr_reading(self, tmp_path):
+        log_path = tmp_path / "ssh_stderr.log"
+        executor = SSHExecutor(host="1.2.3.4", password="p")
+
+        mock_client = MagicMock()
+        mock_client.get_transport.return_value = MagicMock()
+        mock_channel = MagicMock()
+        mock_client.get_transport().open_session.return_value = mock_channel
+
+        recv_results = [b"output1\n", b"", b""]
+        recv_call_count = [0]
+
+        def recv_side_effect(*args):
+            idx = recv_call_count[0]
+            recv_call_count[0] += 1
+            return recv_results[idx] if idx < len(recv_results) else b""
+
+        mock_channel.recv.side_effect = recv_side_effect
+        mock_channel.recv_ready.side_effect = [True, False, False]
+        mock_channel.recv_stderr_ready.side_effect = [True, False]
+        mock_channel.exit_status_ready.side_effect = [False, True]
+        mock_channel.recv_exit_status.return_value = 0
+
+        mock_channel.recv_stderr.return_value = b"stderr_output\n"
+
+        with patch("taskpps.executors.ssh.paramiko") as mock_paramiko:
+            mock_paramiko.SSHClient.return_value = mock_client
+            with patch("taskpps.executors.ssh.select") as mock_select:
+                mock_select.select.return_value = ([mock_channel], [], [])
+                result = asyncio.run(executor.execute("cmd", {}, log_path))
+                assert result.success
+                assert "stderr_output" in result.stdout
+
+
+class TestGitExecutorExitCodeCoverage:
+    @pytest.mark.asyncio
+    async def test_git_cancelled_error(self, tmp_path):
+        log_path = tmp_path / "git_cancel.log"
+        executor = GitExecutor(repo="https://github.com/example/repo.git")
+
+        mock_loop = MagicMock()
+        mock_loop.run_in_executor.side_effect = asyncio.CancelledError()
+
+        with patch("asyncio.get_event_loop", return_value=mock_loop):
+            result = await executor.execute(command="", env={}, log_path=log_path)
+            assert not result.success
+            assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_git_timeout_expired(self, tmp_path):
+        from taskpps.executors.git import _run_subprocess
+        log_path = tmp_path / "git_timeout.log"
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=["git"], timeout=1)):
+            result = _run_subprocess(["git", "clone", "url"], log_path, dict(os.environ))
+            assert not result.success
+            assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_git_command_not_found(self, tmp_path):
+        from taskpps.executors.git import _run_subprocess
+        log_path = tmp_path / "git_nf.log"
+        with patch("subprocess.run", side_effect=FileNotFoundError("git not found")):
+            result = _run_subprocess(["git", "clone", "url"], log_path, dict(os.environ))
+            assert not result.success
+            assert result.exit_code == 1
+
+    @pytest.mark.asyncio
+    async def test_git_pull_fetch_failure(self, tmp_path):
+        from taskpps.executors.git import _git_pull
+        log_path = tmp_path / "git_fetch_fail.log"
+        with patch("taskpps.executors.git._run_subprocess") as mock_run:
+            mock_run.return_value = ExecutorResult(exit_code=1, stderr="fetch failed")
+            result = _git_pull("/tmp/repo", "main", log_path, dict(os.environ), None)
+            assert not result.success
+            assert result.exit_code == 1
+            assert mock_run.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_git_pull_checkout_failure(self, tmp_path):
+        from taskpps.executors.git import _git_pull
+        log_path = tmp_path / "git_co_fail.log"
+        with patch("taskpps.executors.git._run_subprocess") as mock_run:
+            mock_run.side_effect = [
+                ExecutorResult(exit_code=0, stdout="fetched"),
+                ExecutorResult(exit_code=1, stderr="checkout failed"),
+            ]
+            result = _git_pull("/tmp/repo", "main", log_path, dict(os.environ), None)
+            assert not result.success
+            assert result.exit_code == 1
+            assert mock_run.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_git_stderr_written_to_log(self, tmp_path):
+        from taskpps.executors.git import _run_subprocess
+        log_path = tmp_path / "git_stderr.log"
+        result = _run_subprocess(["echo", "hello"], log_path, dict(os.environ))
+        assert result.success
+        log_content = log_path.read_text()
+        assert "hello" in log_content
+
+    @pytest.mark.asyncio
+    async def test_git_execute_cancel(self, tmp_path):
+        executor = GitExecutor(repo="https://github.com/example/repo.git")
+        await executor.cancel()
+        assert executor._cancelled is True
+
+
+class TestInvokeExecutorExitCodeCoverage:
+    @pytest.mark.asyncio
+    async def test_invoke_cancelled_error(self, tmp_path):
+        executor = InvokeExecutor()
+        log_path = tmp_path / "invoke_cancel.log"
+
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        task_file = tasks_dir / "slow_mod.py"
+        task_file.write_text("""
+def slow_func():
+    import time
+    time.sleep(30)
+""")
+
+        mock_loop = MagicMock()
+        mock_loop.run_in_executor.side_effect = asyncio.CancelledError()
+
+        with (
+            patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir),
+            patch("asyncio.get_event_loop", return_value=mock_loop),
+        ):
+            result = await executor.execute(
+                "",
+                {},
+                log_path,
+                invoke_task="slow_mod.slow_func",
+            )
+            assert not result.success
+            assert result.exit_code == -1
+
+    @pytest.mark.asyncio
+    async def test_invoke_function_runtime_error(self, tmp_path):
+        executor = InvokeExecutor()
+        log_path = tmp_path / "invoke_runtime.log"
+
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        task_file = tasks_dir / "error_mod.py"
+        task_file.write_text("""
+def failing_func():
+    raise RuntimeError("intentional test error")
+""")
+
+        with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):
+            result = await executor.execute(
+                "",
+                {},
+                log_path,
+                invoke_task="error_mod.failing_func",
+            )
+            assert not result.success
+            assert result.exit_code == 1
+            assert "intentional test error" in result.stderr
+
+    @pytest.mark.asyncio
+    async def test_invoke_function_with_none_return(self, tmp_path):
+        executor = InvokeExecutor()
+        log_path = tmp_path / "invoke_none.log"
+
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        task_file = tasks_dir / "none_mod.py"
+        task_file.write_text("""
+def none_func():
+    return None
+""")
+
+        with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):
+            result = await executor.execute(
+                "",
+                {},
+                log_path,
+                invoke_task="none_mod.none_func",
+            )
+            assert result.success
+            assert result.exit_code == 0
+
+    @pytest.mark.asyncio
+    async def test_invoke_function_with_env_cleanup(self, tmp_path):
+        executor = InvokeExecutor()
+        log_path = tmp_path / "invoke_env.log"
+
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        task_file = tasks_dir / "env_mod.py"
+        task_file.write_text("""
+def env_func():
+    import os
+    return os.environ.get('INVOKE_TEST_VAR', 'not_set')
+""")
+
+        with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):
+            result = await executor.execute(
+                "",
+                {"INVOKE_TEST_VAR": "test_value"},
+                log_path,
+                invoke_task="env_mod.env_func",
+            )
+            assert result.success
+            assert "test_value" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_invoke_cancel_method(self, tmp_path):
+        executor = InvokeExecutor()
+        with patch.object(executor, "_cancelled", True):
+            await executor.cancel()
+            assert executor._cancelled is True
+
+
 class TestLocalExecutorProductionScenario:
     @pytest.mark.asyncio
     async def test_auto_robot_daemon_with_env_and_cwd(self, tmp_path):
@@ -494,6 +1218,105 @@ class TestLocalExecutorProductionScenario:
         result = await executor.execute(cmd, {}, log_path, timeout=10, cwd=str(tmp_path))
         assert result.success
         assert "done" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_auto_robot_long_running_with_daemon(self, tmp_path):
+        script = tmp_path / "long_run.py"
+        script.write_text(
+            "import subprocess, sys, time\n"
+            "print('start to run auto-robot')\n"
+            "print('Set project to: ebox')\n"
+            "p = subprocess.Popen(['sleep', '120'])\n"
+            "print(f'device_monitor PID: {p.pid}')\n"
+            "print('device_monitor successfully')\n"
+            "sys.stdout.flush()\n"
+            "# ----- simulate 60s real test work -----\n"
+            "for i in range(1, 6):\n"
+            "    time.sleep(1)\n"
+            "    print(f'test step {i}/5 passed')\n"
+            "    sys.stdout.flush()\n"
+            "print('All tests passed')\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "long_run.log"
+        env = {"TASKPPS_RUN_ID": "test_run", "TASKPPS_TASK_ID": "aosp"}
+        result = await executor.execute(
+            f"python3 {script}", env, log_path, timeout=30
+        )
+        assert result.success
+        assert result.exit_code == 0
+        assert "test step 1/5 passed" in result.stdout
+        assert "test step 5/5 passed" in result.stdout
+        assert "All tests passed" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_auto_robot_long_running_with_multiple_daemons(self, tmp_path):
+        script = tmp_path / "multi_long.py"
+        script.write_text(
+            "import subprocess, sys, time\n"
+            "print('start to run auto-robot')\n"
+            "# ---- spawn 2 device_monitor daemons ----\n"
+            "m1 = subprocess.Popen(['sleep', '120'])\n"
+            "print(f'device_monitor unigine PID: {m1.pid}')\n"
+            "m2 = subprocess.Popen(['sleep', '120'])\n"
+            "print(f'device_monitor llm PID: {m2.pid}')\n"
+            "print('device_monitor successfully')\n"
+            "sys.stdout.flush()\n"
+            "# ---- run AOSP test suite ----\n"
+            "for i in range(1, 4):\n"
+            "    time.sleep(1)\n"
+            "    print(f'AOSP test {i}/3: PASS')\n"
+            "    sys.stdout.flush()\n"
+            "print('AOSP test suite complete')\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "multi_long.log"
+        env = {"TASKPPS_RUN_ID": "test_run", "TASKPPS_TASK_ID": "aosp"}
+        result = await executor.execute(
+            f"python3 {script}", env, log_path, timeout=30
+        )
+        assert result.success
+        assert result.exit_code == 0
+        assert "device_monitor unigine PID:" in result.stdout
+        assert "device_monitor llm PID:" in result.stdout
+        assert "device_monitor successfully" in result.stdout
+        assert "AOSP test 1/3: PASS" in result.stdout
+        assert "AOSP test 3/3: PASS" in result.stdout
+        assert "AOSP test suite complete" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_auto_robot_realistic_output_matches_production(self, tmp_path):
+        script = tmp_path / "real_prod.py"
+        script.write_text(
+            "import subprocess, sys, time\n"
+            "print('start to run auto-robot')\n"
+            "print('Set project to: ebox')\n"
+            "print(f'arguments: {sys.argv[1:]}')\n"
+            "m = subprocess.Popen(['sleep', '120'])\n"
+            "print(f'[2026-06-04 21:47:52.882] device_monitor PID: {m.pid}')\n"
+            "print('device_monitor successfully')\n"
+            "sys.stdout.flush()\n"
+            "# simulate real test execution\n"
+            "for i in range(3):\n"
+            "    time.sleep(1)\n"
+            "    print(f'[2026-06-04 21:47:{53+i:02d}.000] test_case_{i}: PASS')\n"
+            "    sys.stdout.flush()\n"
+            "print('[2026-06-04 21:47:56.000] All 3 tests passed')\n"
+        )
+        executor = LocalExecutor()
+        log_path = tmp_path / "real.log"
+        env = {"TASKPPS_RUN_ID": "bddf5a89a207", "TASKPPS_TASK_ID": "aosp_task"}
+        cmd = (
+            f"python3 {script} -K off -d /home/auto/report/20260604_214751 "
+            "--loglevel DEBUG --listener RetryFailed:3 -A suite/aosp.txt ebox"
+        )
+        result = await executor.execute(cmd, env, log_path, timeout=30, cwd=str(tmp_path))
+        assert result.success
+        assert result.exit_code == 0
+        assert "start to run auto-robot" in result.stdout
+        assert "Set project to: ebox" in result.stdout
+        assert "device_monitor successfully" in result.stdout
+        assert "All 3 tests passed" in result.stdout
 
     @pytest.mark.asyncio
     async def test_debug_logs_present_for_production_scenario(self, tmp_path):
