@@ -1,3 +1,7 @@
+import asyncio
+import time
+import uuid
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -7,6 +11,8 @@ from taskpps.schemas.agent import (
     AgentCheckResult,
     AgentDeployRequest,
     AgentDeployResult,
+    AgentExecRequest,
+    AgentExecResult,
     AgentStatus,
 )
 from taskpps.services.agent_manager import AgentManager
@@ -90,6 +96,73 @@ async def agent_list():
             )
         )
     return result
+
+
+@router.post("/{agent_id}/exec")
+async def agent_exec(agent_id: str, body: AgentExecRequest):
+    manager = AgentManager.instance()
+    conn = manager.get_connection(agent_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not connected")
+
+    command_id = str(uuid.uuid4())
+    start_time = time.monotonic()
+
+    output_chunks: list[str] = []
+
+    def on_output(data: str) -> None:
+        output_chunks.append(data)
+
+    conn.register_output_callback(command_id, on_output)
+    fut = manager.create_pending(agent_id, command_id)
+
+    try:
+        await manager.send_command(
+            agent_id,
+            command_id,
+            body.command,
+            body.env or {},
+            body.cwd or "",
+            body.timeout,
+        )
+    except Exception as e:
+        conn.cleanup_command(command_id)
+        raise HTTPException(status_code=500, detail=f"Failed to send command: {e}") from e
+
+    try:
+        result = await asyncio.wait_for(fut, timeout=body.timeout + 10)
+    except asyncio.TimeoutError:
+        await manager.cancel_command(agent_id, command_id)
+        return AgentExecResult(
+            agent_id=agent_id,
+            exit_code=-1,
+            stdout="".join(output_chunks),
+            error="execution timeout exceeded",
+            duration_ms=int((time.monotonic() - start_time) * 1000),
+        )
+    except asyncio.CancelledError:
+        await manager.cancel_command(agent_id, command_id)
+        raise
+
+    exit_code = result.get("exit_code", -1)
+    signal_name = result.get("signal_name", "")
+    error = result.get("error", "")
+    duration_ms = int((time.monotonic() - start_time) * 1000)
+
+    error_msg = ""
+    if signal_name:
+        error_msg = f"killed by signal {signal_name}"
+    elif error:
+        error_msg = error
+
+    return AgentExecResult(
+        agent_id=agent_id,
+        exit_code=exit_code,
+        stdout="".join(output_chunks),
+        stderr=error_msg,
+        duration_ms=duration_ms,
+        error=error_msg or None,
+    )
 
 
 @router.post("/deploy", response_model=AgentDeployResult)

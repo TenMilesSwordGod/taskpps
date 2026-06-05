@@ -46,6 +46,22 @@ class AgentDeployRequest(BaseModel):
     timeout: int = 30
 
 
+class AgentExecRequest(BaseModel):
+    command: str
+    timeout: int = 60
+    cwd: str = ""
+    env: dict[str, str] | None = None
+
+
+class AgentExecResult(BaseModel):
+    agent_id: str
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
+    duration_ms: int = 0
+    error: str | None = None
+
+
 class AgentDeployResult(BaseModel):
     success: bool
     agent_id: str

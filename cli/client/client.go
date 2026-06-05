@@ -460,3 +460,19 @@ func (c *Client) AgentDeploy(agentID string, timeout int) (*models.AgentDeployRe
 	}
 	return &result, nil
 }
+
+func (c *Client) AgentExec(agentID string, body *models.AgentExecRequest) (*models.AgentExecResult, error) {
+	resp, err := c.http.Post(c.baseURL+"/agents/"+agentID+"/exec", req.BodyJSON(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to exec on agent: %w", err)
+	}
+	if resp.Response().StatusCode != 200 {
+		respBody, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, respBody)
+	}
+	var result models.AgentExecResult
+	if err := resp.ToJSON(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}

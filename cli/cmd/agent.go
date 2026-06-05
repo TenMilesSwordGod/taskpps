@@ -14,8 +14,10 @@ import (
 )
 
 var (
-	agentTimeout int
-	agentFile    string
+	agentTimeout     int
+	agentFile        string
+	agentExecTimeout int
+	agentExecCwd     string
 )
 
 var agentCmd = &cobra.Command{
@@ -251,11 +253,15 @@ func init() {
 
 	agentDeployCmd.Flags().IntVarP(&agentDeployTimeout, "timeout", "t", 30, "deployment timeout in seconds")
 
+	agentExecCmd.Flags().IntVarP(&agentExecTimeout, "timeout", "t", 60, "command execution timeout in seconds")
+	agentExecCmd.Flags().StringVarP(&agentExecCwd, "cwd", "w", "", "working directory on agent")
+
 	agentCmd.AddCommand(agentTryConnectCmd)
 	agentCmd.AddCommand(agentCheckCmd)
 	agentCmd.AddCommand(agentListCmd)
 	agentCmd.AddCommand(agentStatusCmd)
 	agentCmd.AddCommand(agentDeployCmd)
+	agentCmd.AddCommand(agentExecCmd)
 	RootCmd.AddCommand(agentCmd)
 }
 
@@ -327,6 +333,57 @@ var agentStatusCmd = &cobra.Command{
 var (
 	agentDeployTimeout int
 )
+
+var agentExecCmd = &cobra.Command{
+	Use:   "exec <agent-id> -- <command> [args...]",
+	Short: "在指定 agent 上执行 shell 命令",
+	Long: `通过 WebSocket 在指定 agent 上执行 shell 命令并返回 stdout/stderr 与退出码。
+
+使用 -- 分隔命令参数以避免与 ppsctl 标志冲突。
+
+示例:
+  ppsctl agent exec auto-01 -- echo hello
+  ppsctl agent exec auto-01 -t 30 -- ls -la /tmp
+  ppsctl agent exec auto-01 -w /opt -- ./deploy.sh`,
+	Args: cobra.MinimumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		agentID := args[0]
+		command := strings.Join(args[1:], " ")
+
+		result, err := apiClient.AgentExec(agentID, &models.AgentExecRequest{
+			Command: command,
+			Timeout: agentExecTimeout,
+			Cwd:     agentExecCwd,
+		})
+		if err != nil {
+			return err
+		}
+
+		if result.Stdout != "" {
+			fmt.Print(result.Stdout)
+		}
+		if result.Stderr != "" {
+			color.Red("%s", result.Stderr)
+		}
+
+		fmt.Printf("\n───── exec result ─────\n")
+		fmt.Printf("  Agent:       %s\n", result.AgentID)
+		if result.ExitCode == 0 {
+			color.Green("  Exit Code:   %d", result.ExitCode)
+		} else {
+			color.Red("  Exit Code:   %d", result.ExitCode)
+		}
+		fmt.Printf("  Duration:    %dms\n", result.DurationMs)
+		if result.Error != "" {
+			color.Red("  Error:       %s", result.Error)
+		}
+
+		if result.ExitCode != 0 {
+			os.Exit(result.ExitCode)
+		}
+		return nil
+	},
+}
 
 var agentDeployCmd = &cobra.Command{
 	Use:   "deploy <agent-id>",

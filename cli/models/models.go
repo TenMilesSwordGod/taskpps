@@ -124,6 +124,22 @@ type AgentStatus struct {
 	RunningCommands int     `json:"running_commands"`
 }
 
+type AgentExecRequest struct {
+	Command string            `json:"command"`
+	Timeout int               `json:"timeout"`
+	Cwd     string            `json:"cwd"`
+	Env     map[string]string `json:"env,omitempty"`
+}
+
+type AgentExecResult struct {
+	AgentID    string `json:"agent_id"`
+	ExitCode   int    `json:"exit_code"`
+	Stdout     string `json:"stdout"`
+	Stderr     string `json:"stderr"`
+	DurationMs int    `json:"duration_ms"`
+	Error      string `json:"error,omitempty"`
+}
+
 type AgentDeployRequest struct {
 	AgentID string `json:"agent_id"`
 	Timeout int    `json:"timeout"`
