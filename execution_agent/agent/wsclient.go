@@ -14,6 +14,8 @@ type WsClient struct {
 	url       string
 	agentID   string
 	secret    string
+	hostname  string
+	agentPID  int
 	conn      *websocket.Conn
 	mu        sync.Mutex
 	connected bool
@@ -23,11 +25,13 @@ type WsClient struct {
 	reconnect bool
 }
 
-func NewWsClient(url, agentID, secret string) *WsClient {
+func NewWsClient(url, agentID, secret, hostname string, agentPID int) *WsClient {
 	return &WsClient{
 		url:       url,
 		agentID:   agentID,
 		secret:    secret,
+		hostname:  hostname,
+		agentPID:  agentPID,
 		done:      make(chan struct{}),
 		reconnect: true,
 	}
@@ -66,9 +70,11 @@ func (c *WsClient) sendHandshake() error {
 	msg := Message{
 		Type: MsgTypeHandshakeRequest,
 		Data: HandshakeRequest{
-			AgentID: c.agentID,
-			Secret:  c.secret,
-			Version: ProtocolVersion,
+			AgentID:  c.agentID,
+			Secret:   c.secret,
+			Version:  ProtocolVersion,
+			Hostname: c.hostname,
+			AgentPID: c.agentPID,
 		},
 	}
 	return c.writeJSON(msg)
@@ -109,10 +115,10 @@ func (c *WsClient) heartbeatLoop() {
 				c.mu.Unlock()
 				continue
 			}
-			err := c.conn.WriteMessage(websocket.PingMessage, nil)
+			err := c.conn.WriteJSON(Message{Type: MsgTypeHeartbeatResponse, Data: map[string]string{}})
 			c.mu.Unlock()
 			if err != nil {
-				logger.Warn("Heartbeat ping failed: %v", err)
+				logger.Warn("Heartbeat send failed: %v", err)
 				c.handleDisconnect()
 			}
 		}

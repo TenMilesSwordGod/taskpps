@@ -120,6 +120,7 @@ type AgentStatus struct {
 	AgentVersion    string  `json:"agent_version"`
 	AgentPID        int     `json:"agent_pid"`
 	ConnectedAt     float64 `json:"connected_at"`
+	LastHeartbeat   float64 `json:"last_heartbeat"`
 	RunningCommands int     `json:"running_commands"`
 }
 

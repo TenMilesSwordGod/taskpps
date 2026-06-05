@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
@@ -212,6 +213,37 @@ func truncateType(t string, maxLen int) string {
 	return t + strings.Repeat(" ", maxLen-len(t))
 }
 
+func formatRelativeTime(timestamp float64) string {
+	now := time.Now()
+	t := time.Unix(int64(timestamp), int64((timestamp-float64(int64(timestamp)))*1e9))
+	diff := now.Sub(t)
+
+	if diff < 0 {
+		return "刚刚"
+	}
+
+	seconds := int(diff.Seconds())
+	if seconds < 5 {
+		return "刚刚"
+	}
+	if seconds < 60 {
+		return fmt.Sprintf("%d秒前", seconds)
+	}
+
+	minutes := int(diff.Minutes())
+	if minutes < 60 {
+		return fmt.Sprintf("%d分钟前", minutes)
+	}
+
+	hours := int(diff.Hours())
+	if hours < 24 {
+		return fmt.Sprintf("%d小时前", hours)
+	}
+
+	days := int(diff.Hours() / 24)
+	return fmt.Sprintf("%d天前", days)
+}
+
 func init() {
 	agentTryConnectCmd.Flags().IntVarP(&agentTimeout, "timeout", "t", 5, "connection timeout in seconds")
 	agentCheckCmd.Flags().IntVarP(&agentTimeout, "timeout", "t", 5, "connection timeout in seconds")
@@ -285,6 +317,9 @@ var agentStatusCmd = &cobra.Command{
 		fmt.Printf("  Agent PID:      %d\n", result.AgentPID)
 		fmt.Printf("  Agent Version:  %s\n", result.AgentVersion)
 		fmt.Printf("  Running Tasks:  %d\n", result.RunningCommands)
+		if result.LastHeartbeat > 0 {
+			fmt.Printf("  Last Seen:      %s\n", formatRelativeTime(result.LastHeartbeat))
+		}
 		return nil
 	},
 }

@@ -18,11 +18,9 @@ async def agent_websocket(ws: WebSocket):
     await ws.accept()
     manager = AgentManager.instance()
     agent_id = None
+    conn = None
     try:
-        agent_id = await manager.handle_connection(ws)
-        conn = manager.get_connection(agent_id)
-        if conn is None:
-            return
+        agent_id, conn = await manager.handle_connection(ws)
 
         while True:
             try:
@@ -54,4 +52,4 @@ async def agent_websocket(ws: WebSocket):
         logger.exception("Agent WebSocket error")
     finally:
         if agent_id:
-            await manager.disconnect(agent_id)
+            await manager.disconnect(agent_id, conn)

@@ -20,9 +20,11 @@ type Message struct {
 }
 
 type HandshakeRequest struct {
-	AgentID string `json:"agent_id"`
-	Secret  string `json:"secret"`
-	Version string `json:"version"`
+	AgentID  string `json:"agent_id"`
+	Secret   string `json:"secret"`
+	Version  string `json:"version"`
+	Hostname string `json:"hostname"`
+	AgentPID int    `json:"agent_pid"`
 }
 
 type HandshakeResponse struct {

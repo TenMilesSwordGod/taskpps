@@ -67,6 +67,7 @@ async def agent_status(agent_id: str):
         agent_version=conn.agent_version,
         agent_pid=conn.agent_pid,
         connected_at=conn.connected_at,
+        last_heartbeat=conn.last_heartbeat,
         running_commands=pending_count,
     )
 
@@ -76,15 +77,18 @@ async def agent_list():
     manager = AgentManager.instance()
     result = []
     for agent_id, conn in manager.connections.items():
-        result.append(AgentStatus(
-            agent_id=agent_id,
-            connected=True,
-            hostname=conn.hostname,
-            agent_version=conn.agent_version,
-            agent_pid=conn.agent_pid,
-            connected_at=conn.connected_at,
-            running_commands=len(conn._pending_commands),
-        ))
+        result.append(
+            AgentStatus(
+                agent_id=agent_id,
+                connected=True,
+                hostname=conn.hostname,
+                agent_version=conn.agent_version,
+                agent_pid=conn.agent_pid,
+                connected_at=conn.connected_at,
+                last_heartbeat=conn.last_heartbeat,
+                running_commands=len(conn._pending_commands),
+            )
+        )
     return result
 
 
@@ -92,6 +96,7 @@ async def agent_list():
 async def deploy_agent(body: AgentDeployRequest):
     try:
         from taskpps.services.agent_bootstrap import AgentBootstrap
+
         bootstrap = AgentBootstrap()
         await bootstrap.bootstrap(body.agent_id)
         return AgentDeployResult(success=True, agent_id=body.agent_id)

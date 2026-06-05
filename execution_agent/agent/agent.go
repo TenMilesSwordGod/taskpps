@@ -28,7 +28,8 @@ func NewAgent(config *AgentConfig) *Agent {
 		stopCh: make(chan struct{}),
 	}
 
-	a.wsClient = NewWsClient(config.ServerURL, config.AgentID, config.Secret)
+	hostname, _ := os.Hostname()
+	a.wsClient = NewWsClient(config.ServerURL, config.AgentID, config.Secret, hostname, os.Getpid())
 	a.executor = NewExecutor(
 		config.Shell,
 		a.onStdout,

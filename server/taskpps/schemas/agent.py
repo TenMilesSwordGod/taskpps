@@ -37,6 +37,7 @@ class AgentStatus(BaseModel):
     agent_version: str = ""
     agent_pid: int = 0
     connected_at: float = 0
+    last_heartbeat: float = 0
     running_commands: int = 0
 
 

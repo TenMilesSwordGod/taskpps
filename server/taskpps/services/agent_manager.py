@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 HEARTBEAT_INTERVAL = 15
 HEARTBEAT_TIMEOUT = 45
 HANDSHAKE_TIMEOUT = 10
+DISPLAY_GRACE_PERIOD = 300
 
 
 class AgentConnection:
@@ -33,13 +35,16 @@ class AgentConnection:
             await self.ws.send_json({"type": msg_type, "data": data})
 
     async def send_command(self, command_id: str, command: str, env: dict[str, str], cwd: str, timeout: int) -> None:
-        await self.send_msg("exec_command", {
-            "command_id": command_id,
-            "command": command,
-            "env": env,
-            "cwd": cwd,
-            "timeout": timeout,
-        })
+        await self.send_msg(
+            "exec_command",
+            {
+                "command_id": command_id,
+                "command": command,
+                "env": env,
+                "cwd": cwd,
+                "timeout": timeout,
+            },
+        )
 
     async def send_cancel(self, command_id: str) -> None:
         await self.send_msg("cancel_command", {"command_id": command_id})
@@ -92,9 +97,11 @@ class AgentManager:
         if conn is None:
             return False
         age = asyncio.get_event_loop().time() - conn.last_heartbeat
-        return age < HEARTBEAT_TIMEOUT
+        return age < DISPLAY_GRACE_PERIOD
 
-    async def handle_connection(self, ws: WebSocket, expected_agent_id: str | None = None) -> str:
+    async def handle_connection(
+        self, ws: WebSocket, expected_agent_id: str | None = None
+    ) -> tuple[str, AgentConnection]:
         try:
             data = await asyncio.wait_for(ws.receive_json(), timeout=HANDSHAKE_TIMEOUT)
         except asyncio.TimeoutError:
@@ -119,15 +126,17 @@ class AgentManager:
         hostname_info = payload.get("hostname", "") or ""
         agent_pid = payload.get("agent_pid", 0) or 0
 
-        await ws.send_json({
-            "type": "handshake_response",
-            "data": {
-                "agent_id": agent_id,
-                "hostname": hostname_info,
-                "agent_version": version,
-                "agent_pid": agent_pid,
-            },
-        })
+        await ws.send_json(
+            {
+                "type": "handshake_response",
+                "data": {
+                    "agent_id": agent_id,
+                    "hostname": hostname_info,
+                    "agent_version": version,
+                    "agent_pid": agent_pid,
+                },
+            }
+        )
 
         loop = asyncio.get_event_loop()
         now = loop.time()
@@ -143,23 +152,32 @@ class AgentManager:
         if old:
             for cid in list(old._pending_commands.keys()):
                 old.cleanup_command(cid)
+            with contextlib.suppress(Exception):
+                await old.ws.close(code=4000, reason="replaced by new connection")
 
         self._connections[agent_id] = conn
-        logger.info("Agent '%s' connected (hostname=%s, version=%s, pid=%d)", agent_id, hostname_info, version, agent_pid)
-        return agent_id
+        logger.info(
+            "Agent '%s' connected (hostname=%s, version=%s, pid=%d)", agent_id, hostname_info, version, agent_pid
+        )
+        return agent_id, conn
 
-    async def disconnect(self, agent_id: str) -> None:
-        conn = self._connections.pop(agent_id, None)
-        if conn:
-            for cid in list(conn._pending_commands.keys()):
-                conn.cleanup_command(cid)
-            logger.info("Agent '%s' disconnected", agent_id)
+    async def disconnect(self, agent_id: str, conn: AgentConnection | None = None) -> None:
+        current = self._connections.get(agent_id)
+        if conn is not None and current is not conn:
+            return
+        if current is None:
+            return
+        self._connections.pop(agent_id, None)
+        for cid in list(current._pending_commands.keys()):
+            current.cleanup_command(cid)
+        logger.info("Agent '%s' disconnected", agent_id)
 
     def get_connection(self, agent_id: str) -> AgentConnection | None:
         return self._connections.get(agent_id)
 
-    async def send_command(self, agent_id: str, command_id: str,
-                           command: str, env: dict[str, str], cwd: str, timeout: int) -> None:
+    async def send_command(
+        self, agent_id: str, command_id: str, command: str, env: dict[str, str], cwd: str, timeout: int
+    ) -> None:
         conn = self._connections.get(agent_id)
         if conn is None:
             raise RuntimeError(t("Agent '{agent_id}' not connected", agent_id=agent_id))

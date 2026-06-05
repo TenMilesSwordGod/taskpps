@@ -9,9 +9,11 @@ func TestMessageSerialization(t *testing.T) {
 	msg := Message{
 		Type: MsgTypeHandshakeRequest,
 		Data: HandshakeRequest{
-			AgentID: "test-agent",
-			Secret:  "test-secret",
-			Version: ProtocolVersion,
+			AgentID:  "test-agent",
+			Secret:   "test-secret",
+			Version:  ProtocolVersion,
+			Hostname: "test-host",
+			AgentPID: 12345,
 		},
 	}
 
@@ -27,6 +29,33 @@ func TestMessageSerialization(t *testing.T) {
 
 	if decoded.Type != MsgTypeHandshakeRequest {
 		t.Errorf("expected %s, got %s", MsgTypeHandshakeRequest, decoded.Type)
+	}
+}
+
+func TestHandshakeRequestFields(t *testing.T) {
+	req := HandshakeRequest{
+		AgentID:  "agent-01",
+		Secret:   "secret",
+		Version:  "1.0.0",
+		Hostname: "myhost",
+		AgentPID: 9999,
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if raw["hostname"] != "myhost" {
+		t.Errorf("expected hostname 'myhost', got %v", raw["hostname"])
+	}
+	if int(raw["agent_pid"].(float64)) != 9999 {
+		t.Errorf("expected agent_pid 9999, got %v", raw["agent_pid"])
 	}
 }
 
