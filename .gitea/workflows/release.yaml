@@ -96,6 +96,44 @@ jobs:
           name: taskpps-cli-${{ matrix.os }}-${{ matrix.arch }}
           path: cli/${{ env.BINARY_NAME }}
 
+  build-agent:
+    name: Build Agent Executor (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    defaults:
+      run:
+        working-directory: execution_agent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: execution_agent/go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test ./... -v -count=1 -timeout 120s
+
+      - name: Build
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          BINARY_NAME="taskpps-agent-linux-${GOARCH}"
+          go build -ldflags="-s -w" -o "$BINARY_NAME" .
+          echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+
+      - name: Upload agent binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskpps-agent-linux-${{ matrix.arch }}
+          path: execution_agent/${{ env.BINARY_NAME }}
+
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
@@ -103,6 +141,7 @@ jobs:
     needs:
       - build-server
       - build-cli
+      - build-agent
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -118,6 +157,11 @@ jobs:
         with:
           path: dist/cli/
 
+      - name: Download agent binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/agent/
+
       - name: List artifacts
         run: find dist/ -type f
 
@@ -128,6 +172,7 @@ jobs:
             dist/**/*.whl
             dist/**/*.tar.gz
             dist/cli/**/taskpps-*
+            dist/agent/**/taskpps-agent-*
           tag: ${{ github.ref_name }}
           title: Release ${{ github.ref_name }}
           body: |
@@ -139,3 +184,4 @@ jobs:
 
             - `taskpps-server-*.whl` — Python server wheel
             - `taskpps-{os}-{arch}` — CLI binaries for each platform
+            - `taskpps-agent-linux-{arch}` — Agent executor binaries for Linux

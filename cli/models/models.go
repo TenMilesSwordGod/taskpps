@@ -112,3 +112,25 @@ type AgentCheckResponse struct {
 	Results []AgentCheckResult `json:"results"`
 	Summary AgentCheckSummary  `json:"summary"`
 }
+
+type AgentStatus struct {
+	AgentID         string  `json:"agent_id"`
+	Connected       bool    `json:"connected"`
+	Hostname        string  `json:"hostname"`
+	AgentVersion    string  `json:"agent_version"`
+	AgentPID        int     `json:"agent_pid"`
+	ConnectedAt     float64 `json:"connected_at"`
+	RunningCommands int     `json:"running_commands"`
+}
+
+type AgentDeployRequest struct {
+	AgentID string `json:"agent_id"`
+	Timeout int    `json:"timeout"`
+}
+
+type AgentDeployResult struct {
+	Success  bool   `json:"success"`
+	AgentID  string `json:"agent_id"`
+	AgentPID int    `json:"agent_pid"`
+	Error    string `json:"error,omitempty"`
+}

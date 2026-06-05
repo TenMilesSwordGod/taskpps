@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from taskpps.domain.pipeline import ResolvedTask
+from taskpps.executors.agent_executor import AgentExecutor
 from taskpps.executors.base import BaseExecutor
 from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
@@ -13,6 +14,7 @@ from taskpps.executors.ssh import SSHExecutor
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
+from taskpps.services.agent_manager import AgentManager
 
 logger = logging.getLogger(__name__)
 
@@ -69,27 +71,56 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
         port = agent_data.get("port", 22)
         username = agent_data.get("username", "root")
 
-        password = None
-        key_path = None
+        if agent_data.get("execution_agent", True):
+            manager = AgentManager.instance()
 
-        credential_id = task.credential or agent_data.get("credential_id")
-        if credential_id:
-            cred_loader = CredentialLoader()
-            cred_data = _resolve_credential(cred_loader, credential_id)
-            if cred_data:
-                username = cred_data.get("username", username)
-                password = cred_data.get("password")
-                key_path = cred_data.get("key_path")
+            if not manager.is_connected(task.host):
+                if agent_data.get("agent_auto_bootstrap", True):
+                    try:
+                        from taskpps.services.agent_bootstrap import AgentBootstrap
+                        bootstrap = AgentBootstrap()
+                        import asyncio
+                        try:
+                            loop = asyncio.get_running_loop()
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        loop.run_until_complete(bootstrap.bootstrap(task.host))
+                    except Exception as e:
+                        logger.warning("Agent '%s' bootstrap failed: %s, falling back to SSHExecutor", task.host, e)
+                        return _make_ssh_executor(host, port, username, agent_data, task)
+                else:
+                    logger.info("Agent '%s' not connected, falling back to SSHExecutor (@deprecated)", task.host)
+                    return _make_ssh_executor(host, port, username, agent_data, task)
 
-        return SSHExecutor(
-            host=host,
-            port=port,
-            username=username,
-            password=password,
-            key_path=key_path,
-        )
+            return AgentExecutor(agent_id=task.host, manager=manager)
+
+        return _make_ssh_executor(host, port, username, agent_data, task)
 
     return LocalExecutor()
+
+
+def _make_ssh_executor(host: str, port: int, username: str,
+                       agent_data: dict[str, Any], task: ResolvedTask) -> SSHExecutor:
+    password = None
+    key_path = None
+
+    credential_id = task.credential or agent_data.get("credential_id")
+    if credential_id:
+        cred_loader = CredentialLoader()
+        cred_data = _resolve_credential(cred_loader, credential_id)
+        if cred_data:
+            username = cred_data.get("username", username)
+            password = cred_data.get("password")
+            key_path = cred_data.get("key_path")
+
+    return SSHExecutor(
+        host=host,
+        port=port,
+        username=username,
+        password=password,
+        key_path=key_path,
+    )
 
 
 def _resolve_agent(agent_loader: AgentLoader, agent_ref: str) -> dict[str, Any] | None:

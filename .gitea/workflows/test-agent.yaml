@@ -1,0 +1,53 @@
+name: Test Agent Executor
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+      - "fix/**"
+      - "u/**"
+    paths:
+      - "execution_agent/**"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "execution_agent/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-agent:
+    name: Agent Executor Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        run: |
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
+          cd repo
+          git fetch origin
+          git checkout "${{ github.ref_name }}"
+          git pull origin "${{ github.ref_name }}"
+          git log --oneline -3
+
+      - name: Setup Go
+        run: |
+          apt-get update && apt-get install -y golang-go
+          go version
+          export GOPROXY=https://goproxy.cn,direct
+          echo "GOPROXY=$GOPROXY" >> $GITHUB_ENV
+
+      - name: Run tests
+        working-directory: repo/execution_agent
+        run: |
+          go test ./... -v -count=1 -timeout 120s
+
+      - name: Build
+        working-directory: repo/execution_agent
+        run: go build -o taskpps-agent .

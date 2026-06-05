@@ -408,3 +408,55 @@ func (c *Client) CheckAgentsStream(agentID, fileFilter string, timeout int, hand
 	}
 	return summary, scanner.Err()
 }
+
+func (c *Client) AgentStatus(agentID string) (*models.AgentStatus, error) {
+	resp, err := c.http.Get(c.baseURL + "/agents/status/" + agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get agent status: %w", err)
+	}
+	if resp.Response().StatusCode != 200 {
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
+	var result models.AgentStatus
+	if err := resp.ToJSON(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) AgentList() ([]models.AgentStatus, error) {
+	resp, err := c.http.Get(c.baseURL + "/agents/list")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list agents: %w", err)
+	}
+	if resp.Response().StatusCode != 200 {
+		body, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
+	var result []models.AgentStatus
+	if err := resp.ToJSON(&result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) AgentDeploy(agentID string, timeout int) (*models.AgentDeployResult, error) {
+	body := models.AgentDeployRequest{
+		AgentID: agentID,
+		Timeout: timeout,
+	}
+	resp, err := c.http.Post(c.baseURL+"/agents/deploy", req.BodyJSON(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy agent: %w", err)
+	}
+	if resp.Response().StatusCode != 200 {
+		respBody, _ := resp.ToString()
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, respBody)
+	}
+	var result models.AgentDeployResult
+	if err := resp.ToJSON(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}

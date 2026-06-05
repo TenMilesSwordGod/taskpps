@@ -13,6 +13,19 @@ class ServerConfig(BaseModel):
     api_key: str | None = None
 
 
+class AgentConfig(BaseModel):
+    enabled: bool = True
+    ws_host: str = "0.0.0.0"
+    ws_port: int = 28765
+    ws_tls: bool = False
+    ws_cert_file: str = ""
+    ws_key_file: str = ""
+    heartbeat_interval: int = 15
+    heartbeat_timeout: int = 45
+    reconnect_max_interval: int = 60
+    bootstrap_timeout: int = 30
+
+
 class ExecutorConfig(BaseModel):
     default_timeout: int = 3600
     max_workers: int = 10
@@ -33,6 +46,7 @@ class Settings(BaseModel):
     locale: str = "zh"
     server: ServerConfig = Field(default_factory=ServerConfig)
     executor: ExecutorConfig = Field(default_factory=ExecutorConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
     env: dict[str, str] = Field(default_factory=dict)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     triggers: list[TriggerConfig] = Field(default_factory=list)

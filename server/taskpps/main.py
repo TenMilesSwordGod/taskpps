@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from taskpps.api import agents, health, runs, triggers
+from taskpps.api import ws_agent
 from taskpps.config import get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale, t
@@ -51,6 +52,8 @@ async def lifespan(app: FastAPI):
             await runner.cancel()
     if _plugin_manager:
         _plugin_manager.stop_all()
+    from taskpps.services.agent_manager import AgentManager
+    await AgentManager.instance().stop()
     if not _external_engine:
         await close_db()
 
@@ -71,6 +74,7 @@ app.include_router(health.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(triggers.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
+app.include_router(ws_agent.router, prefix="/api")
 
 
 def cli():

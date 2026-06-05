@@ -1,0 +1,61 @@
+name: Test CLI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+      - "fix/**"
+      - "u/**"
+    paths:
+      - "cli/**"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "cli/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-go:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        run: |
+          git clone "${{ github.server_url }}/${{ github.repository }}.git" repo
+          cd repo
+          git fetch origin
+          git checkout "${{ github.ref_name }}"
+          git pull origin "${{ github.ref_name }}"
+          git log --oneline -3
+
+      - name: Setup Go
+        run: |
+          apt-get update && apt-get install -y golang-go
+          go version
+          export GOPROXY=https://goproxy.cn,direct
+          echo "GOPROXY=$GOPROXY" >> $GITHUB_ENV
+
+      - name: Unit test with coverage
+        working-directory: repo/cli
+        run: |
+          go test ./tui -v -count=1 -run TestGolden -update -timeout 60s
+          go test ./tui ./tui/components -v -count=1 -coverprofile=coverage.out -timeout 120s
+          go tool cover -func=coverage.out | tail -1
+
+      - name: Build
+        working-directory: repo/cli
+        run: go build -o taskpps-cli .
+
+      - name: Upload Go build artifact
+        if: always()
+        working-directory: repo/cli
+        run: |
+          echo "Build artifact available at cli/taskpps-cli"

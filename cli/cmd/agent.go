@@ -217,7 +217,100 @@ func init() {
 	agentCheckCmd.Flags().IntVarP(&agentTimeout, "timeout", "t", 5, "connection timeout in seconds")
 	agentCheckCmd.Flags().StringVarP(&agentFile, "file", "f", "", "filter by agent file name (without extension)")
 
+	agentDeployCmd.Flags().IntVarP(&agentDeployTimeout, "timeout", "t", 30, "deployment timeout in seconds")
+
 	agentCmd.AddCommand(agentTryConnectCmd)
 	agentCmd.AddCommand(agentCheckCmd)
+	agentCmd.AddCommand(agentListCmd)
+	agentCmd.AddCommand(agentStatusCmd)
+	agentCmd.AddCommand(agentDeployCmd)
 	RootCmd.AddCommand(agentCmd)
+}
+
+var agentListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "列出所有连接的 agent",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		agents, err := apiClient.AgentList()
+		if err != nil {
+			return err
+		}
+		if len(agents) == 0 {
+			fmt.Println("没有已连接的 agent")
+			return nil
+		}
+
+		color.Cyan("───── Agents ─────")
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Agent ID", "Hostname", "Version", "PID", "Tasks"})
+		table.SetBorder(false)
+		table.SetColumnSeparator(" ")
+		for _, a := range agents {
+			status := "✓ connected"
+			statusColor := color.New(color.FgGreen).SprintFunc()
+			table.Append([]string{
+				a.AgentID,
+				a.Hostname,
+				a.AgentVersion,
+				fmt.Sprintf("%d", a.AgentPID),
+				fmt.Sprintf("%d", a.RunningCommands),
+			})
+			_ = statusColor(status)
+		}
+		table.Render()
+		fmt.Printf("\nTotal: %d agents connected\n", len(agents))
+		return nil
+	},
+}
+
+var agentStatusCmd = &cobra.Command{
+	Use:   "status [agent-id]",
+	Short: "查看 agent 运行状态",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		agentID := args[0]
+		result, err := apiClient.AgentStatus(agentID)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("───── Agent Status ─────\n")
+		fmt.Printf("  Agent ID:       %s\n", result.AgentID)
+		fmt.Printf("  Hostname:       %s\n", result.Hostname)
+		if result.Connected {
+			color.Green("  Connection:     ✓ connected (ws)")
+		} else {
+			color.Red("  Connection:     ✗ disconnected")
+		}
+		fmt.Printf("  Agent PID:      %d\n", result.AgentPID)
+		fmt.Printf("  Agent Version:  %s\n", result.AgentVersion)
+		fmt.Printf("  Running Tasks:  %d\n", result.RunningCommands)
+		return nil
+	},
+}
+
+var (
+	agentDeployTimeout int
+)
+
+var agentDeployCmd = &cobra.Command{
+	Use:   "deploy <agent-id>",
+	Short: "部署 agent 到指定主机",
+	Long:  "通过 Server API 触发 agent 自动部署（SSH bootstrap）到目标主机",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		agentID := args[0]
+		fmt.Printf("正在部署 agent '%s' ...\n", agentID)
+		result, err := apiClient.AgentDeploy(agentID, agentDeployTimeout)
+		if err != nil {
+			return err
+		}
+		if result.Success {
+			color.Green("✓ Agent '%s' 部署成功", result.AgentID)
+		} else {
+			color.Red("✗ Agent '%s' 部署失败: %s", result.AgentID, result.Error)
+			os.Exit(1)
+		}
+		return nil
+	},
 }

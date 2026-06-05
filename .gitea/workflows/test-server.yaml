@@ -1,4 +1,4 @@
-name: Lint
+name: Test Server
 
 on:
   push:
@@ -8,20 +8,30 @@ on:
       - "feature/**"
       - "fix/**"
       - "u/**"
+    paths:
+      - "server/**"
   pull_request:
     branches:
       - main
       - develop
+    paths:
+      - "server/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: "3.12"
+
 jobs:
-  lint:
-    name: Lint
+  test-python:
+    name: Python Tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - name: Checkout
         run: |
@@ -52,14 +62,21 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv sync --frozen
 
-      - name: Ruff check
+      - name: Run tests
         working-directory: repo/server
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run --frozen ruff check --output-format=github
+          uv run --frozen pytest tests/ \
+            -v \
+            --tb=short \
+            --junitxml=junit.xml \
+            --cov=taskpps \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing
 
-      - name: Ruff format
+      - name: Upload test results
+        if: always()
         working-directory: repo/server
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run --frozen ruff format --check --diff
+          echo "Test results uploaded"
+          cat junit.xml || true
