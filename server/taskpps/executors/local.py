@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from taskpps.config import get_settings
+from taskpps.config import get_data_dir, get_settings
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.i18n import t
 
@@ -71,9 +71,12 @@ class LocalExecutor(BaseExecutor):
         self._ensure_log_dir(log_path)
         self._cancelled = False
 
-        self._log_direct(log_path, f"[VERSION] executor={_EXECUTOR_VERSION} "
-                         f"python={sys.version.split()[0]} "
-                         f"time={datetime.now(timezone.utc).isoformat()}\n")
+        self._log_direct(
+            log_path,
+            f"[VERSION] executor={_EXECUTOR_VERSION} "
+            f"python={sys.version.split()[0]} "
+            f"time={datetime.now(timezone.utc).isoformat()}\n",
+        )
         self._log_direct(log_path, f"[INFO] Command length: {len(command)} chars\n")
         self._log_direct(log_path, f"[INFO] Command: {command[:500]}\n")
         self._log_direct(log_path, f"[INFO] Timeout: {timeout}s\n")
@@ -87,13 +90,18 @@ class LocalExecutor(BaseExecutor):
 
         merged_env = {**os.environ, **env}
         merged_env["TASKPPS_EXECUTOR_VERSION"] = _EXECUTOR_VERSION
+        uv_cache_dir = get_data_dir() / "uv-cache"
+        uv_cache_dir.mkdir(parents=True, exist_ok=True)
+        merged_env.setdefault("UV_CACHE_DIR", str(uv_cache_dir))
 
         shell = get_settings().executor.shell
 
         wrapped_command = f"trap '' HUP; {command}"
 
         self._log_direct(log_path, f"[INFO] Shell: {shell} -c <command>\n")
-        logger.info("LocalExecutor: starting subprocess, shell=%s, timeout=%s, cwd=%s", shell, timeout, cwd or os.getcwd())
+        logger.info(
+            "LocalExecutor: starting subprocess, shell=%s, timeout=%s, cwd=%s", shell, timeout, cwd or os.getcwd()
+        )
         try:
             self._process = await asyncio.create_subprocess_exec(
                 shell,
@@ -150,8 +158,7 @@ class LocalExecutor(BaseExecutor):
             logger.info("LocalExecutor: process finished PID=%d exit_code=%s", self._process.pid, exit_code)
 
         except asyncio.TimeoutError:
-            self._log_direct(log_path,
-                             f"[ERROR] Task exceeded timeout of {timeout}s\n")
+            self._log_direct(log_path, f"[ERROR] Task exceeded timeout of {timeout}s\n")
             logger.warning("LocalExecutor: timeout PID=%d after %ds", self._process.pid, timeout)
             self._kill_process_tree(self._process.pid, signal.SIGKILL)
             try:
@@ -184,7 +191,9 @@ class LocalExecutor(BaseExecutor):
 
         except Exception as e:
             self._log_direct(log_path, f"[ERROR] Unexpected error in executor: {e}\n")
-            logger.exception("LocalExecutor: unexpected error in executor PID=%s", self._process.pid if self._process else "N/A")
+            logger.exception(
+                "LocalExecutor: unexpected error in executor PID=%s", self._process.pid if self._process else "N/A"
+            )
             if self._process is not None and self._process.returncode is None:
                 try:
                     self._kill_process_tree(self._process.pid, signal.SIGKILL)
@@ -198,16 +207,27 @@ class LocalExecutor(BaseExecutor):
             self._process = None
 
         if exit_code is None:
-            self._log_direct(log_path, "[WARN] Process exited with no return code, assuming signal death (exit_code=-1)\n")
+            self._log_direct(
+                log_path, "[WARN] Process exited with no return code, assuming signal death (exit_code=-1)\n"
+            )
             logger.warning("LocalExecutor: exit_code is None, assuming signal death")
             return ExecutorResult(exit_code=-1, stdout="".join(output_lines))
 
         if exit_code < 0:
             signal_num = -exit_code
             signal_names = {
-                1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 4: "SIGILL",
-                6: "SIGABRT", 8: "SIGFPE", 9: "SIGKILL", 11: "SIGSEGV",
-                13: "SIGPIPE", 14: "SIGALRM", 15: "SIGTERM", 17: "SIGCHLD",
+                1: "SIGHUP",
+                2: "SIGINT",
+                3: "SIGQUIT",
+                4: "SIGILL",
+                6: "SIGABRT",
+                8: "SIGFPE",
+                9: "SIGKILL",
+                11: "SIGSEGV",
+                13: "SIGPIPE",
+                14: "SIGALRM",
+                15: "SIGTERM",
+                17: "SIGCHLD",
             }
             sig_name = signal_names.get(signal_num, f"signal {signal_num}")
             self._log_direct(log_path, f"[ERROR] Process killed by {sig_name} (exit_code={exit_code})\n")
@@ -241,8 +261,10 @@ class LocalExecutor(BaseExecutor):
 
     async def cancel(self) -> None:
         self._cancelled = True
-        logger.info("LocalExecutor.cancel: cancelled=True, process=%s returncode=%s",
-                     self._process.pid if self._process else "None",
-                     self._process.returncode if self._process else "N/A")
+        logger.info(
+            "LocalExecutor.cancel: cancelled=True, process=%s returncode=%s",
+            self._process.pid if self._process else "None",
+            self._process.returncode if self._process else "N/A",
+        )
         if self._process and self._process.returncode is None:
             self._kill_process_tree(self._process.pid, signal.SIGTERM)

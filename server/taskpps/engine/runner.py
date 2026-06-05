@@ -312,6 +312,7 @@ class PipelineRunner:
             len(sub.tasks),
         )
         self.context.get_subpipeline_env(sub)
+        self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} start ===")
         self._write_pipeline_log("INFO", f"Starting SubPipeline '{sub_name}' with {len(sub.tasks)} tasks")
 
         try:
@@ -321,6 +322,7 @@ class PipelineRunner:
             error_msg = f"SubPipeline '{sub_name}' DAG error: {e}"
             logger.error(t(error_msg))
             self._write_pipeline_log("ERROR", error_msg)
+            self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} end ===")
             return {"success": False, "error": str(e)}
 
         self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' has {len(levels)} execution levels")
@@ -412,12 +414,14 @@ class PipelineRunner:
             self._write_pipeline_log(
                 "FAILED", f"SubPipeline '{sub_name}' finished with {len(failed_tasks)} failed tasks"
             )
+            self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} end ===")
             return {"success": False, "failed_tasks": list(failed_tasks)}
 
         self._write_pipeline_log(
             "SUCCESS",
             f"SubPipeline '{sub_name}' completed successfully ({len(completed_tasks)}/{len(sub.tasks)} tasks)",
         )
+        self._write_pipeline_log("LINE", f"=== [subpipeline] {sub_name} end ===")
         return {"success": True}
 
     async def _execute_task(self, task: ResolvedTask, sub_name: str = "") -> ExecutorResult:
@@ -452,9 +456,26 @@ class PipelineRunner:
             self._write_pipeline_log("SKIP", f"Task '{qualified_name}' skipped (when condition not met)")
             return ExecutorResult(exit_code=0, stdout="Task skipped (when condition not met)")
 
+        self._write_pipeline_log("LINE", f"--- [task] {qualified_name} start ---")
         self._write_pipeline_log(
             "INFO", f"Executing task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})"
         )
+        if task.cwd:
+            self._write_pipeline_log("INFO", f"  cwd: {task.cwd}")
+
+        if task.task_type == "invoke":
+            self._write_pipeline_log("CMD", f"  invoke: {task.invoke_task}")
+        elif task.task_type == "git" and task.git:
+            self._write_pipeline_log("CMD", f"  git: {task.git.get('action', 'clone')} {task.git.get('repo', '')}")
+        elif task.task_type == "nexus" and task.nexus:
+            self._write_pipeline_log("CMD", f"  nexus: {task.nexus.get('action', '')} {task.nexus.get('url', '')}")
+        elif task.task_type == "steps" and task.steps:
+            self._write_pipeline_log("CMD", f"  steps: {len(task.steps)} step(s)")
+        elif task.commands:
+            self._write_pipeline_log("CMD", f"  commands: {len(task.commands)} command(s)")
+        else:
+            cmd = task.command or ""
+            self._write_pipeline_log("CMD", f"  command: {cmd}")
 
         async with get_session_factory()() as session:
             task_repo = TaskRunRepository(session)
@@ -474,16 +495,16 @@ class PipelineRunner:
                 with open(log_path, "a") as f:
                     f.write(t("\n[RETRY {n}/{max}] waiting 5s...\n", n=attempt, max=max_retries))
 
-            executor = create_executor(task)
-            self._running_executors[task.name] = executor
-
             effective_cwd = task.cwd or self.context.get_workspace()
 
-            logger.debug(
-                f"[DEBUG-EXEC] _execute_task '{qualified_name}': attempt={attempt}, executor={type(executor).__name__}, effective_cwd={effective_cwd}"
-            )
-
             try:
+                executor = create_executor(task)
+                self._running_executors[task.name] = executor
+
+                logger.debug(
+                    f"[DEBUG-EXEC] _execute_task '{qualified_name}': attempt={attempt}, executor={type(executor).__name__}, effective_cwd={effective_cwd}"
+                )
+
                 if effective_cwd and isinstance(executor, LocalExecutor) and not os.path.isdir(effective_cwd):
                     self._write_pipeline_log(
                         "WARN", f"Task '{qualified_name}' cwd does not exist: {effective_cwd}, using current dir"
@@ -584,6 +605,7 @@ class PipelineRunner:
             if last_result.stderr:
                 self._write_pipeline_log("ERROR", f"Error output: {last_result.stderr[:500]}")
 
+        self._write_pipeline_log("LINE", f"--- [task] {qualified_name} end ---")
         return last_result
 
     async def _execute_commands(
@@ -606,8 +628,9 @@ class PipelineRunner:
                 cmd_timeout = 1
 
         for i, cmd in enumerate(task.commands):
+            self._write_pipeline_log("CMD", f"  [{i + 1}/{len(task.commands)}] {cmd}")
             with open(log_path, "a") as f:
-                f.write(t("Step {n}/{total}: {cmd}\n", n=i + 1, total=len(task.commands), cmd=cmd[:80]))
+                f.write(t("Command {n}/{total}: {cmd}\n", n=i + 1, total=len(task.commands), cmd=cmd[:80]))
 
             result = await executor.execute(
                 command=cmd,
@@ -648,6 +671,12 @@ class PipelineRunner:
         for i, step in enumerate(task.steps):
             step_env = {**env, **step.env}
             step_cwd = step.cd or effective_cwd
+
+            step_desc = f"  [{i + 1}/{len(task.steps)}]"
+            if step.cd:
+                step_desc += f" cd {step.cd} &&"
+            step_desc += f" {step.run}"
+            self._write_pipeline_log("CMD", step_desc)
 
             with open(log_path, "a") as f:
                 f.write(t("Step {n}/{total}: {cmd}", n=i + 1, total=len(task.steps), cmd=step.run[:80]))

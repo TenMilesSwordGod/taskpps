@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 from typing import Any
 
@@ -168,7 +167,7 @@ def build_env(
     task_env: dict[str, str] | None = None,
     cli_env: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    result = dict(system_env or os.environ)
+    result = dict(system_env) if system_env is not None else {}
     if global_env:
         result.update(global_env)
     if pipeline_env:

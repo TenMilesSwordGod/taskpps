@@ -10,10 +10,15 @@ from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.local import LocalExecutor
 from taskpps.executors.nexus import NexusExecutor
 from taskpps.executors.ssh import SSHExecutor
+from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
 
 logger = logging.getLogger(__name__)
+
+
+class AgentNotFoundError(Exception):
+    pass
 
 
 def create_executor(task: ResolvedTask) -> BaseExecutor:
@@ -53,7 +58,12 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
         agent_data = _resolve_agent(agent_loader, task.host)
 
         if agent_data is None:
-            return LocalExecutor()
+            raise AgentNotFoundError(
+                t(
+                    "Agent not found for host: '{host}'. Please create an agent config in the agents/ directory.",
+                    host=task.host,
+                )
+            )
 
         host = agent_data.get("host", task.host)
         port = agent_data.get("port", 22)
@@ -67,6 +77,7 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
             cred_loader = CredentialLoader()
             cred_data = _resolve_credential(cred_loader, credential_id)
             if cred_data:
+                username = cred_data.get("username", username)
                 password = cred_data.get("password")
                 key_path = cred_data.get("key_path")
 

@@ -164,6 +164,6 @@ taskpps/
 - 更新文档以反映代码变更
 - should not import in function
 - after develop, should cover all tests.
-
-  <br />
+- should use chinese in commit or any other condition
+- after develop, first should execute lint and format.
 

@@ -359,7 +359,7 @@ class TestBuildEnv:
 
     def test_none_defaults(self):
         result = build_env()
-        assert "PATH" in result
+        assert result == {}
 
     def test_all_none(self):
         result = build_env(system_env={"X": "1"}, global_env=None, pipeline_env=None, task_env=None, cli_env=None)

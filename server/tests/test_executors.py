@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from taskpps.domain.pipeline import ResolvedTask
-from taskpps.executors import create_executor
+from taskpps.executors import AgentNotFoundError, create_executor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.executors.git import (
     GitExecutor,
@@ -1802,8 +1802,8 @@ class TestCreateExecutor:
             agents_dir.mkdir()
             mock_get_agents_dir.return_value = agents_dir
 
-            executor = create_executor(task)
-            assert isinstance(executor, LocalExecutor)
+            with pytest.raises(AgentNotFoundError, match="nonexistent-host"):
+                create_executor(task)
 
     def test_ssh_credential_not_found(self, tmp_path):
         task = ResolvedTask(
