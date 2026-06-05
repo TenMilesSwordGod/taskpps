@@ -25,6 +25,8 @@ type HandshakeRequest struct {
 	Version  string `json:"version"`
 	Hostname string `json:"hostname"`
 	AgentPID int    `json:"agent_pid"`
+	OS       string `json:"os"`
+	Arch     string `json:"arch"`
 }
 
 type HandshakeResponse struct {

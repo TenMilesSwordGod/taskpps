@@ -68,6 +68,12 @@ class AgentBootstrap:
             agent_pid_file = agent_data.get("agent_pid_file", default_pid_file)
             agent_secret = agent_data.get("agent_secret", "")
 
+            server_host = self._get_server_host(agent_data)
+            server_port = self._get_ws_port()
+            server_url = f"ws://{server_host}:{server_port}/api/ws/agent"
+
+            self._check_server_reachability(ssh, host, server_host, server_port)
+
             installed = await self._check_binary(ssh, agent_binary_path)
             if not installed:
                 logger.info("Agent binary not found on %s, deploying to %s ...", host, agent_binary_path)
@@ -76,7 +82,7 @@ class AgentBootstrap:
                 await self._deploy_binary(ssh, host, agent_binary_path)
                 await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
 
-            server_url = f"ws://{self._get_server_host(agent_data)}:{self._get_ws_port()}/api/ws/agent"
+            logger.info("Agent will connect to: %s", server_url)
 
             pid = await self._start_agent_daemon(
                 ssh, agent_binary_path, agent_log_dir, agent_pid_file,
@@ -95,8 +101,46 @@ class AgentBootstrap:
             )
             logger.info("Agent '%s' handshake completed", agent_id)
             return {"success": True, "agent_pid": 0}
-        except asyncio.TimeoutError as e:
-            raise AgentBootstrapError(t("Agent '{id}' handshake timeout after bootstrap", id=agent_id)) from e
+        except asyncio.TimeoutError:
+            agent_log_path = f"{agent_log_dir}/agent.log"
+            log_tail = ""
+            try:
+                ssh2 = await self._ssh_connect(host, port, username, password, key_path)
+                try:
+                    _, log_out, _ = await self._ssh_exec(
+                        ssh2, f"tail -n 30 {agent_log_path} 2>/dev/null || echo '(no log file)")
+                    if log_out.strip():
+                        log_tail = log_out.strip()
+                finally:
+                    await self._ssh_close(ssh2)
+            except Exception as log_err:
+                log_tail = f"(could not fetch logs: {log_err})"
+
+            error_msg = (
+                f"Agent '{agent_id}' failed to connect to {server_url} "
+                f"after {BOOTSTRAP_TIMEOUT}s. Check: "
+                f"Verify server is reachable from {host} and not bound to 127.0.0.1. "
+                f"Agent log tail:\n{log_tail}"
+            )
+            raise AgentBootstrapError(error_msg)
+
+    def _check_server_reachability(self, ssh, remote_host: str,
+                                     server_host: str, server_port: int) -> None:
+        settings = __import__("taskpps.config", fromlist=["get_settings"]).get_settings()
+        bind_host = settings.server.host
+
+        if bind_host in ("127.0.0.1", "::1"):
+            logger.warning(
+                "Server binds to %s but agent on %s may not reach it. "
+                "Set server.host to 0.0.0.0 or a reachable IP for remote agents.",
+                bind_host, remote_host,
+            )
+
+        if server_host in ("127.0.0.1", "::1", "localhost"):
+            logger.warning(
+                "Agent will try to connect to %s:%s — this address is local-only and not reachable from %s",
+                server_host, server_port, remote_host,
+            )
 
     async def _ssh_connect(self, host: str, port: int, username: str,
                            password: str | None, key_path: str | None):
@@ -208,24 +252,64 @@ class AgentBootstrap:
 
         settings = __import__("taskpps.config", fromlist=["get_settings"]).get_settings()
         host = settings.server.host
-        if host == "0.0.0.0":
-            import socket
-            hostname = socket.gethostname()
+
+        if host not in ("0.0.0.0", "127.0.0.1", "::1", ""):
+            return host
+
+        external_ip = self._get_external_ip()
+        if external_ip:
+            return external_ip
+
+        import socket
+        hostname = socket.gethostname()
+        try:
+            ip = socket.gethostbyname(hostname)
+            if ip not in ("127.0.0.1", "::1"):
+                return ip
+        except Exception:
+            pass
+        logger.warning(
+            "Server listens on %s but no external IP found. Remote agents may fail to connect. "
+            "Set 'server_ws_host' in agent config or use a reachable bind address.",
+            host,
+        )
+        return socket.gethostbyname(socket.gethostname())
+
+    def _get_external_ip(self) -> str | None:
+        import socket
+        try:
+            import netifaces
+        except ImportError:
+            netifaces = None
+
+        if netifaces is not None:
             try:
-                return socket.gethostbyname(hostname)
-            except Exception:
-                return hostname
-        if host == "127.0.0.1":
-            import socket
-            hostname = socket.gethostname()
-            try:
-                ip = socket.gethostbyname(hostname)
-                if ip != "127.0.0.1":
-                    return ip
+                for iface in netifaces.interfaces():
+                    if iface.startswith(("lo", "docker", "veth", "br-")):
+                        continue
+                    addrs = netifaces.ifaddresses(iface)
+                    for af in (netifaces.AF_INET,):
+                        if af not in addrs:
+                            continue
+                        for addr_info in addrs[af]:
+                            ip = addr_info.get("addr", "")
+                            if ip and not ip.startswith("127."):
+                                return ip
             except Exception:
                 pass
-            return socket.gethostbyname(socket.gethostname())
-        return host
+
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                if ip and not ip.startswith("127."):
+                    return ip
+            finally:
+                s.close()
+        except Exception:
+            pass
+        return None
 
     def _get_ws_port(self) -> int:
         try:

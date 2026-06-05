@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -38,7 +39,7 @@ async def agent_websocket(ws: WebSocket):
             payload = data.get("data", {})
 
             if msg_type == "heartbeat_response":
-                conn.last_heartbeat = asyncio.get_event_loop().time()
+                conn.last_heartbeat = time.time()
 
             elif msg_type == "stdout_chunk" or msg_type == "stderr_chunk":
                 conn.handle_output(payload.get("command_id", ""), payload.get("data", ""))

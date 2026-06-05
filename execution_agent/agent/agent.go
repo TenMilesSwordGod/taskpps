@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/taskpps/execution-agent/logger"
@@ -29,7 +30,7 @@ func NewAgent(config *AgentConfig) *Agent {
 	}
 
 	hostname, _ := os.Hostname()
-	a.wsClient = NewWsClient(config.ServerURL, config.AgentID, config.Secret, hostname, os.Getpid())
+	a.wsClient = NewWsClient(config.ServerURL, config.AgentID, config.Secret, hostname, os.Getpid(), runtime.GOOS, runtime.GOARCH)
 	a.executor = NewExecutor(
 		config.Shell,
 		a.onStdout,

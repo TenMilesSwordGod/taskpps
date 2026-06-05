@@ -152,7 +152,7 @@ install_project_deps() {
         python3 -m venv ${VENV_DIR}
         source ${VENV_DIR}/bin/activate
         pip install --upgrade pip setuptools wheel
-        pip install -r requirements.txt || pip install -e '.[dev]'
+        pip install -e '.[dev]'
     "
 
     chown -R taskpps:taskpps /opt/taskpps/server/.venv

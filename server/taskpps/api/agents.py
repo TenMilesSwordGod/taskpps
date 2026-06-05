@@ -61,19 +61,20 @@ async def check_stream(body: AgentCheckRequest):
 @router.get("/status/{agent_id}", response_model=AgentStatus)
 async def agent_status(agent_id: str):
     manager = AgentManager.instance()
-    conn = manager.get_connection(agent_id)
-    if conn is None:
+    if not manager.is_connected(agent_id):
         return AgentStatus(agent_id=agent_id, connected=False)
+    conn = manager.get_connection(agent_id)
 
-    pending_count = len(conn._pending_commands)
+    pending_count = len(conn._pending_commands) if conn else 0
     return AgentStatus(
         agent_id=agent_id,
         connected=True,
-        hostname=conn.hostname,
-        agent_version=conn.agent_version,
-        agent_pid=conn.agent_pid,
-        connected_at=conn.connected_at,
-        last_heartbeat=conn.last_heartbeat,
+        hostname=conn.hostname if conn else "",
+        platform=conn.platform if conn else "",
+        agent_version=conn.agent_version if conn else "",
+        agent_pid=conn.agent_pid if conn else 0,
+        connected_at=conn.connected_at if conn else 0,
+        last_heartbeat=conn.last_heartbeat if conn else 0,
         running_commands=pending_count,
     )
 
@@ -83,11 +84,14 @@ async def agent_list():
     manager = AgentManager.instance()
     result = []
     for agent_id, conn in manager.connections.items():
+        if not manager.is_connected(agent_id):
+            continue
         result.append(
             AgentStatus(
                 agent_id=agent_id,
                 connected=True,
                 hostname=conn.hostname,
+                platform=conn.platform,
                 agent_version=conn.agent_version,
                 agent_pid=conn.agent_pid,
                 connected_at=conn.connected_at,

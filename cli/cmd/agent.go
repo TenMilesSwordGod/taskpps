@@ -25,11 +25,67 @@ var agentCmd = &cobra.Command{
 	Short: "Manage and check agent connections",
 	Long: `Manage agents and check their connectivity.
 
-Subcommands:
+支持两种格式:
+  长格式:  ppsctl agent <action> <agent-id> [flags]
+  快捷:    ppsctl agent <agent-id> [<action>]         # 无 action 默认为 status
+
+示例:
+  ppsctl agent test-agent01                            # 查看状态 (= agent status test-agent01)
+  ppsctl agent test-agent01 status                     # 查看状态
+  ppsctl agent test-agent01 exec -- echo hello         # 执行命令
+  ppsctl agent test-agent01 deploy                     # 部署
+  ppsctl agent test-agent01 try-connect                # 尝试连接
+  ppsctl agent test-agent01 check                      # 检查连接
+
+Subcommands (长格式):
   try-connect  Test connectivity to a specific agent
   check        Check all agent connections, grouped by file`,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+	Args: cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return cmd.Help()
+		}
+
+		actions := map[string]bool{
+			"try-connect": true,
+			"check":       true,
+			"list":        true,
+			"status":      true,
+			"deploy":      true,
+			"exec":        true,
+		}
+
+		if actions[args[0]] {
+			return cmd.Help()
+		}
+
+		agentID := args[0]
+		action := "status"
+		remaining := args[1:]
+		if len(remaining) > 0 && actions[remaining[0]] {
+			action = remaining[0]
+			remaining = remaining[1:]
+		}
+
+		switch action {
+		case "status":
+			return runAgentStatus(agentID)
+		case "list":
+			return runAgentList()
+		case "deploy":
+			return runAgentDeploy(agentID)
+		case "try-connect":
+			return runAgentTryConnect(agentID)
+		case "check":
+			return runAgentCheck(agentID, agentFile)
+		case "exec":
+			if len(remaining) == 0 {
+				return fmt.Errorf("exec 需要命令参数,用法: ppsctl agent %s exec -- <command>", agentID)
+			}
+			return runAgentExec(agentID, remaining)
+		default:
+			return fmt.Errorf("未知操作 '%s',可用: status, list, deploy, try-connect, check, exec", action)
+		}
 	},
 }
 
@@ -38,94 +94,206 @@ var agentTryConnectCmd = &cobra.Command{
 	Short: "Test connectivity to a specific agent",
 	Long: `Attempt a TCP connection to the specified agent and report the result.
 
-Example:
+示例:
   ppsctl agent try-connect prod-server
   ppsctl agent try-connect prod-server --timeout 10`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		agentID := args[0]
-
-		result, err := apiClient.TryConnect(agentID, agentTimeout)
-		if err != nil {
-			return err
-		}
-
-		printSingleResult(result)
-		if result.Status == "failed" {
-			os.Exit(1)
-		}
-		return nil
+		return runAgentTryConnect(args[0])
 	},
 }
 
 var agentCheckCmd = &cobra.Command{
 	Use:   "check [agent-id]",
 	Short: "Check agent connections with live progress",
-	Long: `Check connectivity of one or all agents in real-time, grouped by agent file.
+	Long: `检查一个或所有 agent 的连接状态,支持实时进度显示。
 
-Results are streamed live as each agent is checked. A grouped summary table
-is shown after all checks complete.
-Falls back to batch mode if the server does not support streaming.
-
-Examples:
-  ppsctl agent check                     Check all agents
-  ppsctl agent check prod-server         Check a specific agent
-  ppsctl agent check --file staging      Check agents in staging.yaml only`,
+示例:
+  ppsctl agent check                     检查所有 agent
+  ppsctl agent check prod-server         检查指定 agent
+  ppsctl agent check --file staging      仅检查 staging.yaml 中的 agent`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var agentID string
+		agentID := ""
 		if len(args) > 0 {
 			agentID = args[0]
 		}
-
-		var results []models.AgentCheckResult
-		var cnt int
-
-		summary, err := apiClient.CheckAgentsStream(agentID, agentFile, agentTimeout, func(r models.AgentCheckResult) {
-			results = append(results, r)
-			cnt++
-			fmt.Printf("\r\033[K")
-			if r.Status == "failed" {
-				color.Red("[%d] ✗ %s (%s:%d) — %s", cnt, r.AgentID, r.Host, r.Port, r.Status)
-				if r.Error != "" {
-					fmt.Printf(": %s", r.Error)
-				}
-				fmt.Println()
-			} else {
-				color.Green("[%d] ✓ %s (%s:%d) — %s in %dms", cnt, r.AgentID, r.Host, r.Port, r.Status, r.LatencyMs)
-				fmt.Println()
-			}
-		})
-
-		if err != nil && strings.Contains(err.Error(), "404") {
-			response, err2 := apiClient.CheckAgents(agentID, agentFile, agentTimeout)
-			if err2 != nil {
-				return err2
-			}
-			results = response.Results
-			summary = &response.Summary
-		} else if err != nil {
-			return err
-		}
-
-		if len(results) == 0 {
-			fmt.Println("No agents found.")
-			return nil
-		}
-
-		fmt.Println()
-
-		if len(results) == 1 {
-			printSingleResult(&results[0])
-		} else {
-			printCheckResultsGrouped(results, summary)
-		}
-
-		if summary.Failed > 0 {
-			os.Exit(1)
-		}
-		return nil
+		return runAgentCheck(agentID, agentFile)
 	},
+}
+
+func runAgentTryConnect(agentID string) error {
+	result, err := apiClient.TryConnect(agentID, agentTimeout)
+	if err != nil {
+		return err
+	}
+
+	printSingleResult(result)
+	if result.Status == "failed" {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func runAgentCheck(agentID string, fileFilter string) error {
+	var results []models.AgentCheckResult
+	var cnt int
+
+	summary, err := apiClient.CheckAgentsStream(agentID, fileFilter, agentTimeout, func(r models.AgentCheckResult) {
+		results = append(results, r)
+		cnt++
+		fmt.Printf("\r\033[K")
+		if r.Status == "failed" {
+			color.Red("[%d] ✗ %s (%s:%d) — %s", cnt, r.AgentID, r.Host, r.Port, r.Status)
+			if r.Error != "" {
+				fmt.Printf(": %s", r.Error)
+			}
+			fmt.Println()
+		} else {
+			color.Green("[%d] ✓ %s (%s:%d) — %s in %dms", cnt, r.AgentID, r.Host, r.Port, r.Status, r.LatencyMs)
+			fmt.Println()
+		}
+	})
+
+	if err != nil && strings.Contains(err.Error(), "404") {
+		response, err2 := apiClient.CheckAgents(agentID, fileFilter, agentTimeout)
+		if err2 != nil {
+			return err2
+		}
+		results = response.Results
+		summary = &response.Summary
+	} else if err != nil {
+		return err
+	}
+
+	if len(results) == 0 {
+		fmt.Println("No agents found.")
+		return nil
+	}
+
+	fmt.Println()
+
+	if len(results) == 1 {
+		printSingleResult(&results[0])
+	} else {
+		printCheckResultsGrouped(results, summary)
+	}
+
+	if summary.Failed > 0 {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func runAgentList() error {
+	agents, err := apiClient.AgentList()
+	if err != nil {
+		return err
+	}
+	if len(agents) == 0 {
+		fmt.Println("没有已连接的 agent")
+		return nil
+	}
+
+	color.Cyan("───── Agents ─────")
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Agent ID", "Hostname", "Platform", "Version", "PID", "Tasks"})
+	table.SetBorder(false)
+	table.SetColumnSeparator(" ")
+	for _, a := range agents {
+		table.Append([]string{
+			a.AgentID,
+			a.Hostname,
+			a.Platform,
+			a.AgentVersion,
+			fmt.Sprintf("%d", a.AgentPID),
+			fmt.Sprintf("%d", a.RunningCommands),
+		})
+	}
+	table.Render()
+	fmt.Printf("\nTotal: %d agents connected\n", len(agents))
+	return nil
+}
+
+func runAgentStatus(agentID string) error {
+	result, err := apiClient.AgentStatus(agentID)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("───── Agent Status ─────\n")
+	fmt.Printf("  Agent ID:       %s\n", result.AgentID)
+	fmt.Printf("  Hostname:       %s\n", result.Hostname)
+	if result.Platform != "" {
+		fmt.Printf("  Platform:       %s\n", result.Platform)
+	}
+	if result.Connected {
+		color.Green("  Connection:     ✓ connected (ws)")
+	} else {
+		color.Red("  Connection:     ✗ disconnected")
+	}
+	fmt.Printf("  Agent PID:      %d\n", result.AgentPID)
+	fmt.Printf("  Agent Version:  %s\n", result.AgentVersion)
+	fmt.Printf("  Running Tasks:  %d\n", result.RunningCommands)
+	if result.LastHeartbeat > 0 {
+		fmt.Printf("  Last Seen:      %s\n", formatRelativeTime(result.LastHeartbeat))
+	}
+	return nil
+}
+
+func runAgentDeploy(agentID string) error {
+	fmt.Printf("正在部署 agent '%s' ...\n", agentID)
+	result, err := apiClient.AgentDeploy(agentID, agentDeployTimeout)
+	if err != nil {
+		return err
+	}
+	if result.Success {
+		color.Green("✓ Agent '%s' 部署成功", result.AgentID)
+	} else {
+		color.Red("✗ Agent '%s' 部署失败: %s", result.AgentID, result.Error)
+		os.Exit(1)
+	}
+	return nil
+}
+
+func runAgentExec(agentID string, cmdArgs []string) error {
+	if len(cmdArgs) == 0 {
+		return fmt.Errorf("缺少命令参数")
+	}
+	command := strings.Join(cmdArgs, " ")
+
+	result, err := apiClient.AgentExec(agentID, &models.AgentExecRequest{
+		Command: command,
+		Timeout: agentExecTimeout,
+		Cwd:     agentExecCwd,
+	})
+	if err != nil {
+		return err
+	}
+
+	if result.Stdout != "" {
+		fmt.Print(result.Stdout)
+	}
+	if result.Stderr != "" {
+		color.Red("%s", result.Stderr)
+	}
+
+	fmt.Printf("\n───── exec result ─────\n")
+	fmt.Printf("  Agent:       %s\n", result.AgentID)
+	if result.ExitCode == 0 {
+		color.Green("  Exit Code:   %d", result.ExitCode)
+	} else {
+		color.Red("  Exit Code:   %d", result.ExitCode)
+	}
+	fmt.Printf("  Duration:    %dms\n", result.DurationMs)
+	if result.Error != "" {
+		color.Red("  Error:       %s", result.Error)
+	}
+
+	if result.ExitCode != 0 {
+		os.Exit(result.ExitCode)
+	}
+	return nil
 }
 
 func printSingleResult(r *models.AgentCheckResult) {
@@ -247,14 +415,11 @@ func formatRelativeTime(timestamp float64) string {
 }
 
 func init() {
-	agentTryConnectCmd.Flags().IntVarP(&agentTimeout, "timeout", "t", 5, "connection timeout in seconds")
-	agentCheckCmd.Flags().IntVarP(&agentTimeout, "timeout", "t", 5, "connection timeout in seconds")
-	agentCheckCmd.Flags().StringVarP(&agentFile, "file", "f", "", "filter by agent file name (without extension)")
-
-	agentDeployCmd.Flags().IntVarP(&agentDeployTimeout, "timeout", "t", 30, "deployment timeout in seconds")
-
-	agentExecCmd.Flags().IntVarP(&agentExecTimeout, "timeout", "t", 60, "command execution timeout in seconds")
-	agentExecCmd.Flags().StringVarP(&agentExecCwd, "cwd", "w", "", "working directory on agent")
+	agentCmd.PersistentFlags().IntVarP(&agentTimeout, "timeout", "t", 5, "connect/check timeout in seconds")
+	agentCmd.PersistentFlags().StringVarP(&agentFile, "file", "f", "", "filter by agent file name (without extension)")
+	agentCmd.PersistentFlags().IntVarP(&agentDeployTimeout, "deploy-timeout", "", 30, "deployment timeout in seconds")
+	agentCmd.PersistentFlags().StringVarP(&agentExecCwd, "cwd", "w", "", "working directory on agent (for exec)")
+	agentCmd.PersistentFlags().IntVarP(&agentExecTimeout, "exec-timeout", "", 60, "command execution timeout in seconds")
 
 	agentCmd.AddCommand(agentTryConnectCmd)
 	agentCmd.AddCommand(agentCheckCmd)
@@ -269,35 +434,7 @@ var agentListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "列出所有连接的 agent",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		agents, err := apiClient.AgentList()
-		if err != nil {
-			return err
-		}
-		if len(agents) == 0 {
-			fmt.Println("没有已连接的 agent")
-			return nil
-		}
-
-		color.Cyan("───── Agents ─────")
-		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Agent ID", "Hostname", "Version", "PID", "Tasks"})
-		table.SetBorder(false)
-		table.SetColumnSeparator(" ")
-		for _, a := range agents {
-			status := "✓ connected"
-			statusColor := color.New(color.FgGreen).SprintFunc()
-			table.Append([]string{
-				a.AgentID,
-				a.Hostname,
-				a.AgentVersion,
-				fmt.Sprintf("%d", a.AgentPID),
-				fmt.Sprintf("%d", a.RunningCommands),
-			})
-			_ = statusColor(status)
-		}
-		table.Render()
-		fmt.Printf("\nTotal: %d agents connected\n", len(agents))
-		return nil
+		return runAgentList()
 	},
 }
 
@@ -306,27 +443,7 @@ var agentStatusCmd = &cobra.Command{
 	Short: "查看 agent 运行状态",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		agentID := args[0]
-		result, err := apiClient.AgentStatus(agentID)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("───── Agent Status ─────\n")
-		fmt.Printf("  Agent ID:       %s\n", result.AgentID)
-		fmt.Printf("  Hostname:       %s\n", result.Hostname)
-		if result.Connected {
-			color.Green("  Connection:     ✓ connected (ws)")
-		} else {
-			color.Red("  Connection:     ✗ disconnected")
-		}
-		fmt.Printf("  Agent PID:      %d\n", result.AgentPID)
-		fmt.Printf("  Agent Version:  %s\n", result.AgentVersion)
-		fmt.Printf("  Running Tasks:  %d\n", result.RunningCommands)
-		if result.LastHeartbeat > 0 {
-			fmt.Printf("  Last Seen:      %s\n", formatRelativeTime(result.LastHeartbeat))
-		}
-		return nil
+		return runAgentStatus(args[0])
 	},
 }
 
@@ -347,41 +464,7 @@ var agentExecCmd = &cobra.Command{
   ppsctl agent exec auto-01 -w /opt -- ./deploy.sh`,
 	Args: cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		agentID := args[0]
-		command := strings.Join(args[1:], " ")
-
-		result, err := apiClient.AgentExec(agentID, &models.AgentExecRequest{
-			Command: command,
-			Timeout: agentExecTimeout,
-			Cwd:     agentExecCwd,
-		})
-		if err != nil {
-			return err
-		}
-
-		if result.Stdout != "" {
-			fmt.Print(result.Stdout)
-		}
-		if result.Stderr != "" {
-			color.Red("%s", result.Stderr)
-		}
-
-		fmt.Printf("\n───── exec result ─────\n")
-		fmt.Printf("  Agent:       %s\n", result.AgentID)
-		if result.ExitCode == 0 {
-			color.Green("  Exit Code:   %d", result.ExitCode)
-		} else {
-			color.Red("  Exit Code:   %d", result.ExitCode)
-		}
-		fmt.Printf("  Duration:    %dms\n", result.DurationMs)
-		if result.Error != "" {
-			color.Red("  Error:       %s", result.Error)
-		}
-
-		if result.ExitCode != 0 {
-			os.Exit(result.ExitCode)
-		}
-		return nil
+		return runAgentExec(args[0], args[1:])
 	},
 }
 
@@ -391,18 +474,6 @@ var agentDeployCmd = &cobra.Command{
 	Long:  "通过 Server API 触发 agent 自动部署（SSH bootstrap）到目标主机",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		agentID := args[0]
-		fmt.Printf("正在部署 agent '%s' ...\n", agentID)
-		result, err := apiClient.AgentDeploy(agentID, agentDeployTimeout)
-		if err != nil {
-			return err
-		}
-		if result.Success {
-			color.Green("✓ Agent '%s' 部署成功", result.AgentID)
-		} else {
-			color.Red("✗ Agent '%s' 部署失败: %s", result.AgentID, result.Error)
-			os.Exit(1)
-		}
-		return nil
+		return runAgentDeploy(args[0])
 	},
 }

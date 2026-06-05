@@ -29,8 +29,7 @@ func New(cfg *config.Config) *Client {
 }
 
 func (c *Client) HealthCheck() (*models.HealthResponse, error) {
-	url := fmt.Sprintf("http://%s/health", config.GetServerAddr(config.App))
-	resp, err := c.http.Get(url)
+	resp, err := c.http.Get(c.baseURL + "/health")
 	if err != nil {
 		return nil, fmt.Errorf("connection failed: %w", err)
 	}

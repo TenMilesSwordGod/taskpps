@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import Callable
 
 from fastapi import WebSocket
@@ -22,6 +23,7 @@ class AgentConnection:
         self.agent_id = agent_id
         self.ws = ws
         self.hostname = ""
+        self.platform = ""
         self.agent_version = ""
         self.agent_pid = 0
         self.connected_at = 0.0
@@ -96,7 +98,9 @@ class AgentManager:
         conn = self._connections.get(agent_id)
         if conn is None:
             return False
-        age = asyncio.get_event_loop().time() - conn.last_heartbeat
+        if conn.last_heartbeat <= 0:
+            return True
+        age = time.time() - conn.last_heartbeat
         return age < DISPLAY_GRACE_PERIOD
 
     async def handle_connection(
@@ -125,6 +129,8 @@ class AgentManager:
 
         hostname_info = payload.get("hostname", "") or ""
         agent_pid = payload.get("agent_pid", 0) or 0
+        os_name = payload.get("os", "") or ""
+        arch_name = payload.get("arch", "") or ""
 
         await ws.send_json(
             {
@@ -138,11 +144,11 @@ class AgentManager:
             }
         )
 
-        loop = asyncio.get_event_loop()
-        now = loop.time()
+        now = time.time()
 
         conn = AgentConnection(agent_id, ws)
         conn.hostname = hostname_info
+        conn.platform = f"{os_name}/{arch_name}" if os_name or arch_name else ""
         conn.agent_version = version
         conn.agent_pid = agent_pid
         conn.connected_at = now
@@ -157,7 +163,8 @@ class AgentManager:
 
         self._connections[agent_id] = conn
         logger.info(
-            "Agent '%s' connected (hostname=%s, version=%s, pid=%d)", agent_id, hostname_info, version, agent_pid
+            "Agent '%s' connected (hostname=%s, platform=%s, version=%s, pid=%d)",
+            agent_id, hostname_info, conn.platform, version, agent_pid,
         )
         return agent_id, conn
 

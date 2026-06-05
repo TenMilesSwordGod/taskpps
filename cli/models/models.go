@@ -117,6 +117,7 @@ type AgentStatus struct {
 	AgentID         string  `json:"agent_id"`
 	Connected       bool    `json:"connected"`
 	Hostname        string  `json:"hostname"`
+	Platform        string  `json:"platform"`
 	AgentVersion    string  `json:"agent_version"`
 	AgentPID        int     `json:"agent_pid"`
 	ConnectedAt     float64 `json:"connected_at"`

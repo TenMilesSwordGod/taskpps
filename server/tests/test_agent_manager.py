@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -27,8 +28,7 @@ class TestAgentManager:
         manager = AgentManager()
         ws = create_mock_ws()
         conn = AgentConnection("test-agent", ws)
-        loop = asyncio.get_event_loop()
-        conn.last_heartbeat = loop.time() - DISPLAY_GRACE_PERIOD + 10
+        conn.last_heartbeat = time.time() - DISPLAY_GRACE_PERIOD + 10
         manager._connections["test-agent"] = conn
 
         assert manager.is_connected("test-agent") is True
@@ -38,8 +38,7 @@ class TestAgentManager:
         manager = AgentManager()
         ws = create_mock_ws()
         conn = AgentConnection("test-agent", ws)
-        loop = asyncio.get_event_loop()
-        conn.last_heartbeat = loop.time() - DISPLAY_GRACE_PERIOD - 10
+        conn.last_heartbeat = time.time() - DISPLAY_GRACE_PERIOD - 10
         manager._connections["test-agent"] = conn
 
         assert manager.is_connected("test-agent") is False

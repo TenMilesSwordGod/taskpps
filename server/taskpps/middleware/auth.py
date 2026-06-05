@@ -19,6 +19,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/api/health":
             return await call_next(request)
 
+        if request.url.path.startswith("/api/ws/"):
+            return await call_next(request)
+
         if request.method == "OPTIONS":
             return await call_next(request)
 

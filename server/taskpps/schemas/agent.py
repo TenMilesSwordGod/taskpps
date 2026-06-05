@@ -34,6 +34,7 @@ class AgentStatus(BaseModel):
     agent_id: str
     connected: bool
     hostname: str = ""
+    platform: str = ""
     agent_version: str = ""
     agent_pid: int = 0
     connected_at: float = 0

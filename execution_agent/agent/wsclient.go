@@ -16,6 +16,8 @@ type WsClient struct {
 	secret    string
 	hostname  string
 	agentPID  int
+	osName    string
+	archName  string
 	conn      *websocket.Conn
 	mu        sync.Mutex
 	connected bool
@@ -25,13 +27,15 @@ type WsClient struct {
 	reconnect bool
 }
 
-func NewWsClient(url, agentID, secret, hostname string, agentPID int) *WsClient {
+func NewWsClient(url, agentID, secret, hostname string, agentPID int, osName, archName string) *WsClient {
 	return &WsClient{
 		url:       url,
 		agentID:   agentID,
 		secret:    secret,
 		hostname:  hostname,
 		agentPID:  agentPID,
+		osName:    osName,
+		archName:  archName,
 		done:      make(chan struct{}),
 		reconnect: true,
 	}
@@ -75,6 +79,8 @@ func (c *WsClient) sendHandshake() error {
 			Version:  ProtocolVersion,
 			Hostname: c.hostname,
 			AgentPID: c.agentPID,
+			OS:       c.osName,
+			Arch:     c.archName,
 		},
 	}
 	return c.writeJSON(msg)

@@ -86,7 +86,7 @@ update_deps() {
         export HOME=/var/lib/taskpps
         source ${VENV_DIR}/bin/activate
         pip install --upgrade pip setuptools wheel
-        pip install -r requirements.txt 2>/dev/null || pip install -e '.[dev]'
+        pip install -e '.[dev]'
     "
 
     log_info "Dependencies updated"
