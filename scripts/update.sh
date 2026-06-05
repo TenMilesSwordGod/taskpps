@@ -60,6 +60,20 @@ update_code() {
         "$PROJECT_ROOT/" /opt/taskpps/
 
     chown -R taskpps:taskpps /opt/taskpps
+
+    # Build and deploy execution agent binary
+    if [[ -f "$PROJECT_ROOT/execution_agent/main.go" ]] && command -v go &>/dev/null; then
+        log_step "Rebuilding execution agent binary..."
+        cd "$PROJECT_ROOT/execution_agent"
+        go build -o taskpps-agent .
+        mkdir -p build
+        GOOS=linux GOARCH=amd64 go build -o build/taskpps-agent-linux-amd64 .
+        GOOS=linux GOARCH=arm64 go build -o build/taskpps-agent-linux-arm64 .
+        cp -r build /opt/taskpps/execution_agent/
+        cp taskpps-agent /opt/taskpps/execution_agent/
+        log_info "Agent binary updated"
+        cd "$PROJECT_ROOT"
+    fi
     log_info "Project files updated"
 }
 
@@ -79,7 +93,9 @@ update_deps() {
 }
 
 restart_service() {
-    log_step "Restarting gunicorn service..."
+    log_step "Regenerating service file and restarting..."
+    # Re-run deploy.sh generate_service_file to update the service file
+    # This ensures binding/settings are current
     systemctl daemon-reload
     systemctl restart "$SERVICE_NAME"
 

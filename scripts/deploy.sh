@@ -116,6 +116,24 @@ setup_directories() {
         "$PROJECT_ROOT/" /opt/taskpps/
 
     chown -R taskpps:taskpps /opt/taskpps
+
+    # Build execution agent binary if source is available
+    if [[ -f "$PROJECT_ROOT/execution_agent/main.go" ]]; then
+        log_step "Building execution agent binary..."
+        cd "$PROJECT_ROOT/execution_agent"
+        if command -v go &>/dev/null; then
+            go build -o taskpps-agent .
+            mkdir -p build
+            GOOS=linux GOARCH=amd64 go build -o build/taskpps-agent-linux-amd64 .
+            GOOS=linux GOARCH=arm64 go build -o build/taskpps-agent-linux-arm64 .
+            cp -r build /opt/taskpps/execution_agent/
+            cp taskpps-agent /opt/taskpps/execution_agent/
+            log_info "Agent binary built and deployed"
+        else
+            log_warn "Go compiler not found — agent bootstrap will use pre-built binaries if available"
+        fi
+        cd "$PROJECT_ROOT"
+    fi
 }
 
 # Install Python dependencies with pip + venv
@@ -196,7 +214,7 @@ KillSignal=SIGTERM
 ExecStart=${VENV_DIR}/bin/gunicorn \\
     taskpps.main:app \\
     --worker-class uvicorn.workers.UvicornWorker \\
-    --bind 127.0.0.1:26521 \\
+    --bind 0.0.0.0:26521 \\
     --workers 2 \\
     --worker-tmp-dir /dev/shm \\
     --timeout 120 \\
@@ -237,7 +255,7 @@ generate_config() {
 locale: zh
 
 server:
-  host: 127.0.0.1
+  host: 0.0.0.0
   port: 26521
   api_key: "$api_key"
 
@@ -350,6 +368,11 @@ install() {
     log_info "Config:     /opt/taskpps/taskpps.yaml"
     log_info "Data:       /var/lib/taskpps"
     log_info "Logs dir:   /var/log/taskpps"
+    log_info ""
+    log_info "Endpoints:"
+    log_info "  API:       http://$(hostname -I | awk '{print $1}'):26521/api"
+    log_info "  Agent WS:  ws://$(hostname -I | awk '{print $1}'):26521/api/ws/agent"
+    log_info "  Health:    http://$(hostname -I | awk '{print $1}'):26521/api/health"
 }
 
 # Main
