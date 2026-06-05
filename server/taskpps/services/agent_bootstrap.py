@@ -121,14 +121,15 @@ class AgentBootstrap:
         elif arch == "aarch64":
             arch = "arm64"
 
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         local_binary = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            project_root,
             "execution_agent", "build", f"taskpps-agent-linux-{arch}",
         )
 
         if not os.path.exists(local_binary):
             local_binary = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                project_root,
                 "execution_agent", "taskpps-agent",
             )
 

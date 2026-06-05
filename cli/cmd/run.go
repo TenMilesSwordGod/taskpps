@@ -6,23 +6,20 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/taskpps/ppsctl/client"
-	"github.com/taskpps/ppsctl/tui"
 )
 
 var runParams []string
-var runWatch bool
 var runDetach bool
 
 var runCmd = &cobra.Command{
 	Use:   "run <pipeline-file>",
 	Short: "Submit a pipeline run",
 	Long: `Submit a pipeline YAML file for execution. Supports parameter overrides
-with -p flag and optional foreground monitoring with --watch.
+with -p flag.
 
 Examples:
   ppsctl run deploy.yaml
   ppsctl run deploy.yaml -p "options.host=prod-server"
-  ppsctl run deploy.yaml --watch
   ppsctl run deploy.yaml --detach
 `,
 	Args: cobra.ExactArgs(1),
@@ -42,16 +39,11 @@ Examples:
 		if runDetach {
 			fmt.Printf("Run %s is running in background.\n", run.ID)
 			fmt.Printf("Use 'ppsctl logs %s' to view logs.\n", run.ID)
-			fmt.Printf("Use 'ppsctl watch %s' to attach to it.\n", run.ID)
 			return nil
 		}
 
-		if runWatch {
-			return tui.StartWatch(apiClient, run.ID)
-		}
-
 		if run.Status == "running" || run.Status == "pending" {
-			fmt.Printf("Use 'ppsctl watch %s' to monitor progress.\n", run.ID)
+			fmt.Printf("Use 'ppsctl logs %s' to view logs.\n", run.ID)
 		}
 		return nil
 	},
@@ -93,7 +85,6 @@ func colorForTaskStatus(s string) *color.Color {
 
 func init() {
 	runCmd.Flags().StringArrayVarP(&runParams, "param", "p", nil, "parameter override (e.g. -p options.host=prod)")
-	runCmd.Flags().BoolVar(&runWatch, "watch", false, "watch run in foreground after submission")
 	runCmd.Flags().BoolVar(&runDetach, "detach", false, "submit and run in background")
 	RootCmd.AddCommand(runCmd)
 }

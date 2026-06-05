@@ -60,8 +60,6 @@ ppsctl logs <run-id>
 # 6. 检查 Agent 连通性
 ppsctl agent check
 
-# 7. TUI 实时监控
-ppsctl watch
 ```
 
 ## 配置

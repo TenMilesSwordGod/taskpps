@@ -8,7 +8,6 @@ import (
 	"github.com/taskpps/ppsctl/client"
 	"github.com/taskpps/ppsctl/config"
 	"github.com/taskpps/ppsctl/logger"
-	"github.com/taskpps/ppsctl/tui"
 )
 
 var (
@@ -51,26 +50,6 @@ backend server via REST API.`,
 		if logLevel >= 4 {
 			logger.Debug("Verbose level set to %d (logLevel: %d)", verbose, logLevel)
 			logger.Debug("Command: %s", cmd.Name())
-			// Enable TUI debug recording for -vvvv
-			term := os.Getenv("TERM")
-			tty := os.Getenv("TTY")
-			if tty == "" {
-				tty = "/dev/pts/0"
-			}
-			columns := 183
-			if cols := os.Getenv("COLUMNS"); cols != "" {
-				fmt.Sscanf(cols, "%d", &columns)
-			}
-			lines := 30
-			if l := os.Getenv("LINES"); l != "" {
-				fmt.Sscanf(l, "%d", &lines)
-			}
-			err := tui.EnableDebugRecorder(cmd.Name(), term, tty, columns, lines)
-			if err != nil {
-				logger.Debug("Failed to enable debug recorder: %v", err)
-			} else {
-				logger.Debug("Debug recording enabled")
-			}
 		}
 
 		if cmd.Name() == "init" || cmd.Name() == "version" {

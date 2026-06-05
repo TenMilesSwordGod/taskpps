@@ -199,7 +199,6 @@ taskpps/
 │   ├── client/
 │   ├── config/
 │   ├── models/
-│   └── tui/
 ├── server/              # Python 后端服务
 │   ├── pyproject.toml
 │   ├── taskpps/

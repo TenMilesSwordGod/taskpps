@@ -57,8 +57,6 @@ ppsctl status <run-id>
 # 5. 查看日志
 ppsctl logs <run-id>
 
-# 6. TUI 实时监控
-ppsctl watch
 ```
 
 ## 配置

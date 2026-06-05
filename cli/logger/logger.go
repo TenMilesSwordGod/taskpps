@@ -10,7 +10,7 @@ import (
 type LogLevel int
 
 const (
-	LevelNone  LogLevel = iota  // No logs at all (default)
+	LevelNone  LogLevel = iota // No logs at all (default)
 	LevelError LogLevel = iota // Errors only
 	LevelWarn  LogLevel = iota // Warnings and Errors
 	LevelInfo  LogLevel = iota // Info, Warnings and Errors
@@ -19,11 +19,11 @@ const (
 
 var (
 	currentLevel LogLevel = LevelNone
-	debugLogger *log.Logger
-	infoLogger  *log.Logger
-	warnLogger  *log.Logger
-	errorLogger *log.Logger
-	logFile     *os.File
+	debugLogger  *log.Logger
+	infoLogger   *log.Logger
+	warnLogger   *log.Logger
+	errorLogger  *log.Logger
+	logFile      *os.File
 )
 
 func init() {
@@ -69,9 +69,9 @@ func SetLevel(v int) {
 	case 4:
 		fallthrough
 	default:
-		if v >4 {
+		if v > 4 {
 			currentLevel = LevelDebug
-		} else if v ==4 {
+		} else if v == 4 {
 			currentLevel = LevelDebug
 		}
 	}

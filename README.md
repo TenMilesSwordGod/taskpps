@@ -99,4 +99,4 @@ cd execution_agent && go test ./... -v
 | CLI 概述 | `wiki/CLI-Overview.md` / `cli/docs/overview.md` |
 | CLI 命令 | `wiki/CLI-Commands.md` / `cli/docs/commands.md` |
 | CLI 配置 | `wiki/CLI-Configuration.md` / `cli/docs/config.md` |
-| TUI 界面 | `wiki/CLI-TUI.md` / `cli/docs/tui.md` |
+

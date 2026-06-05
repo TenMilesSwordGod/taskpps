@@ -37,15 +37,15 @@ type TaskRun struct {
 }
 
 type Run struct {
-	ID           string    `json:"id"`
-	PipelineName string    `json:"pipeline_name"`
-	PipelineFile string    `json:"pipeline_file"`
-	Status       RunStatus `json:"status"`
+	ID           string                 `json:"id"`
+	PipelineName string                 `json:"pipeline_name"`
+	PipelineFile string                 `json:"pipeline_file"`
+	Status       RunStatus              `json:"status"`
 	Params       map[string]interface{} `json:"params"`
-	StartedAt    *string   `json:"started_at"`
-	FinishedAt   *string   `json:"finished_at"`
-	CreatedAt    string    `json:"created_at"`
-	Tasks        []TaskRun `json:"tasks"`
+	StartedAt    *string                `json:"started_at"`
+	FinishedAt   *string                `json:"finished_at"`
+	CreatedAt    string                 `json:"created_at"`
+	Tasks        []TaskRun              `json:"tasks"`
 }
 
 type RunListResponse struct {

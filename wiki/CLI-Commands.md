@@ -66,14 +66,6 @@ ppsctl logs <run-id> --follow        # 实时跟踪(类似 tail -f)
 
 `--follow` 基于 SSE 实现实时日志流。
 
-### `watch` — TUI 实时监控
-
-```bash
-ppsctl watch
-```
-
-启动终端交互界面,实时展示运行列表和任务状态。详见 `cli/docs/tui.md`。
-
 ### `cancel` — 取消运行
 
 ```bash
