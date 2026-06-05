@@ -34,13 +34,11 @@ class AgentBootstrap:
         host = agent_data.get("host", "")
         port = agent_data.get("port", 22)
         credential_id = agent_data.get("credential_id", "")
-        agent_binary_path = agent_data.get("agent_binary_path", "/usr/local/bin/taskpps-agent")
-        agent_secret = agent_data.get("agent_secret", "")
 
         if not host or host in ("localhost", "127.0.0.1", "::1"):
             return {"success": True, "agent_pid": 0, "message": "local agent"}
 
-        username = "root"
+        username = agent_data.get("username", "root")
         password = None
         key_path = None
 
@@ -53,16 +51,36 @@ class AgentBootstrap:
 
         ssh = await self._ssh_connect(host, port, username, password, key_path)
         try:
+            remote_home, is_root = await self._get_remote_user_info(ssh)
+
+            if is_root:
+                default_binary = "/usr/local/bin/taskpps-agent"
+                default_log_dir = "/var/log/taskpps"
+                default_pid_file = "/var/run/taskpps-agent.pid"
+            else:
+                work_dir = f"{remote_home}/.taskpps"
+                default_binary = f"{work_dir}/taskpps-agent"
+                default_log_dir = f"{work_dir}/logs"
+                default_pid_file = f"{work_dir}/agent.pid"
+
+            agent_binary_path = agent_data.get("agent_binary_path", default_binary)
+            agent_log_dir = agent_data.get("agent_log_dir", default_log_dir)
+            agent_pid_file = agent_data.get("agent_pid_file", default_pid_file)
+            agent_secret = agent_data.get("agent_secret", "")
+
             installed = await self._check_binary(ssh, agent_binary_path)
             if not installed:
-                logger.info("Agent binary not found on %s, deploying...", host)
+                logger.info("Agent binary not found on %s, deploying to %s ...", host, agent_binary_path)
+                await self._ensure_remote_dir(ssh, agent_binary_path)
+                await self._ensure_remote_dir(ssh, f"{agent_log_dir}/_")
                 await self._deploy_binary(ssh, host, agent_binary_path)
                 await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
 
             server_url = f"ws://{self._get_server_host(agent_data)}:{self._get_ws_port()}/api/ws/agent"
 
             pid = await self._start_agent_daemon(
-                ssh, agent_binary_path, agent_id, agent_secret, server_url, agent_data
+                ssh, agent_binary_path, agent_log_dir, agent_pid_file,
+                agent_id, agent_secret, server_url, agent_data
             )
             if pid:
                 logger.info("Agent '%s' started on %s with PID %d", agent_id, host, pid)
@@ -109,6 +127,22 @@ class AgentBootstrap:
             return stdout.channel.recv_exit_status(), stdout.read().decode(), stderr.read().decode()
         return await asyncio.to_thread(_run)
 
+    async def _get_remote_user_info(self, client) -> tuple[str, bool]:
+        exit_code, home, _ = await self._ssh_exec(client, "echo $HOME")
+        if exit_code != 0 or not home.strip():
+            home = "/root"
+        home = home.strip()
+
+        exit_code, uid, _ = await self._ssh_exec(client, "id -u")
+        is_root = (exit_code == 0 and uid.strip() == "0")
+        return home, is_root
+
+    async def _ensure_remote_dir(self, client, file_path: str) -> None:
+        import posixpath
+        parent = posixpath.dirname(file_path)
+        if parent and parent != "/":
+            await self._ssh_exec(client, f"mkdir -p {parent}")
+
     async def _check_binary(self, client, path: str) -> bool:
         exit_code, _, _ = await self._ssh_exec(client, f"test -x {path}")
         return exit_code == 0
@@ -143,13 +177,13 @@ class AgentBootstrap:
             sftp.close()
 
     async def _start_agent_daemon(self, client, binary_path: str,
+                                   log_dir: str, pid_file: str,
                                    agent_id: str, secret: str, server_url: str,
                                    agent_data: dict) -> int:
-        log_file = agent_data.get("agent_log_dir", "/var/log/taskpps") + "/agent.log"
-        pid_file = agent_data.get("agent_pid_file", "/var/run/taskpps-agent.pid")
+        log_file = f"{log_dir}/agent.log"
 
         cmd = (
-            f"mkdir -p $(dirname {pid_file}) $(dirname {log_file}) && "
+            f"mkdir -p {log_dir} && "
             f"{binary_path} run --server {server_url} --agent-id {agent_id}"
         )
         if secret:
