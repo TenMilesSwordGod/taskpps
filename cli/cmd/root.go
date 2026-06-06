@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	cfgFile   string
-	apiClient *client.Client
-	appConfig *config.Config
-	verbose   int
+	cfgFile     string
+	projectFlag string
+	apiClient   *client.Client
+	appConfig   *config.Config
+	verbose     int
 )
 
 var RootCmd = &cobra.Command{
@@ -56,7 +57,7 @@ backend server via REST API.`,
 			return nil
 		}
 		var err error
-		appConfig, err = config.Load(cfgFile)
+		appConfig, err = config.Load(cfgFile, projectFlag)
 		if err != nil {
 			if verbose >= 1 {
 				logger.Error("Failed to load config: %v", err)
@@ -100,6 +101,7 @@ func Execute() {
 
 func init() {
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "path to taskpps.yaml config file")
+	RootCmd.PersistentFlags().StringVarP(&projectFlag, "project", "p", "", "项目工作目录路径")
 	RootCmd.PersistentFlags().StringP("server", "s", "", "server address (host:port)")
 	RootCmd.PersistentFlags().CountVarP(&verbose, "verbose", "v", "increase verbosity (-v: warn, -vv: info, -vvv: debug)")
 }

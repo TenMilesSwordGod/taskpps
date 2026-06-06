@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock, patch
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -10,7 +7,7 @@ from taskpps.domain.context import ExecutionContext
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.engine.runner import PipelineRunner
 from taskpps.main import app as _app
-from taskpps.schemas.pipeline import OptionsYAML, PipelineYAML, TaskYAML
+from taskpps.schemas.pipeline import OptionsYAML
 
 
 def _setup_config(tmp_project):
@@ -97,8 +94,8 @@ class TestWorkspacePropagation:
 class TestPipelineLoading:
     def test_load_and_resolve_pipeline(self, setup_project, tmp_project):
         _setup_config(tmp_project)
-        from taskpps.loaders.pipeline_loader import PipelineLoader
         from taskpps.domain.pipeline import ResolvedPipeline
+        from taskpps.loaders.pipeline_loader import PipelineLoader
 
         loader = PipelineLoader(tmp_project / "pipelines")
         spec = loader.load("deploy.yaml")

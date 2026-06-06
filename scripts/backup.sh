@@ -10,6 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+SERVER_HOME="/opt/taskpps"
 BACKUP_DIR="${1:-$PROJECT_ROOT/backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_NAME="taskpps_backup_${TIMESTAMP}"
@@ -35,18 +36,18 @@ mkdir -p "$BACKUP_DIR"
 
 log_step "Creating backup: $BACKUP_NAME"
 
-# Backup database
-if [[ -f /var/lib/taskpps/state.db ]]; then
+# Backup database (server home)
+if [[ -f "$SERVER_HOME/.taskpps/state.db" ]]; then
     log_info "Backing up database..."
-    mkdir -p "$TMP_DIR/data"
-    cp /var/lib/taskpps/state.db "$TMP_DIR/data/"
+    mkdir -p "$TMP_DIR/server_home/.taskpps"
+    cp "$SERVER_HOME/.taskpps/state.db" "$TMP_DIR/server_home/.taskpps/"
 fi
 
-# Backup config
-if [[ -f /opt/taskpps/taskpps.yaml ]]; then
-    log_info "Backing up configuration..."
-    mkdir -p "$TMP_DIR/config"
-    cp /opt/taskpps/taskpps.yaml "$TMP_DIR/config/"
+# Backup server config
+if [[ -f "$SERVER_HOME/taskpps.yaml" ]]; then
+    log_info "Backing up server configuration..."
+    mkdir -p "$TMP_DIR/server_home"
+    cp "$SERVER_HOME/taskpps.yaml" "$TMP_DIR/server_home/"
 fi
 
 # Backup logs (optional, last 7 days)
@@ -56,16 +57,27 @@ if [[ -d /var/log/taskpps ]]; then
     find /var/log/taskpps -type f -mtime -7 -exec cp {} "$TMP_DIR/logs/" \; 2>/dev/null || true
 fi
 
-# Backup pipelines
-if [[ -d /opt/taskpps/pipelines ]]; then
-    log_info "Backing up pipelines..."
-    cp -r /opt/taskpps/pipelines "$TMP_DIR/"
-fi
-
-# Backup credentials (with warning)
-if [[ -d /opt/taskpps/credentials ]]; then
-    log_warn "Backing up credentials directory (contains sensitive data)"
-    cp -r /opt/taskpps/credentials "$TMP_DIR/"
+# Backup project workdir pipelines/agents/credentials
+if [[ -n "${TASKPPS_WORKDIR:-}" ]] && [[ -d "$TASKPPS_WORKDIR/pipelines" ]]; then
+    log_info "Backing up project workdir: $TASKPPS_WORKDIR"
+    mkdir -p "$TMP_DIR/workdir"
+    cp -r "$TASKPPS_WORKDIR/pipelines" "$TMP_DIR/workdir/" 2>/dev/null || true
+    cp -r "$TASKPPS_WORKDIR/agents" "$TMP_DIR/workdir/" 2>/dev/null || true
+    cp -r "$TASKPPS_WORKDIR/credentials" "$TMP_DIR/workdir/" 2>/dev/null || true
+    if [[ -f "$TASKPPS_WORKDIR/.taskpps/taskpps.yaml" ]]; then
+        mkdir -p "$TMP_DIR/workdir/.taskpps"
+        cp "$TASKPPS_WORKDIR/.taskpps/taskpps.yaml" "$TMP_DIR/workdir/.taskpps/"
+    fi
+elif [[ -d "$SERVER_HOME/pipelines" ]]; then
+    # Fallback: backup from server home
+    log_info "Backing up pipelines from server home..."
+    if [[ -d "$SERVER_HOME/pipelines" ]]; then
+        cp -r "$SERVER_HOME/pipelines" "$TMP_DIR/"
+    fi
+    if [[ -d "$SERVER_HOME/credentials" ]]; then
+        log_warn "Backing up credentials directory (contains sensitive data)"
+        cp -r "$SERVER_HOME/credentials" "$TMP_DIR/"
+    fi
 fi
 
 # Create tarball

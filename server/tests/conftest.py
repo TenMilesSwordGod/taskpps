@@ -149,6 +149,8 @@ def setup_project(tmp_project):
     import taskpps.config as cfg
 
     cfg._project_root = tmp_project
+    cfg._server_home = tmp_project
+    cfg._project_workdir = tmp_project
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
     reset_engine()

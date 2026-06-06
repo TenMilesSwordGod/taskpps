@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from taskpps.services.agent_manager import (
+    DISPLAY_GRACE_PERIOD,
     AgentConnection,
     AgentManager,
-    DISPLAY_GRACE_PERIOD,
-    HEARTBEAT_TIMEOUT,
 )
 
 
@@ -161,7 +159,7 @@ class TestAgentManager:
 
     @pytest.mark.asyncio
     async def test_reconnect_race_condition(self):
-        """模拟重连竞态：旧 handler 的 disconnect 不应移除新连接"""
+        """模拟重连竞态: 旧 handler 的 disconnect 不应移除新连接"""
         manager = AgentManager()
 
         old_ws = create_mock_ws()

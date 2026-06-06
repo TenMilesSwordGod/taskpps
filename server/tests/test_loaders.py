@@ -274,14 +274,14 @@ class TestSubstituteEnvVars:
     def test_load_with_env_prefix_and_no_env_param(self, tmp_path, monkeypatch):
         # 测试没有显式传入 env 参数时，仍然可以通过 settings.env 和 os.environ 替换
         monkeypatch.setenv("SYS_ENV", "sys_value")
-        
+
         # 模拟 settings.env
         import taskpps.config
         from taskpps.config import Settings
         original_settings = taskpps.config._settings
         try:
             taskpps.config._settings = Settings(env={"SETTINGS_ENV": "settings_value"})
-            
+
             pipelines_dir = tmp_path / "pipelines"
             pipelines_dir.mkdir()
             p = pipelines_dir / "env_prefix_test.yaml"
@@ -300,14 +300,14 @@ tasks:
     def test_load_with_env_prefix_and_params(self, tmp_path, monkeypatch):
         # 测试传入 env 参数时的优先级
         monkeypatch.setenv("SYS_ENV", "sys_value")
-        
+
         # 模拟 settings.env
         import taskpps.config
         from taskpps.config import Settings
         original_settings = taskpps.config._settings
         try:
             taskpps.config._settings = Settings(env={"SETTINGS_ENV": "settings_value", "OVERLAPPED": "settings_val"})
-            
+
             pipelines_dir = tmp_path / "pipelines"
             pipelines_dir.mkdir()
             p = pipelines_dir / "env_priority_test.yaml"
@@ -330,7 +330,7 @@ tasks:
     def test_load_always_substitute_vars(self, tmp_path, monkeypatch):
         # 测试即使没有 env 参数，也会执行变量替换
         monkeypatch.setenv("TEST_VAR", "os_value")
-        
+
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
         p = pipelines_dir / "always_substitute.yaml"
@@ -347,14 +347,14 @@ tasks:
     def test_no_env_prefix_also_uses_settings_and_os(self, tmp_path, monkeypatch):
         # 测试没有 env. 前缀的变量也会按同样的优先级查找
         monkeypatch.setenv("SYS_NO_PREFIX", "sys_no_prefix")
-        
+
         # 模拟 settings.env
         import taskpps.config
         from taskpps.config import Settings
         original_settings = taskpps.config._settings
         try:
             taskpps.config._settings = Settings(env={"SETTINGS_NO_PREFIX": "settings_no_prefix", "OVERLAP_NO_PREFIX": "settings_np"})
-            
+
             pipelines_dir = tmp_path / "pipelines"
             pipelines_dir.mkdir()
             p = pipelines_dir / "no_prefix_test.yaml"

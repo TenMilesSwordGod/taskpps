@@ -10,6 +10,7 @@ set -euo pipefail
 
 SERVICE_NAME="taskpps"
 API_URL="http://127.0.0.1:26521/api/health"
+SERVER_HOME="/opt/taskpps"
 JSON_OUTPUT=false
 
 # Parse args
@@ -96,15 +97,14 @@ check_memory() {
 }
 
 check_db() {
-    local db_path
-    db_path="/opt/taskpps/.taskpps/state.db"
+    local db_path="$SERVER_HOME/.taskpps/state.db"
 
     if [[ -f "$db_path" ]]; then
         RESULTS+=("database:ok")
-        $JSON_OUTPUT || log_ok "Database file exists"
+        $JSON_OUTPUT || log_ok "Database file exists at $db_path"
     else
         RESULTS+=("database:failed")
-        $JSON_OUTPUT || log_fail "Database file not found"
+        $JSON_OUTPUT || log_fail "Database file not found at $db_path"
         HEALTHY=false
     fi
 }

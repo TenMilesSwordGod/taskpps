@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 
 import yaml
@@ -44,6 +45,8 @@ class TriggerConfig(BaseModel):
 
 class Settings(BaseModel):
     locale: str = "zh"
+    workdir: str | None = None
+    server_home: str | None = None
     server: ServerConfig = Field(default_factory=ServerConfig)
     executor: ExecutorConfig = Field(default_factory=ExecutorConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
@@ -56,6 +59,8 @@ class Settings(BaseModel):
 
 _settings: Settings | None = None
 _project_root: Path | None = None
+_server_home: Path | None = None
+_project_workdir: Path | None = None
 
 
 def find_project_root() -> Path:
@@ -77,8 +82,20 @@ def find_project_root() -> Path:
 
 
 def set_project_root(path: Path) -> None:
-    global _project_root
+    global _project_root, _server_home, _project_workdir
     _project_root = path.resolve()
+    _server_home = path.resolve()
+    _project_workdir = path.resolve()
+
+
+def set_server_home(path: Path) -> None:
+    global _server_home
+    _server_home = path.resolve()
+
+
+def set_project_workdir(path: Path) -> None:
+    global _project_workdir
+    _project_workdir = path.resolve()
 
 
 def load_settings(config_path: str | None = None) -> Settings:
@@ -108,9 +125,34 @@ def get_settings() -> Settings:
     return _settings
 
 
+def get_project_workdir() -> Path:
+    global _project_workdir
+    if _project_workdir is not None:
+        return _project_workdir
+    env_workdir = os.environ.get("TASKPPS_WORKDIR")
+    if env_workdir:
+        return Path(env_workdir)
+    settings = get_settings()
+    if settings.workdir:
+        return Path(settings.workdir)
+    return find_project_root()
+
+
+def get_server_home() -> Path:
+    global _server_home
+    if _server_home is not None:
+        return _server_home
+    env_server = os.environ.get("TASKPPS_SERVER_HOME")
+    if env_server:
+        return Path(env_server)
+    settings = get_settings()
+    if settings.server_home:
+        return Path(settings.server_home)
+    return Path(__file__).resolve().parent.parent.parent
+
+
 def get_data_dir() -> Path:
-    root = find_project_root()
-    data_dir = root / ".taskpps"
+    data_dir = get_server_home() / ".taskpps"
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 
@@ -120,33 +162,33 @@ def get_db_path() -> Path:
 
 
 def get_logs_dir() -> Path:
-    logs = get_data_dir() / "logs"
+    logs = get_project_workdir() / ".taskpps" / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     return logs
 
 
 def get_pipelines_dir() -> Path:
-    return find_project_root() / "pipelines"
+    return get_project_workdir() / "pipelines"
 
 
 def get_agents_dir() -> Path:
-    return find_project_root() / "agents"
+    return get_project_workdir() / "agents"
 
 
 def get_credentials_dir() -> Path:
-    return find_project_root() / "credentials"
+    return get_project_workdir() / "credentials"
 
 
 def get_tasks_dir() -> Path:
-    return find_project_root() / "tasks"
+    return get_project_workdir() / "tasks"
 
 
 def get_plugins_dir() -> Path:
-    return find_project_root() / "plugins"
+    return get_project_workdir() / "plugins"
 
 
 def get_workspaces_dir() -> Path:
-    workspaces = get_data_dir() / "workspaces"
+    workspaces = get_project_workdir() / ".taskpps" / "workspaces"
     workspaces.mkdir(parents=True, exist_ok=True)
     return workspaces
 

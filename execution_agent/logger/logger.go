@@ -5,18 +5,53 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 	"time"
 )
 
-var (
-	stdLogger  *log.Logger
-	fileLogger *log.Logger
-	logFile    *os.File
+type LogLevel int
+
+const (
+	LevelNone  LogLevel = iota
+	LevelError
+	LevelWarn
+	LevelInfo
+	LevelDebug
 )
+
+var levelNames = map[LogLevel]string{
+	LevelNone:  "NONE",
+	LevelError: "ERROR",
+	LevelWarn:  "WARN",
+	LevelInfo:  "INFO",
+	LevelDebug: "DEBUG",
+}
+
+var levelByName = map[string]LogLevel{
+	"NONE":  LevelNone,
+	"ERROR": LevelError,
+	"WARN":  LevelWarn,
+	"INFO":  LevelInfo,
+	"DEBUG": LevelDebug,
+}
+
+var (
+	mu      sync.RWMutex
+	level   LogLevel = LevelInfo
+	writer  *log.Logger
+	logFile *os.File
+)
+
+func (l LogLevel) String() string {
+	if name, ok := levelNames[l]; ok {
+		return name
+	}
+	return fmt.Sprintf("LEVEL(%d)", l)
+}
 
 func Init(logPath string) error {
 	if logPath == "" {
-		stdLogger = log.New(os.Stderr, "", 0)
+		writer = log.New(os.Stderr, "", 0)
 		return nil
 	}
 
@@ -26,38 +61,84 @@ func Init(logPath string) error {
 	}
 	logFile = f
 
-	writer := io.MultiWriter(os.Stderr, f)
-	stdLogger = log.New(writer, "", 0)
-	fileLogger = log.New(f, "", 0)
+	multi := io.MultiWriter(os.Stderr, f)
+	writer = log.New(multi, "", 0)
 	return nil
 }
 
-func Close() {
+func Close() error {
 	if logFile != nil {
-		logFile.Close()
+		err := logFile.Close()
+		logFile = nil
+		return err
+	}
+	return nil
+}
+
+func SetLevel(v int) {
+	mu.Lock()
+	defer mu.Unlock()
+	switch {
+	case v <= 0:
+		level = LevelNone
+	case v == 1:
+		level = LevelError
+	case v == 2:
+		level = LevelWarn
+	case v == 3:
+		level = LevelInfo
+	default:
+		level = LevelDebug
 	}
 }
 
-func logf(level, format string, args ...interface{}) {
+func SetLevelByName(name string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	l, ok := levelByName[name]
+	if !ok {
+		return false
+	}
+	level = l
+	return true
+}
+
+func GetLevel() LogLevel {
+	mu.RLock()
+	defer mu.RUnlock()
+	return level
+}
+
+func logf(logLevel LogLevel, levelName, format string, args ...interface{}) {
+	mu.RLock()
+	currentLevel := level
+	w := writer
+	mu.RUnlock()
+
+	if currentLevel < logLevel {
+		return
+	}
+	if w == nil {
+		return
+	}
+
 	msg := fmt.Sprintf(format, args...)
-	line := fmt.Sprintf("[%s] [%s] %s", time.Now().Format(time.RFC3339), level, msg)
-	if stdLogger != nil {
-		stdLogger.Println(line)
-	}
-}
-
-func Info(format string, args ...interface{}) {
-	logf("INFO", format, args...)
-}
-
-func Warn(format string, args ...interface{}) {
-	logf("WARN", format, args...)
-}
-
-func Error(format string, args ...interface{}) {
-	logf("ERROR", format, args...)
+	line := fmt.Sprintf("[%s] [%s] %s", time.Now().Format(time.RFC3339), levelName, msg)
+	w.Println(line)
 }
 
 func Debug(format string, args ...interface{}) {
-	logf("DEBUG", format, args...)
+	logf(LevelDebug, "DEBUG", format, args...)
+}
+
+func Info(format string, args ...interface{}) {
+	logf(LevelInfo, "INFO", format, args...)
+}
+
+func Warn(format string, args ...interface{}) {
+	logf(LevelWarn, "WARN", format, args...)
+}
+
+func Error(format string, args ...interface{}) {
+	logf(LevelError, "ERROR", format, args...)
 }

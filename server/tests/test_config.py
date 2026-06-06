@@ -119,6 +119,8 @@ class TestProjectRoot:
         new_root.mkdir()
         set_project_root(new_root)
         assert cfg._project_root == new_root.resolve()
+        assert cfg._server_home == new_root.resolve()
+        assert cfg._project_workdir == new_root.resolve()
 
 
 class TestLoadSettings:
@@ -154,14 +156,14 @@ class TestDirectories:
     def test_data_dir_creates(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_server_home = cfg._server_home
+        cfg._server_home = tmp_path
         try:
             d = get_data_dir()
             assert d.exists()
             assert (tmp_path / ".taskpps").exists()
         finally:
-            cfg._project_root = old_root
+            cfg._server_home = old_server_home
 
     def test_db_path(self, setup_project, tmp_project):
         p = get_db_path()
@@ -171,14 +173,14 @@ class TestDirectories:
     def test_db_path_uses_data_dir(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_server_home = cfg._server_home
+        cfg._server_home = tmp_path
         try:
             p = get_db_path()
             assert p.name == "state.db"
             assert p.parent == tmp_path / ".taskpps"
         finally:
-            cfg._project_root = old_root
+            cfg._server_home = old_server_home
 
     def test_logs_dir(self, setup_project):
         d = get_logs_dir()
@@ -187,14 +189,14 @@ class TestDirectories:
     def test_logs_dir_creates(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             d = get_logs_dir()
             assert d.exists()
             assert d == tmp_path / ".taskpps" / "logs"
         finally:
-            cfg._project_root = old_root
+            cfg._project_workdir = old_workdir
 
     def test_pipelines_dir(self, setup_project, tmp_project):
         d = get_pipelines_dir()
@@ -203,13 +205,13 @@ class TestDirectories:
     def test_pipelines_dir_no_trailing_slash(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             d = get_pipelines_dir()
             assert d == tmp_path / "pipelines"
         finally:
-            cfg._project_root = old_root
+            cfg._project_workdir = old_workdir
 
     def test_agents_dir(self, setup_project, tmp_project):
         d = get_agents_dir()
@@ -218,13 +220,13 @@ class TestDirectories:
     def test_agents_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             d = get_agents_dir()
             assert d == tmp_path / "agents"
         finally:
-            cfg._project_root = old_root
+            cfg._project_workdir = old_workdir
 
     def test_credentials_dir(self, setup_project, tmp_project):
         d = get_credentials_dir()
@@ -233,13 +235,13 @@ class TestDirectories:
     def test_credentials_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             d = get_credentials_dir()
             assert d == tmp_path / "credentials"
         finally:
-            cfg._project_root = old_root
+            cfg._project_workdir = old_workdir
 
     def test_tasks_dir(self, setup_project, tmp_project):
         d = get_tasks_dir()
@@ -248,13 +250,13 @@ class TestDirectories:
     def test_tasks_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             d = get_tasks_dir()
             assert d == tmp_path / "tasks"
         finally:
-            cfg._project_root = old_root
+            cfg._project_workdir = old_workdir
 
     def test_plugins_dir(self, setup_project, tmp_project):
         d = get_plugins_dir()
@@ -263,10 +265,10 @@ class TestDirectories:
     def test_plugins_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_root = cfg._project_root
-        cfg._project_root = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             d = get_plugins_dir()
             assert d == tmp_path / "plugins"
         finally:
-            cfg._project_root = old_root
+            cfg._project_workdir = old_workdir

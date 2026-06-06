@@ -135,7 +135,11 @@ func TestAgentCheckArgs(t *testing.T) {
 func TestAgentTimeoutFlag(t *testing.T) {
 	flag := agentTryConnectCmd.Flags().Lookup("timeout")
 	if flag == nil {
+		flag = agentTryConnectCmd.InheritedFlags().Lookup("timeout")
+	}
+	if flag == nil {
 		t.Error("try-connect should have --timeout flag")
+		return
 	}
 	if flag.DefValue != "5" {
 		t.Errorf("default timeout should be 5, got %s", flag.DefValue)
@@ -143,10 +147,17 @@ func TestAgentTimeoutFlag(t *testing.T) {
 
 	flag = agentCheckCmd.Flags().Lookup("timeout")
 	if flag == nil {
+		flag = agentCheckCmd.InheritedFlags().Lookup("timeout")
+	}
+	if flag == nil {
 		t.Error("check should have --timeout flag")
+		return
 	}
 
 	flag = agentCheckCmd.Flags().Lookup("file")
+	if flag == nil {
+		flag = agentCheckCmd.InheritedFlags().Lookup("file")
+	}
 	if flag == nil {
 		t.Error("check should have --file flag")
 	}

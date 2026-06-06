@@ -66,7 +66,7 @@ def _resolve_variable_match(match, env: dict[str, str]) -> str:
 
     elif ref.startswith("env."):
         key = ref[4:]
-        # 按优先级查找：传入的 env > settings.env > os.environ
+        # 按优先级查找: 传入的 env > settings.env > os.environ
         if key in env:
             return env[key]
         settings = get_settings()
@@ -75,7 +75,7 @@ def _resolve_variable_match(match, env: dict[str, str]) -> str:
         return os.environ.get(key, match.group(0))
 
     else:
-        # 按优先级查找：传入的 env > settings.env > os.environ
+        # 按优先级查找: 传入的 env > settings.env > os.environ
         if ref in env:
             return env[ref]
         settings = get_settings()
@@ -126,7 +126,7 @@ class PipelineLoader:
         if data is None:
             raise ValueError(t("Pipeline file is empty: {path}", path=pipeline_file))
 
-        # 始终执行变量替换，即使 env 为空也支持 settings.env 和 os.environ
+        # 始终执行变量替换, 即使 env 为空也支持 settings.env 和 os.environ
         data = substitute_env_vars(data, env or {})
 
         return PipelineYAML(**data)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -154,10 +155,7 @@ class LocalExecutor(BaseExecutor):
                     await asyncio.sleep(0.1)
 
             await self._process.wait()
-            if self._cancelled:
-                exit_code = -1
-            else:
-                exit_code = self._process.returncode
+            exit_code = -1 if self._cancelled else self._process.returncode
             logger.info(
                 "LocalExecutor: process finished PID=%d exit_code=%s (cancelled=%s)",
                 self._process.pid, exit_code, self._cancelled,
@@ -167,10 +165,8 @@ class LocalExecutor(BaseExecutor):
             self._log_direct(log_path, f"[ERROR] Task exceeded timeout of {timeout}s\n")
             logger.warning("LocalExecutor: timeout PID=%d after %ds", self._process.pid, timeout)
             self._kill_process_tree(self._process.pid, signal.SIGKILL)
-            try:
+            with contextlib.suppress(Exception):
                 await asyncio.wait_for(self._process.wait(), timeout=5)
-            except Exception:
-                pass
             msg = t("Task exceeded timeout of {timeout}s", timeout=timeout)
             output_lines.append(msg)
             self._log_direct(log_path, msg + "\n")
@@ -186,10 +182,8 @@ class LocalExecutor(BaseExecutor):
                 except Exception:
                     self._kill_process_tree(self._process.pid, signal.SIGKILL)
                     logger.warning("LocalExecutor: SIGTERM failed, escalating to SIGKILL PID=%d", self._process.pid)
-                    try:
+                    with contextlib.suppress(Exception):
                         await self._process.wait()
-                    except Exception:
-                        pass
             msg = t("Task was cancelled")
             output_lines.append(msg)
             self._log_direct(log_path, msg + "\n")
@@ -246,12 +240,10 @@ class LocalExecutor(BaseExecutor):
         )
 
     def _kill_process_tree(self, pid: int, sig: int) -> None:
-        pids = [pid] + _collect_descendants(pid)
+        pids = [pid, *_collect_descendants(pid)]
         for p in reversed(pids):
-            try:
+            with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
                 os.kill(p, sig)
-            except (ProcessLookupError, PermissionError, OSError):
-                pass
 
     def _log_direct(self, log_path: Path, message: str) -> None:
         try:

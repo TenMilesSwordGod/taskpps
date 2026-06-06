@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 
+from taskpps.config import get_server_home
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
@@ -57,18 +59,15 @@ class AgentBootstrap:
                 default_binary = "/usr/local/bin/taskpps-agent"
                 default_log_dir = "/var/log/taskpps"
                 default_pid_file = "/var/run/taskpps-agent.pid"
-                default_work_dir = "/opt/taskpps"
             else:
                 work_dir = f"{remote_home}/.taskpps"
                 default_binary = f"{work_dir}/taskpps-agent"
                 default_log_dir = f"{work_dir}/logs"
                 default_pid_file = f"{work_dir}/agent.pid"
-                default_work_dir = work_dir
 
             agent_binary_path = agent_data.get("agent_binary_path", default_binary)
             agent_log_dir = agent_data.get("agent_log_dir", default_log_dir)
             agent_pid_file = agent_data.get("agent_pid_file", default_pid_file)
-            agent_work_dir = agent_data.get("agent_work_dir", default_work_dir)
             agent_secret = agent_data.get("agent_secret", "")
 
             server_host = self._get_server_host(agent_data)
@@ -104,7 +103,7 @@ class AgentBootstrap:
             )
             logger.info("Agent '%s' handshake completed", agent_id)
             return {"success": True, "agent_pid": 0}
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             agent_log_path = f"{agent_log_dir}/agent.log"
             log_tail = ""
             try:
@@ -125,7 +124,7 @@ class AgentBootstrap:
                 f"Verify server is reachable from {host} and not bound to 127.0.0.1. "
                 f"Agent log tail:\n{log_tail}"
             )
-            raise AgentBootstrapError(error_msg)
+            raise AgentBootstrapError(error_msg) from e
 
     def _check_server_reachability(self, ssh, remote_host: str,
                                      server_host: str, server_port: int) -> None:
@@ -163,10 +162,8 @@ class AgentBootstrap:
         return client
 
     async def _ssh_close(self, client) -> None:
-        try:
+        with contextlib.suppress(Exception):
             client.close()
-        except Exception:
-            pass
 
     async def _ssh_exec(self, client, command: str) -> tuple[int, str, str]:
         def _run():
@@ -250,7 +247,7 @@ class AgentBootstrap:
             raise AgentBootstrapError(t("Failed to read PID file"))
         return int(pid_str.strip())
 
-    def _get_server_host(self, agent_data: dict = None) -> str:
+    def _get_server_host(self, agent_data: dict | None = None) -> str:
         if agent_data:
             explicit = agent_data.get("server_ws_host", "")
             if explicit:

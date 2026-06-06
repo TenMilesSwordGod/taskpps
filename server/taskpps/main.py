@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from taskpps.api import agents, health, runs, triggers, ws_agent
-from taskpps.config import get_settings, load_settings
+from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale, t
 from taskpps.middleware.auth import APIKeyMiddleware
@@ -32,6 +32,8 @@ async def lifespan(app: FastAPI):
         load_settings()
         settings = get_settings()
     set_locale(settings.locale)
+    logger.info("Project workdir: %s", get_project_workdir())
+    logger.info("Server home: %s", get_server_home())
     if settings.server.api_key is None:
         logger.warning("No API key configured — all API endpoints are accessible without authentication")
     await init_db()

@@ -11,7 +11,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SERVICE_NAME="taskpps"
-VENV_DIR="/opt/taskpps/server/.venv"
+SERVER_HOME="/opt/taskpps"
+VENV_DIR="$SERVER_HOME/server/.venv"
 
 # Colors
 RED='\033[0;31m'
@@ -34,22 +35,25 @@ check_root() {
 
 backup_config() {
     log_step "Backing up configuration..."
-    if [[ -f /opt/taskpps/taskpps.yaml ]]; then
-        cp /opt/taskpps/taskpps.yaml /opt/taskpps/taskpps.yaml.bak.$(date +%Y%m%d_%H%M%S)
+    if [[ -f "$SERVER_HOME/taskpps.yaml" ]]; then
+        cp "$SERVER_HOME/taskpps.yaml" "$SERVER_HOME/taskpps.yaml.bak.$(date +%Y%m%d_%H%M%S)"
         log_info "Config backed up"
+    fi
+    if [[ -f "$SERVER_HOME/.taskpps/state.db" ]]; then
+        cp "$SERVER_HOME/.taskpps/state.db" "$SERVER_HOME/.taskpps/state.db.bak.$(date +%Y%m%d_%H%M%S)"
+        log_info "Database backed up"
     fi
 }
 
 update_code() {
-    log_step "Updating project files..."
+    log_step "Updating server code..."
 
-    # Check if project root is a git repo
     if [[ -d "$PROJECT_ROOT/.git" ]]; then
         cd "$PROJECT_ROOT"
         git pull origin main || log_warn "Git pull failed, using local files"
     fi
 
-    # Sync files
+    # Sync server code to server home
     rsync -a --delete \
         --exclude='.git' \
         --exclude='__pycache__' \
@@ -57,9 +61,14 @@ update_code() {
         --exclude='.pytest_cache' \
         --exclude='.venv' \
         --exclude='node_modules' \
-        "$PROJECT_ROOT/" /opt/taskpps/
+        --exclude='pipelines/' \
+        --exclude='agents/' \
+        --exclude='credentials/' \
+        --exclude='tasks/' \
+        --exclude='plugins/' \
+        "$PROJECT_ROOT/" "$SERVER_HOME/"
 
-    chown -R taskpps:taskpps /opt/taskpps
+    chown -R taskpps:taskpps "$SERVER_HOME"
 
     # Build and deploy execution agent binary
     if [[ -f "$PROJECT_ROOT/execution_agent/main.go" ]] && command -v go &>/dev/null; then
@@ -69,18 +78,29 @@ update_code() {
         mkdir -p build
         GOOS=linux GOARCH=amd64 go build -o build/taskpps-agent-linux-amd64 .
         GOOS=linux GOARCH=arm64 go build -o build/taskpps-agent-linux-arm64 .
-        cp -r build /opt/taskpps/execution_agent/
-        cp taskpps-agent /opt/taskpps/execution_agent/
+        cp -r build "$SERVER_HOME/execution_agent/"
+        cp taskpps-agent "$SERVER_HOME/execution_agent/"
         log_info "Agent binary updated"
         cd "$PROJECT_ROOT"
     fi
-    log_info "Project files updated"
+
+    # Rebuild ppsctl if source available
+    if command -v go &>/dev/null && [[ -f "$SERVER_HOME/cli/main.go" ]]; then
+        log_step "Rebuilding ppsctl..."
+        cd "$SERVER_HOME/cli"
+        go build -o bin/ppsctl .
+        cp bin/ppsctl /usr/local/bin/ppsctl 2>/dev/null || true
+        cd "$PROJECT_ROOT"
+        log_info "ppsctl updated"
+    fi
+
+    log_info "Server code updated"
 }
 
 update_deps() {
     log_step "Updating dependencies with pip..."
 
-    cd /opt/taskpps/server
+    cd "$SERVER_HOME/server"
 
     su -s /bin/bash taskpps -c "
         export HOME=/var/lib/taskpps
@@ -93,9 +113,7 @@ update_deps() {
 }
 
 restart_service() {
-    log_step "Regenerating service file and restarting..."
-    # Re-run deploy.sh generate_service_file to update the service file
-    # This ensures binding/settings are current
+    log_step "Restarting service..."
     systemctl daemon-reload
     systemctl restart "$SERVICE_NAME"
 

@@ -50,7 +50,7 @@ executor:
 	os.Chdir(tmpDir)
 	defer os.Chdir(originalWd)
 
-	cfg, err := Load(configPath)
+	cfg, err := Load(configPath, "")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}

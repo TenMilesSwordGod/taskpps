@@ -13,54 +13,89 @@ func TestSetLevel(t *testing.T) {
 		input    int
 		expected LogLevel
 	}{
-		{
-			name:     "LevelNone by default/0",
-			input:    0,
-			expected: LevelNone,
-		},
-		{
-			name:     "LevelError",
-			input:    1,
-			expected: LevelError,
-		},
-		{
-			name:     "LevelWarn",
-			input:    2,
-			expected: LevelWarn,
-		},
-		{
-			name:     "LevelInfo",
-			input:    3,
-			expected: LevelInfo,
-		},
-		{
-			name:     "LevelDebug",
-			input:    4,
-			expected: LevelDebug,
-		},
-		{
-			name:     "LevelDebug (>=4)",
-			input:    5,
-			expected: LevelDebug,
-		},
+		{name: "LevelNone by default/0", input: 0, expected: LevelNone},
+		{name: "LevelError", input: 1, expected: LevelError},
+		{name: "LevelWarn", input: 2, expected: LevelWarn},
+		{name: "LevelInfo", input: 3, expected: LevelInfo},
+		{name: "LevelDebug", input: 4, expected: LevelDebug},
+		{name: "LevelDebug (>=4)", input: 5, expected: LevelDebug},
+		{name: "negative value", input: -1, expected: LevelNone},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			SetLevel(tc.input)
-			if currentLevel != tc.expected {
-				t.Errorf("SetLevel(%d) = %v, want %v", tc.input, currentLevel, tc.expected)
+			if got := GetLevel(); got != tc.expected {
+				t.Errorf("SetLevel(%d) = %v, want %v", tc.input, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestSetLevelByName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected LogLevel
+		ok       bool
+	}{
+		{name: "NONE", input: "NONE", expected: LevelNone, ok: true},
+		{name: "ERROR", input: "ERROR", expected: LevelError, ok: true},
+		{name: "WARN", input: "WARN", expected: LevelWarn, ok: true},
+		{name: "INFO", input: "INFO", expected: LevelInfo, ok: true},
+		{name: "DEBUG", input: "DEBUG", expected: LevelDebug, ok: true},
+		{name: "lowercase", input: "debug", expected: LevelNone, ok: false},
+		{name: "unknown", input: "TRACE", expected: LevelNone, ok: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			SetLevel(4)
+			ok := SetLevelByName(tc.input)
+			if ok != tc.ok {
+				t.Errorf("SetLevelByName(%q) ok = %v, want %v", tc.input, ok, tc.ok)
+			}
+			if ok && GetLevel() != tc.expected {
+				t.Errorf("SetLevelByName(%q) = %v, want %v", tc.input, GetLevel(), tc.expected)
+			}
+		})
+	}
+}
+
+func TestGetLevel(t *testing.T) {
+	SetLevel(2)
+	if got := GetLevel(); got != LevelWarn {
+		t.Errorf("GetLevel() = %v, want %v", got, LevelWarn)
+	}
+}
+
+func TestLogLevelString(t *testing.T) {
+	testCases := []struct {
+		level    LogLevel
+		expected string
+	}{
+		{LevelNone, "NONE"},
+		{LevelError, "ERROR"},
+		{LevelWarn, "WARN"},
+		{LevelInfo, "INFO"},
+		{LevelDebug, "DEBUG"},
+		{LogLevel(99), "LEVEL(99)"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expected, func(t *testing.T) {
+			if got := tc.level.String(); got != tc.expected {
+				t.Errorf("LogLevel(%d).String() = %q, want %q", tc.level, got, tc.expected)
 			}
 		})
 	}
 }
 
 func TestLoggingAtDifferentLevels(t *testing.T) {
-	// Save original state
-	oldLevel := currentLevel
+	oldLevel := GetLevel()
 	oldOutput := debugLogger.Writer()
 	defer func() {
-		currentLevel = oldLevel
+		SetLevel(int(oldLevel))
 		SetOutput(oldOutput)
 	}()
 
@@ -75,94 +110,17 @@ func TestLoggingAtDifferentLevels(t *testing.T) {
 		expectToLog    bool
 		expectedPrefix string
 	}{
-		{
-			name:           "Debug at LevelNone - not logged",
-			level:          0,
-			logFunc:        Debug,
-			message:        "test debug",
-			expectToLog:    false,
-			expectedPrefix: "[DEBUG]",
-		},
-		{
-			name:           "Info at LevelNone - not logged",
-			level:          0,
-			logFunc:        Info,
-			message:        "test info",
-			expectToLog:    false,
-			expectedPrefix: "[INFO]",
-		},
-		{
-			name:           "Warn at LevelNone - not logged",
-			level:          0,
-			logFunc:        Warn,
-			message:        "test warn",
-			expectToLog:    false,
-			expectedPrefix: "[WARN]",
-		},
-		{
-			name:           "Error at LevelNone - not logged",
-			level:          0,
-			logFunc:        Error,
-			message:        "test error",
-			expectToLog:    false,
-			expectedPrefix: "[ERROR]",
-		},
-		{
-			name:           "Error at LevelError - logged",
-			level:          1,
-			logFunc:        Error,
-			message:        "test error 1",
-			expectToLog:    true,
-			expectedPrefix: "[ERROR]",
-		},
-		{
-			name:           "Warn at LevelError - not logged",
-			level:          1,
-			logFunc:        Warn,
-			message:        "test warn 1",
-			expectToLog:    false,
-			expectedPrefix: "[WARN]",
-		},
-		{
-			name:           "Warn at LevelWarn - logged",
-			level:          2,
-			logFunc:        Warn,
-			message:        "test warn 2",
-			expectToLog:    true,
-			expectedPrefix: "[WARN]",
-		},
-		{
-			name:           "Info at LevelWarn - not logged",
-			level:          2,
-			logFunc:        Info,
-			message:        "test info 2",
-			expectToLog:    false,
-			expectedPrefix: "[INFO]",
-		},
-		{
-			name:           "Info at LevelInfo - logged",
-			level:          3,
-			logFunc:        Info,
-			message:        "test info 3",
-			expectToLog:    true,
-			expectedPrefix: "[INFO]",
-		},
-		{
-			name:           "Debug at LevelInfo - not logged",
-			level:          3,
-			logFunc:        Debug,
-			message:        "test debug 3",
-			expectToLog:    false,
-			expectedPrefix: "[DEBUG]",
-		},
-		{
-			name:           "Debug at LevelDebug - logged",
-			level:          4,
-			logFunc:        Debug,
-			message:        "test debug 4",
-			expectToLog:    true,
-			expectedPrefix: "[DEBUG]",
-		},
+		{name: "Debug at LevelNone", level: 0, logFunc: Debug, message: "test debug", expectToLog: false, expectedPrefix: "[DEBUG]"},
+		{name: "Info at LevelNone", level: 0, logFunc: Info, message: "test info", expectToLog: false, expectedPrefix: "[INFO]"},
+		{name: "Warn at LevelNone", level: 0, logFunc: Warn, message: "test warn", expectToLog: false, expectedPrefix: "[WARN]"},
+		{name: "Error at LevelNone", level: 0, logFunc: Error, message: "test error", expectToLog: false, expectedPrefix: "[ERROR]"},
+		{name: "Error at LevelError", level: 1, logFunc: Error, message: "test error 1", expectToLog: true, expectedPrefix: "[ERROR]"},
+		{name: "Warn at LevelError", level: 1, logFunc: Warn, message: "test warn 1", expectToLog: false, expectedPrefix: "[WARN]"},
+		{name: "Warn at LevelWarn", level: 2, logFunc: Warn, message: "test warn 2", expectToLog: true, expectedPrefix: "[WARN]"},
+		{name: "Info at LevelWarn", level: 2, logFunc: Info, message: "test info 2", expectToLog: false, expectedPrefix: "[INFO]"},
+		{name: "Info at LevelInfo", level: 3, logFunc: Info, message: "test info 3", expectToLog: true, expectedPrefix: "[INFO]"},
+		{name: "Debug at LevelInfo", level: 3, logFunc: Debug, message: "test debug 3", expectToLog: false, expectedPrefix: "[DEBUG]"},
+		{name: "Debug at LevelDebug", level: 4, logFunc: Debug, message: "test debug 4", expectToLog: true, expectedPrefix: "[DEBUG]"},
 	}
 
 	for _, tc := range testCases {
@@ -189,16 +147,16 @@ func TestLoggingAtDifferentLevels(t *testing.T) {
 }
 
 func TestSetOutput(t *testing.T) {
-	oldLevel := currentLevel
+	oldLevel := GetLevel()
 	oldOutput := debugLogger.Writer()
 	defer func() {
-		currentLevel = oldLevel
+		SetLevel(int(oldLevel))
 		SetOutput(oldOutput)
 	}()
 
 	var buf1 bytes.Buffer
 	SetOutput(&buf1)
-	SetLevel(4) // LevelDebug
+	SetLevel(4)
 	Debug("test to buf1")
 	if !bytes.Contains(buf1.Bytes(), []byte("test to buf1")) {
 		t.Error("Expected log to buf1, but not found")
@@ -210,28 +168,22 @@ func TestSetOutput(t *testing.T) {
 	if !bytes.Contains(buf2.Bytes(), []byte("test to buf2")) {
 		t.Error("Expected log to buf2, but not found")
 	}
-	// Check buf1 doesn't have buf2's log
 	if bytes.Contains(buf1.Bytes(), []byte("test to buf2")) {
 		t.Error("buf1 should not have buf2's log")
 	}
 }
 
 func TestEnableVerboseOutput(t *testing.T) {
-	oldLevel := currentLevel
+	oldLevel := GetLevel()
 	oldOutput := debugLogger.Writer()
 	defer func() {
-		currentLevel = oldLevel
+		SetLevel(int(oldLevel))
 		SetOutput(oldOutput)
 	}()
 
-	// Set output to io.Discard first
 	SetOutput(io.Discard)
-	var buf bytes.Buffer
-
-	// Now enable verbose output
 	EnableVerboseOutput()
 
-	// Check that the output is os.Stderr
 	if debugLogger.Writer() != os.Stderr {
 		t.Errorf("Expected writer to be os.Stderr after EnableVerboseOutput")
 	}
@@ -245,9 +197,8 @@ func TestEnableVerboseOutput(t *testing.T) {
 		t.Errorf("Expected error writer to be os.Stderr after EnableVerboseOutput")
 	}
 
-	// Now test it actually logs
+	var buf bytes.Buffer
 	SetLevel(4)
-	// Replace output with buf temporarily
 	SetOutput(&buf)
 	Debug("test enable verbose")
 	if !bytes.Contains(buf.Bytes(), []byte("test enable verbose")) {

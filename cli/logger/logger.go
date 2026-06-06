@@ -5,19 +5,37 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 )
 
 type LogLevel int
 
 const (
-	LevelNone  LogLevel = iota // No logs at all (default)
-	LevelError LogLevel = iota // Errors only
-	LevelWarn  LogLevel = iota // Warnings and Errors
-	LevelInfo  LogLevel = iota // Info, Warnings and Errors
-	LevelDebug LogLevel = iota // All including debug
+	LevelNone  LogLevel = iota
+	LevelError
+	LevelWarn
+	LevelInfo
+	LevelDebug
 )
 
+var levelNames = map[LogLevel]string{
+	LevelNone:  "NONE",
+	LevelError: "ERROR",
+	LevelWarn:  "WARN",
+	LevelInfo:  "INFO",
+	LevelDebug: "DEBUG",
+}
+
+var levelByName = map[string]LogLevel{
+	"NONE":  LevelNone,
+	"ERROR": LevelError,
+	"WARN":  LevelWarn,
+	"INFO":  LevelInfo,
+	"DEBUG": LevelDebug,
+}
+
 var (
+	mu           sync.RWMutex
 	currentLevel LogLevel = LevelNone
 	debugLogger  *log.Logger
 	infoLogger   *log.Logger
@@ -27,14 +45,19 @@ var (
 )
 
 func init() {
-	// Default to no output at all (io.Discard)
 	debugLogger = log.New(io.Discard, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
 	infoLogger = log.New(io.Discard, "[INFO]  ", log.LstdFlags|log.Lshortfile)
 	warnLogger = log.New(io.Discard, "[WARN]  ", log.LstdFlags|log.Lshortfile)
 	errorLogger = log.New(io.Discard, "[ERROR] ", log.LstdFlags|log.Lshortfile)
 }
 
-// SetOutput sets the log output destination (file or os.Stderr etc.)
+func (l LogLevel) String() string {
+	if name, ok := levelNames[l]; ok {
+		return name
+	}
+	return fmt.Sprintf("LEVEL(%d)", l)
+}
+
 func SetOutput(w io.Writer) {
 	debugLogger.SetOutput(w)
 	infoLogger.SetOutput(w)
@@ -42,7 +65,6 @@ func SetOutput(w io.Writer) {
 	errorLogger.SetOutput(w)
 }
 
-// SetLogFile sets the log output to a file
 func SetLogFile(filename string) error {
 	if logFile != nil {
 		logFile.Close()
@@ -57,51 +79,75 @@ func SetLogFile(filename string) error {
 }
 
 func SetLevel(v int) {
-	switch v {
-	case 0:
+	mu.Lock()
+	defer mu.Unlock()
+	switch {
+	case v <= 0:
 		currentLevel = LevelNone
-	case 1:
+	case v == 1:
 		currentLevel = LevelError
-	case 2:
+	case v == 2:
 		currentLevel = LevelWarn
-	case 3:
+	case v == 3:
 		currentLevel = LevelInfo
-	case 4:
-		fallthrough
 	default:
-		if v > 4 {
-			currentLevel = LevelDebug
-		} else if v == 4 {
-			currentLevel = LevelDebug
-		}
+		currentLevel = LevelDebug
 	}
 }
 
-// EnableVerboseOutput enables output to stderr (for when verbose flag is set)
+func SetLevelByName(name string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	level, ok := levelByName[name]
+	if !ok {
+		return false
+	}
+	currentLevel = level
+	return true
+}
+
+func GetLevel() LogLevel {
+	mu.RLock()
+	defer mu.RUnlock()
+	return currentLevel
+}
+
 func EnableVerboseOutput() {
 	SetOutput(os.Stderr)
 }
 
 func Debug(format string, v ...interface{}) {
-	if currentLevel >= LevelDebug {
+	mu.RLock()
+	level := currentLevel
+	mu.RUnlock()
+	if level >= LevelDebug {
 		debugLogger.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func Info(format string, v ...interface{}) {
-	if currentLevel >= LevelInfo {
+	mu.RLock()
+	level := currentLevel
+	mu.RUnlock()
+	if level >= LevelInfo {
 		infoLogger.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func Warn(format string, v ...interface{}) {
-	if currentLevel >= LevelWarn {
+	mu.RLock()
+	level := currentLevel
+	mu.RUnlock()
+	if level >= LevelWarn {
 		warnLogger.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func Error(format string, v ...interface{}) {
-	if currentLevel >= LevelError {
+	mu.RLock()
+	level := currentLevel
+	mu.RUnlock()
+	if level >= LevelError {
 		errorLogger.Output(2, fmt.Sprintf(format, v...))
 	}
 }

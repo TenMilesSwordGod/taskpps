@@ -21,6 +21,15 @@ var initCmd = &cobra.Command{
   plugins/      插件目录
   .taskpps/     项目配置文件`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("获取当前目录失败: %w", err)
+		}
+		absCwd, err := filepath.Abs(cwd)
+		if err != nil {
+			return fmt.Errorf("获取绝对路径失败: %w", err)
+		}
+
 		dirs := []string{
 			"pipelines",
 			"tasks",
@@ -41,8 +50,9 @@ var initCmd = &cobra.Command{
 			fmt.Printf("  created %s/\n", d)
 		}
 
-		taskppsYAML := `# taskpps 项目配置文件
+		taskppsYAML := fmt.Sprintf(`# taskpps 项目配置文件
 locale: zh
+workdir: %s
 
 server:
   host: 127.0.0.1
@@ -61,7 +71,7 @@ plugins:
   paths: ["plugins"]
 
 triggers: []
-`
+`, absCwd)
 		if err := writeFileIfNotExists(".taskpps/taskpps.yaml", taskppsYAML, "  "); err != nil {
 			return err
 		}
