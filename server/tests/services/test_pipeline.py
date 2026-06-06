@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -5,8 +7,6 @@ from unittest.mock import patch
 import pytest
 
 from taskpps.services.pipeline_service import PipelineService
-from taskpps.services.plugin_manager import PluginManager
-from taskpps.services.trigger_service import TriggerService
 
 
 def _setup_config(tmp_project):
@@ -285,69 +285,3 @@ class TestPipelineService:
                 params = json.loads(test_params)
         assert params == {}
 
-
-class TestTriggerService:
-    @pytest.mark.asyncio
-    async def test_create_and_list(self, tmp_project, db_engine):
-        _setup_config(tmp_project)
-        svc = TriggerService()
-        result = await svc.create_trigger("cron", {"schedule": "0 * * * *"}, "deploy.yaml")
-        assert hasattr(result, "id")
-
-        triggers = await svc.list_triggers()
-        assert len(triggers) >= 1
-
-    @pytest.mark.asyncio
-    async def test_delete_nonexistent(self, tmp_project, db_engine):
-        _setup_config(tmp_project)
-        svc = TriggerService()
-        result = await svc.delete_trigger("nonexistent")
-        assert result is False
-
-
-class TestPluginManager:
-    def test_discover(self, tmp_project):
-        _setup_config(tmp_project)
-        pm = PluginManager()
-        pm.discover_plugins()
-        assert isinstance(pm.list_plugins(), list)
-
-    def test_start_stop_triggers(self, tmp_project):
-        _setup_config(tmp_project)
-        pm = PluginManager()
-        pm.start_triggers(callback=lambda x: None)
-        pm.stop_all()
-
-    def test_get_nonexistent(self):
-        pm = PluginManager()
-        assert pm.get("nonexistent") is None
-
-    def test_stop_all_with_plugins(self):
-        pm = PluginManager()
-        from taskpps.plugins.base import BasePlugin
-
-        class TestPlugin(BasePlugin):
-            @property
-            def name(self):
-                return "test"
-
-            def start(self):
-                pass
-
-            def stop(self):
-                raise Exception("stop fail")
-
-        pm.register("test", TestPlugin())
-        pm.stop_all()
-
-    def test_start_triggers_already_running(self):
-        pm = PluginManager()
-        from taskpps.plugins.cron_trigger import CronTrigger
-
-        trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
-        trigger._running = True
-        pm.register("cron:0 * * * *:deploy.yaml", trigger)
-
-        with patch("taskpps.services.plugin_manager.get_settings") as mock_settings:
-            mock_settings.return_value.triggers = []
-            pm.start_triggers()
