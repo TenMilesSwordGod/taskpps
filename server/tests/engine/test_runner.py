@@ -379,7 +379,7 @@ class TestPipelineRunnerBoundary:
 
     @pytest.mark.asyncio
     async def test_on_failure_continue_only_affects_own_deps(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         tasks = [
             ResolvedTask(name="t1", task_type="command", command="exit 1", on_failure="continue"),
             ResolvedTask(name="t2", task_type="command", command="echo ok"),
@@ -413,7 +413,7 @@ class TestPipelineRunnerBoundary:
 
     @pytest.mark.asyncio
     async def test_retry_on_failure(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="exit 1", retry=2)]
         pipeline = make_pipeline(tasks=tasks)
         ctx = ExecutionContext(pipeline=pipeline, run_id="test_retry")
@@ -708,7 +708,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
     @pytest.mark.asyncio
     async def test_when_condition_skips_task(self, mock_session_factory):
-        run_repo, task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         tasks = [
             ResolvedTask(name="t1", task_type="command", command="echo hi", when='${env.SKIP} == "yes"'),
         ]
@@ -730,7 +730,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
     @pytest.mark.asyncio
     async def test_subpipeline_not_found_produces_failure(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
         sub.name = "sub1"
         sub.tasks = []
@@ -753,7 +753,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
     @pytest.mark.asyncio
     async def test_subpipeline_dag_error_produces_failure(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
         sub.name = "sub1"
         sub.tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -776,7 +776,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
     @pytest.mark.asyncio
     async def test_subpipeline_with_depends_on_skip(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         sub1 = MagicMock()
         sub1.name = "sub1"
         sub1.tasks = [ResolvedTask(name="t1", task_type="command", command="exit 1")]
@@ -813,7 +813,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
     @pytest.mark.asyncio
     async def test_pipeline_with_multiple_levels(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         sub1 = ResolvedSubPipeline(
             name="sub1",
             tasks=[ResolvedTask(name="t1", task_type="command", command="echo 1")],
@@ -850,7 +850,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
     @pytest.mark.asyncio
     async def test_task_with_exit_code_neg1_in_subpipeline(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
         sub.name = "sub1"
         sub.tasks = [ResolvedTask(name="t1", task_type="command", command="kill -9 $$")]
@@ -949,7 +949,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
     @pytest.mark.asyncio
     async def test_top_level_runner_exception_handled(self, mock_session_factory):
-        run_repo, _task_repo = mock_session_factory
+        _run_repo, _task_repo = mock_session_factory
         sub = ResolvedSubPipeline(
             name="sub1",
             tasks=[ResolvedTask(name="t1", task_type="command", command="echo hi")],

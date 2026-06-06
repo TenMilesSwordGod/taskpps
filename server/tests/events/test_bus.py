@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from taskpps.events.bus import (
-    EventBus,
     SIGNAL_PIPELINE_STARTED,
     SIGNAL_RUN_CANCELLED,
     SIGNAL_RUN_COMPLETED,
     SIGNAL_TASK_FINISHED,
     SIGNAL_TASK_STARTED,
+    EventBus,
     get_event_bus,
 )
 
@@ -242,7 +242,6 @@ class TestEventBusBoundary:
 
     def test_concurrent_emit(self):
         import threading
-        import time
 
         bus = EventBus()
         counter = 0

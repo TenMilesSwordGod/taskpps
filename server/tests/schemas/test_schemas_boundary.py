@@ -3,11 +3,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from taskpps.models.trigger import TriggerType
 from taskpps.schemas.agent import AgentCheckRequest, AgentExecRequest
-from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineYAML, TaskYAML, GitSpec, PipelineConfig
+from taskpps.schemas.pipeline import GitSpec, InvokeSpec, OptionsYAML, PipelineConfig, PipelineYAML, TaskYAML
 from taskpps.schemas.run import CleanRequest, CreateRunRequest
 from taskpps.schemas.trigger import CreateTriggerRequest
-from taskpps.models.trigger import TriggerType
 
 
 class TestTaskYAMLBoundary:

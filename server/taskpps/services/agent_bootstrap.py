@@ -5,7 +5,6 @@ import contextlib
 import logging
 import os
 
-from taskpps.config import get_server_home
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader

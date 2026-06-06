@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import asyncio
-import os
-import signal
-import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -13,6 +9,7 @@ from taskpps.executors import AgentNotFoundError, create_executor
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.local import LocalExecutor
 from taskpps.executors.ssh import SSHExecutor
+
 
 class TestCreateExecutor:
     def test_local(self):

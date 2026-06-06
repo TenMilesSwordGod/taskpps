@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import signal
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -15,6 +14,7 @@ from taskpps.executors.git import (
     _git_pull,
     _run_subprocess,
 )
+
 
 class TestGitExecutorExitCodeCoverage:
     @pytest.mark.asyncio

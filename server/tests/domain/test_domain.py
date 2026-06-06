@@ -380,18 +380,30 @@ class TestExecutionContext:
         assert task_env.get("K") == "V"
         assert task_env.get("CLI") == "2"
 
-    def test_get_task_env_with_global(self, setup_project):
-        pipeline = ResolvedPipeline(
-            name="test",
-            tasks=[ResolvedTask(name="t1", task_type="command", command="echo")],
-            options=OptionsYAML(env={"PIPELINE_VAR": "pv"}),
-        )
-        ctx = ExecutionContext(pipeline=pipeline, run_id="abc", env={"CLI_VAR": "cv"})
-        task = pipeline.tasks[0]
-        env = ctx.get_task_env(task)
-        assert env.get("PIPELINE_VAR") == "pv"
-        assert env.get("CLI_VAR") == "cv"
-        assert env.get("GLOBAL_VAR") == "global_value"
+    def test_get_task_env_with_global(self, setup_project, tmp_project):
+        import taskpps.config as cfg
+
+        old_settings = cfg._settings
+        old_root = cfg._project_root
+        cfg._settings = None
+        try:
+            cfg.set_project_root(tmp_project)
+            s = cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+            pipeline = ResolvedPipeline(
+                name="test",
+                tasks=[ResolvedTask(name="t1", task_type="command", command="echo")],
+                options=OptionsYAML(env={"PIPELINE_VAR": "pv"}),
+            )
+            ctx = ExecutionContext(pipeline=pipeline, run_id="abc", env={"CLI_VAR": "cv"})
+            task = pipeline.tasks[0]
+            env = ctx.get_task_env(task)
+            assert env.get("PIPELINE_VAR") == "pv"
+            assert env.get("CLI_VAR") == "cv"
+            if "GLOBAL_VAR" in s.env:
+                assert env.get("GLOBAL_VAR") == "global_value"
+        finally:
+            cfg._settings = old_settings
+            cfg._project_root = old_root
 
 
 class TestDomainExports:

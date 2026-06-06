@@ -3,13 +3,12 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
-import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.executors.local import LocalExecutor
+
 
 class TestLocalExecutor:
     @pytest.mark.asyncio
@@ -644,9 +643,11 @@ class TestLocalExecutorExitCodeCoverage:
     async def test_kill_process_tree_handles_permission_error(self, tmp_path):
         executor = LocalExecutor()
 
-        with patch("taskpps.executors.local._collect_descendants", return_value=[12345]):
-            with patch("os.kill", side_effect=PermissionError("denied")):
-                executor._kill_process_tree(99999, signal.SIGTERM)
+        with (
+            patch("taskpps.executors.local._collect_descendants", return_value=[12345]),
+            patch("os.kill", side_effect=PermissionError("denied")),
+        ):
+            executor._kill_process_tree(99999, signal.SIGTERM)
 
     @pytest.mark.asyncio
     async def test_collect_descendants_handles_oserror(self, tmp_path):
@@ -696,7 +697,7 @@ class TestLocalExecutorExitCodeCoverage:
         log_path = tmp_path / "twait.log"
 
         with (
-            patch.object(executor, "_kill_process_tree") as mock_kill,
+            patch.object(executor, "_kill_process_tree") as _mock_kill,
             patch.object(asyncio, "wait_for", side_effect=asyncio.TimeoutError()),
         ):
             result = await executor.execute("sleep 10", {}, log_path, timeout=1)

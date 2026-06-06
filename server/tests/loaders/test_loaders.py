@@ -272,7 +272,7 @@ class TestSubstituteEnvVars:
         assert result == "echo ${env.MISSING}"
 
     def test_load_with_env_prefix_and_no_env_param(self, tmp_path, monkeypatch):
-        # 测试没有显式传入 env 参数时，仍然可以通过 settings.env 和 os.environ 替换
+        # 测试没有显式传入 env 参数时,仍然可以通过 settings.env 和 os.environ 替换
         monkeypatch.setenv("SYS_ENV", "sys_value")
 
         # 模拟 settings.env
@@ -291,7 +291,7 @@ tasks:
     command: echo ${env.SYS_ENV} ${env.SETTINGS_ENV} ${env.MISSING}
 """)
             loader = PipelineLoader(pipelines_dir)
-            # 没有传入 env 参数！
+            # 没有传入 env 参数!
             spec = loader.load("env_prefix_test.yaml")
             assert spec.tasks[0].command == "echo sys_value settings_value ${env.MISSING}"
         finally:
@@ -317,18 +317,18 @@ tasks:
     command: echo ${env.PARAM_ENV} ${env.SETTINGS_ENV} ${env.SYS_ENV} ${env.OVERLAPPED}
 """)
             loader = PipelineLoader(pipelines_dir)
-            # 传入 env 参数，包含与 settings.env 重叠的变量
+            # 传入 env 参数,包含与 settings.env 重叠的变量
             spec = loader.load("env_priority_test.yaml", env={
                 "PARAM_ENV": "param_value",
                 "OVERLAPPED": "param_val"
             })
-            # 优先级：传入的 env > settings.env > os.environ
+            # 优先级:传入的 env > settings.env > os.environ
             assert spec.tasks[0].command == "echo param_value settings_value sys_value param_val"
         finally:
             taskpps.config._settings = original_settings
 
     def test_load_always_substitute_vars(self, tmp_path, monkeypatch):
-        # 测试即使没有 env 参数，也会执行变量替换
+        # 测试即使没有 env 参数,也会执行变量替换
         monkeypatch.setenv("TEST_VAR", "os_value")
 
         pipelines_dir = tmp_path / "pipelines"

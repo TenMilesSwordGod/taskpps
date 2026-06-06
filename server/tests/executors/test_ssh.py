@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import signal
-import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from taskpps.executors.base import ExecutorResult
 from taskpps.executors.ssh import SSHExecutor
+
 
 class TestSSHExecutorExitCodeCoverage:
     def test_ssh_transport_none_raises(self, tmp_path):
@@ -398,7 +395,7 @@ class TestSSHExecutor:
         assert not result.success
         assert result.exit_code == -1
 
-        # 验证即使异常，日志文件也被创建并写入内容
+        # 验证即使异常, 日志文件也被创建并写入内容
         assert log_path.exists(), "日志文件在异常时也应该被创建"
         with open(log_path) as f:
             log_content = f.read()

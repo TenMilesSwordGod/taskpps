@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from taskpps.loaders.pipeline_loader import PipelineLoader
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
+from taskpps.loaders.pipeline_loader import PipelineLoader
 
 
 class TestPipelineLoaderBoundary:

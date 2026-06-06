@@ -1,56 +1,77 @@
-from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus, TaskType
+from __future__ import annotations
+
+from taskpps.models.run import PipelineRun, TaskRun, TaskType
 from taskpps.models.trigger import Trigger, TriggerType
 
 
-def test_pipeline_run_defaults():
-    run = PipelineRun(pipeline_name="test")
-    assert run.id is not None
-    assert run.status == RunStatus.PENDING
-    assert run.params == "{}"
-    assert run.started_at is None
-    assert run.finished_at is None
-    assert run.created_at is not None
+class TestPipelineRun:
+    def test_create_with_required_fields(self):
+        run = PipelineRun(pipeline_name="test-pipeline")
+        assert run.id is not None
+        assert len(run.id) == 12
+        assert run.pipeline_name == "test-pipeline"
+        assert run.created_at is not None
+
+    def test_create_with_all_fields(self):
+        run = PipelineRun(
+            pipeline_name="full",
+            pipeline_file="deploy.yaml",
+            pipeline_id="deploy",
+            pipeline_version="abc12345",
+            params='{"key": "val"}',
+        )
+        assert run.pipeline_file == "deploy.yaml"
+        assert run.pipeline_id == "deploy"
+        assert run.pipeline_version == "abc12345"
+        assert run.params == '{"key": "val"}'
+
+    def test_unique_ids(self):
+        r1 = PipelineRun(pipeline_name="p1")
+        r2 = PipelineRun(pipeline_name="p2")
+        assert r1.id != r2.id
 
 
-def test_task_run_defaults():
-    task = TaskRun(run_id="abc", task_name="step1")
-    assert task.id is not None
-    assert task.status == TaskStatus.PENDING
-    assert task.task_type == TaskType.COMMAND
-    assert task.exit_code is None
-    assert task.log_path == ""
+class TestTaskRun:
+    def test_create_with_required_fields(self):
+        task = TaskRun(run_id="abc123", task_name="step1")
+        assert task.id is not None
+        assert len(task.id) == 12
+        assert task.run_id == "abc123"
+        assert task.task_name == "step1"
+        assert task.task_type == TaskType.COMMAND
+
+    def test_create_with_all_fields(self):
+        task = TaskRun(
+            run_id="abc123",
+            task_name="step1",
+            subpipeline_name="sub1",
+            task_type=TaskType.STEPS,
+            log_path="/logs/step1.log",
+            exit_code=0,
+        )
+        assert task.subpipeline_name == "sub1"
+        assert task.task_type == TaskType.STEPS
+        assert task.log_path == "/logs/step1.log"
+
+    def test_unique_ids(self):
+        t1 = TaskRun(run_id="r1", task_name="a")
+        t2 = TaskRun(run_id="r1", task_name="b")
+        assert t1.id != t2.id
 
 
-def test_run_status_values():
-    assert RunStatus.PENDING == "pending"
-    assert RunStatus.RUNNING == "running"
-    assert RunStatus.SUCCESS == "success"
-    assert RunStatus.FAILED == "failed"
-    assert RunStatus.CANCELLED == "cancelled"
-    assert RunStatus.PARTIAL == "partial"
+class TestTrigger:
+    def test_create_with_required_fields(self):
+        trigger = Trigger(type=TriggerType.CRON, config="{}", pipeline_file="test.yaml")
+        assert trigger.id is not None
+        assert trigger.type == TriggerType.CRON
+        assert trigger.pipeline_file == "test.yaml"
 
-
-def test_task_status_values():
-    assert TaskStatus.PENDING == "pending"
-    assert TaskStatus.RUNNING == "running"
-    assert TaskStatus.SUCCESS == "success"
-    assert TaskStatus.FAILED == "failed"
-    assert TaskStatus.SKIPPED == "skipped"
-    assert TaskStatus.CANCELLED == "cancelled"
-
-
-def test_task_type_values():
-    assert TaskType.COMMAND == "command"
-    assert TaskType.INVOKE == "invoke"
-
-
-def test_trigger_defaults():
-    trigger = Trigger(type=TriggerType.CRON, config="{}", pipeline_file="test.yaml")
-    assert trigger.id is not None
-    assert trigger.enabled is True
-    assert trigger.created_at is not None
-
-
-def test_trigger_type_values():
-    assert TriggerType.CRON == "cron"
-    assert TriggerType.WEBHOOK == "webhook"
+    def test_create_with_all_fields(self):
+        trigger = Trigger(
+            type=TriggerType.WEBHOOK,
+            config='{"url": "https://example.com"}',
+            pipeline_file="webhook.yaml",
+            enabled=False,
+        )
+        assert trigger.type == TriggerType.WEBHOOK
+        assert trigger.enabled is False

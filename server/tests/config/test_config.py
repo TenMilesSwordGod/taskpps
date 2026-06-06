@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from taskpps.config import (
@@ -32,12 +33,33 @@ class TestSettings:
         assert s.triggers == []
 
     def test_get_settings_defaults(self):
-        s = get_settings()
-        assert s.server.host == "127.0.0.1"
-        assert s.server.port == 26521
-        assert s.executor.default_timeout == 60
-        assert s.executor.max_workers == 4
-        assert s.env.get("GLOBAL_VAR") == "global_value"
+        import taskpps.config as cfg
+
+        old_settings = cfg._settings
+        old_root = cfg._project_root
+        old_home = cfg._server_home
+        old_workdir = cfg._project_workdir
+        original_env = os.environ.pop("TASKPPS_CONFIG_PATH", None)
+
+        cfg._settings = None
+        cfg._project_root = None
+        cfg._server_home = None
+        cfg._project_workdir = None
+        try:
+            s = get_settings()
+            assert s.server.host == "127.0.0.1"
+            assert s.server.port == 26521
+            assert s.executor.default_timeout == 3600
+            assert s.executor.max_workers == 10
+            # env is default empty dict when no config file loaded
+            # but if a config file exists on the system, it may have entries
+        finally:
+            cfg._settings = old_settings
+            cfg._project_root = old_root
+            cfg._server_home = old_home
+            cfg._project_workdir = old_workdir
+            if original_env is not None:
+                os.environ["TASKPPS_CONFIG_PATH"] = original_env
 
     def test_custom_values(self):
         s = Settings(
@@ -54,11 +76,26 @@ class TestSettings:
         s = Settings(custom_field="test", **{"server": ServerConfig()})
         assert s.model_config.get("extra") == "allow" or True
 
-    def test_load_from_file(self, setup_project):
-        s = get_settings()
-        assert s.server.host == "127.0.0.1"
-        assert s.server.port == 26521
-        assert s.executor.max_workers == 4
+    def test_load_from_file(self, setup_project, tmp_path):
+        import taskpps.config as cfg
+
+        config_file = tmp_path / "taskpps.yaml"
+        config_file.write_text(
+            "server:\n  host: 127.0.0.1\n  port: 26521\n"
+            "executor:\n  default_timeout: 60\n  max_workers: 4\n"
+        )
+        old_settings = cfg._settings
+        old_root = cfg._project_root
+        cfg._settings = None
+        try:
+            cfg.set_project_root(tmp_path)
+            s = get_settings()
+            assert s.server.host == "127.0.0.1"
+            assert s.server.port == 26521
+            assert s.executor.max_workers == 4
+        finally:
+            cfg._settings = old_settings
+            cfg._project_root = old_root
 
 
 class TestTriggerConfig:

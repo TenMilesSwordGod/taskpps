@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import signal
-import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from taskpps.executors.base import ExecutorResult
 from taskpps.executors.invoke import InvokeExecutor
+
 
 class TestInvokeExecutorExitCodeCoverage:
     @pytest.mark.asyncio

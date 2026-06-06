@@ -4,10 +4,9 @@ import pytest
 
 from taskpps.domain.context import (
     ExecutionContext,
+    apply_overrides,
     build_env,
     resolve_dot_path,
-    set_dot_path,
-    apply_overrides,
 )
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.schemas.pipeline import PipelineConfig

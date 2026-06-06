@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 
 from taskpps.config import (
@@ -14,7 +11,6 @@ from taskpps.config import (
     get_settings,
     load_settings,
     set_project_root,
-    set_server_home,
 )
 
 
@@ -47,7 +43,8 @@ class TestConfigBoundary:
     def test_load_invalid_yaml(self, tmp_path):
         config_file = tmp_path / "invalid.yaml"
         config_file.write_text(":invalid: yaml: [[")
-        with pytest.raises(Exception):
+        import yaml
+        with pytest.raises(yaml.YAMLError):
             load_settings(str(config_file))
 
     def test_get_settings_resets(self):

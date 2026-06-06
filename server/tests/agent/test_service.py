@@ -114,7 +114,7 @@ class TestCheckSshAuth:
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="test-cred")
         cred = _make_credential_data(cred_id="test-cred", username="admin", password="secret")
-        mock_paramiko, mock_client = _patch_paramiko()
+        mock_paramiko, _mock_client = _patch_paramiko()
         with (
             patch.object(svc._loader, "resolve_credential", return_value=cred),
             patch.dict("sys.modules", {"paramiko": mock_paramiko}),
@@ -126,7 +126,7 @@ class TestCheckSshAuth:
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="test-cred")
         cred = _make_credential_data(cred_id="test-cred", username="admin", key_path="/path/to/key")
-        mock_paramiko, mock_client = _patch_paramiko()
+        mock_paramiko, _mock_client = _patch_paramiko()
         with (
             patch.object(svc._loader, "resolve_credential", return_value=cred),
             patch.dict("sys.modules", {"paramiko": mock_paramiko}),
@@ -202,7 +202,7 @@ class TestCheckOneWithCredential:
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="good-cred")
         cred = _make_credential_data(cred_id="good-cred", username="admin", password="correct")
-        mock_paramiko, mock_client = _patch_paramiko()
+        mock_paramiko, _mock_client = _patch_paramiko()
         with (
             patch("taskpps.services.agent_service.socket") as mock_socket,
             patch.object(svc._loader, "resolve_credential", return_value=cred),

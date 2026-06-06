@@ -7,7 +7,7 @@ from taskpps.main import app as _app
 
 class TestAppCreation:
     def test_create_app(self):
-        _app is not None
+        assert _app is not None
         assert _app.title is not None
 
     def test_create_app_routes(self):
