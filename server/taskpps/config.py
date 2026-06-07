@@ -152,7 +152,7 @@ def get_server_home() -> Path:
 
 
 def get_data_dir() -> Path:
-    data_dir = get_server_home() / ".taskpps"
+    data_dir = get_project_workdir() / ".taskpps"
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 

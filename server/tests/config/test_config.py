@@ -193,14 +193,14 @@ class TestDirectories:
     def test_data_dir_creates(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_server_home = cfg._server_home
-        cfg._server_home = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             d = get_data_dir()
             assert d.exists()
             assert (tmp_path / ".taskpps").exists()
         finally:
-            cfg._server_home = old_server_home
+            cfg._project_workdir = old_workdir
 
     def test_db_path(self, setup_project, tmp_project):
         p = get_db_path()
@@ -210,14 +210,14 @@ class TestDirectories:
     def test_db_path_uses_data_dir(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
-        old_server_home = cfg._server_home
-        cfg._server_home = tmp_path
+        old_workdir = cfg._project_workdir
+        cfg._project_workdir = tmp_path
         try:
             p = get_db_path()
             assert p.name == "state.db"
             assert p.parent == tmp_path / ".taskpps"
         finally:
-            cfg._server_home = old_server_home
+            cfg._project_workdir = old_workdir
 
     def test_logs_dir(self, setup_project):
         d = get_logs_dir()

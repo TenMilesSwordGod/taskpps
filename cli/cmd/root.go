@@ -101,7 +101,7 @@ func Execute() {
 
 func init() {
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "path to taskpps.yaml config file")
-	RootCmd.PersistentFlags().StringVarP(&projectFlag, "project", "p", "", "项目工作目录路径")
+	RootCmd.PersistentFlags().StringVarP(&projectFlag, "project", "P", "", "项目工作目录路径")
 	RootCmd.PersistentFlags().StringP("server", "s", "", "server address (host:port)")
 	RootCmd.PersistentFlags().CountVarP(&verbose, "verbose", "v", "increase verbosity (-v: warn, -vv: info, -vvv: debug)")
 }

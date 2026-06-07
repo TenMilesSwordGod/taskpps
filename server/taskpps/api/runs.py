@@ -149,5 +149,10 @@ async def clean_runs(
     keep: int | None = Query(None, description="Keep only N most recent runs", ge=0),
     force: bool = Query(False, description="Delete all runs"),
 ):
-    result = await _pipeline_service.clean_runs(older_than=older_than, keep=keep, force=force)
-    return result
+    try:
+        result = await _pipeline_service.clean_runs(older_than=older_than, keep=keep, force=force)
+        return result
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e

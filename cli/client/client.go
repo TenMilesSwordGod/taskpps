@@ -28,19 +28,32 @@ func New(cfg *config.Config) *Client {
 	}
 }
 
+// parseResp checks the HTTP status code and decodes the JSON response body.
+// If the status code is not in the 2xx range, it returns an error with the
+// status code and the raw response body (never a cryptic JSON parse error).
+// If the body cannot be decoded as JSON despite a 2xx status, the raw body
+// is included in the error message for debugging.
+func parseResp(resp *req.Resp, v interface{}) error {
+	status := resp.Response().StatusCode
+	if status < 200 || status >= 300 {
+		body := resp.String()
+		return fmt.Errorf("unexpected status %d: %s", status, body)
+	}
+	if err := resp.ToJSON(v); err != nil {
+		body := resp.String()
+		return fmt.Errorf("failed to parse response: %w (body: %s)", err, body)
+	}
+	return nil
+}
+
 func (c *Client) HealthCheck() (*models.HealthResponse, error) {
 	resp, err := c.http.Get(c.baseURL + "/health")
 	if err != nil {
 		return nil, fmt.Errorf("connection failed: %w", err)
 	}
-	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
-	}
 	var health models.HealthResponse
-	if err := resp.ToJSON(&health); err != nil {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
+	if err := parseResp(resp, &health); err != nil {
+		return nil, err
 	}
 	return &health, nil
 }
@@ -54,11 +67,8 @@ func (c *Client) CreateRun(pipeline string, params map[string]interface{}) (*mod
 	if err != nil {
 		return nil, fmt.Errorf("failed to create run: %w", err)
 	}
-	if resp.Response().StatusCode != 201 {
-		return nil, fmt.Errorf("unexpected status: %s", resp.String())
-	}
 	var run models.Run
-	if err := resp.ToJSON(&run); err != nil {
+	if err := parseResp(resp, &run); err != nil {
 		return nil, err
 	}
 	return &run, nil
@@ -79,16 +89,11 @@ func (c *Client) ListRuns(pipeline, status string, limit int) (*models.RunListRe
 	if err != nil {
 		return nil, fmt.Errorf("failed to list runs: %w", err)
 	}
-	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
-	}
 	var list models.RunListResponse
-	if err := resp.ToJSON(&list); err != nil {
+	if err := parseResp(resp, &list); err != nil {
 		var runs []models.Run
 		if err2 := resp.ToJSON(&runs); err2 != nil {
-			body, _ := resp.ToString()
-			return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
+			return nil, err
 		}
 		list = models.RunListResponse{
 			Items: runs,
@@ -103,17 +108,12 @@ func (c *Client) GetRun(runID string) (*models.Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run: %w", err)
 	}
-	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
-		if resp.Response().StatusCode == 404 {
-			return nil, fmt.Errorf("run %s not found", runID)
-		}
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	if resp.Response().StatusCode == 404 {
+		return nil, fmt.Errorf("run %s not found", runID)
 	}
 	var run models.Run
-	if err := resp.ToJSON(&run); err != nil {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
+	if err := parseResp(resp, &run); err != nil {
+		return nil, err
 	}
 	return &run, nil
 }
@@ -130,16 +130,11 @@ func (c *Client) GetLogs(runID, task string, tail int) (map[string]string, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logs: %w", err)
 	}
-	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
-	}
 	var result struct {
 		Logs map[string]string `json:"logs"`
 	}
-	if err := resp.ToJSON(&result); err != nil {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("failed to parse response: %w (received: %s)", err, body)
+	if err := parseResp(resp, &result); err != nil {
+		return nil, err
 	}
 	return result.Logs, nil
 }
@@ -197,6 +192,10 @@ func (c *Client) CancelRun(runID string) error {
 	if resp.Response().StatusCode == 404 {
 		return fmt.Errorf("run %s not found", runID)
 	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		body := resp.String()
+		return fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
 	return nil
 }
 
@@ -216,7 +215,7 @@ func (c *Client) CleanRuns(olderThan, keep int, force bool) (*models.CleanRespon
 		return nil, fmt.Errorf("failed to clean runs: %w", err)
 	}
 	var result models.CleanResponse
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -228,7 +227,7 @@ func (c *Client) CreateTrigger(reqBody models.CreateTriggerRequest) (*models.Tri
 		return nil, fmt.Errorf("failed to create trigger: %w", err)
 	}
 	var trigger models.Trigger
-	if err := resp.ToJSON(&trigger); err != nil {
+	if err := parseResp(resp, &trigger); err != nil {
 		return nil, err
 	}
 	return &trigger, nil
@@ -242,7 +241,7 @@ func (c *Client) ListTriggers() ([]models.Trigger, error) {
 	var result struct {
 		Items []models.Trigger `json:"items"`
 	}
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		var triggers []models.Trigger
 		if err2 := resp.ToJSON(&triggers); err2 != nil {
 			return nil, err
@@ -259,6 +258,10 @@ func (c *Client) DeleteTrigger(triggerID string) error {
 	}
 	if resp.Response().StatusCode == 404 {
 		return fmt.Errorf("trigger %s not found", triggerID)
+	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		body := resp.String()
+		return fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
 	}
 	return nil
 }
@@ -318,12 +321,8 @@ func (c *Client) TryConnect(agentID string, timeout int) (*models.AgentCheckResu
 	if resp.Response().StatusCode == 404 {
 		return nil, fmt.Errorf("agent %s not found", agentID)
 	}
-	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
-	}
 	var result models.AgentCheckResult
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -339,12 +338,8 @@ func (c *Client) CheckAgents(agentID, fileFilter string, timeout int) (*models.A
 	if err != nil {
 		return nil, fmt.Errorf("failed to check agents: %w", err)
 	}
-	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
-		respBody, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, respBody)
-	}
 	var result models.AgentCheckResponse
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -413,12 +408,8 @@ func (c *Client) AgentStatus(agentID string) (*models.AgentStatus, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get agent status: %w", err)
 	}
-	if resp.Response().StatusCode != 200 {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
-	}
 	var result models.AgentStatus
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -429,12 +420,8 @@ func (c *Client) AgentList() ([]models.AgentStatus, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list agents: %w", err)
 	}
-	if resp.Response().StatusCode != 200 {
-		body, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
-	}
 	var result []models.AgentStatus
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -449,12 +436,8 @@ func (c *Client) AgentDeploy(agentID string, timeout int) (*models.AgentDeployRe
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy agent: %w", err)
 	}
-	if resp.Response().StatusCode != 200 {
-		respBody, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, respBody)
-	}
 	var result models.AgentDeployResult
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -465,12 +448,8 @@ func (c *Client) AgentExec(agentID string, body *models.AgentExecRequest) (*mode
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec on agent: %w", err)
 	}
-	if resp.Response().StatusCode != 200 {
-		respBody, _ := resp.ToString()
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, respBody)
-	}
 	var result models.AgentExecResult
-	if err := resp.ToJSON(&result); err != nil {
+	if err := parseResp(resp, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

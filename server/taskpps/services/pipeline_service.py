@@ -255,6 +255,7 @@ class PipelineService:
     async def clean_runs(self, older_than: int | None = None, keep: int | None = None, force: bool = False) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
 
             deleted_logs = 0
 
@@ -262,6 +263,7 @@ class PipelineService:
                 runs = await run_repo.list_runs(limit=10000)
                 for run in runs:
                     deleted_logs += self._delete_run_logs(run)
+                    await task_repo.delete_tasks_for_run(run.id)
                 deleted_runs = await run_repo.delete_all_runs()
             elif older_than:
                 cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=older_than)
@@ -269,11 +271,13 @@ class PipelineService:
                 for run in runs:
                     if run.created_at and run.created_at < cutoff:
                         deleted_logs += self._delete_run_logs(run)
+                        await task_repo.delete_tasks_for_run(run.id)
                 deleted_runs = await run_repo.delete_runs_older_than(older_than)
             elif keep:
                 runs = await run_repo.list_runs(limit=10000)
                 for run in runs[keep:]:
                     deleted_logs += self._delete_run_logs(run)
+                    await task_repo.delete_tasks_for_run(run.id)
                 deleted_runs = await run_repo.delete_runs_keep(keep)
             else:
                 return {"deleted_runs": 0, "deleted_logs": 0}
@@ -296,7 +300,7 @@ class PipelineService:
                     log_file = item / "console.log"
                     if log_file.exists():
                         count += 1
-            shutil.rmtree(run_dir)
+            shutil.rmtree(run_dir, ignore_errors=True)
         return count
 
     def list_pipelines(self) -> list[str]:
