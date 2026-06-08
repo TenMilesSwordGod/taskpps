@@ -69,10 +69,13 @@ class RunRepository:
         self,
         pipeline: str | None = None,
         status: str | None = None,
+        pipeline_id: str | None = None,
     ) -> int:
         stmt = select(func.count(PipelineRun.id))
         if pipeline:
             stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
+        if pipeline_id:
+            stmt = stmt.where(PipelineRun.pipeline_id == pipeline_id)
         if status:
             stmt = stmt.where(PipelineRun.status == status)
         result = await self.session.execute(stmt)

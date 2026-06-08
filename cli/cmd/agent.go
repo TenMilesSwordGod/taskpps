@@ -143,7 +143,7 @@ func runAgentCheck(agentID string, fileFilter string) error {
 		results = append(results, r)
 		cnt++
 		fmt.Printf("\r\033[K")
-		if r.Status == "failed" {
+		if r.Status == "failed" || r.Status == "disconnected" {
 			color.Red("[%d] ✗ %s (%s:%d) — %s", cnt, r.AgentID, r.Host, r.Port, r.Status)
 			if r.Error != "" {
 				fmt.Printf(": %s", r.Error)
@@ -334,7 +334,7 @@ func printCheckResultsGrouped(results []models.AgentCheckResult, summary *models
 		for _, a := range agents {
 			statusDisplay := fmt.Sprintf("✓ %s", a.Status)
 			statusColor := color.New(color.FgGreen).SprintFunc()
-			if a.Status == "failed" {
+			if a.Status == "failed" || a.Status == "disconnected" {
 				statusDisplay = fmt.Sprintf("✗ %s", a.Status)
 				statusColor = color.New(color.FgRed).SprintFunc()
 			}

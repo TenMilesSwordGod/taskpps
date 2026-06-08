@@ -202,3 +202,122 @@ class TestAgentManager:
 
         assert manager.get_connection("agent-1") is conn
         assert manager.get_connection("nonexistent") is None
+
+
+class TestAgentManagerMore:
+    """Tests for AgentManager branches not covered in existing tests."""
+
+    @pytest.mark.asyncio
+    async def test_handle_connection_timeout(self):
+        manager = AgentManager()
+        ws = create_mock_ws()
+        ws.receive_json.side_effect = __import__("asyncio").TimeoutError()
+
+        with pytest.raises(__import__("asyncio").TimeoutError):
+            await manager.handle_connection(ws)
+
+        ws.close.assert_called_once()
+        call_kwargs = ws.close.call_args
+        assert call_kwargs[1]["code"] == 4001
+
+    @pytest.mark.asyncio
+    async def test_handle_connection_wrong_message_type(self):
+        manager = AgentManager()
+        ws = create_mock_ws()
+        ws.receive_json.return_value = {
+            "type": "wrong_type",
+            "data": {"agent_id": "agent-1"},
+        }
+
+        with pytest.raises(ValueError, match="Expected handshake_request"):
+            await manager.handle_connection(ws)
+
+        ws.close.assert_called_once()
+        call_kwargs = ws.close.call_args
+        assert call_kwargs[1]["code"] == 4002
+
+    @pytest.mark.asyncio
+    async def test_handle_connection_agent_id_mismatch(self):
+        manager = AgentManager()
+        ws = create_mock_ws()
+        ws.receive_json.return_value = {
+            "type": "handshake_request",
+            "data": {"agent_id": "wrong-agent", "secret": "s", "version": "1.0"},
+        }
+
+        with pytest.raises(ValueError, match="agent_id mismatch"):
+            await manager.handle_connection(ws, expected_agent_id="expected-agent")
+
+        ws.close.assert_called_once()
+        call_kwargs = ws.close.call_args
+        assert call_kwargs[1]["code"] == 4003
+
+    @pytest.mark.asyncio
+    async def test_send_command_not_connected(self):
+        manager = AgentManager()
+        with pytest.raises(RuntimeError, match="not connected"):
+            await manager.send_command("agent-1", "cmd-1", "echo", {}, "", 30)
+
+    @pytest.mark.asyncio
+    async def test_cancel_command_not_connected(self):
+        manager = AgentManager()
+        # Should not raise
+        await manager.cancel_command("agent-1", "cmd-1")
+
+    @pytest.mark.asyncio
+    async def test_create_pending_not_connected(self):
+        manager = AgentManager()
+        fut = manager.create_pending("agent-1", "cmd-1")
+        assert fut.done()
+        result = fut.result()
+        assert result["exit_code"] == -1
+        assert result["error"] == "agent not connected"
+
+    @pytest.mark.asyncio
+    async def test_register_output_callback_not_connected(self):
+        manager = AgentManager()
+        # Should not raise
+        manager.register_output_callback("agent-1", "cmd-1", lambda x: x)
+
+    @pytest.mark.asyncio
+    async def test_stop(self):
+        manager = AgentManager()
+        ws = create_mock_ws()
+        conn = AgentConnection("agent-1", ws)
+        manager._connections["agent-1"] = conn
+
+        await manager.stop()
+
+        assert manager.get_connection("agent-1") is None
+        assert manager._active is False
+
+    @pytest.mark.asyncio
+    async def test_send_command_with_lock(self):
+        manager = AgentManager()
+        ws = create_mock_ws()
+        ws.send_json = AsyncMock()
+        conn = AgentConnection("agent-1", ws)
+        manager._connections["agent-1"] = conn
+
+        await manager.send_command("agent-1", "cmd-1", "echo hello", {"KEY": "V"}, "/tmp", 30)
+
+        ws.send_json.assert_called_once()
+        call_args = ws.send_json.call_args[0][0]
+        assert call_args["type"] == "exec_command"
+        assert call_args["data"]["command"] == "echo hello"
+
+    @pytest.mark.asyncio
+    async def test_disconnect_nonexistent_agent(self):
+        manager = AgentManager()
+        # Should not raise
+        await manager.disconnect("nonexistent", None)
+
+    @pytest.mark.asyncio
+    async def test_is_connected_no_heartbeat_yet(self):
+        manager = AgentManager()
+        ws = create_mock_ws()
+        conn = AgentConnection("test-agent", ws)
+        conn.last_heartbeat = 0  # never received heartbeat
+        manager._connections["test-agent"] = conn
+
+        assert manager.is_connected("test-agent") is True

@@ -269,3 +269,175 @@ class TestTriggerRepository:
 
             deleted_again = await repo.delete_trigger(trigger.id)
             assert deleted_again is False
+
+
+class TestRunRepositoryMore:
+    @pytest.mark.asyncio
+    async def test_get_last_run_by_pipeline(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("pipe", pipeline_id="pid-1", pipeline_version="v1")
+            await repo.create_run("pipe", pipeline_id="pid-1", pipeline_version="v2")
+
+            last = await repo.get_last_run_by_pipeline("pid-1")
+            assert last is not None
+            assert last.pipeline_version == "v2"
+
+    @pytest.mark.asyncio
+    async def test_get_last_run_by_pipeline_none(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            result = await repo.get_last_run_by_pipeline("nonexistent")
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_list_versions(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("pipe", pipeline_id="pid-1", pipeline_version="v2")
+            await repo.create_run("pipe", pipeline_id="pid-1", pipeline_version="v1")
+
+            versions = await repo.list_versions("pid-1")
+            assert versions == ["v1", "v2"]  # ordered by created_at desc
+
+    @pytest.mark.asyncio
+    async def test_list_versions_empty(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            versions = await repo.list_versions("nonexistent")
+            assert versions == []
+
+    @pytest.mark.asyncio
+    async def test_delete_runs_by_version(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("pipe", pipeline_id="pid-1", pipeline_version="v1")
+            await repo.create_run("pipe", pipeline_id="pid-1", pipeline_version="v2")
+
+            count = await repo.delete_runs_by_version("pid-1", "v1")
+            assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_count_runs(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            assert await repo.count_runs() == 0
+            await repo.create_run("pipe-a")
+            await repo.create_run("pipe-b")
+            assert await repo.count_runs() == 2
+            assert await repo.count_runs(pipeline="pipe-a") == 1
+            assert await repo.count_runs(status="pending") == 2
+
+    @pytest.mark.asyncio
+    async def test_delete_runs_older_than(self, db_engine, clean_db):
+        from datetime import datetime, timedelta, timezone
+
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            run = await repo.create_run("pipe")
+            # Set created_at to 30 days ago
+            run.created_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+            await session.commit()
+
+            count = await repo.delete_runs_older_than(7)
+            assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_delete_runs_keep(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("pipe")
+            await repo.create_run("pipe")
+            await repo.create_run("pipe")
+
+            count = await repo.delete_runs_keep(2)
+            assert count == 1  # 3 - 2 = 1 deleted
+
+    @pytest.mark.asyncio
+    async def test_delete_runs_keep_zero(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("pipe")
+            await repo.create_run("pipe")
+
+            count = await repo.delete_runs_keep(0)
+            assert count == 2
+
+    @pytest.mark.asyncio
+    async def test_delete_runs_keep_negative(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            with pytest.raises(ValueError, match="keep must be non-negative"):
+                await repo.delete_runs_keep(-1)
+
+    @pytest.mark.asyncio
+    async def test_update_run_status_finished_at(self, db_engine, clean_db):
+        from datetime import datetime, timezone
+
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            run = await repo.create_run("test")
+            now = datetime.now(timezone.utc)
+            await repo.update_run_status(run.id, RunStatus.SUCCESS, finished_at=now)
+            updated = await repo.get_run(run.id)
+            assert updated.status == RunStatus.SUCCESS
+            assert updated.finished_at is not None
+
+
+class TestTaskRunRepositoryMore:
+    @pytest.mark.asyncio
+    async def test_get_running_tasks(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run("test")
+            t1 = await task_repo.create_task_run(run.id, "task-1")
+            await task_repo.create_task_run(run.id, "task-2")
+            await task_repo.update_task_status(t1.id, TaskStatus.RUNNING)
+
+            running = await task_repo.get_running_tasks(run.id)
+            assert len(running) == 1
+            assert running[0].task_name == "task-1"
+
+    @pytest.mark.asyncio
+    async def test_get_running_tasks_none(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run("test")
+            await task_repo.create_task_run(run.id, "task-1")
+
+            running = await task_repo.get_running_tasks(run.id)
+            assert len(running) == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_tasks_for_run(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run("test")
+            await task_repo.create_task_run(run.id, "task-1")
+            await task_repo.create_task_run(run.id, "task-2")
+
+            count = await task_repo.delete_tasks_for_run(run.id)
+            assert count == 2
+
+            tasks = await task_repo.list_task_runs(run.id)
+            assert len(tasks) == 0
+
+    @pytest.mark.asyncio
+    async def test_update_task_status_started_finished_at(self, db_engine, clean_db):
+        from datetime import datetime, timezone
+
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run("test")
+            task = await task_repo.create_task_run(run.id, "task-1")
+
+            now = datetime.now(timezone.utc)
+            await task_repo.update_task_status(task.id, TaskStatus.SUCCESS, exit_code=0,
+                                               started_at=now, finished_at=now)
+            updated = await task_repo.get_task_run(task.id)
+            assert updated.started_at is not None
+            assert updated.finished_at is not None

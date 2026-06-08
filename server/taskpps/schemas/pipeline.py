@@ -86,6 +86,8 @@ class PipelineConfig(BaseModel):
     retry: int = 0
     on_failure: str = "fail"
     execution_strategy: str = "sequential"
+    max_parallel: int | None = None
+    cwd: str | None = None
 
 
 class OptionsYAML(PipelineConfig):

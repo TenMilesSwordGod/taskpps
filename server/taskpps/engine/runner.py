@@ -472,6 +472,15 @@ class PipelineRunner:
             self._write_pipeline_log("SKIP", f"Task '{qualified_name}' skipped (when condition not met)")
             return ExecutorResult(exit_code=0, stdout="Task skipped (when condition not met)")
 
+        if self._cancelled:
+            logger.info("PipelineRunner: task '%s' cancelled before execution", qualified_name)
+            async with get_session_factory()() as session:
+                task_repo = TaskRunRepository(session)
+                if task_run_id:
+                    await task_repo.update_task_status(task_run_id, TaskStatus.CANCELLED)
+            self._write_pipeline_log("CANCELLED", f"Task '{qualified_name}' cancelled before execution")
+            return ExecutorResult(exit_code=-1, stdout="Task cancelled")
+
         self._write_separator("-", f"[task] {qualified_name} start")
         self._write_pipeline_log(
             "INFO", f"Executing task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})"
@@ -603,7 +612,10 @@ class PipelineRunner:
             if result.success:
                 break
 
-        task_status = TaskStatus.SUCCESS if last_result.success else TaskStatus.FAILED
+        if self._cancelled:
+            task_status = TaskStatus.CANCELLED
+        else:
+            task_status = TaskStatus.SUCCESS if last_result.success else TaskStatus.FAILED
 
         async with get_session_factory()() as session:
             task_repo = TaskRunRepository(session)

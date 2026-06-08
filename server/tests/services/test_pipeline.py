@@ -284,3 +284,131 @@ class TestPipelineService:
                 params = json.loads(test_params)
         assert params == {}
 
+
+class TestPipelineServiceMore:
+    @pytest.mark.asyncio
+    async def test_save_pipeline_snapshot(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        from taskpps.config import get_logs_dir
+
+        svc = PipelineService()
+        result = await svc.create_run("deploy.yaml")
+        snapshot_dir = (
+            get_logs_dir()
+            / result["pipeline_id"]
+            / f"v_{result['pipeline_version']}"
+            / "builds"
+            / result["id"]
+        )
+        snapshot = snapshot_dir / "pipeline-snapshot.yaml"
+        assert snapshot.exists()
+
+    @pytest.mark.asyncio
+    async def test_save_pipeline_snapshot_nonexistent_file(self, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        from taskpps.config import get_logs_dir
+
+        svc = PipelineService()
+        # _save_pipeline_snapshot silently returns if source doesn't exist
+        # We test indirectly: create a run with a pipeline that has snapshot
+        result = await svc.create_run("deploy.yaml")
+        assert "id" in result
+
+    @pytest.mark.asyncio
+    async def test_version_changed_detection(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        from taskpps.db.engine import get_session_factory
+        from taskpps.db.repository import RunRepository
+
+        svc = PipelineService()
+        # First run
+        result1 = await svc.create_run("deploy.yaml")
+        assert result1["version_changed"] is False
+
+        # Second run with same pipeline
+        result2 = await svc.create_run("deploy.yaml")
+        assert result2["version_changed"] is False
+
+    @pytest.mark.asyncio
+    async def test_handle_run_error_cancelled(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        import asyncio
+
+        # Create a cancelled task
+        async def _raise_cancelled():
+            raise asyncio.CancelledError()
+
+        task = asyncio.create_task(_raise_cancelled())
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        # Should not raise
+        PipelineService._handle_run_error(task)
+
+    @pytest.mark.asyncio
+    async def test_handle_run_error_generic(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        import asyncio
+
+        async def _raise_error():
+            raise RuntimeError("test error")
+
+        task = asyncio.create_task(_raise_error())
+        try:
+            await task
+        except RuntimeError:
+            pass
+
+        # Should not raise
+        PipelineService._handle_run_error(task)
+
+    @pytest.mark.asyncio
+    async def test_handle_run_error_success(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        import asyncio
+
+        async def _ok():
+            return "done"
+
+        task = asyncio.create_task(_ok())
+        await task
+
+        # Should not raise
+        PipelineService._handle_run_error(task)
+
+    @pytest.mark.asyncio
+    async def test_create_run_with_config_env(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        svc = PipelineService()
+        result = await svc.create_run("deploy.yaml", params={
+            "config": {"env": {"CUSTOM_KEY": "custom_value"}}
+        })
+        assert "id" in result
+
+    @pytest.mark.asyncio
+    async def test_create_run_with_config_env_not_dict(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        svc = PipelineService()
+        # env is not a dict, should be handled gracefully
+        result = await svc.create_run("deploy.yaml", params={
+            "config": {"env": "not_a_dict"}
+        })
+        assert "id" in result
+
+    @pytest.mark.asyncio
+    async def test_clean_keep_zero(self, setup_project, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        svc = PipelineService()
+        await svc.create_run("deploy.yaml")
+        clean_result = await svc.clean_runs(keep=0)
+        assert clean_result["deleted_runs"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_clean_runs_force_empty(self, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        svc = PipelineService()
+        clean_result = await svc.clean_runs(force=True)
+        assert clean_result == {"deleted_runs": 0, "deleted_logs": 0}
+

@@ -97,7 +97,7 @@ class ResolvedTask:
             steps=resolved_steps,
             git=resolved_git,
             nexus=resolved_nexus,
-            cwd=task_yaml.cwd,
+            cwd=task_yaml.cwd or config.cwd,
             host=task_yaml.host or config.host,
             credential=task_yaml.credential or config.credential,
             env={**config.env, **task_yaml.env},
@@ -209,4 +209,6 @@ def _merge_config(top: PipelineConfig, override: PipelineConfig | None) -> Pipel
         execution_strategy=override.execution_strategy
         if override.execution_strategy != "sequential" or top.execution_strategy == "sequential"
         else top.execution_strategy,
+        max_parallel=override.max_parallel if override.max_parallel is not None else top.max_parallel,
+        cwd=override.cwd if override.cwd is not None else top.cwd,
     )
