@@ -1,13 +1,37 @@
 import { useState, useMemo } from 'react';
-import { Input, Empty, Tag, Spin, Badge, Tooltip } from 'antd';
-import { Search, Server, RefreshCw } from 'lucide-react';
+import { Input, Empty, Tag, Spin, Badge, Tooltip, Alert } from 'antd';
+import { Search, Server, RefreshCw, AlertCircle } from 'lucide-react';
 import { useAgentsWithConfig } from '@/api/agents';
 import ServerCard from './ServerCard';
 
 /** Servers 列表页 */
 export default function ServersPage() {
-  const { data: agents, isLoading, refetch, isFetching } = useAgentsWithConfig();
+  const { data: agents, isLoading, refetch, isFetching, error } = useAgentsWithConfig();
   const [search, setSearch] = useState('');
+
+  // 调试用：直接 raw fetch 一次，识别是"404 未重启"还是"[] 但确实没配"
+  const [debugInfo, setDebugInfo] = useState<{ url: string; status: number; type: string; preview: string } | null>(null);
+  const checkDebug = async () => {
+    const baseURL = (import.meta.env.VITE_API_BASE_URL as string) ?? '';
+    const url = `${baseURL}/api/agents/all`;
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      let type = 'unknown';
+      let preview = text.slice(0, 200);
+      try {
+        const j = JSON.parse(text);
+        type = Array.isArray(j) ? `array(${j.length})` : typeof j;
+        if (j && typeof j === 'object' && 'detail' in j) preview = `detail: ${j.detail}`;
+      } catch {
+        type = 'text';
+        preview = text.slice(0, 120);
+      }
+      setDebugInfo({ url, status: res.status, type, preview });
+    } catch (e) {
+      setDebugInfo({ url, status: -1, type: 'error', preview: String(e) });
+    }
+  };
 
   const filtered = useMemo(() => {
     const list = agents ?? [];
@@ -84,13 +108,50 @@ export default function ServersPage() {
             <Spin size="large" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="p-4 space-y-3">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <span style={{ color: '#6b7280' }}>
                   {totalCount === 0 ? '暂无 agent 配置' : '无匹配的服务器'}
                 </span>
+              }
+            />
+            <Alert
+              type="warning"
+              showIcon
+              icon={<AlertCircle size={16} />}
+              message="诊断信息"
+              description={
+                <div className="space-y-1 text-xs">
+                  <div>API: <code>GET /api/agents/all</code></div>
+                  <div>
+                    当前状态：{error ? `前端请求失败（${String(error)}）` : '后端返回空数组'}
+                  </div>
+                  {debugInfo && (
+                    <div className="font-mono text-xs bg-gray-50 p-2 rounded border border-gray-200 mt-1">
+                      <div>URL: {debugInfo.url}</div>
+                      <div>HTTP {debugInfo.status} · type: {debugInfo.type}</div>
+                      <div>preview: {debugInfo.preview}</div>
+                    </div>
+                  )}
+                  <div className="text-gray-500 mt-2">
+                    可能原因：
+                    <ul className="list-disc pl-5 mt-1">
+                      <li>后端 Python 进程未重启，<code>/api/agents/all</code> 路由未注册（HTTP 404）</li>
+                      <li>dev 模式 workdir 指向错误目录，读不到 agents/*.yaml</li>
+                      <li>agents 目录确实为空</li>
+                    </ul>
+                  </div>
+                </div>
+              }
+              action={
+                <button
+                  onClick={checkDebug}
+                  className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50"
+                >
+                  检测 API 响应
+                </button>
               }
             />
           </div>
