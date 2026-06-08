@@ -44,7 +44,7 @@ class AgentService:
             results.append(self._check_one(agent_data, request.timeout))
 
         total = len(results)
-        connected = sum(1 for r in results if r.status != "failed")
+        connected = sum(1 for r in results if r.status not in ("failed", "disconnected"))
         failed = total - connected
 
         return AgentCheckResponse(
@@ -78,7 +78,7 @@ class AgentService:
 
         for coro in asyncio.as_completed(tasks):
             result = await coro
-            if result.status == "failed":
+            if result.status in ("failed", "disconnected"):
                 failed += 1
             else:
                 connected += 1
@@ -98,6 +98,68 @@ class AgentService:
         host = agent_data.get("host", "")
         port = agent_data.get("port", 22)
         source_file = agent_data.get("_source_file", "")
+
+        # Execution agents connect via WebSocket, check AgentManager
+        if agent_type in ("execution-agent", "agent", "websocket"):
+            from taskpps.services.agent_manager import AgentManager
+            manager = AgentManager.instance()
+            if manager.is_connected(agent_id):
+                conn = manager.get_connection(agent_id)
+                return AgentCheckResult(
+                    agent_id=agent_id,
+                    name=agent_name,
+                    type=agent_type,
+                    host=conn.hostname if conn else host,
+                    port=port,
+                    source_file=source_file,
+                    status="connected",
+                    latency_ms=0,
+                    error=None,
+                )
+            else:
+                # WebSocket not connected, try TCP check for host reachability
+                if host and host not in ("localhost", "127.0.0.1", "::1"):
+                    start = time.monotonic()
+                    try:
+                        sock = socket.create_connection((host, port), timeout=timeout)
+                        sock.close()
+                        latency_ms = int((time.monotonic() - start) * 1000)
+                        return AgentCheckResult(
+                            agent_id=agent_id,
+                            name=agent_name,
+                            type=agent_type,
+                            host=host,
+                            port=port,
+                            source_file=source_file,
+                            status="disconnected",
+                            latency_ms=latency_ms,
+                            error="Host reachable but execution agent not connected via WebSocket",
+                        )
+                    except Exception as e:
+                        latency_ms = int((time.monotonic() - start) * 1000)
+                        return AgentCheckResult(
+                            agent_id=agent_id,
+                            name=agent_name,
+                            type=agent_type,
+                            host=host,
+                            port=port,
+                            source_file=source_file,
+                            status="failed",
+                            latency_ms=latency_ms,
+                            error=t("Host unreachable: {error}", error=str(e)),
+                        )
+                else:
+                    return AgentCheckResult(
+                        agent_id=agent_id,
+                        name=agent_name,
+                        type=agent_type,
+                        host=host or "localhost",
+                        port=port or 0,
+                        source_file=source_file,
+                        status="disconnected",
+                        latency_ms=0,
+                        error="Execution agent not connected via WebSocket",
+                    )
 
         if not host or host in ("localhost", "127.0.0.1", "::1"):
             return AgentCheckResult(
