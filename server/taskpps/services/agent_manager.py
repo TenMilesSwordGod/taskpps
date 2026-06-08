@@ -156,8 +156,8 @@ class AgentManager:
 
         old = self._connections.pop(agent_id, None)
         if old:
-            for cid in list(old._pending_commands.keys()):
-                old.cleanup_command(cid)
+            conn._pending_commands = old._pending_commands
+            conn._output_callbacks = old._output_callbacks
             with contextlib.suppress(Exception):
                 await old.ws.close(code=4000, reason="replaced by new connection")
 
