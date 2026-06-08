@@ -287,7 +287,7 @@ class TestPipelineService:
         run_id = result["id"]
 
         logs_dir = get_logs_dir()
-        log_file = logs_dir / "deploy" / run_id / "step1" / "console.log"
+        log_file = logs_dir / "deploy" / run_id / "step1" / "task.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
         log_file.write_text("test log content")
 

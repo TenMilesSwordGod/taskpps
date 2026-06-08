@@ -187,7 +187,7 @@ async def test_get_run_logs(app, setup_project, tmp_project, db_engine):
 
         log_dir = get_logs_dir() / "deploy" / run_id / "step1"
         log_dir.mkdir(parents=True, exist_ok=True)
-        (log_dir / "console.log").write_text("test log content")
+        (log_dir / "task.log").write_text("test log content")
 
         response = await client.get(f"/api/runs/{run_id}/logs")
         assert response.status_code == 200

@@ -480,7 +480,7 @@ class PipelineRunner:
         if self._pipeline_id and self._pipeline_version:
             log_path = build_log_path(self._pipeline_id, self._pipeline_version, self.run_id, qualified_name)
         else:
-            log_path = Path(self._task_run_ids.get(qualified_name, "console.log"))
+            log_path = Path(self._task_run_ids.get(qualified_name, "task.log"))
 
         env = self.context.get_task_env(task)
         env["TASKPPS_RUN_ID"] = self.run_id
