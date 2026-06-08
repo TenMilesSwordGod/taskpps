@@ -7,8 +7,8 @@ export function useAgents(enabled = true) {
   return useQuery<AgentStatus[]>({
     queryKey: ['agents', 'list'],
     queryFn: async () => {
-      const res = await apiClient.get<AgentStatus[]>('/api/agents/list');
-      return res.data;
+      const res = await apiClient.get('/api/agents/list');
+      return Array.isArray(res.data) ? (res.data as AgentStatus[]) : [];
     },
     enabled,
     refetchInterval: 5000,
@@ -22,8 +22,9 @@ export function useAgentsWithConfig(enabled = true) {
   return useQuery<AgentWithConfig[]>({
     queryKey: ['agents', 'all'],
     queryFn: async () => {
-      const res = await apiClient.get<AgentWithConfig[]>('/api/agents/all');
-      return res.data;
+      const res = await apiClient.get('/api/agents/all');
+      // 防御性：后端未重启/出错时可能返回 {detail: "..."} 或非数组
+      return Array.isArray(res.data) ? (res.data as AgentWithConfig[]) : [];
     },
     enabled,
     refetchInterval: 5000,
