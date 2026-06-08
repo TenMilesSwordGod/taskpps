@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -106,6 +107,12 @@ class PipelineRunner:
                             f"[PIPELINE]   - {sub.name}: {len(sub.tasks)} tasks (strategy: {sub.config.execution_strategy})\n"
                         )
                     f.write("\n")
+                # Flush Python buffers and push the header to the OS page
+                # cache so that a concurrent reader sees it immediately
+                # and not just on file-close. See issue #15.
+                f.flush()
+                with contextlib.suppress(OSError):
+                    os.fsync(f.fileno())
 
     def _write_separator(self, char: str, label: str = "") -> None:
         """Write a full-width separator line with an optional label."""
@@ -120,6 +127,7 @@ class PipelineRunner:
                             char + " " * max(padding - 1, 0) + label + " " * max(W - padding - len(label) - 1, 0) + "\n"
                         )
                         f.write(char * W + "\n")
+                    f.flush()
             except Exception as e:
                 logger.error(f"Failed to write separator to pipeline log: {e}")
 
@@ -130,6 +138,14 @@ class PipelineRunner:
                 timestamp = datetime.now(timezone.utc).isoformat()
                 with open(self._pipeline_log_path, "a") as f:
                     f.write(f"[{level}] [{timestamp}] {message}\n")
+                    # Flush after every entry so a reader tailing the log
+                    # (or the user inspecting console.log right after a
+                    # single task completes) sees every line, not just
+                    # the last one. Without this, the first few lines
+                    # can be lost when the server is still running and
+                    # the OS has not yet drained its write buffer.
+                    # See issue #15.
+                    f.flush()
             except Exception as e:
                 logger.error(f"Failed to write to pipeline log: {e}")
 

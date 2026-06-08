@@ -121,6 +121,47 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    async def test_console_log_contains_header_after_run(self, mock_session_factory, tmp_path):
+        # Issue #15: after a single task runs, console.log must already
+        # contain the header (and the [PIPELINE] subpipelines block).
+        # Without an explicit flush the first few lines can be sitting in
+        # the OS write buffer and not yet visible to a reader tailing
+        # the log while the server is still alive.
+        _run_repo, _task_repo = mock_session_factory
+        log_path = tmp_path / "console.log"
+
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="flush_test")
+        runner = PipelineRunner(run_id="flush_test", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+        runner._pipeline_id = "pid"
+        runner._pipeline_version = "v1"
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.build_pipeline_log_path", return_value=log_path),
+        ):
+            await runner.run()
+
+        # The runner wrote the log at the path provided by the patched
+        # build_pipeline_log_path. The header block must already be on
+        # disk before run() returns.
+        assert log_path.exists()
+        content = log_path.read_text()
+        assert "Pipeline Execution Log" in content
+        assert "[SYSTEM] Run ID: flush_test" in content
+        assert "[PIPELINE] SubPipelines:" in content
+        assert "SUCCESS" in content
+        # The header must come before the trailing summary, not be
+        # somehow overwritten by it.
+        assert content.index("Pipeline Execution Log") < content.index("SUCCESS")
+
+    @pytest.mark.asyncio
     async def test_subpipeline_levels_in_yaml_order(self):
         # Subpipelines at the same level (no inter-dependency) must be
         # ordered in YAML declaration order, so that the level list in
