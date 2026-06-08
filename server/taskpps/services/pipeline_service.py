@@ -27,8 +27,26 @@ from taskpps.schemas.pipeline import PipelineYAML
 
 
 class PipelineService:
+    # Per-pipeline asyncio.Lock to make the max_parallel check and run
+    # creation atomic within a single event loop. The dict is class-level
+    # so it is shared across PipelineService instances within one process.
+    # NOTE: with gunicorn's multi-worker setup, this only protects against
+    # concurrent calls handled by the same worker. Cross-worker safety
+    # relies on a single-writer-per-pipeline pattern at the DB layer; that
+    # constraint is enforced by SQLite's BEGIN IMMEDIATE behavior in the
+    # underlying session when status is updated to 'running' on the runner.
+    _pipeline_locks: dict[str, asyncio.Lock] = {}
+
     def __init__(self):
         self.loader = PipelineLoader()
+
+    @classmethod
+    def _get_pipeline_lock(cls, pipeline_id: str) -> asyncio.Lock:
+        lock = cls._pipeline_locks.get(pipeline_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            cls._pipeline_locks[pipeline_id] = lock
+        return lock
 
     async def create_run(self, pipeline_file: str, params: dict[str, Any] | None = None) -> dict:
         try:
@@ -69,11 +87,30 @@ class PipelineService:
         pipeline_id = compute_pipeline_id(pipeline_file)
         pipeline_version = compute_pipeline_version(pipeline_file)
 
+        async with self._get_pipeline_lock(pipeline_id):
+            return await self._create_run_locked(
+                resolved=resolved,
+                pipeline_file=pipeline_file,
+                params=params,
+                pipeline_id=pipeline_id,
+                pipeline_version=pipeline_version,
+            )
+
+    async def _create_run_locked(
+        self,
+        *,
+        resolved: ResolvedPipeline,
+        pipeline_file: str,
+        params: dict[str, Any] | None,
+        pipeline_id: str,
+        pipeline_version: str,
+    ) -> dict:
+        # The caller is expected to hold PipelineService._get_pipeline_lock(pipeline_id).
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
 
-            # Enforce max_parallel (atomic with run creation)
+            # Enforce max_parallel (atomic with run creation under the per-pipeline lock)
             max_parallel = resolved.top_config.max_parallel
             if max_parallel is not None and max_parallel > 0:
                 active_count = await run_repo.count_runs(pipeline_id=pipeline_id, status="running")

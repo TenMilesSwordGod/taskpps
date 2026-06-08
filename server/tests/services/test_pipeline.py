@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from datetime import datetime, timedelta, timezone
 
@@ -120,6 +121,71 @@ class TestPipelineService:
         result = await svc.list_runs()
         assert result["total"] >= 3
         assert len(result["items"]) >= 3
+
+    @pytest.mark.asyncio
+    async def test_max_parallel_sequential_enforced(self, setup_project, tmp_project, db_engine):
+        # Two sequential create_run calls for a pipeline with max_parallel: 1
+        # must result in the second one being rejected. See issue #11.
+        import taskpps.config as cfg
+
+        cfg._project_root = tmp_project
+        cfg._settings = None
+        cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+        pipelines_dir = tmp_project / "pipelines"
+        (pipelines_dir / "max_parallel.yaml").write_text(
+            "name: max_parallel\n"
+            "options:\n"
+            "  max_parallel: 1\n"
+            "tasks:\n"
+            "  - name: t\n"
+            "    command: echo ok\n"
+        )
+        svc = PipelineService()
+        first = await svc.create_run("max_parallel.yaml")
+        assert "id" in first
+
+        with pytest.raises(ValueError, match="max_parallel"):
+            await svc.create_run("max_parallel.yaml")
+
+    @pytest.mark.asyncio
+    async def test_max_parallel_concurrent_race(self, setup_project, tmp_project, db_engine):
+        # Two truly concurrent create_run calls for a pipeline with
+        # max_parallel: 1 must result in exactly one success and one
+        # ValueError. The fix uses a per-pipeline asyncio.Lock; without it
+        # the count + create would be a check-then-act race. See issue #11.
+        import taskpps.config as cfg
+
+        cfg._project_root = tmp_project
+        cfg._settings = None
+        cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+        pipelines_dir = tmp_project / "pipelines"
+        (pipelines_dir / "max_parallel.yaml").write_text(
+            "name: max_parallel\n"
+            "options:\n"
+            "  max_parallel: 1\n"
+            "tasks:\n"
+            "  - name: t\n"
+            "    command: echo ok\n"
+        )
+
+        # Clear the per-pipeline lock so a previous test cannot serialize us.
+        PipelineService._pipeline_locks.clear()
+
+        svc = PipelineService()
+
+        async def go() -> str:
+            try:
+                r = await svc.create_run("max_parallel.yaml")
+                return r["id"]
+            except ValueError:
+                return "rejected"
+
+        results = await asyncio.gather(go(), go(), return_exceptions=True)
+        # First one created; second one must have been rejected.
+        successes = [r for r in results if isinstance(r, str) and r != "rejected"]
+        rejections = [r for r in results if r == "rejected"]
+        assert len(successes) == 1, f"expected 1 success, got {results}"
+        assert len(rejections) == 1, f"expected 1 rejection, got {results}"
 
     @pytest.mark.asyncio
     async def test_cancel_nonexistent(self, tmp_project, db_engine):
