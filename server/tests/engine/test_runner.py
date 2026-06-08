@@ -120,6 +120,56 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    async def test_inherited_cwd_reaches_executor(self, mock_session_factory):
+        # Issue #9: top-level / subpipeline / task cwd should all propagate
+        # to the executor via the resolved task's cwd field.
+        run_repo, _task_repo = mock_session_factory
+
+        # Use ResolvedSubPipeline.from_yaml so that subpipeline.config.cwd
+        # is merged into tasks without their own cwd (mirrors production
+        # behavior).
+        from taskpps.schemas.pipeline import PipelineYAML, SubPipeline, TaskYAML
+
+        spec = PipelineYAML(
+            name="p",
+            config={"cwd": "/top"},
+            pipelines=[
+                SubPipeline(
+                    name="sub",
+                    config={"cwd": "/sub"},
+                    tasks=[
+                        TaskYAML(name="t1", command="echo hi"),
+                        TaskYAML(name="t2", command="echo bye", cwd="/task"),
+                    ],
+                )
+            ],
+        )
+        from taskpps.domain.pipeline import ResolvedPipeline
+
+        pipeline = ResolvedPipeline.from_yaml(spec, pipeline_file="x.yaml")
+        # Resolved task cwd honors: subpipeline.config.cwd / task.cwd
+        assert pipeline.subpipelines[0].tasks[0].cwd == "/sub"
+        assert pipeline.subpipelines[0].tasks[1].cwd == "/task"
+
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cwd")
+        runner = PipelineRunner(run_id="test_cwd", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"sub.t1": "tr1", "sub.t2": "tr2"}
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        # Both tasks executed and the final run status is success.
+        assert mock_executor.execute.call_count == 2
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+
+    @pytest.mark.asyncio
     async def test_with_executor_exception(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
