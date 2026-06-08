@@ -190,12 +190,20 @@ class PipelineRunner:
                     if not subs_to_run:
                         continue
 
-                    results = await asyncio.gather(
-                        *[self._execute_subpipeline(sub_name) for sub_name in subs_to_run],
-                        return_exceptions=True,
-                    )
+                    # Within a level, subpipelines have no remaining
+                    # inter-dependencies. We still run them one at a time
+                    # in YAML order rather than with asyncio.gather so that
+                    # console.log is written in a single coherent stream
+                    # per subpipeline, instead of being interleaved across
+                    # them. See issue #13.
+                    for sub_name in subs_to_run:
+                        if self._cancelled:
+                            break
+                        try:
+                            result = await self._execute_subpipeline(sub_name)
+                        except BaseException as exc:
+                            result = exc
 
-                    for sub_name, result in zip(subs_to_run, results, strict=False):
                         sub = self.pipeline.get_subpipeline_by_name(sub_name)
                         if sub is None:
                             failed_subpipelines.add(sub_name)
@@ -277,11 +285,17 @@ class PipelineRunner:
     def _build_subpipeline_levels(self) -> list[list[str]]:
         in_degree: dict[str, int] = {}
         adjacency: dict[str, list[str]] = {}
+        # Track the original YAML position of each subpipeline so the
+        # level ordering is deterministic and matches what the user wrote
+        # in the YAML file (set iteration order is not guaranteed and
+        # would otherwise produce a confusing console.log). See issue #13.
+        yaml_index: dict[str, int] = {}
 
-        for sub in self.pipeline.subpipelines:
+        for idx, sub in enumerate(self.pipeline.subpipelines):
             if sub.name not in in_degree:
                 in_degree[sub.name] = 0
                 adjacency[sub.name] = []
+                yaml_index[sub.name] = idx
 
         for sub in self.pipeline.subpipelines:
             for dep in sub.depends_on:
@@ -296,11 +310,12 @@ class PipelineRunner:
         remaining = set(in_degree.keys())
 
         while remaining:
-            level = [name for name in remaining if in_degree[name] == 0]
-            if not level:
+            ready = [name for name in remaining if in_degree[name] == 0]
+            if not ready:
                 raise DAGCycleError(t("Cycle detected among subpipelines: {names}", names=remaining))
-            levels.append(level)
-            for name in level:
+            ready.sort(key=lambda n: yaml_index[n])
+            levels.append(ready)
+            for name in ready:
                 remaining.remove(name)
                 for neighbor in adjacency[name]:
                     in_degree[neighbor] -= 1

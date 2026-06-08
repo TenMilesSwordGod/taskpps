@@ -1,3 +1,4 @@
+import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,7 +10,7 @@ from taskpps.engine.runner import PipelineRunner, get_active_runner
 from taskpps.executors.base import ExecutorResult
 from taskpps.executors.local import LocalExecutor
 from taskpps.executors.ssh import SSHExecutor
-from taskpps.schemas.pipeline import OptionsYAML, PipelineConfig
+from taskpps.schemas.pipeline import OptionsYAML, PipelineConfig, PipelineYAML, SubPipeline, TaskYAML
 
 
 def make_pipeline(name="test", tasks=None, options=None):
@@ -117,6 +118,90 @@ class TestPipelineRunnerRun:
             await runner.run()
 
         assert run_repo.update_run_status.call_count >= 1
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+
+    @pytest.mark.asyncio
+    async def test_subpipeline_levels_in_yaml_order(self):
+        # Subpipelines at the same level (no inter-dependency) must be
+        # ordered in YAML declaration order, so that the level list in
+        # console.log is stable and matches what the user wrote. See issue #13.
+        spec = PipelineYAML(
+            name="p",
+            pipelines=[
+                SubPipeline(name="sync", tasks=[TaskYAML(name="t", command="echo s")]),
+                SubPipeline(name="tests", tasks=[TaskYAML(name="t", command="echo t")]),
+            ],
+        )
+        from taskpps.domain.pipeline import ResolvedPipeline
+
+        pipeline = ResolvedPipeline.from_yaml(spec, pipeline_file="x.yaml")
+        ctx = ExecutionContext(pipeline=pipeline, run_id="ord")
+        runner = PipelineRunner(run_id="ord", pipeline=pipeline, context=ctx)
+        levels = runner._build_subpipeline_levels()
+        # Both in level 1 (no depends_on) but in YAML order.
+        assert levels == [["sync", "tests"]]
+
+    @pytest.mark.asyncio
+    async def test_subpipeline_levels_with_dependency(self):
+        # An explicit depends_on must still put the dependent in a later
+        # level regardless of YAML order. See issue #13.
+        spec = PipelineYAML(
+            name="p",
+            pipelines=[
+                SubPipeline(name="tests", depends_on=["sync"], tasks=[TaskYAML(name="t", command="echo t")]),
+                SubPipeline(name="sync", tasks=[TaskYAML(name="t", command="echo s")]),
+            ],
+        )
+        from taskpps.domain.pipeline import ResolvedPipeline
+
+        pipeline = ResolvedPipeline.from_yaml(spec, pipeline_file="x.yaml")
+        ctx = ExecutionContext(pipeline=pipeline, run_id="dep")
+        runner = PipelineRunner(run_id="dep", pipeline=pipeline, context=ctx)
+        levels = runner._build_subpipeline_levels()
+        assert levels == [["sync"], ["tests"]]
+
+    @pytest.mark.asyncio
+    async def test_unrelated_subpipelines_run_sequentially(self, mock_session_factory):
+        # Two subpipelines with no inter-dependency should still run one
+        # after the other (not concurrently), so that console.log writes
+        # for sub A finish before sub B starts. See issue #13.
+        run_repo, _task_repo = mock_session_factory
+
+        sub_a = ResolvedSubPipeline(
+            name="A",
+            config=PipelineConfig(),
+            tasks=[ResolvedTask(name="a1", task_type="command", command="echo a")],
+        )
+        sub_b = ResolvedSubPipeline(
+            name="B",
+            config=PipelineConfig(),
+            tasks=[ResolvedTask(name="b1", task_type="command", command="echo b")],
+        )
+        pipeline = ResolvedPipeline(name="p", subpipelines=[sub_a, sub_b], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="seq")
+        runner = PipelineRunner(run_id="seq", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"A.a1": "tr-a", "B.b1": "tr-b"}
+
+        execution_order: list[str] = []
+
+        async def fake_execute_subpipeline(name):
+            execution_order.append(f"start:{name}")
+            # Yield to event loop; if the runner used asyncio.gather, the
+            # other subpipeline would also start here. With the sequential
+            # for-loop, this yields but the runner waits for us to finish.
+            await asyncio.sleep(0)
+            execution_order.append(f"end:{name}")
+            return {"success": True}
+
+        with (
+            patch.object(runner, "_execute_subpipeline", side_effect=fake_execute_subpipeline),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        # A must complete before B starts.
+        assert execution_order == ["start:A", "end:A", "start:B", "end:B"]
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
