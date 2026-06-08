@@ -73,6 +73,17 @@ class PipelineService:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
 
+            # Enforce max_parallel (atomic with run creation)
+            max_parallel = resolved.top_config.max_parallel
+            if max_parallel is not None and max_parallel > 0:
+                active_count = await run_repo.count_runs(pipeline_id=pipeline_id, status="running")
+                active_count += await run_repo.count_runs(pipeline_id=pipeline_id, status="pending")
+                if active_count >= max_parallel:
+                    raise ValueError(
+                        t("Cannot start pipeline: max_parallel={max} reached ({active} active runs)",
+                          max=max_parallel, active=active_count)
+                    )
+
             last_run = await run_repo.get_last_run_by_pipeline(pipeline_id)
             version_changed = (
                 last_run is not None
@@ -111,6 +122,9 @@ class PipelineService:
         runner._task_run_ids = task_run_ids
         runner._pipeline_id = pipeline_id
         runner._pipeline_version = pipeline_version
+
+        from taskpps.engine.runner import _active_runs
+        _active_runs[run.id] = runner
 
         asyncio_task = asyncio.create_task(runner.run())
         asyncio_task.add_done_callback(self._handle_run_error)
