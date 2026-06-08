@@ -53,6 +53,18 @@ func runForeground() error {
 		hostname, _ := os.Hostname()
 		agentID = hostname
 	}
+	if pidFile == "" {
+		pidFile = "/var/run/taskpps-agent.pid"
+	}
+
+	// Refuse to start if a daemon is already recorded as running. A second
+	// agent with the same agent_id would race the daemon for handshake
+	// ownership on the server. See issue #14.
+	if running, pid, err := checkInstanceRunning(pidFile); err != nil {
+		return err
+	} else if running {
+		return fmt.Errorf("taskpps-agent 已经有一个实例在运行 (PID: %d, PID 文件: %s); 先 stop 再 start", pid, pidFile)
+	}
 
 	if err := logger.Init(logFile); err != nil {
 		return fmt.Errorf("初始化日志失败: %w", err)
@@ -92,6 +104,16 @@ func runDaemon() error {
 	}
 	if pidFile == "" {
 		pidFile = "/var/run/taskpps-agent.pid"
+	}
+
+	// Refuse to start a second daemon. The previous implementation would
+	// blindly overwrite the PID file with the new process's PID, leaving
+	// the old daemon running and making `status` and `stop` point at the
+	// wrong process. See issue #14.
+	if running, pid, err := checkInstanceRunning(pidFile); err != nil {
+		return err
+	} else if running {
+		return fmt.Errorf("taskpps-agent daemon 已经在运行 (PID: %d, PID 文件: %s); 先 stop 再 start", pid, pidFile)
 	}
 
 	args := os.Args
