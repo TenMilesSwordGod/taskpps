@@ -5,6 +5,7 @@ import {
   DashboardOutlined,
   PartitionOutlined,
   HistoryOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 
@@ -24,6 +25,11 @@ const menuRoutes = [
     path: '/runs',
     name: '运行历史',
     icon: <HistoryOutlined />,
+  },
+  {
+    path: '/servers',
+    name: '服务器',
+    icon: <CloudServerOutlined />,
   },
 ];
 

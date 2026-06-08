@@ -4,6 +4,7 @@ import PipelineListPage from '@/features/pipelines/PipelineListPage';
 import PipelineDetailPage from '@/features/pipelines/PipelineDetailPage';
 import RunListPage from '@/features/runs/RunListPage';
 import RunDetailPage from '@/features/runs/RunDetailPage';
+import ServersPage from '@/features/servers/ServersPage';
 
 /** 路由定义 */
 const routes: RouteObject[] = [
@@ -26,6 +27,10 @@ const routes: RouteObject[] = [
   {
     path: '/runs/:id',
     element: <RunDetailPage />,
+  },
+  {
+    path: '/servers',
+    element: <ServersPage />,
   },
 ];
 

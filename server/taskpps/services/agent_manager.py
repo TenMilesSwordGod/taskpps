@@ -24,6 +24,9 @@ class AgentConnection:
         self.ws = ws
         self.hostname = ""
         self.platform = ""
+        self.system = ""
+        self.arch = ""
+        self.ip = ""
         self.agent_version = ""
         self.agent_pid = 0
         self.connected_at = 0.0
@@ -150,11 +153,20 @@ class AgentManager:
 
         conn = AgentConnection(agent_id, ws)
         conn.hostname = hostname_info
+        conn.system = os_name
+        conn.arch = arch_name
         conn.platform = f"{os_name}/{arch_name}" if os_name or arch_name else ""
         conn.agent_version = version
         conn.agent_pid = agent_pid
         conn.connected_at = now
         conn.last_heartbeat = now
+        # 提取客户端 IP（取代理链中第一个非 trust 头）
+        try:
+            client = ws.client
+            if client and client.host:
+                conn.ip = client.host
+        except Exception:
+            conn.ip = ""
 
         old = self._connections.pop(agent_id, None)
         if old:

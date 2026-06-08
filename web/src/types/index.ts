@@ -162,3 +162,19 @@ export interface HealthResponse {
   host: string;
   port: number;
 }
+
+/** Agent（Server）状态响应 */
+export interface AgentStatus {
+  agent_id: string;
+  connected: boolean;
+  hostname: string;
+  platform: string;
+  system: string;
+  arch: string;
+  ip: string;
+  agent_version: string;
+  agent_pid: number;
+  connected_at: number;
+  last_heartbeat: number;
+  running_commands: number;
+}
