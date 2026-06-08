@@ -98,6 +98,8 @@ class AgentManager:
         conn = self._connections.get(agent_id)
         if conn is None:
             return False
+        if conn.last_heartbeat < 0:
+            return False
         if conn.last_heartbeat <= 0:
             return True
         age = time.time() - conn.last_heartbeat
@@ -174,10 +176,8 @@ class AgentManager:
             return
         if current is None:
             return
-        self._connections.pop(agent_id, None)
-        for cid in list(current._pending_commands.keys()):
-            current.cleanup_command(cid)
-        logger.info("Agent '%s' disconnected", agent_id)
+        current.last_heartbeat = -1
+        logger.info("Agent '%s' disconnected (pending commands preserved for reconnect)", agent_id)
 
     def get_connection(self, agent_id: str) -> AgentConnection | None:
         return self._connections.get(agent_id)
