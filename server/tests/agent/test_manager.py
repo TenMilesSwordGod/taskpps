@@ -115,7 +115,10 @@ class TestAgentManager:
 
         await manager.disconnect("agent-1", conn)
 
-        assert manager.get_connection("agent-1") is None
+        # Connection is preserved (with stale heartbeat) so a reconnecting
+        # agent can transfer its pending commands back. See fix(#12).
+        assert manager.get_connection("agent-1") is conn
+        assert conn.last_heartbeat < 0
 
     @pytest.mark.asyncio
     async def test_disconnect_with_non_matching_conn_does_not_remove(self):
@@ -140,10 +143,16 @@ class TestAgentManager:
 
         await manager.disconnect("agent-1")
 
-        assert manager.get_connection("agent-1") is None
+        # Same as the matching-conn case: keep the connection so reconnect
+        # can hand off pending commands. See fix(#12).
+        assert manager.get_connection("agent-1") is conn
+        assert conn.last_heartbeat < 0
 
     @pytest.mark.asyncio
-    async def test_disconnect_cleans_up_pending_commands(self):
+    async def test_disconnect_preserves_pending_commands(self):
+        # Pending commands must survive disconnect() so that long-running
+        # tasks do not get a spurious "connection lost" failure when the
+        # agent's WebSocket drops and reconnects. See fix(#12).
         manager = AgentManager()
         ws = create_mock_ws()
         conn = AgentConnection("agent-1", ws)
@@ -152,10 +161,48 @@ class TestAgentManager:
 
         await manager.disconnect("agent-1", conn)
 
-        assert fut.done()
-        result = fut.result()
-        assert result["exit_code"] == -1
-        assert result["error"] == "connection lost"
+        assert not fut.done()
+        assert "cmd-1" in conn._pending_commands
+
+    @pytest.mark.asyncio
+    async def test_reconnect_transfers_pending_commands(self):
+        # When a new connection arrives for the same agent_id, the new
+        # connection must inherit the old connection's pending commands and
+        # output callbacks so the agent can keep streaming results. See fix(#12).
+        manager = AgentManager()
+
+        old_ws = create_mock_ws()
+        old_ws.receive_json.return_value = {
+            "type": "handshake_request",
+            "data": {
+                "agent_id": "agent-1",
+                "secret": "secret",
+                "version": "1.0.0",
+                "hostname": "old",
+                "agent_pid": 1,
+            },
+        }
+        _, old_conn = await manager.handle_connection(old_ws)
+        old_fut = old_conn.register_pending("cmd-keep")
+        old_conn.register_output_callback("cmd-keep", lambda _d: None)
+
+        new_ws = create_mock_ws()
+        new_ws.receive_json.return_value = {
+            "type": "handshake_request",
+            "data": {
+                "agent_id": "agent-1",
+                "secret": "secret",
+                "version": "1.0.0",
+                "hostname": "new",
+                "agent_pid": 2,
+            },
+        }
+        _, new_conn = await manager.handle_connection(new_ws)
+
+        # Pending command and callback were moved to the new connection;
+        # the original future identity is preserved (executors are awaiting it).
+        assert new_conn._pending_commands.get("cmd-keep") is old_fut
+        assert "cmd-keep" in new_conn._output_callbacks
 
     @pytest.mark.asyncio
     async def test_reconnect_race_condition(self):

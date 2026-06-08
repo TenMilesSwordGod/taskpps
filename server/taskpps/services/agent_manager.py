@@ -211,5 +211,13 @@ class AgentManager:
 
     async def stop(self) -> None:
         self._active = False
+        # On server shutdown there is no chance of an agent reconnecting,
+        # so we must actually drop the connections and fail any in-flight
+        # pending commands instead of leaving them dangling for a safety-net
+        # timeout to catch.
         for agent_id in list(self._connections.keys()):
-            await self.disconnect(agent_id)
+            conn = self._connections.pop(agent_id, None)
+            if conn is None:
+                continue
+            for cid in list(conn._pending_commands.keys()):
+                conn.cleanup_command(cid)
