@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
 import { Input, Empty, Tag, Spin, Badge, Tooltip } from 'antd';
 import { Search, Server, RefreshCw } from 'lucide-react';
-import { useAgents } from '@/api/agents';
+import { useAgentsWithConfig } from '@/api/agents';
 import ServerCard from './ServerCard';
 
 /** Servers 列表页 */
 export default function ServersPage() {
-  const { data: agents, isLoading, refetch, isFetching } = useAgents();
+  const { data: agents, isLoading, refetch, isFetching } = useAgentsWithConfig();
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
@@ -17,9 +17,12 @@ export default function ServersPage() {
       (a) =>
         a.agent_id.toLowerCase().includes(s) ||
         a.hostname.toLowerCase().includes(s) ||
+        a.name.toLowerCase().includes(s) ||
         a.ip.toLowerCase().includes(s) ||
+        a.host.toLowerCase().includes(s) ||
         a.system.toLowerCase().includes(s) ||
-        a.arch.toLowerCase().includes(s),
+        a.arch.toLowerCase().includes(s) ||
+        a.type.toLowerCase().includes(s),
     );
   }, [agents, search]);
 
@@ -45,7 +48,7 @@ export default function ServersPage() {
           <Input
             allowClear
             prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="搜索 ID / 主机名 / IP / 系统 / 架构"
+            placeholder="搜索 ID / 名称 / IP / 系统 / 架构 / 类型"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: 280 }}
@@ -86,7 +89,7 @@ export default function ServersPage() {
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <span style={{ color: '#6b7280' }}>
-                  {totalCount === 0 ? '暂无 agent 连接' : '无匹配的服务器'}
+                  {totalCount === 0 ? '暂无 agent 配置' : '无匹配的服务器'}
                 </span>
               }
             />

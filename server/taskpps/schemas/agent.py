@@ -45,6 +45,28 @@ class AgentStatus(BaseModel):
     running_commands: int = 0
 
 
+class AgentWithConfig(BaseModel):
+    """合并 agent yaml 配置与实时连接状态"""
+    agent_id: str
+    name: str = ""
+    type: str = ""
+    host: str = ""
+    port: int = 0
+    source_file: str = ""
+    connected: bool = False
+    # 实时状态字段（未连接时为空）
+    hostname: str = ""
+    platform: str = ""
+    system: str = ""
+    arch: str = ""
+    ip: str = ""
+    agent_version: str = ""
+    agent_pid: int = 0
+    connected_at: float = 0
+    last_heartbeat: float = 0
+    running_commands: int = 0
+
+
 class AgentDeployRequest(BaseModel):
     agent_id: str
     timeout: int = 30

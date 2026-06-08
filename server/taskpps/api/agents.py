@@ -14,9 +14,11 @@ from taskpps.schemas.agent import (
     AgentExecRequest,
     AgentExecResult,
     AgentStatus,
+    AgentWithConfig,
 )
 from taskpps.services.agent_manager import AgentManager
 from taskpps.services.agent_service import AgentService
+from taskpps.loaders.agent_loader import AgentLoader
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -105,6 +107,40 @@ async def agent_list():
                 running_commands=len(conn._pending_commands),
             )
         )
+    return result
+
+
+@router.get("/all", response_model=list[AgentWithConfig])
+async def agent_all():
+    """返回所有 yaml 中配置的 agent + 实时连接状态（未连接也展示）"""
+    manager = AgentManager.instance()
+    loader = AgentLoader()
+    agents = loader.load_all()
+    result: list[AgentWithConfig] = []
+    for agent_id, cfg in agents.items():
+        item = AgentWithConfig(
+            agent_id=agent_id,
+            name=str(cfg.get("name", "") or ""),
+            type=str(cfg.get("type", "") or ""),
+            host=str(cfg.get("host", "") or ""),
+            port=int(cfg.get("port", 0) or 0),
+            source_file=str(cfg.get("_source_file", "") or ""),
+        )
+        if manager.is_connected(agent_id):
+            conn = manager.get_connection(agent_id)
+            if conn is not None:
+                item.connected = True
+                item.hostname = conn.hostname
+                item.platform = conn.platform
+                item.system = conn.system
+                item.arch = conn.arch
+                item.ip = conn.ip
+                item.agent_version = conn.agent_version
+                item.agent_pid = conn.agent_pid
+                item.connected_at = conn.connected_at
+                item.last_heartbeat = conn.last_heartbeat
+                item.running_commands = len(conn._pending_commands)
+        result.append(item)
     return result
 
 

@@ -1,20 +1,20 @@
 import { Tooltip } from 'antd';
-import type { AgentStatus } from '@/types';
-import { useAgentStatus } from '@/api/agents';
+import type { AgentWithConfig } from '@/types';
 import { Cpu, Globe, Hash, Activity, Wifi, WifiOff } from 'lucide-react';
 
 interface ServerCardProps {
-  agent: AgentStatus;
+  agent: AgentWithConfig;
 }
 
 /** 把 system 字段映射到图标（Linux/Darwin/Windows/...） */
-function getOsIcon(system: string, arch: string): string {
+function getOsIcon(system: string, arch: string, type: string): string {
+  void type;
   const s = (system || '').toLowerCase();
   if (s.includes('linux')) return '/static/servers/linux.svg';
   if (s.includes('darwin') || s.includes('macos') || s.includes('mac os') || s.includes('apple')) return '/static/servers/apple.svg';
   if (s.includes('windows')) return '/static/servers/windows.svg';
-  // 通用 server 图标
   void arch;
+  // 通用 server 图标
   return '/static/servers/server.svg';
 }
 
@@ -31,7 +31,6 @@ function getSystemLabel(system: string): string {
   if (s.includes('darwin') || s.includes('macos') || s.includes('mac os')) return 'macOS';
   if (s.includes('windows')) return 'Windows';
   if (s.includes('linux')) return 'Linux';
-  // 首字母大写
   return system.charAt(0).toUpperCase() + system.slice(1);
 }
 
@@ -46,6 +45,15 @@ function getArchLabel(arch: string): string {
   return arch;
 }
 
+/** 把 type 字段规整为友好名称 */
+function getTypeLabel(type: string): string {
+  if (!type) return 'unknown';
+  if (type.startsWith('ssh-')) return 'SSH';
+  if (type === 'local') return 'Local';
+  if (type === 'agent') return 'Agent';
+  return type;
+}
+
 /** 把时间戳格式化为 hh:mm:ss */
 function formatTs(ts: number): string {
   if (!ts) return '—';
@@ -53,14 +61,21 @@ function formatTs(ts: number): string {
 }
 
 export default function ServerCard({ agent }: ServerCardProps) {
-  // 每个卡片独立刷新 detail（5s 轮询）
-  useAgentStatus(agent.agent_id);
-
   const online = agent.connected;
-  const osIcon = getOsIcon(agent.system, agent.arch);
+
+  // 系统图标：优先按 system 字段，否则按 host 类型兜底
+  const osIcon = getOsIcon(agent.system, agent.arch, agent.type);
   const systemLabel = getSystemLabel(agent.system);
   const archLabel = getArchLabel(agent.arch);
-  const displayName = agent.hostname || agent.agent_id;
+  const typeLabel = getTypeLabel(agent.type);
+
+  // 显示名称优先级：yaml.name → agent.hostname（agent 报告的）→ agent_id
+  const displayName = agent.name || agent.hostname || agent.agent_id;
+  // IP 优先级：agent 报告的真实 IP → yaml 配置 host
+  const displayIp = agent.ip || (agent.host ? (agent.port ? `${agent.host}:${agent.port}` : agent.host) : '—');
+  // Arch + System 离线兜底
+  const archDisplay = agent.arch ? archLabel : '—';
+  const versionDisplay = agent.agent_version ? `v${agent.agent_version}` : '—';
 
   return (
     <div
@@ -72,6 +87,7 @@ export default function ServerCard({ agent }: ServerCardProps) {
         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
         transition: 'box-shadow 0.2s, transform 0.2s',
         position: 'relative',
+        opacity: online ? 1 : 0.85,
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
@@ -105,7 +121,7 @@ export default function ServerCard({ agent }: ServerCardProps) {
               style={{
                 fontSize: 15,
                 fontWeight: 600,
-                color: '#111827',
+                color: online ? '#111827' : '#6b7280',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -129,7 +145,12 @@ export default function ServerCard({ agent }: ServerCardProps) {
             </Tooltip>
           </div>
           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-            {agent.agent_id}
+            <Tooltip title={agent.source_file || agent.agent_id}>
+              <span>{agent.agent_id}</span>
+            </Tooltip>
+            {typeLabel !== 'unknown' && (
+              <span style={{ marginLeft: 6, color: '#9ca3af' }}>· {typeLabel}</span>
+            )}
           </div>
         </div>
         {online ? (
@@ -142,27 +163,27 @@ export default function ServerCard({ agent }: ServerCardProps) {
       {/* 信息行：IP / Agent Version / System / Arch */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 12 }}>
         <Tooltip title="IP 地址">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4b5563' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
             <Globe size={12} color="#9ca3af" />
-            <span style={{ fontFamily: 'monospace' }}>{agent.ip || '—'}</span>
+            <span style={{ fontFamily: 'monospace' }}>{displayIp}</span>
           </div>
         </Tooltip>
         <Tooltip title="Agent 版本">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4b5563' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
             <Hash size={12} color="#9ca3af" />
-            <span style={{ fontFamily: 'monospace' }}>v{agent.agent_version || '—'}</span>
+            <span style={{ fontFamily: 'monospace' }}>{versionDisplay}</span>
           </div>
         </Tooltip>
         <Tooltip title="操作系统">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4b5563' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
             <img src={osIcon} alt="" style={{ width: 12, height: 12, opacity: 0.7 }} />
             <span>{systemLabel}</span>
           </div>
         </Tooltip>
         <Tooltip title="CPU 架构">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4b5563' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
             <Cpu size={12} color="#9ca3af" />
-            <span style={{ fontFamily: 'monospace' }}>{archLabel}</span>
+            <span style={{ fontFamily: 'monospace' }}>{archDisplay}</span>
           </div>
         </Tooltip>
       </div>
@@ -183,7 +204,7 @@ export default function ServerCard({ agent }: ServerCardProps) {
           <Activity size={11} />
           运行中 {agent.running_commands}
         </span>
-        <span>连接 {formatTs(agent.connected_at)}</span>
+        <span>{online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}</span>
       </div>
     </div>
   );
