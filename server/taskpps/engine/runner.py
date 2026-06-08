@@ -737,7 +737,13 @@ class PipelineRunner:
         event_bus.emit(SIGNAL_RUN_CANCELLED, sender=self, run_id=self.run_id)
 
         async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
+            # Persist the cancelled status up front so the run does not appear
+            # as "running" while waiting for the in-flight task to drain.
+            # finished_at is left unset and will be filled in by run()'s final
+            # status update with the real end time.
+            await run_repo.update_run_status(self.run_id, RunStatus.CANCELLED)
             await task_repo.cancel_pending_tasks(self.run_id)
 
         for _name, executor in self._running_executors.items():

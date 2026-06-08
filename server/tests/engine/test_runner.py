@@ -241,6 +241,27 @@ class TestPipelineRunnerCancel:
 
         assert runner._cancelled is True
 
+    @pytest.mark.asyncio
+    async def test_cancel_updates_run_status_to_cancelled(self, mock_session_factory):
+        run_repo, _task_repo = mock_session_factory
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cancel_status")
+        runner = PipelineRunner(run_id="test_cancel_status", pipeline=pipeline, context=ctx)
+
+        with patch("taskpps.engine.runner.get_event_bus"):
+            await runner.cancel()
+
+        assert runner._cancelled is True
+        # The run's status must be persisted as "cancelled" immediately so
+        # users don't see it stuck at "running" while a long task drains.
+        assert run_repo.update_run_status.call_count >= 1
+        cancelled_calls = [
+            c for c in run_repo.update_run_status.call_args_list
+            if len(c.args) > 1 and c.args[1] == "cancelled"
+        ]
+        assert len(cancelled_calls) == 1
+
 
 class TestPipelineRunnerBoundary:
     @pytest.mark.asyncio
