@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Input, Empty, Tag, Spin, Badge, Tooltip, Alert } from 'antd';
 import { Search, Server, RefreshCw, AlertCircle, Radar } from 'lucide-react';
 import { useAgentsWithConfig } from '@/api/agents';
 import ServerCard from './ServerCard';
+import HostInfoModal from './HostInfoModal';
 import apiClient from '@/api/client';
-import type { AgentCheckResult } from '@/types';
+import type { AgentCheckResult, AgentWithConfig } from '@/types';
 
 /** Servers 列表页 */
 export default function ServersPage() {
@@ -94,6 +95,13 @@ export default function ServersPage() {
 
   const onlineCount = (agents ?? []).filter((a) => a.connected).length;
   const totalCount = (agents ?? []).length;
+
+  // host 详情 modal 状态
+  const [detailAgent, setDetailAgent] = useState<AgentWithConfig | null>(null);
+  const handleShowDetail = useCallback((agent: AgentWithConfig) => {
+    setDetailAgent(agent);
+  }, []);
+  const handleCloseDetail = useCallback(() => setDetailAgent(null), []);
 
   return (
     <div className="flex flex-col h-full p-4 gap-3 bg-gray-50">
@@ -235,12 +243,16 @@ export default function ServersPage() {
                   agent={a}
                   detectedSystem={det?.system}
                   detectedArch={det?.arch}
+                  onShowDetail={handleShowDetail}
                 />
               );
             })}
           </div>
         )}
       </div>
+
+      {/* Host 详情 modal */}
+      <HostInfoModal open={!!detailAgent} agent={detailAgent} onClose={handleCloseDetail} />
     </div>
   );
 }

@@ -180,6 +180,42 @@ export interface AgentStatus {
 }
 
 /** Agent yaml 配置 + 实时状态（用于"所有服务器"列表） */
+export interface DiskInfo {
+  filesystem: string;
+  size: string;
+  used: string;
+  avail: string;
+  percent: number;
+  mount: string;
+}
+
+export interface CpuInfo {
+  model: string;
+  cores: number;
+  threads: number;
+}
+
+export interface MemoryInfo {
+  total: string;
+  used: string;
+  free: string;
+  percent: number;
+}
+
+export interface AgentHostInfo {
+  agent_id: string;
+  hostname: string;
+  kernel: string;
+  os_release: string;
+  uptime: string;
+  cpu: CpuInfo;
+  memory: MemoryInfo;
+  disks: DiskInfo[];
+  error?: string | null;
+  source: 'ssh' | 'agent' | 'none' | '';
+}
+
+/** Agent yaml 配置 + 实时状态（用于"所有服务器"列表） */
 export interface AgentWithConfig {
   agent_id: string;
   name: string;

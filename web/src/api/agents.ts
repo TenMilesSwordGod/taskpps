@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import apiClient from './client';
-import type { AgentStatus, AgentWithConfig } from '@/types';
+import type { AgentStatus, AgentWithConfig, AgentHostInfo } from '@/types';
 
 /** 部署/引导 agent（未连接时） */
 export function useDeployAgent() {
@@ -27,6 +27,20 @@ export function useDeployAgent() {
       const detail = err?.response?.data?.detail ?? err?.message ?? '未知错误';
       message.error(`Agent ${agentId} 部署失败：${detail}`);
     },
+  });
+}
+
+/** 获取 agent host 详细信息（CPU/内存/磁盘/内核） */
+export function useAgentHostInfo(agentId: string | null) {
+  return useQuery<AgentHostInfo>({
+    queryKey: ['agents', 'host-info', agentId],
+    queryFn: async () => {
+      const res = await apiClient.get<AgentHostInfo>(`/api/agents/${agentId}/host-info`);
+      return res.data;
+    },
+    enabled: !!agentId,
+    staleTime: 30_000,
+    retry: 0,
   });
 }
 

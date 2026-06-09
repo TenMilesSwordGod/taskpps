@@ -1,7 +1,10 @@
 import { memo } from 'react';
 import { Tooltip, Popconfirm } from 'antd';
 import type { AgentWithConfig } from '@/types';
-import { Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle, CloudUpload, Loader2 } from 'lucide-react';
+import {
+  Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
+  CloudUpload, Loader2, Info, Server,
+} from 'lucide-react';
 import { useDeployAgent } from '@/api/agents';
 
 interface ServerCardProps {
@@ -9,6 +12,8 @@ interface ServerCardProps {
   /** 探测后的 system/arch 覆盖（来自 POST /api/agents/check） */
   detectedSystem?: string;
   detectedArch?: string;
+  /** 点击"查看 host 详情"图标 */
+  onShowDetail?: (agent: AgentWithConfig) => void;
 }
 
 /** 把 system 字段映射到图标（Linux/Darwin/Windows/...） */
@@ -102,7 +107,7 @@ function formatTs(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('zh-CN');
 }
 
-function ServerCard({ agent, detectedSystem, detectedArch }: ServerCardProps) {
+function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: ServerCardProps) {
   const online = agent.connected;
   const deploy = useDeployAgent();
   const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
@@ -210,6 +215,48 @@ function ServerCard({ agent, detectedSystem, detectedArch }: ServerCardProps) {
             )}
           </Tooltip>
           <NetStatusIcon netStatus={agent.net_status} />
+          {/* 查看 host 详情（CPU/内存/磁盘） */}
+          <Tooltip title="查看 host 详情（CPU / 内存 / 磁盘）">
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowDetail?.(agent);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  onShowDetail?.(agent);
+                }
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 22,
+                height: 22,
+                borderRadius: 4,
+                cursor: 'pointer',
+                background: '#f9fafb',
+                color: '#4b5563',
+                border: '1px solid #e5e7eb',
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#eff6ff';
+                e.currentTarget.style.borderColor = '#bfdbfe';
+                e.currentTarget.style.color = '#2563eb';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#f9fafb';
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#4b5563';
+              }}
+            >
+              <Info size={13} />
+            </span>
+          </Tooltip>
           {/* 未连接 agent 显示部署按钮（已连接无需部署） */}
           {!online && (
             <Popconfirm
@@ -318,11 +365,12 @@ function ServerCard({ agent, detectedSystem, detectedArch }: ServerCardProps) {
 }
 
 // 用 React.memo 包裹：props 不变时跳过 re-render（react-query 5s refetch 时只更新变化项）
-// 自定义比较：detected* 字符串是简单值，可走默认浅比较
+// 自定义比较：agent 引用相同 + detected* 字符串相同 + onShowDetail 引用相同才跳过
 export default memo(ServerCard, (prev, next) => {
   return (
     prev.agent === next.agent &&
     prev.detectedSystem === next.detectedSystem &&
-    prev.detectedArch === next.detectedArch
+    prev.detectedArch === next.detectedArch &&
+    prev.onShowDetail === next.onShowDetail
   );
 });

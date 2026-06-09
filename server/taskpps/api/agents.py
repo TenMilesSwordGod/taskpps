@@ -264,3 +264,73 @@ async def deploy_agent(body: AgentDeployRequest):
         return AgentDeployResult(success=True, agent_id=body.agent_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/{agent_id}/host-info", response_model=AgentHostInfo)
+async def get_agent_host_info(agent_id: str):
+    """获取 agent host 详细信息（CPU/内存/磁盘/内核等）
+    - execution-agent 类型：从 ws connection 拿（agent 主动上报，待实现）
+    - ssh-* 类型：复用 paramiko + uname/lscpu/free/df 探测
+    - 失败返回 error 字段而非 5xx
+    """
+    from taskpps.loaders.agent_loader import AgentLoader
+    from taskpps.services.agent_service import AgentService
+
+    loader = AgentLoader()
+    cfg = loader.get(agent_id)
+    if not cfg:
+        raise HTTPException(status_code=404, detail=f"agent {agent_id} not found")
+
+    agent_type = cfg.get("type", "")
+
+    # execution-agent：目前没存 host_info（需要 agent 端主动上报），返回空
+    if agent_type in ("execution-agent", "agent", "websocket", "local") or not agent_type.startswith("ssh-"):
+        conn = manager.get_connection(agent_id)
+        info = AgentHostInfo(agent_id=agent_id, source="agent")
+        if conn:
+            info.hostname = conn.hostname
+            info.kernel = conn.platform
+        if not conn:
+            info.error = "execution agent 未连接或未实现 host info 上报（需 agent 端集成）"
+        return info
+
+    # SSH 探测：单独 paramiko 认证（不复用 _check_ssh_auth 因为它会探测后 close）
+    import paramiko
+    svc = AgentService()
+    host = cfg.get("host", "")
+    port = int(cfg.get("port", 22) or 22)
+    username = cfg.get("username", "root")
+    password = cfg.get("password")
+    private_key_path = cfg.get("private_key")
+    cred = loader.resolve_credential(cfg) or {}
+    if not password:
+        password = cred.get("password")
+    if not private_key_path:
+        private_key_path = cred.get("private_key")
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    connect_kwargs: dict = {}
+    if private_key_path:
+        try:
+            pkey = paramiko.RSAKey.from_private_key_file(private_key_path)
+        except Exception:
+            try:
+                pkey = paramiko.Ed25519Key.from_private_key_file(private_key_path)
+            except Exception as e:
+                return AgentHostInfo(agent_id=agent_id, error=f"load private key failed: {e}", source="ssh")
+        connect_kwargs["pkey"] = pkey
+    if password and "pkey" not in connect_kwargs:
+        connect_kwargs["password"] = password
+    try:
+        await asyncio.to_thread(client.connect, host, port=port, username=username, timeout=5, **connect_kwargs)
+    except Exception as e:
+        return AgentHostInfo(agent_id=agent_id, error=f"SSH auth failed: {e}", source="ssh")
+    try:
+        data = await asyncio.to_thread(svc._probe_remote_host_info, client, 5)
+        data["agent_id"] = agent_id
+        data["source"] = "ssh"
+        return AgentHostInfo(**data)
+    finally:
+        with contextlib.suppress(Exception):
+            client.close()

@@ -352,6 +352,106 @@ class AgentService:
             arch = _run("echo %PROCESSOR_ARCHITECTURE%")
         return system, arch
 
+    def _probe_remote_host_info(self, client, timeout: int = 5) -> dict:
+        """通过已认证 SSH 会话采集主机硬件/系统信息"""
+        import re
+
+        def _run(cmd: str) -> str:
+            try:
+                _stdin, stdout, _stderr = client.exec_command(cmd, timeout=timeout)
+                return stdout.read().decode("utf-8", errors="ignore").strip()
+            except Exception:
+                return ""
+
+        info: dict = {
+            "hostname": _run("hostname") or _run("uname -n"),
+            "kernel": _run("uname -a") or _run("uname -srv"),
+            "os_release": _run("cat /etc/os-release 2>/dev/null | head -10") or _run("lsb_release -a 2>/dev/null"),
+            "uptime": _run("uptime"),
+            "cpu": {"model": "", "cores": 0, "threads": 0},
+            "memory": {"total": "", "used": "", "free": "", "percent": -1},
+            "disks": [],
+        }
+
+        # CPU：lscpu 输出解析
+        lscpu = _run("lscpu 2>/dev/null")
+        if lscpu:
+            for line in lscpu.splitlines():
+                low = line.lower()
+                if "model name" in low:
+                    info["cpu"]["model"] = line.split(":", 1)[-1].strip()
+                elif low.startswith("cpu(s):") and "thread" not in low:
+                    try:
+                        info["cpu"]["threads"] = int(line.split(":", 1)[-1].strip())
+                    except Exception:
+                        pass
+                elif "core(s) per socket" in low or "cores per socket" in low:
+                    try:
+                        cores_per_socket = int(line.split(":", 1)[-1].strip())
+                        sockets = 1
+                        for l in lscpu.splitlines():
+                            if l.lower().startswith("socket(s):"):
+                                try:
+                                    sockets = int(l.split(":", 1)[-1].strip())
+                                except Exception:
+                                    pass
+                        info["cpu"]["cores"] = cores_per_socket * sockets
+                    except Exception:
+                        pass
+        # 兜底 nproc
+        if info["cpu"]["threads"] == 0:
+            nproc = _run("nproc")
+            try:
+                info["cpu"]["threads"] = int(nproc)
+            except Exception:
+                pass
+
+        # 内存：free -h / free -m 解析
+        free_out = _run("free -h 2>/dev/null") or _run("free -m")
+        for line in free_out.splitlines():
+            if line.lower().startswith("mem"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    info["memory"]["total"] = parts[1]
+                    info["memory"]["used"] = parts[2]
+                    info["memory"]["free"] = parts[3] if len(parts) > 3 else ""
+                break
+        # 用 MemAvailable 算 percent（更准）
+        avail = _run("grep MemAvailable /proc/meminfo")
+        if avail:
+            m = re.search(r"(\d+)\s*kB", avail)
+            total_kb = re.search(r"MemTotal:\s*(\d+)\s*kB", _run("grep MemTotal /proc/meminfo"))
+            if m and total_kb:
+                try:
+                    free_kb = int(m.group(1))
+                    total = int(total_kb.group(1))
+                    if total > 0:
+                        info["memory"]["percent"] = round((total - free_kb) * 100 / total)
+                except Exception:
+                    pass
+
+        # 磁盘：df -h
+        df_out = _run("df -h -x tmpfs -x devtmpfs 2>/dev/null") or _run("df -h")
+        for line in df_out.splitlines()[1:]:
+            parts = line.split()
+            if len(parts) < 6:
+                continue
+            fs, size, used, avail, percent, mount = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+            pct = -1
+            try:
+                pct = int(percent.rstrip("%"))
+            except Exception:
+                pass
+            info["disks"].append({
+                "filesystem": fs,
+                "size": size,
+                "used": used,
+                "avail": avail,
+                "percent": pct,
+                "mount": mount,
+            })
+        return info
+
 
 def _match_file_filter(source_file: str, file_filter: str) -> bool:
     import re

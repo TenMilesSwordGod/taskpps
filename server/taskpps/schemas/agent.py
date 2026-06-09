@@ -99,3 +99,38 @@ class AgentDeployResult(BaseModel):
     agent_id: str
     agent_pid: int = 0
     error: str | None = None
+
+
+class CpuInfo(BaseModel):
+    model: str = ""
+    cores: int = 0
+    threads: int = 0
+
+
+class MemoryInfo(BaseModel):
+    total: str = ""
+    used: str = ""
+    free: str = ""
+    percent: int = -1  # -1 表示未知
+
+
+class DiskInfo(BaseModel):
+    mount: str = ""
+    filesystem: str = ""
+    size: str = ""
+    used: str = ""
+    avail: str = ""
+    percent: int = -1
+
+
+class AgentHostInfo(BaseModel):
+    agent_id: str
+    hostname: str = ""
+    kernel: str = ""
+    os_release: str = ""
+    uptime: str = ""
+    cpu: CpuInfo = CpuInfo()
+    memory: MemoryInfo = MemoryInfo()
+    disks: list[DiskInfo] = []
+    error: str | None = None
+    source: str = ""  # "ssh" / "agent" / "none"
