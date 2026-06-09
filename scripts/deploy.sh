@@ -4,7 +4,10 @@ set -euo pipefail
 # ============================================================================
 # TaskPPS Deployment Script (pip + gunicorn)
 # ============================================================================
-# Usage: sudo ./scripts/deploy.sh [install|uninstall|status|restart|logs] [--workdir <path>]
+# Usage: sudo ./scripts/deploy.sh [install|uninstall|status|restart|logs] \
+#                                 [--workdir <path>] \
+#                                 [--binary-source build|download] \
+#                                 [--release-tag <tag>]
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,6 +18,12 @@ VENV_DIR="/opt/taskpps/server/.venv"
 PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 SERVER_HOME="/opt/taskpps"
 WORKDIR=""
+BINARY_SOURCE=""   # build | download,由 select_binary_source 填充,也可由 --binary-source 覆盖
+RELEASE_TAG=""     # 仅 download 模式使用,可由 --release-tag 覆盖
+
+# 公共构建/下载/安装库(deploy.sh 与 update.sh 共用)
+# shellcheck source=./_lib_build.sh
+source "$SCRIPT_DIR/_lib_build.sh"
 
 # Colors
 RED='\033[0;31m'
@@ -561,21 +570,63 @@ EOF
     log_info "Environment config created at $profile_file"
 }
 
-# Install ppsctl globally
-install_ppsctl() {
-    log_step "Installing ppsctl globally..."
+# Install ppsctl and execution-agent binaries
+# 来源选择(本地构建 vs release 下载)由 BINARY_SOURCE 控制:
+#   1) CLI 参数 --binary-source 优先
+#   2) 否则交互式询问(非交互模式默认 build)
+#   3) build 模式若缺 go,require_go 会硬退出 + 打印安装指引
+install_cli_and_agent_binaries() {
+    log_step "安装 ppsctl 和 execution-agent 二进制..."
 
-    if [[ -f "$SERVER_HOME/cli/ppsctl" ]]; then
-        cp "$SERVER_HOME/cli/ppsctl" /usr/local/bin/ppsctl
-        chmod 755 /usr/local/bin/ppsctl
-        log_info "ppsctl installed to /usr/local/bin/ppsctl"
-    elif [[ -f "$SERVER_HOME/cli/bin/ppsctl" ]]; then
-        cp "$SERVER_HOME/cli/bin/ppsctl" /usr/local/bin/ppsctl
-        chmod 755 /usr/local/bin/ppsctl
-        log_info "ppsctl installed to /usr/local/bin/ppsctl"
-    else
-        log_warn "ppsctl binary not found at $SERVER_HOME/cli — skipping global install"
+    # 把 deploy.sh 的 --release-tag 透传给 _lib_build.sh(它读 $LIB_RELEASE_TAG)
+    if [[ -n "$RELEASE_TAG" ]]; then
+        export LIB_RELEASE_TAG="$RELEASE_TAG"
     fi
+
+    # 1. 决定 source
+    if [[ -z "$BINARY_SOURCE" ]]; then
+        if [[ ! -t 0 ]]; then
+            # 非交互模式(例如 CI/--workdir 走过来的)默认 build
+            BINARY_SOURCE="build"
+            log_info "非交互模式,默认使用本地构建 (--binary-source 可覆盖)"
+        else
+            BINARY_SOURCE=$(select_binary_source)
+        fi
+    fi
+
+    case "$BINARY_SOURCE" in
+        build)
+            require_go
+            build_ppsctl
+            build_execution_agent
+            ;;
+        download)
+            download_release_artifacts
+            ;;
+        *)
+            log_error "未知的 --binary-source 值: '$BINARY_SOURCE'(应为 build 或 download)"
+            exit 1
+            ;;
+    esac
+
+    # 2. 部署完成,统一告诉用户二进制落在哪里
+    print_install_paths "$BINARY_SOURCE"
+}
+
+# 交互式选择二进制来源,结果 echo 到 stdout
+select_binary_source() {
+    echo ""
+    echo "请选择 ppsctl / execution-agent 二进制的来源:"
+    echo "  1) 本地源码构建 (需要 go 1.21+)"
+    echo "  2) 从 release 下载 (无需 go,但需联网,默认从内部 Gitea)"
+    echo -n "请输入选项 [1/2] (默认: 1): "
+    local choice
+    read -r choice
+    case "${choice:-1}" in
+        1) echo "build" ;;
+        2) echo "download" ;;
+        *) echo "build" ;;
+    esac
 }
 
 # Reload systemd and enable service
@@ -710,7 +761,7 @@ install() {
     generate_service_file
     generate_config
     generate_profile_d
-    install_ppsctl
+    install_cli_and_agent_binaries
     enable_service
     start_service
 
@@ -744,7 +795,7 @@ install() {
     log_info "  Health:    http://$(hostname -I | awk '{print $1}'):26521/api/health"
 }
 
-# Parse --workdir argument
+# Parse CLI args,设置全局 WORKDIR / BINARY_SOURCE / RELEASE_TAG,并 echo 子命令
 parse_workdir_arg() {
     local args=()
     while [[ $# -gt 0 ]]; do
@@ -761,6 +812,34 @@ parse_workdir_arg() {
                 WORKDIR="${1#*=}"
                 shift
                 ;;
+            --binary-source)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--binary-source requires a value (build|download)"
+                    exit 1
+                fi
+                BINARY_SOURCE="$2"
+                shift 2
+                ;;
+            --binary-source=*)
+                BINARY_SOURCE="${1#*=}"
+                shift
+                ;;
+            --release-tag)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--release-tag requires a value (e.g. v1.2.3)"
+                    exit 1
+                fi
+                RELEASE_TAG="$2"
+                shift 2
+                ;;
+            --release-tag=*)
+                RELEASE_TAG="${1#*=}"
+                shift
+                ;;
+            -h|--help)
+                args+=("help")
+                shift
+                ;;
             *)
                 args+=("$1")
                 shift
@@ -769,6 +848,30 @@ parse_workdir_arg() {
     done
     set -- "${args[@]}"
     echo "${1:-install}"
+}
+
+# 打印帮助(单独抽出来,这样 --help 和默认 usage 都复用)
+show_usage() {
+    echo "Usage: $0 [install|uninstall|status|restart|logs|stop|start] [options]"
+    echo ""
+    echo "Commands:"
+    echo "  install    - Full installation with systemd (default)"
+    echo "  uninstall  - Remove systemd service and ppsctl"
+    echo "  status     - Show service status"
+    echo "  restart    - Restart the service"
+    echo "  logs       - Follow service logs"
+    echo "  stop       - Stop the service"
+    echo "  start      - Start the service"
+    echo ""
+    echo "Options:"
+    echo "  --workdir <path>          Project workdir for pipelines/agents/credentials"
+    echo "                            (default: /opt/taskpps, non-interactive mode)"
+    echo "  --binary-source <mode>    ppsctl / execution-agent 二进制来源"
+    echo "                            build   = 本地 go build(需要 go 1.21+)"
+    echo "                            download= 从 release 下载(默认内部 Gitea)"
+    echo "                            非交互模式默认 build,交互模式会询问"
+    echo "  --release-tag <tag>       download 模式使用的 release tag,例如 v1.2.3"
+    echo "                            (默认: git describe --tags 自动解析)"
 }
 
 # Main
@@ -799,21 +902,11 @@ case "$CMD" in
         check_root
         start_service
         ;;
+    help)
+        show_usage
+        ;;
     *)
-        echo "Usage: $0 [install|uninstall|status|restart|logs|stop|start] [--workdir <path>]"
-        echo ""
-        echo "Commands:"
-        echo "  install    - Full installation with systemd (default)"
-        echo "  uninstall  - Remove systemd service and ppsctl"
-        echo "  status     - Show service status"
-        echo "  restart    - Restart the service"
-        echo "  logs       - Follow service logs"
-        echo "  stop       - Stop the service"
-        echo "  start      - Start the service"
-        echo ""
-        echo "Options:"
-        echo "  --workdir <path>  - Project workdir for pipelines/agents/credentials"
-        echo "                      (default: /opt/taskpps, non-interactive mode)"
+        show_usage
         exit 1
         ;;
 esac

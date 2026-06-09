@@ -14,6 +14,10 @@ SERVICE_NAME="taskpps"
 SERVER_HOME="/opt/taskpps"
 VENV_DIR="$SERVER_HOME/server/.venv"
 
+# 公共构建/下载/安装库(deploy.sh 与 update.sh 共用)
+# shellcheck source=./_lib_build.sh
+source "$SCRIPT_DIR/_lib_build.sh"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -70,28 +74,14 @@ update_code() {
 
     chown -R taskpps:taskpps "$SERVER_HOME"
 
-    # Build and deploy execution agent binary
-    if [[ -f "$PROJECT_ROOT/execution_agent/main.go" ]] && command -v go &>/dev/null; then
-        log_step "Rebuilding execution agent binary..."
-        cd "$PROJECT_ROOT/execution_agent"
-        go build -o taskpps-agent .
-        mkdir -p build
-        GOOS=linux GOARCH=amd64 go build -o build/taskpps-agent-linux-amd64 .
-        GOOS=linux GOARCH=arm64 go build -o build/taskpps-agent-linux-arm64 .
-        cp -r build "$SERVER_HOME/execution_agent/"
-        cp taskpps-agent "$SERVER_HOME/execution_agent/"
-        log_info "Agent binary updated"
-        cd "$PROJECT_ROOT"
-    fi
-
-    # Rebuild ppsctl if source available
-    if command -v go &>/dev/null && [[ -f "$SERVER_HOME/cli/main.go" ]]; then
-        log_step "Rebuilding ppsctl..."
-        cd "$SERVER_HOME/cli"
-        go build -o bin/ppsctl .
-        cp bin/ppsctl /usr/local/bin/ppsctl 2>/dev/null || true
-        cd "$PROJECT_ROOT"
-        log_info "ppsctl updated"
+    # 重建 execution_agent / ppsctl(走 _lib_build.sh 公共逻辑,与 deploy.sh 对齐)
+    # update.sh 不强制 go:首次部署可能是 download 模式,容许不重建二进制。
+    if command -v go >/dev/null 2>&1; then
+        build_execution_agent
+        build_ppsctl
+    else
+        log_warn "未检测到 'go' 命令,跳过二进制重建 (现有 /usr/local/bin/ppsctl 与 execution_agent/build/ 保持不变)"
+        log_warn "如需重建,请安装 go 1.21+ 后重新运行 update.sh"
     fi
 
     log_info "Server code updated"
@@ -175,6 +165,8 @@ main() {
     log_info "========================================"
     log_info "Update completed successfully!"
     log_info "========================================"
+    # update.sh 总是走本地构建路径(build),告诉用户 build result 落点
+    print_install_paths "build"
 }
 
 main

@@ -9,7 +9,7 @@ Taskpps 提供一键部署脚本，可以快速在生产环境中部署服务。
 sudo ./scripts/deploy.sh
 ```
 
-部署脚本会提示选择项目工作目录，然后自动完成以下工作：
+部署脚本会提示选择项目工作目录、ppsctl / execution-agent 二进制来源，然后自动完成以下工作：
 
 1. 安装系统依赖（Python 3、curl、rsync）
 2. 创建系统用户 `taskpps`（无登录权限）
@@ -19,7 +19,7 @@ sudo ./scripts/deploy.sh
 6. 生成 Systemd 服务文件
 7. 生成服务端和项目配置文件
 8. 生成 `/etc/profile.d/taskpps.sh` 环境变量配置
-9. 安装 `ppsctl` 到 `/usr/local/bin/`
+9. 安装 `ppsctl` 到 `/usr/local/bin/`、构建/下载 `execution-agent` 到 `execution_agent/build/`
 10. 启动服务
 
 ## 工作目录选择
@@ -39,12 +39,61 @@ sudo ./scripts/deploy.sh install --workdir /home/admin/projects/taskpps
 - **当前目录**：使用 git clone 目录作为项目工作目录
 - **自定义路径**：指定任意路径作为项目工作目录
 
+## ppsctl / execution-agent 二进制来源
+
+`ppsctl`（CLI）和 `execution-agent` 的二进制有两种来源，部署时必须二选一：
+
+| 来源 | 说明 | 适用场景 |
+|:--|:--|:--|
+| **build**（默认） | 本地 `go build` 从 `cli/` 和 `execution_agent/` 源码编译 | 离线/内网/版本未发布时；需要 `go 1.21+`（缺失会**硬退出**并打印安装指引） |
+| **download** | `wget`/`curl` 从内部 Gitea release 拉预编译产物 | 不想装 Go 时；需要联网；按主机 arch 自动选 linux/amd64 或 linux/arm64 |
+
+### 交互式选择
+
+直接运行 `sudo ./scripts/deploy.sh` 会在二进制安装阶段弹出菜单：
+
+```
+请选择 ppsctl / execution-agent 二进制的来源:
+  1) 本地源码构建 (需要 go 1.21+)
+  2) 从 release 下载 (无需 go,但需联网,默认从内部 Gitea)
+```
+
+### 非交互式参数
+
+```bash
+# 本地构建（非交互模式默认）
+sudo ./scripts/deploy.sh install --workdir /home/admin/projects/taskpps
+
+# 从 release 拉指定 tag
+sudo ./scripts/deploy.sh install --binary-source=download --release-tag=v1.2.3
+
+# 自定义 release 地址（高级）
+LIB_RELEASE_URL=https://github.com/foo/taskpps/releases/download \
+  sudo ./scripts/deploy.sh install --binary-source=download --release-tag=v1.2.3
+```
+
+### Build result 落点
+
+部署完成会打印本次安装产物的最终位置（用户最常问的"binary 在哪"）：
+
+```
+Build results（本次安装产物的最终位置）:
+  来源:           release v1.2.3  (http://...)
+  ppsctl:         /usr/local/bin/ppsctl
+  execution_agent:
+    - /opt/taskpps/execution_agent/taskpps-agent                (当前平台)
+    - /opt/taskpps/execution_agent/build/taskpps-agent-linux-amd64
+    - /opt/taskpps/execution_agent/build/taskpps-agent-linux-arm64
+```
+
 ## 部署脚本命令
 
 | 命令 | 说明 |
 |:--|:--|
 | `sudo ./scripts/deploy.sh install` | 完整部署（默认） |
 | `sudo ./scripts/deploy.sh install --workdir <path>` | 指定工作目录部署 |
+| `sudo ./scripts/deploy.sh install --binary-source=build` | 强制本地 go build（默认） |
+| `sudo ./scripts/deploy.sh install --binary-source=download --release-tag=v1.2.3` | 从 release 拉取二进制 |
 | `sudo ./scripts/deploy.sh uninstall` | 移除 Systemd 服务和 ppsctl |
 | `sudo ./scripts/deploy.sh status` | 查看服务状态 |
 | `sudo ./scripts/deploy.sh restart` | 重启服务 |
@@ -61,6 +110,10 @@ sudo ./scripts/deploy.sh install --workdir /home/admin/projects/taskpps
 ├── server/                   # Python 服务端代码
 ├── cli/                      # CLI 源码
 ├── execution_agent/          # 执行代理
+│   ├── taskpps-agent         # 当前平台主产物
+│   └── build/                # 跨平台产物（build/download 模式都写这里）
+│       ├── taskpps-agent-linux-amd64
+│       └── taskpps-agent-linux-arm64
 ├── pipelines/                # 流水线定义
 ├── agents/                   # Agent 配置
 ├── credentials/              # 凭据配置
@@ -80,6 +133,10 @@ sudo ./scripts/deploy.sh install --workdir /home/admin/projects/taskpps
 ├── server/                           # Python 服务端代码
 ├── cli/                              # CLI 源码
 ├── execution_agent/                  # 执行代理
+│   ├── taskpps-agent
+│   └── build/                        # 跨平台产物
+│       ├── taskpps-agent-linux-amd64
+│       └── taskpps-agent-linux-arm64
 ├── scripts/                          # 部署脚本
 ├── .taskpps/                         # 服务端数据
 │   ├── state.db                      # 数据库
