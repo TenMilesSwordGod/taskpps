@@ -259,22 +259,36 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
           </Tooltip>
           {/* 未连接 agent 显示部署按钮（已连接无需部署） */}
           {!online && (
-            <Popconfirm
-              title={`部署 Agent "${agent.agent_id}"?`}
-              description="将通过 bootstrap 流程在该 host 部署并启动 agent。期间将消耗数分钟，请耐心等待。"
-              okText="开始部署"
-              cancelText="取消"
-              onConfirm={(e) => {
-                e?.stopPropagation();
-                deploy.mutate(agent.agent_id);
-              }}
-              onCancel={(e) => e?.stopPropagation()}
+            <Tooltip
+              title={
+                agent.net_status === 'unreachable'
+                  ? '需先检查连接（TCP 不可达）'
+                  : '部署 agent 到此 host'
+              }
             >
-              <Tooltip title="部署 agent 到此 host">
+              <Popconfirm
+                title={`部署 Agent "${agent.agent_id}"?`}
+                description={
+                  agent.net_status === 'unreachable'
+                    ? '⚠️ 当前主机 TCP 不可达，部署可能失败。是否仍要继续？'
+                    : '将通过 bootstrap 流程在该 host 部署并启动 agent。期间将消耗数分钟，请耐心等待。'
+                }
+                okText="开始部署"
+                cancelText="取消"
+                disabled={agent.net_status === 'unreachable'}
+                onConfirm={(e) => {
+                  e?.stopPropagation();
+                  deploy.mutate(agent.agent_id);
+                }}
+                onCancel={(e) => e?.stopPropagation()}
+              >
                 <span
                   role="button"
-                  tabIndex={0}
-                  onClick={(e) => e.stopPropagation()}
+                  tabIndex={agent.net_status === 'unreachable' ? -1 : 0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (agent.net_status === 'unreachable') return;
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
                   }}
@@ -285,19 +299,21 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
                     width: 22,
                     height: 22,
                     borderRadius: 4,
-                    cursor: isDeploying ? 'wait' : 'pointer',
-                    background: '#eff6ff',
-                    color: '#2563eb',
-                    border: '1px solid #bfdbfe',
+                    cursor: agent.net_status === 'unreachable'
+                      ? 'not-allowed'
+                      : isDeploying ? 'wait' : 'pointer',
+                    background: agent.net_status === 'unreachable' ? '#f3f4f6' : '#eff6ff',
+                    color: agent.net_status === 'unreachable' ? '#9ca3af' : '#2563eb',
+                    border: `1px solid ${agent.net_status === 'unreachable' ? '#e5e7eb' : '#bfdbfe'}`,
                     transition: 'background 0.15s, border-color 0.15s',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isDeploying) {
-                      e.currentTarget.style.background = '#dbeafe';
-                      e.currentTarget.style.borderColor = '#60a5fa';
-                    }
+                    if (agent.net_status === 'unreachable' || isDeploying) return;
+                    e.currentTarget.style.background = '#dbeafe';
+                    e.currentTarget.style.borderColor = '#60a5fa';
                   }}
                   onMouseLeave={(e) => {
+                    if (agent.net_status === 'unreachable') return;
                     e.currentTarget.style.background = '#eff6ff';
                     e.currentTarget.style.borderColor = '#bfdbfe';
                   }}
@@ -308,8 +324,8 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
                     <CloudUpload size={13} />
                   )}
                 </span>
-              </Tooltip>
-            </Popconfirm>
+              </Popconfirm>
+            </Tooltip>
           )}
         </div>
       </div>

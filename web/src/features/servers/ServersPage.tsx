@@ -96,6 +96,24 @@ export default function ServersPage() {
   const onlineCount = (agents ?? []).filter((a) => a.connected).length;
   const totalCount = (agents ?? []).length;
 
+  // 按 yaml 文件分组（保持 yaml 内定义顺序）
+  const grouped = useMemo(() => {
+    const list = filtered;
+    const groups: { sourceFile: string; items: AgentWithConfig[] }[] = [];
+    const indexMap = new Map<string, number>();
+    for (const a of list) {
+      const sf = a.source_file || 'unknown';
+      let idx = indexMap.get(sf);
+      if (idx === undefined) {
+        idx = groups.length;
+        indexMap.set(sf, idx);
+        groups.push({ sourceFile: sf, items: [] });
+      }
+      groups[idx].items.push(a);
+    }
+    return groups;
+  }, [filtered]);
+
   // host 详情 modal 状态
   const [detailAgent, setDetailAgent] = useState<AgentWithConfig | null>(null);
   const handleShowDetail = useCallback((agent: AgentWithConfig) => {
@@ -235,16 +253,65 @@ export default function ServersPage() {
               padding: 4,
             }}
           >
-            {filtered.map((a) => {
-              const det = detected[a.agent_id];
+            {grouped.map((group) => {
+              const onlineInGroup = group.items.filter((a) => a.connected).length;
               return (
-                <ServerCard
-                  key={a.agent_id}
-                  agent={a}
-                  detectedSystem={det?.system}
-                  detectedArch={det?.arch}
-                  onShowDetail={handleShowDetail}
-                />
+                <div key={group.sourceFile} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* group header — 粘性置顶 */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 10px',
+                      background: '#f9fafb',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 6,
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 1,
+                    }}
+                  >
+                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#374151', fontWeight: 500 }}>
+                      {group.sourceFile}
+                    </span>
+                    <Tag style={{ marginLeft: 4 }}>
+                      {group.items.length} 个 agent
+                    </Tag>
+                    {onlineInGroup > 0 && (
+                      <Tag color="green">
+                        {onlineInGroup} 在线
+                      </Tag>
+                    )}
+                    {onlineInGroup < group.items.length && (
+                      <Tag color="default">
+                        {group.items.length - onlineInGroup} 离线
+                      </Tag>
+                    )}
+                  </div>
+                  {/* 卡片网格 */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+                      gap: 12,
+                      padding: 4,
+                    }}
+                  >
+                    {group.items.map((a) => {
+                      const det = detected[a.agent_id];
+                      return (
+                        <ServerCard
+                          key={a.agent_id}
+                          agent={a}
+                          detectedSystem={det?.system}
+                          detectedArch={det?.arch}
+                          onShowDetail={handleShowDetail}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
