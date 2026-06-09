@@ -1,48 +1,51 @@
 # Taskpps
 
-轻量级、可扩展的任务编排系统,替代 Jenkins 等重量级 CI/CD 工具用于小型项目。
+<p>
+  <img src="https://img.shields.io/badge/python-≥3.10-blue" alt="python">
+  <img src="https://img.shields.io/badge/go-≥1.22-blue" alt="go">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="prs">
+</p>
 
-```
-┌─────────────┐     REST API     ┌──────────────────┐
-│  ppsctl (Go) │ ◄──────────────► │  Backend (Python) │
-└─────────────┘                  └──────┬───────────┘
-                   WebSocket            │
-┌──────────────────────┐               │
-│  Execution Agent (Go)│◄──────────────┘
-│  (远程执行节点)       │
-└──────────────────────┘
+轻量级、可扩展的任务编排系统，替代 Jenkins 等重量级 CI/CD 工具，适合中小团队和项目。
+
+```text
+┌──────────────┐      REST API      ┌──────────────────┐
+│  ppsctl (Go)  │ ◄────────────────► │  Backend (Python) │
+│  CLI + TUI    │                    │  FastAPI + SQLite │
+└──────────────┘                    └────────┬─────────┘
+                    WebSocket                │
+┌─────────────────────────┐                 │
+│  Execution Agent (Go)    │◄───────────────┘
+│  远程执行节点 · 断线重连 │
+└─────────────────────────┘
 ```
 
 ## 特性
 
-- **YAML 定义流水线** — 全局默认值 + 任务级覆盖,极简配置
-- **三种任务类型** — Shell 命令 / SSH 远程 / Python invoke 函数
-- **Agent 远程执行** — 通过 WebSocket 连接的后台节点执行任务,支持断线重连
-- **DAG 依赖编排** — 拓扑排序、并发执行、失败策略(fail/continue)
-- **插件化** — 触发器(Cron)、通知器、执行器均可扩展
-- **可观测** — SSE 实时日志流、运行历史、任务状态跟踪
+- **YAML 即配置** — 全局默认值 + 任务级覆盖，零模板
+- **三种任务类型** — Shell 命令 / SSH 远程 / Python invoke
+- **Agent 远程执行** — WebSocket 节点，断线自动重连
+- **DAG 依赖编排** — 拓扑排序、并发、失败策略（fail / continue）
+- **可观测** — SSE 实时日志、运行历史、状态跟踪
+- **插件化** — 触发器（Cron）、通知器、执行器均可扩展
 - **API 密钥认证** — 可选中间件保护
-- **国际化** — 内建中文 / 英文支持
+- **国际化** — 内建中文 / English
 
 ## 快速开始
 
 ```bash
-# 1. 安装后端
-cd server && uv sync
+# 后端
+cd server && uv sync && uv run taskpps-server
 
-# 2. 安装 CLI
+# CLI（另一终端）
 cd cli && go build -o bin/ppsctl .
+ppsctl init && ppsctl run deploy.yaml TAG=latest
 
-# 3. 初始化项目
-ppsctl init
+# Web UI（可选）
+cd web && npm install && npm run dev
 
-# 4. 在 pipelines/ 中编写 YAML 流水线,启动服务
-uv run taskpps-server
-
-# 5. 运行
-ppsctl run deploy.yaml TAG=latest
-
-# 6. (可选)启动远程执行 Agent
+# 远程 Agent（可选）
 cd execution_agent && go build -o bin/taskpps-agent .
 ./bin/taskpps-agent --server ws://localhost:26521 --agent-id node1
 ```
@@ -53,24 +56,24 @@ cd execution_agent && go build -o bin/taskpps-agent .
 taskpps/
 ├── cli/               # Go CLI (ppsctl) — Cobra + Bubble Tea TUI
 ├── server/            # Python 后端 — FastAPI + SQLModel + aiosqlite
-│   ├── taskpps/       #   核心包:api/ db/ domain/ engine/ executors/ ...
-│   └── tests/         #   测试套件(目标 100% 覆盖)
-├── execution_agent/   # Go Agent 执行节点 — WebSocket 远程执行
+│   ├── taskpps/       #   核心包
+│   └── tests/         #   测试
+├── web/               # React + TypeScript 前端页面
+├── execution_agent/   # Go 远程执行节点 — WebSocket
 ├── agents/            # Agent SSH 主机配置 (YAML)
-├── credentials/       # SSH 凭据配置 (YAML)
-├── plugins/           # 用户自定义插件
-├── pipelines/         # 用户定义流水线 (YAML)
-├── tasks/             # 用户任务仓库
-├── wiki/              # 项目维基文档
-└── examples/          # 示例配置
+├── credentials/       # SSH 凭据 (YAML)
+├── plugins/           # 用户插件
+├── pipelines/         # 流水线定义 (YAML)
+├── tasks/             # 任务仓库
+├── wiki/              # 文档
+└── examples/          # 示例
 ```
 
 ## 开发
 
 ```bash
-# 后端
-cd server
-uv sync --dev
+# 后端 — 测试 + 覆盖率
+cd server && uv sync --dev
 uv run pytest tests/ -v
 uv run pytest tests/ --cov=taskpps --cov-report=term-missing
 
@@ -79,6 +82,9 @@ cd cli && go build -o bin/ppsctl .
 
 # Agent
 cd execution_agent && go test ./... -v
+
+# Web
+cd web && npm install && npm run dev
 ```
 
 ## 详细文档
