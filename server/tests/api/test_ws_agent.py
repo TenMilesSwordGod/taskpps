@@ -27,8 +27,8 @@ class TestAgentWebSocket:
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
-        # First receive_json is handshake, then receive_text times out
-        ws.receive_text = AsyncMock(side_effect=asyncio.TimeoutError())
+        # First receive_json is handshake, then receive_text times out once, then disconnects
+        ws.receive_text = AsyncMock(side_effect=[asyncio.TimeoutError(), WebSocketDisconnect()])
 
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
