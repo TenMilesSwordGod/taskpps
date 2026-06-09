@@ -615,11 +615,11 @@ install_cli_and_agent_binaries() {
 
 # 交互式选择二进制来源,结果 echo 到 stdout
 select_binary_source() {
-    echo ""
-    echo "请选择 ppsctl / execution-agent 二进制的来源:"
-    echo "  1) 本地源码构建 (需要 go 1.21+)"
-    echo "  2) 从 release 下载 (无需 go,但需联网,默认从内部 Gitea)"
-    echo -n "请输入选项 [1/2] (默认: 1): "
+    echo "" >&2
+    echo "请选择 ppsctl / execution-agent 二进制的来源:" >&2
+    echo "  1) 本地源码构建 (需要 go 1.21+)" >&2
+    echo "  2) 从 release 下载 (无需 go,但需联网,默认从内部 Gitea)" >&2
+    echo -n "请输入选项 [1/2] (默认: 1): " >&2
     local choice
     read -r choice
     case "${choice:-1}" in
