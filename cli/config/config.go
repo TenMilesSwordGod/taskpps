@@ -54,10 +54,7 @@ func FindWorkDir(projectFlag string) (string, error) {
 		return filepath.Abs(projectFlag)
 	}
 
-	if envDir := os.Getenv("TASKPPS_WORKDIR"); envDir != "" {
-		return filepath.Abs(envDir)
-	}
-
+	// 从当前目录向上查找 .taskpps/taskpps.yaml 或 taskpps.yaml
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -65,25 +62,9 @@ func FindWorkDir(projectFlag string) (string, error) {
 	for i := 0; i < 10; i++ {
 		configPath := filepath.Join(dir, ".taskpps", "taskpps.yaml")
 		if _, statErr := os.Stat(configPath); statErr == nil {
-			v := viper.New()
-			v.SetConfigFile(configPath)
-			if readErr := v.ReadInConfig(); readErr == nil {
-				workdir := v.GetString("workdir")
-				if workdir != "" {
-					return filepath.Abs(workdir)
-				}
-			}
 			return filepath.Abs(dir)
 		}
 		if _, statErr := os.Stat(filepath.Join(dir, "taskpps.yaml")); statErr == nil {
-			v := viper.New()
-			v.SetConfigFile(filepath.Join(dir, "taskpps.yaml"))
-			if readErr := v.ReadInConfig(); readErr == nil {
-				workdir := v.GetString("workdir")
-				if workdir != "" {
-					return filepath.Abs(workdir)
-				}
-			}
 			return filepath.Abs(dir)
 		}
 		parent := filepath.Dir(dir)
@@ -93,7 +74,7 @@ func FindWorkDir(projectFlag string) (string, error) {
 		dir = parent
 	}
 
-	return "", fmt.Errorf("未找到项目工作目录，请设置 TASKPPS_WORKDIR 环境变量或使用 --project 参数指定")
+	return "", fmt.Errorf("未找到项目工作目录，请使用 --project 参数指定")
 }
 
 func Load(path string, projectFlag string) (*Config, error) {

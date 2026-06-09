@@ -37,15 +37,18 @@ type TaskRun struct {
 }
 
 type Run struct {
-	ID           string                 `json:"id"`
-	PipelineName string                 `json:"pipeline_name"`
-	PipelineFile string                 `json:"pipeline_file"`
-	Status       RunStatus              `json:"status"`
-	Params       map[string]interface{} `json:"params"`
-	StartedAt    *string                `json:"started_at"`
-	FinishedAt   *string                `json:"finished_at"`
-	CreatedAt    string                 `json:"created_at"`
-	Tasks        []TaskRun              `json:"tasks"`
+	ID              string                 `json:"id"`
+	PipelineName    string                 `json:"pipeline_name"`
+	PipelineFile    string                 `json:"pipeline_file"`
+	PipelineID      string                 `json:"pipeline_id"`
+	PipelineVersion string                 `json:"pipeline_version"`
+	ProjectID       *string                `json:"project_id"`
+	Status          RunStatus              `json:"status"`
+	Params          map[string]interface{} `json:"params"`
+	StartedAt       *string                `json:"started_at"`
+	FinishedAt      *string                `json:"finished_at"`
+	CreatedAt       string                 `json:"created_at"`
+	Tasks           []TaskRun              `json:"tasks"`
 }
 
 type RunListResponse struct {
@@ -54,8 +57,9 @@ type RunListResponse struct {
 }
 
 type CreateRunRequest struct {
-	Pipeline string                 `json:"pipeline"`
-	Params   map[string]interface{} `json:"params"`
+	Pipeline  string                 `json:"pipeline"`
+	Params    map[string]interface{} `json:"params"`
+	ProjectID *string                `json:"project_id,omitempty"`
 }
 
 type CleanResponse struct {
@@ -154,4 +158,18 @@ type AgentDeployResult struct {
 	AgentID  string `json:"agent_id"`
 	AgentPID int    `json:"agent_pid"`
 	Error    string `json:"error,omitempty"`
+}
+
+type Project struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Workdir      string  `json:"workdir"`
+	RegisteredAt string  `json:"registered_at"`
+	LastUsedAt   *string `json:"last_used_at"`
+	Active       bool    `json:"active"`
+}
+
+type CreateProjectRequest struct {
+	Workdir string `json:"workdir"`
+	Name    string `json:"name,omitempty"`
 }

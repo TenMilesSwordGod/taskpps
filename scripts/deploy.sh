@@ -17,7 +17,6 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 VENV_DIR="/opt/taskpps/server/.venv"
 PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 SERVER_HOME="/opt/taskpps"
-WORKDIR=""
 BINARY_SOURCE=""   # build | download,由 select_binary_source 填充,也可由 --binary-source 覆盖
 RELEASE_TAG=""     # 仅 download 模式使用,可由 --release-tag 覆盖
 
@@ -98,107 +97,15 @@ create_user() {
     fi
 }
 
-# Detect existing project workdir from taskpps.yaml
-# NOTE: log messages go to stderr (>&2) because this function is called
-# via $(...) command substitution and only the path should be on stdout.
-detect_existing_workdir() {
-    local detected=""
-    local candidate_configs=(
-        "$SERVER_HOME/.taskpps/taskpps.yaml"
-        "$SERVER_HOME/taskpps.yaml"
-        "$PROJECT_ROOT/.taskpps/taskpps.yaml"
-        "$PROJECT_ROOT/taskpps.yaml"
-    )
-
-    for cfg in "${candidate_configs[@]}"; do
-        if [[ -f "$cfg" ]]; then
-            local val
-            val=$(grep -E '^[[:space:]]*workdir[[:space:]]*:' "$cfg" 2>/dev/null | \
-                  head -n1 | sed -E 's/^[[:space:]]*workdir[[:space:]]*:[[:space:]]*//' | \
-                  tr -d '"'"'")
-            if [[ -n "$val" && -d "$val" ]]; then
-                detected="$val"
-                echo -e "${GREEN}[INFO]${NC}  检测到已有项目配置: $cfg" >&2
-                echo "$detected"
-                return
-            fi
-        fi
-    done
-    echo ""
-}
-
-# Select project workdir
+# Select project workdir (deprecated — deploy.sh no longer manages project directories)
 select_workdir() {
-    if [[ -n "${WORKDIR:-}" ]]; then
-        log_info "Using workdir from --workdir parameter: $WORKDIR"
-        return
-    fi
-
-    if [[ ! -t 0 ]]; then
-        log_info "Non-interactive mode, using default workdir: $SERVER_HOME"
-        WORKDIR="$SERVER_HOME"
-        return
-    fi
-
-    local existing_workdir
-    existing_workdir=$(detect_existing_workdir)
-
-    echo ""
-    echo "请选择项目工作目录 (pipelines/agents/credentials 存放位置):"
-
-    if [[ -n "$existing_workdir" ]]; then
-        echo "  0) 复用已有项目目录 - $existing_workdir (从 taskpps.yaml 检测到)"
-    fi
-
-    echo "  1) 默认 - $SERVER_HOME (传统模式，服务器代码与项目文件在同一目录)"
-    echo "  2) 当前目录 - $PROJECT_ROOT (git clone 目录)"
-    echo "  3) 自定义路径"
-
-    if [[ -n "$existing_workdir" ]]; then
-        echo -n "请输入选项 [0/1/2/3] (默认: 0): "
-    else
-        echo -n "请输入选项 [1/2/3] (默认: 1): "
-    fi
-    read -r choice
-
-    if [[ -n "$existing_workdir" && ("${choice:-0}" == "0" || "${choice:-0}" == "") ]]; then
-        WORKDIR="$existing_workdir"
-        log_info "已选择复用已有项目目录: $WORKDIR"
-        echo ""
-        return
-    fi
-
-    case "${choice:-1}" in
-        1)
-            WORKDIR="$SERVER_HOME"
-            log_info "已选择默认模式: $WORKDIR"
-            ;;
-        2)
-            WORKDIR="$PROJECT_ROOT"
-            log_info "已选择当前目录: $WORKDIR"
-            ;;
-        3)
-            echo -n "请输入项目工作目录的绝对路径: "
-            read -r custom_path
-            if [[ -z "$custom_path" ]]; then
-                log_error "路径不能为空"
-                exit 1
-            fi
-            WORKDIR="$custom_path"
-            log_info "已选择自定义路径: $WORKDIR"
-            ;;
-        *)
-            WORKDIR="$SERVER_HOME"
-            log_info "无效选项，使用默认模式: $WORKDIR"
-            ;;
-    esac
-
-    echo ""
+    log_warn "select_workdir() 已废弃, deploy.sh 不再管理项目目录"
+    log_info "请使用 ppsctl init --register-current-folder 初始化项目"
 }
 
 # Setup project directories
 setup_directories() {
-    log_step "Setting up project directories..."
+    log_step "Setting up server directories..."
 
     local dirs=(
         "/var/lib/taskpps"
@@ -215,9 +122,6 @@ setup_directories() {
 
     # Copy project files to server home
     log_step "Copying project files to $SERVER_HOME..."
-    # NOTE: exclude .taskpps (workspaces/logs/runtime data) — never overwrite
-    # runtime workspaces in $SERVER_HOME, and don't let --delete wipe them
-    # (workspaces contain cloned git repos with read-only objects).
     rsync -a --delete \
         --exclude='.git' \
         --exclude='__pycache__' \
@@ -226,6 +130,11 @@ setup_directories() {
         --exclude='.venv' \
         --exclude='node_modules' \
         --exclude='.taskpps' \
+        --exclude='pipelines' \
+        --exclude='agents' \
+        --exclude='credentials' \
+        --exclude='tasks' \
+        --exclude='plugins' \
         "$PROJECT_ROOT/" "$SERVER_HOME/"
 
     chown -R taskpps:taskpps "$SERVER_HOME"
@@ -234,64 +143,6 @@ setup_directories() {
     mkdir -p "$SERVER_HOME/.taskpps"
     chown -R taskpps:taskpps "$SERVER_HOME/.taskpps"
     chmod 750 "$SERVER_HOME/.taskpps"
-
-    # Always create project structure in workdir (including logs and workspaces)
-    log_step "Creating project structure in workdir: $WORKDIR"
-    mkdir -p "$WORKDIR"
-    chown taskpps:taskpps "$WORKDIR"
-    # 2777 = setgid + rwx for owner/group/other. The workdir is intentionally
-    # world-writable: any logged-in user (aba, dady, vncuser, ...) can create,
-    # edit, and remove files in this project folder without per-user setup.
-    # setgid is kept so new files/dirs inherit the `taskpps` group, which
-    # keeps the service happy and makes `ls -l` consistent across users.
-    chmod 2777 "$WORKDIR"
-
-    # Ensure taskpps user can traverse from / to the workdir.
-    # Parent directories need at least 'x' (traverse/execute) permission for 'others'.
-    # This is especially important for paths under /home where user home dirs are 700.
-    # Permission string format: drwxr-xr-x  (positions 0-9, position 9 = others execute)
-    local check_path="$WORKDIR"
-    while [[ "$check_path" != "/" ]]; do
-        if [[ -d "$check_path" ]]; then
-            local perms
-            perms=$(stat -c '%A' "$check_path" 2>/dev/null || echo "----------")
-            if [[ "${perms:9:1}" != "x" && "${perms:9:1}" != "t" ]]; then
-                log_warn "父目录 $check_path 对其他用户无遍历权限 (当前 $perms),正在添加 o+x..."
-                chmod o+x "$check_path" 2>/dev/null || log_warn "  无法修改 $check_path 权限,请手动确认 taskpps 用户可访问"
-            fi
-        fi
-        check_path=$(dirname "$check_path")
-    done
-
-    local project_dirs=(
-        "pipelines"
-        "agents"
-        "credentials"
-        "tasks"
-        "plugins"
-        ".taskpps"
-        ".taskpps/logs"
-        ".taskpps/workspaces"
-    )
-
-    for d in "${project_dirs[@]}"; do
-        mkdir -p "$WORKDIR/$d"
-        chown taskpps:taskpps "$WORKDIR/$d"
-        # 2777 = world-writable + setgid, see comment on $WORKDIR above.
-        chmod 2777 "$WORKDIR/$d"
-        log_info "  created $WORKDIR/$d"
-    done
-
-    # Recursively fix ownership of pre-existing runtime data (e.g. state.db
-    # created by a prior local run under a different user) so the service
-    # running as 'taskpps' can write to it. Without this, SQLite reports
-    # "attempt to write a readonly database" on the first write attempt.
-    if [[ -d "$WORKDIR/.taskpps" ]]; then
-        chown -R taskpps:taskpps "$WORKDIR/.taskpps"
-        # Ensure existing subdirs under .taskpps are also world-writable so
-        # any user can drop into workspaces/ or read logs/ without setup.
-        find "$WORKDIR/.taskpps" -type d -exec chmod 2777 {} +
-    fi
 }
 
 # Install Python dependencies with pip + venv
@@ -383,19 +234,6 @@ build_web_ui() {
 generate_service_file() {
     log_step "Generating systemd service file (gunicorn)..."
 
-    # ProtectHome=true makes /home empty and inaccessible.
-    # If workdir is under /home, we must relax this so the server can reach it.
-    local protect_home="true"
-    if [[ "$WORKDIR" == /home/* ]]; then
-        protect_home="read-only"
-        log_info "WORKDIR 位于 /home 下,将 ProtectHome 设为 read-only 以允许服务器访问"
-    fi
-
-    local read_write_paths="$SERVER_HOME /var/lib/taskpps /var/log/taskpps"
-    if [[ "$WORKDIR" != "$SERVER_HOME" ]]; then
-        read_write_paths="$read_write_paths $WORKDIR"
-    fi
-
     cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=TaskPPS Pipeline Server (Gunicorn)
@@ -412,15 +250,14 @@ Environment=PYTHONPATH=$SERVER_HOME/server
 Environment=PATH=${VENV_DIR}/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HOME=/var/lib/taskpps
 Environment=TASKPPS_CONFIG=$SERVER_HOME/taskpps.yaml
-Environment=TASKPPS_WORKDIR=$WORKDIR
 Environment=TASKPPS_SERVER_HOME=$SERVER_HOME
 
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=$protect_home
-ReadWritePaths=$read_write_paths
+ProtectHome=read-only
+ReadWritePaths=$SERVER_HOME /var/lib/taskpps /var/log/taskpps
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -484,7 +321,6 @@ generate_config() {
 # Generated on $(date -Iseconds)
 
 locale: zh
-workdir: $WORKDIR
 
 server:
   host: 0.0.0.0
@@ -514,40 +350,6 @@ EOF
     else
         log_info "Server config file already exists, skipping"
     fi
-
-    # Generate project config in workdir (always, regardless of WORKDIR vs SERVER_HOME)
-    local project_config="$WORKDIR/.taskpps/taskpps.yaml"
-    if [[ ! -f "$project_config" ]]; then
-        log_step "Generating project configuration in workdir..."
-
-        cat > "$project_config" << EOF
-# TaskPPS 项目配置文件
-# Generated on $(date -Iseconds)
-
-locale: zh
-workdir: $WORKDIR
-
-server:
-  host: 127.0.0.1
-  port: 26521
-
-executor:
-  default_timeout: 3600
-  max_workers: 10
-  shell: /bin/bash
-
-env: {}
-
-plugins:
-  paths: ["plugins"]
-
-triggers: []
-EOF
-
-        chown taskpps:taskpps "$project_config"
-        chmod 640 "$project_config"
-        log_info "Project config created at $project_config"
-    fi
 }
 
 # Generate /etc/profile.d/taskpps.sh
@@ -558,8 +360,6 @@ generate_profile_d() {
     cat > "$profile_file" << EOF
 # TaskPPS 环境配置
 # 由 deploy.sh 自动生成于 $(date -Iseconds)
-
-export TASKPPS_WORKDIR=$WORKDIR
 
 if [ -d "$SERVER_HOME/cli/bin" ]; then
     export PATH="$SERVER_HOME/cli/bin:\$PATH"
@@ -645,7 +445,6 @@ start_service() {
     log_info "  验证应用可导入 (taskpps 用户)..."
     if su -s /bin/bash taskpps -c "
         export HOME=/var/lib/taskpps
-        export TASKPPS_WORKDIR=$WORKDIR
         export TASKPPS_CONFIG=$SERVER_HOME/taskpps.yaml
         export TASKPPS_SERVER_HOME=$SERVER_HOME
         export PYTHONPATH=$SERVER_HOME/server
@@ -658,28 +457,16 @@ start_service() {
         exit 1
     fi
 
-    # Pre-flight check: verify taskpps user can actually read/write workdir
-    log_info "  验证 workdir 读写权限..."
-    if su -s /bin/bash taskpps -c "
-        test -r \"$WORKDIR\" && test -w \"$WORKDIR\" && echo READWRITE_OK || echo READWRITE_FAIL
-    " 2>&1 | grep -q READWRITE_OK; then
-        log_info "  workdir 可读写: $WORKDIR"
-    else
-        log_warn "taskpps 用户无法读写 $WORKDIR — 检查父目录权限和 ProtectHome 设置"
-        log_warn "  ls -ld $WORKDIR: $(ls -ld "$WORKDIR" 2>/dev/null)"
-    fi
-
-    # Pre-flight check: state.db (and other runtime files) under workdir must
+    # Pre-flight check: state.db under SERVER_HOME/.taskpps must
     # be owned by taskpps. If a previous run created them under a different
     # user, SQLite will fail with "attempt to write a readonly database".
-    # Fix it automatically rather than letting the service start in a broken state.
-    if [[ -d "$WORKDIR/.taskpps" ]]; then
+    if [[ -d "$SERVER_HOME/.taskpps" ]]; then
         local bad_owner
-        bad_owner=$(find "$WORKDIR/.taskpps" -not -user taskpps -print -quit 2>/dev/null)
+        bad_owner=$(find "$SERVER_HOME/.taskpps" -not -user taskpps -print -quit 2>/dev/null)
         if [[ -n "$bad_owner" ]]; then
             log_warn "  发现 .taskpps 下存在非 taskpps 用户的文件,自动修正所有权..."
-            chown -R taskpps:taskpps "$WORKDIR/.taskpps"
-            log_info "  已修正: $(ls -ld "$WORKDIR/.taskpps" 2>/dev/null)"
+            chown -R taskpps:taskpps "$SERVER_HOME/.taskpps"
+            log_info "  已修正: $(ls -ld "$SERVER_HOME/.taskpps" 2>/dev/null)"
         fi
     fi
 
@@ -752,7 +539,6 @@ install() {
     log_info "Project root: $PROJECT_ROOT"
 
     check_root
-    select_workdir
     install_python_deps
     create_user
     setup_directories
@@ -769,24 +555,17 @@ install() {
     log_info "Deployment completed successfully!"
     log_info "========================================"
     log_info "Server home:  $SERVER_HOME"
-    log_info "Project workdir: $WORKDIR"
     log_info "Service:      systemctl status $SERVICE_NAME"
     log_info "Logs:         journalctl -u $SERVICE_NAME -f"
     log_info "Access log:   tail -f /var/log/taskpps/access.log"
     log_info "Error log:    tail -f /var/log/taskpps/error.log"
     log_info "Config:       $SERVER_HOME/taskpps.yaml"
-    log_info "Project config: $WORKDIR/.taskpps/taskpps.yaml"
     log_info "Data:         /var/lib/taskpps"
     log_info "Logs dir:     /var/log/taskpps"
     log_info "ppsctl:       /usr/local/bin/ppsctl"
     log_info "Env config:   /etc/profile.d/taskpps.sh"
     log_info ""
-    log_info "Shared workdir (world-writable):"
-    log_info "  $WORKDIR is mode 2777 (rwxrwxrwx + setgid)."
-    log_info "  Any logged-in user can create / edit / remove files here — no per-user setup."
-    log_info "  Note: new files default to 0644 (only the creator can write them)."
-    log_info "  To let everyone edit a specific file: chmod 666 <file>"
-    log_info "  To let everyone edit every new file:  umask 000  (in your shell rc)"
+    log_info "项目初始化: 请使用 ppsctl init --register-current-folder"
     log_info ""
     log_info "Endpoints:"
     log_info "  API:       http://$(hostname -I | awk '{print $1}'):26521/api"
@@ -795,21 +574,18 @@ install() {
     log_info "  Health:    http://$(hostname -I | awk '{print $1}'):26521/api/health"
 }
 
-# Parse CLI args,设置全局 WORKDIR / BINARY_SOURCE / RELEASE_TAG,并 echo 子命令
-parse_workdir_arg() {
+# Parse CLI args,设置全局 BINARY_SOURCE / RELEASE_TAG,并 echo 子命令
+parse_args() {
     local args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --workdir)
-                if [[ -z "${2:-}" ]]; then
-                    log_error "--workdir requires a path argument"
-                    exit 1
-                fi
-                WORKDIR="$2"
-                shift 2
+                # --workdir 已废弃,忽略并警告
+                log_warn "--workdir 已废弃, deploy.sh 不再管理项目目录"
+                shift 2 2>/dev/null || shift
                 ;;
             --workdir=*)
-                WORKDIR="${1#*=}"
+                log_warn "--workdir 已废弃, deploy.sh 不再管理项目目录"
                 shift
                 ;;
             --binary-source)
@@ -864,8 +640,6 @@ show_usage() {
     echo "  start      - Start the service"
     echo ""
     echo "Options:"
-    echo "  --workdir <path>          Project workdir for pipelines/agents/credentials"
-    echo "                            (default: /opt/taskpps, non-interactive mode)"
     echo "  --binary-source <mode>    ppsctl / execution-agent 二进制来源"
     echo "                            build   = 本地 go build(需要 go 1.21+)"
     echo "                            download= 从 release 下载(默认内部 Gitea)"
@@ -875,7 +649,7 @@ show_usage() {
 }
 
 # Main
-CMD=$(parse_workdir_arg "$@")
+CMD=$(parse_args "$@")
 case "$CMD" in
     install)
         install

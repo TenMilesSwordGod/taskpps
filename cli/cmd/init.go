@@ -6,7 +6,11 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/taskpps/ppsctl/client"
+	"github.com/taskpps/ppsctl/config"
 )
+
+var registerCurrentFolder bool
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -15,11 +19,13 @@ var initCmd = &cobra.Command{
 
 创建的目录:
   pipelines/    流水线定义文件
-  tasks/        Invoke 任务定义文件  
+  tasks/        Invoke 任务定义文件
   agents/       Agent 主机配置文件
   credentials/  凭据配置文件
   plugins/      插件目录
-  .taskpps/     项目配置文件`,
+  .taskpps/     项目配置文件
+
+使用 --register-current-folder 可在初始化后通过 API 将项目注册到 server。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -50,9 +56,9 @@ var initCmd = &cobra.Command{
 			fmt.Printf("  created %s/\n", d)
 		}
 
-		taskppsYAML := fmt.Sprintf(`# taskpps 项目配置文件
+		// 不再写入 workdir: <abs_path>，项目路径由 DB 注册管理
+		taskppsYAML := `# taskpps 项目配置文件
 locale: zh
-workdir: %s
 
 server:
   host: 127.0.0.1
@@ -71,7 +77,7 @@ plugins:
   paths: ["plugins"]
 
 triggers: []
-`, absCwd)
+`
 		if err := writeFileIfNotExists(".taskpps/taskpps.yaml", taskppsYAML, "  "); err != nil {
 			return err
 		}
@@ -224,6 +230,23 @@ def health_check(c, url="http://localhost:8000"):
 		fmt.Println("  3. 编辑 pipelines/example.yaml 或创建新流水线")
 		fmt.Println("  4. 运行: taskpps start-server 启动服务端")
 		fmt.Println("  5. 运行: taskpps run example 执行流水线")
+
+		if registerCurrentFolder {
+			fmt.Println("\n正在注册项目到 server...")
+			cfg, err := config.Load(cfgFile, projectFlag)
+			if err != nil {
+				return fmt.Errorf("加载配置失败(无法连接 server): %w", err)
+			}
+			c := client.New(cfg)
+			project, err := c.RegisterProject(absCwd, filepath.Base(absCwd))
+			if err != nil {
+				return fmt.Errorf("注册项目失败: %w", err)
+			}
+			fmt.Printf("  项目已注册: id=%s workdir=%s\n", project.ID, project.Workdir)
+		} else {
+			fmt.Println("\n提示: 使用 --register-current-folder 可将项目注册到 server")
+		}
+
 		return nil
 	},
 }
@@ -242,5 +265,6 @@ func writeFileIfNotExists(relPath, content, indent string) error {
 }
 
 func init() {
+	initCmd.Flags().BoolVar(&registerCurrentFolder, "register-current-folder", false, "初始化后将当前项目注册到 server")
 	RootCmd.AddCommand(initCmd)
 }

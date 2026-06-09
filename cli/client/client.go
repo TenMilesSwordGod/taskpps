@@ -454,3 +454,46 @@ func (c *Client) AgentExec(agentID string, body *models.AgentExecRequest) (*mode
 	}
 	return &result, nil
 }
+
+func (c *Client) RegisterProject(workdir, name string) (*models.Project, error) {
+	body := models.CreateProjectRequest{
+		Workdir: workdir,
+		Name:    name,
+	}
+	resp, err := c.http.Post(c.baseURL+"/projects/", req.BodyJSON(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to register project: %w", err)
+	}
+	var project models.Project
+	if err := parseResp(resp, &project); err != nil {
+		return nil, err
+	}
+	return &project, nil
+}
+
+func (c *Client) ListProjects() ([]models.Project, error) {
+	resp, err := c.http.Get(c.baseURL + "/projects/")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list projects: %w", err)
+	}
+	var projects []models.Project
+	if err := parseResp(resp, &projects); err != nil {
+		return nil, err
+	}
+	return projects, nil
+}
+
+func (c *Client) UnregisterProject(projectID string) error {
+	resp, err := c.http.Delete(c.baseURL + "/projects/" + projectID)
+	if err != nil {
+		return fmt.Errorf("failed to unregister project: %w", err)
+	}
+	if resp.Response().StatusCode == 404 {
+		return fmt.Errorf("project %s not found", projectID)
+	}
+	if resp.Response().StatusCode < 200 || resp.Response().StatusCode >= 300 {
+		body := resp.String()
+		return fmt.Errorf("unexpected status %d: %s", resp.Response().StatusCode, body)
+	}
+	return nil
+}

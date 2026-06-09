@@ -223,6 +223,8 @@ func TestFindWorkDir_WithProjectFlag(t *testing.T) {
 }
 
 func TestFindWorkDir_EnvVar(t *testing.T) {
+	// TASKPPS_WORKDIR is no longer supported by FindWorkDir()
+	// It should return an error when no config file is found
 	dir, err := os.MkdirTemp("", "test-workdir-env-*")
 	if err != nil {
 		t.Fatal(err)
@@ -232,13 +234,9 @@ func TestFindWorkDir_EnvVar(t *testing.T) {
 	os.Setenv("TASKPPS_WORKDIR", dir)
 	defer os.Unsetenv("TASKPPS_WORKDIR")
 
-	workDir, err := FindWorkDir("")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	absDir, _ := filepath.Abs(dir)
-	if workDir != absDir {
-		t.Errorf("expected %s, got %s", absDir, workDir)
+	_, err = FindWorkDir("")
+	if err == nil {
+		t.Error("expected error when TASKPPS_WORKDIR is set but no config file found")
 	}
 }
 
