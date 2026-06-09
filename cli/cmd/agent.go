@@ -150,7 +150,11 @@ func runAgentCheck(agentID string, fileFilter string) error {
 			}
 			fmt.Println()
 		} else {
-			color.Green("[%d] ✓ %s (%s:%d) — %s in %dms", cnt, r.AgentID, r.Host, r.Port, r.Status, r.LatencyMs)
+			extra := ""
+			if r.System != "" || r.Arch != "" {
+				extra = fmt.Sprintf(" · %s/%s", color.CyanString(orUnknown(r.System)), color.CyanString(orUnknown(r.Arch)))
+			}
+			color.Green("[%d] ✓ %s (%s:%d) — %s in %dms%s", cnt, r.AgentID, r.Host, r.Port, r.Status, r.LatencyMs, extra)
 			fmt.Println()
 		}
 	})
@@ -303,6 +307,13 @@ func printSingleResult(r *models.AgentCheckResult) {
 		color.Red("✗ %s (%s:%d) — %s after %dms", r.AgentID, r.Host, r.Port, r.Status, r.LatencyMs)
 	}
 	fmt.Printf("  Type:     %s\n", r.Type)
+	if r.System != "" || r.Arch != "" {
+		fmt.Printf("  System:   %s\n", orUnknown(r.System))
+		fmt.Printf("  Arch:     %s\n", orUnknown(r.Arch))
+	}
+	if r.Platform != "" {
+		fmt.Printf("  Platform: %s\n", r.Platform)
+	}
 	fmt.Printf("  File:     %s\n", r.SourceFile)
 	if r.Error != "" {
 		color.Red("  Error:    %s\n", r.Error)
@@ -326,7 +337,7 @@ func printCheckResultsGrouped(results []models.AgentCheckResult, summary *models
 
 		color.Cyan("───── %s ─────", file)
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Agent", "Host:Port", "Type", "Status", "Latency"})
+		table.SetHeader([]string{"Agent", "Host:Port", "Type", "System", "Arch", "Status", "Latency"})
 		table.SetBorder(false)
 		table.SetColumnSeparator(" ")
 		table.SetAutoWrapText(false)
@@ -347,6 +358,8 @@ func printCheckResultsGrouped(results []models.AgentCheckResult, summary *models
 				a.AgentID,
 				hostPort,
 				truncateType(a.Type, 18),
+				orUnknown(a.System),
+				orUnknown(a.Arch),
 				statusColor(statusDisplay),
 				latency,
 			})
@@ -381,6 +394,14 @@ func truncateType(t string, maxLen int) string {
 		return t[:maxLen-3] + "..."
 	}
 	return t + strings.Repeat(" ", maxLen-len(t))
+}
+
+// orUnknown 把空字符串显示为 "unknown"
+func orUnknown(s string) string {
+	if s == "" {
+		return "unknown"
+	}
+	return s
 }
 
 func formatRelativeTime(timestamp float64) string {

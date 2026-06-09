@@ -1,13 +1,41 @@
 import { useState, useMemo } from 'react';
 import { Input, Empty, Tag, Spin, Badge, Tooltip, Alert } from 'antd';
-import { Search, Server, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, Server, RefreshCw, AlertCircle, Radar } from 'lucide-react';
 import { useAgentsWithConfig } from '@/api/agents';
 import ServerCard from './ServerCard';
+import apiClient from '@/api/client';
+import type { AgentCheckResult } from '@/types';
 
 /** Servers 列表页 */
 export default function ServersPage() {
   const { data: agents, isLoading, refetch, isFetching, error } = useAgentsWithConfig();
   const [search, setSearch] = useState('');
+  // 探测结果（agent_id → { system, arch }），用于按需覆盖 yaml 兜底
+  const [detected, setDetected] = useState<Record<string, { system: string; arch: string }>>({});
+  const [probing, setProbing] = useState(false);
+
+  const runProbe = async () => {
+    if (!agents || agents.length === 0) return;
+    setProbing(true);
+    try {
+      // 调一次 check，遍历 results 收集 system/arch
+      const res = await apiClient.post<{ results: AgentCheckResult[] }>('/api/agents/check', {
+        timeout: 5,
+      });
+      const map: Record<string, { system: string; arch: string }> = {};
+      for (const r of res.data?.results ?? []) {
+        if (r.system || r.arch) {
+          map[r.agent_id] = { system: r.system, arch: r.arch };
+        }
+      }
+      setDetected(map);
+    } catch (e) {
+      // 静默失败，UI 仍展示 type 兜底
+      console.warn('probe failed', e);
+    } finally {
+      setProbing(false);
+    }
+  };
 
   // 调试用：直接 raw fetch 一次，识别是"404 未重启"还是"[] 但确实没配"
   const [debugInfo, setDebugInfo] = useState<{ url: string; status: number; type: string; preview: string } | null>(null);
@@ -98,6 +126,27 @@ export default function ServersPage() {
               刷新
             </button>
           </Tooltip>
+          <Tooltip title="主动探测所有 agent 的 system / arch（通过 SSH uname）">
+            <button
+              onClick={runProbe}
+              disabled={probing}
+              style={{
+                border: '1px solid #722ed1',
+                borderRadius: 6,
+                padding: '4px 10px',
+                background: '#fff',
+                cursor: probing ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                color: '#722ed1',
+                fontSize: 13,
+              }}
+            >
+              <Radar size={14} className={probing ? 'animate-spin' : ''} />
+              {probing ? '探测中…' : '探测 system/arch'}
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -164,9 +213,17 @@ export default function ServersPage() {
               padding: 4,
             }}
           >
-            {filtered.map((a) => (
-              <ServerCard key={a.agent_id} agent={a} />
-            ))}
+            {filtered.map((a) => {
+              const det = detected[a.agent_id];
+              return (
+                <ServerCard
+                  key={a.agent_id}
+                  agent={a}
+                  detectedSystem={det?.system}
+                  detectedArch={det?.arch}
+                />
+              );
+            })}
           </div>
         )}
       </div>

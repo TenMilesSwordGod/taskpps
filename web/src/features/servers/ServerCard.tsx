@@ -4,6 +4,9 @@ import { Cpu, Globe, Hash, Activity, Wifi, WifiOff } from 'lucide-react';
 
 interface ServerCardProps {
   agent: AgentWithConfig;
+  /** 探测后的 system/arch 覆盖（来自 POST /api/agents/check） */
+  detectedSystem?: string;
+  detectedArch?: string;
 }
 
 /** 把 system 字段映射到图标（Linux/Darwin/Windows/...） */
@@ -47,11 +50,26 @@ function getArchLabel(arch: string): string {
 
 /** 把 type 字段规整为友好名称 */
 function getTypeLabel(type: string): string {
-  if (!type) return 'unknown';
+  if (!type) return 'Local';
   if (type.startsWith('ssh-')) return 'SSH';
   if (type === 'local') return 'Local';
-  if (type === 'agent') return 'Agent';
+  if (type === 'execution-agent' || type === 'agent' || type === 'websocket') return 'Agent';
   return type;
+}
+
+/** 按 type 字段兜底推导 system（用于离线 / 未探测时显示） */
+function fallbackSystem(type: string): string {
+  if (!type) return 'Local';
+  if (type.startsWith('ssh-')) return 'Linux';
+  if (type === 'local') return 'Local';
+  if (type === 'execution-agent' || type === 'agent' || type === 'websocket') return '';
+  return '';
+}
+
+/** 按 type 字段兜底推导 arch（用于离线时显示） */
+function fallbackArch(type: string): string {
+  if (type.startsWith('ssh-')) return 'x86_64';
+  return '';
 }
 
 /** 把时间戳格式化为 hh:mm:ss */
@@ -60,13 +78,16 @@ function formatTs(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('zh-CN');
 }
 
-export default function ServerCard({ agent }: ServerCardProps) {
+export default function ServerCard({ agent, detectedSystem, detectedArch }: ServerCardProps) {
   const online = agent.connected;
 
-  // 系统图标：优先按 system 字段，否则按 host 类型兜底
-  const osIcon = getOsIcon(agent.system, agent.arch, agent.type);
-  const systemLabel = getSystemLabel(agent.system);
-  const archLabel = getArchLabel(agent.arch);
+  // 优先级：detected > real > type 兜底
+  const effectiveSystem = detectedSystem || agent.system || fallbackSystem(agent.type);
+  const effectiveArch = detectedArch || agent.arch || fallbackArch(agent.type);
+  const fallbackSys = fallbackSystem(agent.type);
+  const osIcon = getOsIcon(effectiveSystem, effectiveArch, agent.type);
+  const systemLabel = getSystemLabel(effectiveSystem);
+  const archLabel = getArchLabel(effectiveArch);
   const typeLabel = getTypeLabel(agent.type);
 
   // 显示名称优先级：yaml.name → agent.hostname（agent 报告的）→ agent_id

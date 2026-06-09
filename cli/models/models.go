@@ -99,6 +99,9 @@ type AgentCheckResult struct {
 	SourceFile string `json:"source_file"`
 	Status     string `json:"status"`
 	LatencyMs  int    `json:"latency_ms"`
+	System     string `json:"system,omitempty"`
+	Arch       string `json:"arch,omitempty"`
+	Platform   string `json:"platform,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
 

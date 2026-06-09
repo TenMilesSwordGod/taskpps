@@ -199,3 +199,32 @@ export interface AgentWithConfig {
   last_heartbeat: number;
   running_commands: number;
 }
+
+/** Agent check 探测单项结果 */
+export interface AgentCheckResult {
+  agent_id: string;
+  name: string;
+  type: string;
+  host: string;
+  port: number;
+  source_file: string;
+  status: string;
+  latency_ms: number;
+  system: string;
+  arch: string;
+  platform: string;
+  error?: string;
+}
+
+/** Agent check 探测汇总 */
+export interface AgentCheckSummary {
+  total: number;
+  connected: number;
+  failed: number;
+}
+
+/** Agent check 探测响应 */
+export interface AgentCheckResponse {
+  results: AgentCheckResult[];
+  summary: AgentCheckSummary;
+}

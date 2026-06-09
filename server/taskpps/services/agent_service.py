@@ -105,6 +105,9 @@ class AgentService:
             manager = AgentManager.instance()
             if manager.is_connected(agent_id):
                 conn = manager.get_connection(agent_id)
+                sys_name = conn.system if conn else ""
+                arch_name = conn.arch if conn else ""
+                plat = f"{sys_name}/{arch_name}" if sys_name and arch_name else (conn.platform if conn else "")
                 return AgentCheckResult(
                     agent_id=agent_id,
                     name=agent_name,
@@ -114,6 +117,9 @@ class AgentService:
                     source_file=source_file,
                     status="connected",
                     latency_ms=0,
+                    system=sys_name,
+                    arch=arch_name,
+                    platform=plat,
                     error=None,
                 )
             else:
@@ -213,6 +219,9 @@ class AgentService:
             if auth_result is not None:
                 return auth_result
 
+        detected_system = str(agent_data.get("_detected_system", "") or "")
+        detected_arch = str(agent_data.get("_detected_arch", "") or "")
+        detected_platform = f"{detected_system}/{detected_arch}" if detected_system and detected_arch else ""
         return AgentCheckResult(
             agent_id=agent_id,
             name=agent_name,
@@ -222,6 +231,9 @@ class AgentService:
             source_file=source_file,
             status="connected",
             latency_ms=latency_ms,
+            system=detected_system,
+            arch=detected_arch,
+            platform=detected_platform,
             error=None,
         )
 
@@ -274,9 +286,9 @@ class AgentService:
             )
 
         start = time.monotonic()
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             client.connect(
                 hostname=host,
                 port=port,
@@ -284,9 +296,6 @@ class AgentService:
                 timeout=timeout,
                 **connect_kwargs,
             )
-            client.close()
-            latency_ms = int((time.monotonic() - start) * 1000)
-            return None
         except paramiko.AuthenticationException as e:
             latency_ms = int((time.monotonic() - start) * 1000)
             return AgentCheckResult(
@@ -313,6 +322,35 @@ class AgentService:
                 latency_ms=latency_ms,
                 error=t("SSH auth check failed: {error}", error=str(e)),
             )
+
+        # 认证成功：探测远端 uname
+        system, arch = self._probe_remote_system(client, timeout=min(timeout, 5))
+        client.close()
+        latency_ms = int((time.monotonic() - start) * 1000)
+        # 暂存到 agent_data，便于 _check_one 写入结果
+        agent_data["_detected_system"] = system
+        agent_data["_detected_arch"] = arch
+        return None
+
+    def _probe_remote_system(self, client, timeout: int = 5) -> tuple[str, str]:
+        """通过已认证 SSH 会话执行 uname，返回 (system, arch)"""
+        import paramiko
+
+        def _run(cmd: str) -> str:
+            try:
+                _stdin, stdout, _stderr = client.exec_command(cmd, timeout=timeout)
+                return stdout.read().decode("utf-8", errors="ignore").strip()
+            except Exception:
+                return ""
+
+        system = _run("uname -s")
+        if not system:
+            # Windows 没有 uname，使用 ver 或 echo
+            system = _run("ver")
+        arch = _run("uname -m")
+        if not arch:
+            arch = _run("echo %PROCESSOR_ARCHITECTURE%")
+        return system, arch
 
 
 def _match_file_filter(source_file: str, file_filter: str) -> bool:

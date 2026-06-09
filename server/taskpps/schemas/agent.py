@@ -16,6 +16,10 @@ class AgentCheckResult(BaseModel):
     source_file: str
     status: str
     latency_ms: int
+    # 远端系统信息（SSH 认证成功后通过 uname 获取）
+    system: str = ""      # 操作系统内核名（Linux/Darwin/Windows）
+    arch: str = ""        # CPU 架构（x86_64/aarch64/...）
+    platform: str = ""    # system/arch 简写
     error: str | None = None
 
 
