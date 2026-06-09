@@ -60,3 +60,227 @@ async def test_check_agent_not_found(app, setup_project, tmp_project):
             json={"agent_id": "nonexistent", "timeout": 5},
         )
         assert response.status_code in (400, 404)
+
+
+# ----------------------------------------------------------------------------
+# /api/agents/{id}/host-info endpoint 测试
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_host_info_agent_not_found(app, setup_project, tmp_project):
+    """不存在的 agent_id → 404"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/agents/nonexistent/host-info")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_host_info_execution_agent(app, setup_project, tmp_project):
+    """execution-agent 类型：返回 source=agent + 错误（待 agent 端实现）"""
+    import taskpps.config as cfg
+    from unittest.mock import patch, MagicMock
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_cfg = {
+        "id": "exec-agent",
+        "name": "Exec Agent",
+        "type": "execution-agent",
+        "host": "",
+        "port": 0,
+    }
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents.AgentLoader") as MockLoader:
+            loader = MagicMock()
+            loader.get.return_value = agent_cfg
+            loader.resolve_credential.return_value = None
+            MockLoader.return_value = loader
+            with patch("taskpps.api.agents.manager") as mock_mgr:
+                mock_mgr.get_connection.return_value = None
+                response = await client.get("/api/agents/exec-agent/host-info")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source"] == "agent"
+    assert "execution agent" in (data.get("error") or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_host_info_ssh_missing_credential(app, setup_project, tmp_project):
+    """ssh agent 但 credential 没 key_path / password → 200 + 明确错误信息"""
+    import taskpps.config as cfg
+    from unittest.mock import patch, MagicMock
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_cfg = {
+        "id": "ssh-no-creds",
+        "name": "SSH No Creds",
+        "type": "ssh-username-password",
+        "host": "10.0.0.1",
+        "port": 22,
+        "username": "root",
+        "credential_id": "empty-cred",
+    }
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents.AgentLoader") as MockLoader:
+            loader = MagicMock()
+            loader.get.return_value = agent_cfg
+            # credential yaml 只有 username，没 key_path/password
+            loader.resolve_credential.return_value = {"id": "empty-cred", "username": "root"}
+            MockLoader.return_value = loader
+            response = await client.get("/api/agents/ssh-no-creds/host-info")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source"] == "ssh"
+    assert "key_path" in (data.get("error") or "") or "password" in (data.get("error") or "")
+
+
+@pytest.mark.asyncio
+async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project):
+    """SSH 认证失败 → 200 + 错误信息含 username（不发 5xx）"""
+    import taskpps.config as cfg
+    from unittest.mock import patch, MagicMock
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_cfg = {
+        "id": "ssh-bad-pw",
+        "name": "SSH Bad PW",
+        "type": "ssh-username-password",
+        "host": "10.0.0.1",
+        "port": 22,
+        "username": "root",
+        "credential_id": "bad-cred",
+    }
+
+    # 模拟 paramiko 模块
+    mock_paramiko = MagicMock()
+    mock_client = MagicMock()
+    mock_paramiko.SSHClient.return_value = mock_client
+    mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+    # 模拟 paramiko.AuthenticationException 异常类
+    class _AuthExc(Exception):
+        pass
+    mock_paramiko.AuthenticationException = _AuthExc
+    mock_client.connect.side_effect = _AuthExc("bad password")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents.AgentLoader") as MockLoader:
+            loader = MagicMock()
+            loader.get.return_value = agent_cfg
+            loader.resolve_credential.return_value = {
+                "id": "bad-cred", "username": "admin", "password": "wrong",
+            }
+            MockLoader.return_value = loader
+            with patch.dict("sys.modules", {"paramiko": mock_paramiko}):
+                response = await client.get("/api/agents/ssh-bad-pw/host-info")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source"] == "ssh"
+    # 错误信息应该含 username（让用户诊断）
+    assert "admin" in (data.get("error") or ""), f"Expected 'admin' in error, got: {data.get('error')}"
+    assert "认证失败" in (data.get("error") or "")
+
+
+@pytest.mark.asyncio
+async def test_host_info_ssh_success(app, setup_project, tmp_project):
+    """SSH 成功 → 返回真实 host 数据"""
+    import taskpps.config as cfg
+    from unittest.mock import patch, MagicMock
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_cfg = {
+        "id": "ssh-ok",
+        "name": "SSH OK",
+        "type": "ssh-key",
+        "host": "10.0.0.1",
+        "port": 22,
+        "username": "root",
+        "credential_id": "good-cred",
+    }
+
+    # 模拟 paramiko 模块：connect 不抛错 + exec_command 返回 lscpu/free/df
+    mock_paramiko = MagicMock()
+    mock_client = MagicMock()
+    mock_paramiko.SSHClient.return_value = mock_client
+    mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+    mock_paramiko.AuthenticationException = type("AE", (Exception,), {})
+
+    outputs = {
+        "hostname": "myhost",
+        "uname -a": "Linux myhost 6.1.0 x86_64",
+        "/etc/os-release": 'PRETTY_NAME="Ubuntu 22.04"',
+        "uptime": "10:00:00 up 1 day",
+        "lscpu": "Model name: TestCPU\nCPU(s): 2\nCore(s) per socket: 2\nSocket(s): 1",
+        "free -h": "Mem:           8Gi        2Gi       4Gi",
+        "/proc/meminfo": "MemTotal:       8388608 kB\nMemAvailable:   6000000 kB",
+        "df -h": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1       20G   8G   12G  40% /",
+    }
+
+    def _exec(cmd, timeout=None):
+        mock = MagicMock()
+        stdout = MagicMock()
+        for k, v in outputs.items():
+            if k in cmd:
+                stdout.read.return_value = v.encode("utf-8")
+                break
+        else:
+            stdout.read.return_value = b""
+        return (None, stdout, None)
+
+    mock_client.exec_command.side_effect = _exec
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents.AgentLoader") as MockLoader:
+            loader = MagicMock()
+            loader.get.return_value = agent_cfg
+            loader.resolve_credential.return_value = {
+                "id": "good-cred", "username": "admin", "key_path": "/tmp/key",
+            }
+            MockLoader.return_value = loader
+            with patch.dict("sys.modules", {"paramiko": mock_paramiko}):
+                response = await client.get("/api/agents/ssh-ok/host-info")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source"] == "ssh"
+    assert data["error"] is None
+    assert data["hostname"] == "myhost"
+    assert "Linux" in data["kernel"]
+    assert "Ubuntu" in data["os_release"]
+    assert data["cpu"]["model"] == "TestCPU"
+    assert data["cpu"]["threads"] == 2
+    assert data["cpu"]["cores"] == 2
+    assert data["memory"]["total"] == "8Gi"
+    assert 25 <= data["memory"]["percent"] <= 35
+    assert len(data["disks"]) == 1
+    assert data["disks"][0]["mount"] == "/"
+    # 验证 connect 调用用了 key_filename（不是 pkey 对象）
+    mock_client.connect.assert_called_once()
+    call_kwargs = mock_client.connect.call_args.kwargs
+    assert call_kwargs.get("key_filename") == "/tmp/key"
+    assert call_kwargs.get("username") == "admin"
+    assert "pkey" not in call_kwargs  # ← 回归测试：之前 bug 用 pkey 错字段名
