@@ -35,22 +35,8 @@ export function useAgentHostInfo(agentId: string | undefined) {
   return useQuery<AgentHostInfo>({
     queryKey: ['agentHostInfo', agentId],
     queryFn: async () => {
-      try {
-        const res = await apiClient.get<AgentHostInfo>(`/api/agents/${agentId}/host-info`);
-        return res.data;
-      } catch (err: any) {
-        // 后端 500 时把 detail 抛给组件显示（不是只显示 status code）
-        const detail =
-          err?.response?.data?.detail ||
-          err?.response?.data?.error ||
-          err?.response?.data?.message ||
-          err?.message ||
-          'Unknown error';
-        const wrapped: any = new Error(detail);
-        wrapped.status = err?.response?.status;
-        wrapped.detail = detail;
-        throw wrapped;
-      }
+      const res = await apiClient.get<AgentHostInfo>(`/api/agents/${agentId}/host-info`);
+      return res.data;
     },
     enabled: !!agentId,
     retry: 0,

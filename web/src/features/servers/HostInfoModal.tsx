@@ -102,22 +102,10 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
 
       {isError && (
         <Alert
-          type="error"
+          type="warning"
           showIcon
-          message={`获取 host 信息失败 (HTTP ${(error as any)?.status || '???'})`}
-          description={
-            <div>
-              <div>{(error as any)?.detail ?? (error as Error)?.message ?? '未知错误'}</div>
-              <div style={{ marginTop: 12, padding: 10, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 4, fontSize: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4, color: '#92400e' }}>后端可能还在跑旧代码？</div>
-                <div style={{ color: '#78350f' }}>本次修复需要重启 taskpps 服务才能生效。在服务器执行：</div>
-                <code style={{ display: 'block', marginTop: 4, padding: 6, background: '#fffbeb', borderRadius: 3, color: '#1f2937', fontFamily: 'monospace' }}>
-                  sudo /opt/taskpps/scripts/hotupdate.sh
-                </code>
-                <div style={{ marginTop: 4, color: '#78350f' }}>（热重载 gunicorn，保留运行中 pipeline）</div>
-              </div>
-            </div>
-          }
+          message="主机信息暂不可用"
+          description="后端探测失败，请稍后重试或联系管理员。"
           action={
             <Button size="small" onClick={() => refetch()}>重试</Button>
           }
