@@ -151,3 +151,25 @@ class PipelineLoader:
             except Exception:
                 continue
         return result
+
+    def load_all_with_files(self) -> dict[str, PipelineYAML]:
+        """加载所有流水线，返回以文件相对路径为 key 的映射"""
+        result = {}
+        base = self.base_dir
+        if not base.exists():
+            return result
+        for path in sorted(base.glob("**/*.yaml")):
+            try:
+                rel = path.relative_to(base)
+                spec = self.load(str(rel))
+                result[str(rel)] = spec
+            except Exception:
+                continue
+        for path in sorted(base.glob("**/*.yml")):
+            try:
+                rel = path.relative_to(base)
+                spec = self.load(str(rel))
+                result[str(rel)] = spec
+            except Exception:
+                continue
+        return result
