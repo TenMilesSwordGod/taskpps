@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag } from 'antd';
-import { XCircle, ListTree, RefreshCw, Copy, Clock } from 'lucide-react';
+import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress } from 'antd';
+import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRun, useCancelRun, useRunLogs } from '@/api/runs';
 import { usePipeline } from '@/api/pipelines';
@@ -166,11 +166,12 @@ export default function RunDetailPage() {
                 </Tag>
               </Tooltip>
             )}
-            <Tooltip title="任务进度（成功+失败+跳过 / 总数）">
-              <Tag color={progress.failed > 0 ? 'error' : progress.done === progress.total && progress.total > 0 ? 'success' : 'blue'} style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
-                进度 {progress.done}/{progress.total}
-              </Tag>
-            </Tooltip>
+            <ProgressBadge
+              done={progress.done}
+              total={progress.total}
+              failed={progress.failed}
+              running={progress.running}
+            />
             {progress.running > 0 && (
               <Tag color="processing" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>运行中 {progress.running}</Tag>
             )}
@@ -263,5 +264,73 @@ export default function RunDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/** 任务进度徽标：mini 圆形 Progress + 文字 + 状态图标 */
+function ProgressBadge({ done, total, failed, running }: { done: number; total: number; failed: number; running: number }) {
+  const safeTotal = Math.max(total, 1);
+  const percent = Math.min(100, Math.round((done / safeTotal) * 100));
+  const isFailed = failed > 0;
+  const isDone = total > 0 && done === total;
+
+  // 颜色与状态：失败红 / 完成绿 / 进行中蓝
+  const color = isFailed ? '#ef4444' : isDone ? '#10b981' : '#3b82f6';
+  const status: 'success' | 'exception' | 'active' | 'normal' = isFailed
+    ? 'exception'
+    : isDone
+      ? 'success'
+      : running > 0
+        ? 'active'
+        : 'normal';
+
+  // 失败优先显示失败数，否则显示完成比例
+  const label = isFailed ? `${failed} 失败` : `${done}/${total}`;
+
+  // 提示文字
+  const tooltipText = isFailed
+    ? `失败 ${failed} / 总数 ${total}（已处理 ${done}）`
+    : isDone
+      ? `已完成 ${done} / ${total}`
+      : `进行中：已处理 ${done} / ${total}（${percent}%）`;
+
+  return (
+    <Tooltip title={tooltipText}>
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '2px 8px 2px 6px',
+          margin: 0,
+          height: 24,
+          lineHeight: '20px',
+          fontSize: 12,
+          background: '#fff',
+          border: `1px solid ${color}`,
+          borderRadius: 12,
+          color: isFailed ? '#b91c1c' : isDone ? '#047857' : '#1d4ed8',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <Progress
+          type="circle"
+          percent={isDone ? 100 : percent}
+          size={16}
+          strokeWidth={14}
+          showInfo={false}
+          strokeColor={color}
+          status={status === 'normal' ? 'normal' : status}
+        />
+        <span style={{ fontWeight: 500 }}>{label}</span>
+        {running > 0 ? (
+          <Loader2 size={11} color={color} className="animate-spin" />
+        ) : isFailed ? (
+          <AlertCircle size={11} color={color} />
+        ) : isDone ? (
+          <CheckCircle2 size={11} color={color} />
+        ) : null}
+      </div>
+    </Tooltip>
   );
 }
