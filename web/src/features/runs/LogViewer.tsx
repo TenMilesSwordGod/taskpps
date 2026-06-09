@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Select, Input, Switch, Button, Empty, Tag, Tooltip, Space } from 'antd';
-import { Trash2, Filter, Layers, Download, AlertCircle, AlertTriangle, Info, Bug, Terminal } from 'lucide-react';
+import { Select, Input, Switch, Button, Empty, Tag, Tooltip, Space, Modal } from 'antd';
+import { Trash2, Filter, Layers, Download, AlertCircle, AlertTriangle, Info, Bug, Terminal, FileText, RefreshCw } from 'lucide-react';
 import type { LogEntry } from './hooks/useSSELogs';
+import { useRunConsole } from '@/api/runs';
 
 interface LogViewerProps {
   logs: LogEntry[];
@@ -15,6 +16,8 @@ interface LogViewerProps {
   onClearTaskFilter?: () => void;
   /** 任务执行状态（用于显示 N failed 等） */
   failedCount?: number;
+  /** run id - 用于拉 console log */
+  runId?: string;
 }
 
 /** 任务名颜色映射 */
@@ -69,13 +72,22 @@ export default function LogViewer({
   selectedTaskId,
   onClearTaskFilter,
   failedCount = 0,
+  runId,
 }: LogViewerProps) {
   const [taskFilter, setTaskFilter] = useState<string | undefined>();
   const [searchText, setSearchText] = useState('');
   const [levelFilter, setLevelFilter] = useState<LogLevel[]>([...ALL_LEVELS]);
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [consoleTail, setConsoleTail] = useState<number | undefined>(500);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 跟踪是否用户已向上滚动，暂停自动滚动
   const stickyToBottomRef = useRef(true);
+
+  // console 日志（按需拉，失败时一键诊断）
+  const { data: consoleData, isLoading: consoleLoading, refetch: refetchConsole } = useRunConsole(
+    consoleOpen ? runId : undefined,
+    consoleTail,
+  );
 
   // 提取唯一任务名（去重）
   const taskNames = useMemo(
@@ -221,6 +233,14 @@ export default function LogViewer({
         <Button size="small" icon={<Trash2 size={14} />} onClick={onClear}>
           清空
         </Button>
+        <Button
+          size="small"
+          icon={<FileText size={14} />}
+          onClick={() => setConsoleOpen(true)}
+          title="打开 pipeline console.log（engine 结构化日志，含 ERROR/WARN）"
+        >
+          Console
+        </Button>
         <Button size="small" icon={<Download size={14} />} onClick={handleExport} disabled={filtered.length === 0}>
           导出
         </Button>
@@ -315,6 +335,93 @@ export default function LogViewer({
           </div>
         )}
       </div>
+
+      {/* Pipeline Console Modal — engine 结构化日志，含 root cause */}
+      <Modal
+        open={consoleOpen}
+        onCancel={() => setConsoleOpen(false)}
+        footer={null}
+        width={900}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FileText size={16} color="#6b7280" />
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Pipeline Console Log</span>
+            {consoleData && (
+              <Tag style={{ marginLeft: 4 }}>
+                {consoleData.exists ? `${consoleData.lines} 行` : '无文件'}
+              </Tag>
+            )}
+            <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace', marginLeft: 'auto' }}>
+              {consoleData?.log_path}
+            </span>
+          </div>
+        }
+      >
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: '#6b7280' }}>尾部</span>
+          <Select
+            size="small"
+            value={consoleTail}
+            onChange={(v) => setConsoleTail(v)}
+            style={{ width: 120 }}
+            options={[
+              { label: '200 行', value: 200 },
+              { label: '500 行', value: 500 },
+              { label: '1000 行', value: 1000 },
+              { label: '全文', value: undefined },
+            ]}
+          />
+          <Button
+            size="small"
+            icon={<RefreshCw size={12} />}
+            loading={consoleLoading}
+            onClick={() => refetchConsole()}
+          >
+            刷新
+          </Button>
+          <Button
+            size="small"
+            icon={<Download size={12} />}
+            disabled={!consoleData?.content}
+            onClick={() => {
+              const blob = new Blob([consoleData?.content ?? ''], { type: 'text/plain;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `console-${runId ?? 'run'}.log`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }}
+          >
+            下载
+          </Button>
+        </div>
+        <div
+          style={{
+            background: '#111827',
+            color: '#d1d5db',
+            padding: '12px 16px',
+            borderRadius: 6,
+            fontFamily: 'monospace',
+            fontSize: 12,
+            lineHeight: '20px',
+            maxHeight: '60vh',
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          {consoleLoading ? (
+            <div style={{ color: '#9ca3af', textAlign: 'center', padding: 40 }}>加载中…</div>
+          ) : !consoleData?.exists ? (
+            <div style={{ color: '#9ca3af', textAlign: 'center', padding: 40 }}>console.log 文件不存在（可能 run 还没启动）</div>
+          ) : (
+            <pre style={{ margin: 0, color: 'inherit', font: 'inherit' }}>{consoleData.content}</pre>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

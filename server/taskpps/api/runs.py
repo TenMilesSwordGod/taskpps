@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
 
+from taskpps.config import build_pipeline_log_path
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
 from taskpps.i18n import t
@@ -141,6 +142,55 @@ async def cancel_run(run_id: str):
     if not success:
         raise HTTPException(status_code=404, detail=t("Run not found or cannot be cancelled"))
     return {"status": "cancelled", "run_id": run_id}
+
+
+@router.get("/{run_id}/console")
+async def get_run_console(
+    run_id: str,
+    tail: int | None = Query(None, ge=1, description="仅返回末尾 N 行"),
+):
+    """获取 pipeline console.log（engine 写入的结构化日志）
+    - 包含 [INFO]/[WARN]/[ERROR]/[CMD]/[SUCCESS]/[FAILED] 等级别
+    - 失败时是 root cause 的最佳入口
+    """
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        run = await run_repo.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=t("Run not found"))
+        pipeline_id = run.pipeline_id
+        pipeline_version = run.pipeline_version
+
+    log_path = build_pipeline_log_path(pipeline_id, pipeline_version, run_id)
+    if not log_path.exists():
+        return {"log_path": str(log_path), "content": "", "lines": 0, "exists": False}
+
+    if tail:
+        # 高效 tail：反向 seek N 行
+        with open(log_path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            block = min(size, tail * 512)
+            f.seek(max(0, size - block))
+            raw = f.read().decode("utf-8", errors="replace")
+            lines = raw.splitlines()
+            if size > block:
+                lines = lines[1:]
+            return {
+                "log_path": str(log_path),
+                "content": "\n".join(lines[-tail:]),
+                "lines": len(lines[-tail:]),
+                "exists": True,
+            }
+
+    with open(log_path) as f:
+        content = f.read()
+    return {
+        "log_path": str(log_path),
+        "content": content,
+        "lines": content.count("\n") + (1 if content and not content.endswith("\n") else 0),
+        "exists": True,
+    }
 
 
 @router.delete("/", response_model=CleanResponse)

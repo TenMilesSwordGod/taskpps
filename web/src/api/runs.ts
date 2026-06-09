@@ -77,3 +77,24 @@ export function useRunLogs(runId: string | undefined) {
     enabled: !!runId,
   });
 }
+
+/** Pipeline console 日志（engine 写入的结构化 ERROR/WARN 日志） */
+export interface RunConsoleResponse {
+  log_path: string;
+  content: string;
+  lines: number;
+  exists: boolean;
+}
+
+export function useRunConsole(runId: string | undefined, tail?: number) {
+  return useQuery<RunConsoleResponse>({
+    queryKey: ['runConsole', runId, tail],
+    queryFn: async () => {
+      const res = await apiClient.get<RunConsoleResponse>(
+        `/api/runs/${runId}/console${tail ? `?tail=${tail}` : ''}`,
+      );
+      return res.data;
+    },
+    enabled: !!runId,
+  });
+}

@@ -224,6 +224,7 @@ export default function RunDetailPage() {
               selectedTaskId={selectedTaskId}
               onClearTaskFilter={() => setSelectedTaskId(null)}
               failedCount={progress.failed}
+              runId={id}
             />
           </div>
         ) : (
@@ -259,6 +260,7 @@ export default function RunDetailPage() {
                   selectedTaskId={selectedTaskId}
                   onClearTaskFilter={() => setSelectedTaskId(null)}
                   failedCount={progress.failed}
+                  runId={id}
                 />
               </div>
             </Splitter.Panel>
