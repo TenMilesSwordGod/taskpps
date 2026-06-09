@@ -1,12 +1,52 @@
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import fcntl
+import os
+
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
-from taskpps.config import get_db_path
+from taskpps.config import get_data_dir, get_db_path
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
+
+# 同进程内串行化:asyncio.Lock 在同一个 event loop 里把并发 init_db 排成串行。
+# 注意不能跨 event loop 用,所以下面 fcntl 负责跨进程,gunicorn 多 worker 安全。
+_in_process_lock: asyncio.Lock | None = None
+
+
+def _get_in_process_lock() -> asyncio.Lock:
+    """Lazy create the asyncio.Lock bound to the current event loop.
+
+    asyncio.Lock 必须绑定到具体的 event loop,所以在第一次调用时再创建。
+    """
+    global _in_process_lock
+    if _in_process_lock is None:
+        _in_process_lock = asyncio.Lock()
+    return _in_process_lock
+
+
+@contextlib.contextmanager
+def _cross_process_lock():
+    """跨进程串行化 init_db() —— fcntl 文件锁。
+
+    gunicorn 多 worker 是不同进程,asyncio.Lock 帮不到。fcntl(LOCK_EX) 在不同进程
+    间互斥(同进程内多个 fd 调 flock 不互斥,所以这一步不替代 asyncio.Lock)。
+    每次调用新开一个 fd,持锁期间在调用方所在线程阻塞,典型 <1ms。
+    """
+    lock_path = get_data_dir() / ".db_init.lock"
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def get_engine() -> AsyncEngine:
@@ -68,10 +108,26 @@ async def _migrate_schema() -> None:
 
 
 async def init_db() -> None:
-    engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    await _migrate_schema()
+    """Initialize database schema. Safe to call concurrently across processes
+    and within a single process (e.g. asyncio.gather).
+
+    gunicorn 启动时多个 worker 会同时执行 lifespan → init_db()。SQLAlchemy 的
+    create_all(checkfirst=True) 是 check-then-create 模式,跨进程存在 TOCTOU 竞态
+    (两个 worker 都查到表不存在,然后都尝试 CREATE,后到者失败)。
+
+    双层锁保护:
+    1. asyncio.Lock —— 同进程内并发互斥(asyncio.gather 多个 task)
+    2. fcntl flock —— 跨进程互斥(gunicorn 多 worker)
+
+    第一个调用者跑 create_all + 迁移,后续调用者等锁释放后再进,
+    看到表已存在直接 no-op,迁移也跳过(已存在列)。
+    """
+    async with _get_in_process_lock():
+        with _cross_process_lock():
+            engine = get_engine()
+            async with engine.begin() as conn:
+                await conn.run_sync(SQLModel.metadata.create_all)
+            await _migrate_schema()
 
 
 async def close_db() -> None:
@@ -80,12 +136,17 @@ async def close_db() -> None:
         await _engine.dispose()
         _engine = None
         _session_factory = None
+    # init_db 的锁是栈式 contextmanager,scope 受 init_db 调用本身控制,
+    # close_db 不会主动释放它(若有别的 task 正在 init_db 持锁,我们无权释放)。
+    # 但 reset_engine() 走的是测试清理路径,应当假定无并发,直接放手即可。
 
 
 def reset_engine() -> None:
     global _engine, _session_factory
     _engine = None
     _session_factory = None
+    # Test-only: 锁是 contextmanager 栈式管理,reset_engine 只清 engine 状态,
+    # 不去碰锁 fd(若有持锁的 init_db task 在飞,释放权应属于它本身)。
 
 
 def set_engine(engine: AsyncEngine) -> None:

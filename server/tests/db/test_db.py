@@ -1,6 +1,8 @@
+import asyncio
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
@@ -85,6 +87,44 @@ class TestDBEngine:
         assert db_file.exists()
         await engine.dispose()
         reset_engine()
+
+    @pytest.mark.asyncio
+    async def test_init_db_concurrent(self, tmp_path, monkeypatch):
+        """回归测试:多 task 并发调 init_db 不能炸出 'table already exists'。
+
+        复现 gunicorn 多 worker 启动时的竞态:SQLAlchemy create_all 是
+        check-then-create,跨任务并发跑会撞 TOCTOU。fix 是在 init_db 里加
+        fcntl 文件锁,这里验证锁能起到串行化作用。
+
+        注意:同进程内的多个 asyncio task 共享 flock 文件。修复后每次 init_db
+        都新开 fd 走 flock,后到的 task 在 flock 上阻塞直到前者释放,不会撞车。
+        """
+        # 把 data dir 指到 tmp_path(避免污染真实 workdir / 留 lock 文件)
+        monkeypatch.setattr("taskpps.config._project_root", tmp_path)
+        monkeypatch.setattr("taskpps.config._server_home", tmp_path)
+        monkeypatch.setattr("taskpps.config._project_workdir", tmp_path)
+        monkeypatch.setattr("taskpps.config._settings", None)
+
+        reset_engine()
+
+        db_file = tmp_path / "concurrent.db"
+        engine = create_async_engine(
+            f"sqlite+aiosqlite:///{db_file}",
+            connect_args={"check_same_thread": False, "timeout": 30},
+        )
+        set_engine(engine)
+
+        try:
+            # 5 个 task 并发 init_db,修复前会报 "table runs already exists"
+            await asyncio.gather(*(init_db() for _ in range(5)))
+            async with engine.begin() as conn:
+                rows = (await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))).fetchall()
+                table_names = {r[0] for r in rows}
+            assert "runs" in table_names
+            assert "task_runs" in table_names
+        finally:
+            await engine.dispose()
+            reset_engine()
 
     @pytest.mark.asyncio
     async def test_close_db(self, tmp_path):
@@ -436,8 +476,9 @@ class TestTaskRunRepositoryMore:
             task = await task_repo.create_task_run(run.id, "task-1")
 
             now = datetime.now(timezone.utc)
-            await task_repo.update_task_status(task.id, TaskStatus.SUCCESS, exit_code=0,
-                                               started_at=now, finished_at=now)
+            await task_repo.update_task_status(
+                task.id, TaskStatus.SUCCESS, exit_code=0, started_at=now, finished_at=now
+            )
             updated = await task_repo.get_task_run(task.id)
             assert updated.started_at is not None
             assert updated.finished_at is not None
