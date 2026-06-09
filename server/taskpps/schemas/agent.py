@@ -69,6 +69,8 @@ class AgentWithConfig(BaseModel):
     connected_at: float = 0
     last_heartbeat: float = 0
     running_commands: int = 0
+    # 网络可达性：unknown / reachable / unreachable
+    net_status: str = "unknown"
 
 
 class AgentDeployRequest(BaseModel):

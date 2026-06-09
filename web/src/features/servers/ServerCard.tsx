@@ -1,6 +1,6 @@
 import { Tooltip } from 'antd';
 import type { AgentWithConfig } from '@/types';
-import { Cpu, Globe, Hash, Activity, Wifi, WifiOff } from 'lucide-react';
+import { Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle } from 'lucide-react';
 
 interface ServerCardProps {
   agent: AgentWithConfig;
@@ -70,6 +70,29 @@ function fallbackSystem(type: string): string {
 function fallbackArch(type: string): string {
   if (type.startsWith('ssh-')) return 'x86_64';
   return '';
+}
+
+/** 网络可达性图标 */
+function NetStatusIcon({ netStatus }: { netStatus: 'unknown' | 'reachable' | 'unreachable' }) {
+  if (netStatus === 'reachable') {
+    return (
+      <Tooltip title="网络可达：TCP 端口可连接">
+        <Plug size={16} color="#10b981" />
+      </Tooltip>
+    );
+  }
+  if (netStatus === 'unreachable') {
+    return (
+      <Tooltip title="网络不可达：TCP 端口无法连接">
+        <Unplug size={16} color="#ef4444" />
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip title="网络状态未知：未配置 host:port">
+      <HelpCircle size={16} color="#9ca3af" />
+    </Tooltip>
+  );
 }
 
 /** 把时间戳格式化为 hh:mm:ss */
@@ -175,11 +198,16 @@ export default function ServerCard({ agent, detectedSystem, detectedArch }: Serv
             )}
           </div>
         </div>
-        {online ? (
-          <Wifi size={16} color="#10b981" />
-        ) : (
-          <WifiOff size={16} color="#9ca3af" />
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <Tooltip title={online ? 'Agent WS 已连接' : 'Agent WS 未连接'}>
+            {online ? (
+              <Wifi size={16} color="#10b981" />
+            ) : (
+              <WifiOff size={16} color="#9ca3af" />
+            )}
+          </Tooltip>
+          <NetStatusIcon netStatus={agent.net_status} />
+        </div>
       </div>
 
       {/* 信息行：IP / Agent Version / System / Arch */}

@@ -113,10 +113,29 @@ async def agent_list():
 @router.get("/all", response_model=list[AgentWithConfig])
 async def agent_all():
     """返回所有 yaml 中配置的 agent + 实时连接状态（未连接也展示）"""
+    import asyncio
+
     manager = AgentManager.instance()
     loader = AgentLoader()
     agents = loader.load_all()
     result: list[AgentWithConfig] = []
+    # 并发探测所有 agent 的网络可达性
+    async def probe_net(host: str, port: int) -> str:
+        if not host or not port:
+            return "unknown"
+        try:
+            fut = asyncio.open_connection(host, port)
+            reader, writer = await asyncio.wait_for(fut, timeout=1.5)
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+            del reader
+            return "reachable"
+        except Exception:
+            return "unreachable"
+
     for agent_id, cfg in agents.items():
         item = AgentWithConfig(
             agent_id=agent_id,
@@ -140,7 +159,23 @@ async def agent_all():
                 item.connected_at = conn.connected_at
                 item.last_heartbeat = conn.last_heartbeat
                 item.running_commands = len(conn._pending_commands)
+                # ws 已连接 → 网络必然可达
+                item.net_status = "reachable"
         result.append(item)
+
+    # 并发执行所有探测，填回 net_status（ws 连接的 agent 跳过，已填 reachable）
+    if result:
+        tasks = []
+        idx_map: list[int] = []
+        for idx, item in enumerate(result):
+            if item.net_status == "unknown" and item.host and item.port:
+                tasks.append(probe_net(item.host, item.port))
+                idx_map.append(idx)
+        if tasks:
+            statuses = await asyncio.gather(*tasks, return_exceptions=False)
+            for idx, status in zip(idx_map, statuses):
+                result[idx].net_status = status
+
     return result
 
 

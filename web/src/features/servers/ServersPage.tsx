@@ -153,8 +153,8 @@ export default function ServersPage() {
       {/* 卡片网格 */}
       <div className="flex-1 min-h-0 overflow-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Spin size="large" />
+          <div className="p-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
+            {[1, 2, 3, 4].map((i) => <ServerCardSkeleton key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-4 space-y-3">
@@ -226,6 +226,49 @@ export default function ServersPage() {
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** 卡片骨架屏：shimmer 动画 */
+function ServerCardSkeleton() {
+  return (
+    <div
+      style={{
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 10,
+        padding: 16,
+        height: 158,
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
+      <style>{`
+        @keyframes serverCardShimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .server-card-skeleton-line {
+          background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+          background-size: 200% 100%;
+          animation: serverCardShimmer 1.4s linear infinite;
+          border-radius: 4px;
+        }
+      `}</style>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <div className="server-card-skeleton-line" style={{ width: 44, height: 44, borderRadius: 8 }} />
+        <div style={{ flex: 1 }}>
+          <div className="server-card-skeleton-line" style={{ width: '60%', height: 14, marginBottom: 6 }} />
+          <div className="server-card-skeleton-line" style={{ width: '40%', height: 11 }} />
+        </div>
+        <div className="server-card-skeleton-line" style={{ width: 32, height: 16, borderRadius: 4 }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="server-card-skeleton-line" style={{ width: '90%', height: 12 }} />
+        ))}
       </div>
     </div>
   );

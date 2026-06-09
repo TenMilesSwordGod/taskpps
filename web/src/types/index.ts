@@ -198,6 +198,8 @@ export interface AgentWithConfig {
   connected_at: number;
   last_heartbeat: number;
   running_commands: number;
+  /** 网络可达性：unknown / reachable / unreachable */
+  net_status: 'unknown' | 'reachable' | 'unreachable';
 }
 
 /** Agent check 探测单项结果 */
