@@ -1,7 +1,9 @@
 import asyncio
+import contextlib
 import time
 import uuid
 
+import paramiko
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -296,7 +298,6 @@ async def get_agent_host_info(agent_id: str):
         return info
 
     # SSH 探测：复用 _check_ssh_auth 的认证方式（key_path / password / username 来自 credential）
-    import paramiko
     svc = AgentService()
     cred_data = loader.resolve_credential(cfg) or {}
 
