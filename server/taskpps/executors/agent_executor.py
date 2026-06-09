@@ -12,6 +12,22 @@ from taskpps.services.agent_manager import AgentManager
 logger = logging.getLogger(__name__)
 
 
+def _write_log_chunk(log_path: Path, data: str) -> None:
+    """Append a single chunk to the task log file.
+
+    Called from a thread pool by ``AgentExecutor.execute``'s ``on_output``
+    callback so the WebSocket handler's event loop is never blocked on
+    file I/O (see issue #16 for the deadlock this avoids).
+    """
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a") as f:
+            f.write(data)
+            f.flush()
+    except Exception:
+        pass
+
+
 class AgentExecutor(BaseExecutor):
     def __init__(self, agent_id: str, manager: AgentManager, agent_data: dict | None = None):
         self._agent_id = agent_id
@@ -75,9 +91,18 @@ class AgentExecutor(BaseExecutor):
 
         def on_output(data: str):
             output_lines.append(data)
-            with open(log_path, "a") as f:
-                f.write(data)
-                f.flush()
+            # 文件 I/O 必须在事件循环外执行。原因：readPipeBinary 读取子
+            # 进程 stdout/stderr 的管道后会通过 WebSocket 把每一行推上来；
+            # 如果 on_output 在事件循环里同步 open+write+flush+close，
+            # 单条卡顿就会让整个 WebSocket handler 不能继续读消息，agent
+            # 的 sendMsg 反压、streamOutput 回调卡住、channel 写满、管道
+            # 没法被排空 → 子进程 write 阻塞 → 任务看起来"卡住"，超时前
+            # exec_result 永远到不了 (issue #16)。
+            try:
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, _write_log_chunk, log_path, data)
+            except RuntimeError:
+                _write_log_chunk(log_path, data)
 
         self._manager.register_output_callback(self._agent_id, command_id, on_output)
 

@@ -326,3 +326,85 @@ class TestAgentExecutorLog:
 
         # should not raise
         executor._log(log_path, "test message\n")
+
+
+class TestAgentExecutorOutputCallback:
+    """Regression test for issue #16: on_output used to do file I/O inside
+    the WebSocket handler's event loop, so a slow disk could freeze the
+    event loop, backpressure the agent, and make the task appear stuck.
+    The fix schedules the file write via run_in_executor.
+    """
+
+    @pytest.mark.asyncio
+    async def test_on_output_writes_off_event_loop(self, tmp_path, mock_manager, agent_data):
+        log_path = tmp_path / "off_loop.log"
+        fut = asyncio.get_event_loop().create_future()
+        fut.set_result({"exit_code": 0, "signal_name": "", "error": ""})
+        mock_manager.create_pending.return_value = fut
+
+        executor = AgentExecutor("agent-1", mock_manager, agent_data)
+        await executor.execute("echo hello", {}, log_path, timeout=30)
+
+        # Grab the registered callback
+        assert mock_manager.register_output_callback.called
+        agent_id, command_id, on_output = mock_manager.register_output_callback.call_args[0]
+        assert agent_id == "agent-1"
+        assert command_id == executor._command_id
+
+        # Slow the file write so the event loop would block if on_output
+        # were doing the I/O synchronously. We measure the time it takes
+        # for on_output to return — with run_in_executor it should be
+        # effectively zero regardless of how slow the I/O is.
+        import time
+
+        from taskpps.executors import agent_executor
+
+        original = agent_executor._write_log_chunk
+
+        def slow_write(path, data):
+            time.sleep(0.5)
+            original(path, data)
+
+        with patch.object(agent_executor, "_write_log_chunk", side_effect=slow_write):
+            t0 = time.monotonic()
+            on_output("chunk-1\n")
+            elapsed = time.monotonic() - t0
+
+        # on_output must return quickly even when the underlying I/O is slow
+        assert elapsed < 0.1, f"on_output blocked the event loop for {elapsed:.3f}s"
+
+        # And the chunk must eventually land in the log file
+        for _ in range(20):
+            if "chunk-1" in log_path.read_text():
+                break
+            await asyncio.sleep(0.1)
+        assert "chunk-1" in log_path.read_text()
+
+    @pytest.mark.asyncio
+    async def test_on_output_no_running_loop_falls_back(self, tmp_path):
+        """If on_output is somehow invoked without a running loop (e.g. in
+        a test or sync context), it must still write the chunk instead of
+        silently dropping it."""
+        log_path = tmp_path / "fallback.log"
+
+        from taskpps.executors import agent_executor
+
+        # Simulate "no running loop" by patching get_running_loop to raise.
+        # The callback must catch the RuntimeError and call _write_log_chunk
+        # directly so no chunk is dropped.
+        import asyncio as _asyncio
+
+        def _raise(*_a, **_kw):
+            raise RuntimeError("no running event loop")
+
+        def callback(data):
+            try:
+                loop = _asyncio.get_running_loop()
+                loop.run_in_executor(None, agent_executor._write_log_chunk, log_path, data)
+            except RuntimeError:
+                agent_executor._write_log_chunk(log_path, data)
+
+        with patch.object(_asyncio, "get_running_loop", side_effect=_raise):
+            callback("fallback-chunk\n")
+
+        assert "fallback-chunk" in log_path.read_text()

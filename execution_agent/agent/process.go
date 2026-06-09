@@ -67,7 +67,10 @@ func isDigit(s string) bool {
 }
 
 func readPipeBinary(reader io.Reader) <-chan []byte {
-	ch := make(chan []byte, 64)
+	// 较大的缓冲是为了让 readPipe 领先 streamOutput 的 WebSocket 发送，
+	// 避免在任务输出大量日志时 channel 写满导致管道被回压、子进程 write
+	// 阻塞、最终 cmd.Wait() 永远不返回、exec_result 发不出去 (issue #16)。
+	ch := make(chan []byte, 8192)
 	go func() {
 		defer close(ch)
 		buf := bufio.NewReader(reader)
