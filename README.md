@@ -39,6 +39,32 @@ flowchart TB
 - **插件化** — 触发器（Cron）、通知器、执行器均可扩展
 - **API 密钥认证** — 可选中间件保护
 - **国际化** — 内建中文 / English
+- **Code / Project 解耦** — 一套 Server 同时管理多个项目，每个项目独立的 pipelines/agents/credentials
+
+## 多项目架构
+
+Taskpps 把 *代码*（server + CLI + agent）和 *项目数据*（pipelines/agents/credentials/tasks）解耦：
+
+```
+┌─────────────────────────────────────────┐
+│  Server (一套二进制, 全局唯一)           │
+│  • 监听 :26521                          │
+│  • 持有 projects 表 (DB)                │
+│  • 根据 project_id 加载对应项目目录     │
+└─────────────────────────────────────────┘
+              │  REST/WS
+              ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  Project A   │  │  Project B   │  │  Project C   │
+│  pipelines/  │  │  pipelines/  │  │  pipelines/  │
+│  agents/     │  │  agents/     │  │  agents/     │
+│  credentials/│  │  credentials/│  │  credentials/│
+│  tasks/      │  │  tasks/      │  │  tasks/      │
+└──────────────┘  └──────────────┘  └──────────────┘
+```
+
+每个项目是一个独立的目录，通过 `ppsctl init --register-current-folder` 注册到 server。
+所有 run/trigger 都带 `project_id`，server 根据它加载对应的配置目录。
 
 ## 快速开始
 
@@ -48,7 +74,11 @@ cd server && uv sync && uv run taskpps-server
 
 # CLI（另一终端）
 cd cli && go build -o bin/ppsctl .
-ppsctl init && ppsctl run deploy.yaml TAG=latest
+
+# 进入项目目录，注册并初始化
+cd /path/to/your/project
+ppsctl init --register-current-folder
+ppsctl run deploy.yaml TAG=latest
 
 # Web UI（可选）
 cd web && npm install && npm run dev
@@ -61,21 +91,26 @@ cd execution_agent && go build -o bin/taskpps-agent .
 ## 项目结构
 
 ```
-taskpps/
-├── cli/               # Go CLI (ppsctl) — Cobra
-├── server/            # Python 后端 — FastAPI + SQLModel + aiosqlite
-│   ├── taskpps/       #   核心包
-│   └── tests/         #   测试
-├── web/               # React + TypeScript 前端页面
-├── execution_agent/   # Go 远程执行节点 — WebSocket
-├── agents/            # Agent SSH 主机配置 (YAML)
-├── credentials/       # SSH 凭据 (YAML)
-├── plugins/           # 用户插件
-├── pipelines/         # 流水线定义 (YAML)
-├── tasks/             # 任务仓库
-├── wiki/              # 文档
-└── examples/          # 示例
+taskpps/                  # 代码仓库（server / cli / agent / web）
+├── cli/                  # Go CLI (ppsctl) — Cobra
+├── server/               # Python 后端 — FastAPI + SQLModel + aiosqlite
+│   ├── taskpps/          #   核心包
+│   └── tests/            #   测试
+├── web/                  # React + TypeScript 前端页面
+├── execution_agent/      # Go 远程执行节点 — WebSocket
+├── wiki/                 # 文档
+└── examples/             # 示例
+
+# 项目数据（每个项目独立，可放在任意位置）
+my-project/
+├── pipelines/            # 流水线定义 (YAML)
+├── agents/               # Agent SSH 主机配置 (YAML)
+├── credentials/          # SSH 凭据 (YAML)
+├── tasks/                # 任务仓库
+└── plugins/              # 用户插件
 ```
+
+用 `ppsctl init --register-current-folder` 把项目目录注册到 server，server 端通过 `project_id` 路由。
 
 ## 开发
 
