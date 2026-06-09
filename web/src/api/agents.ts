@@ -31,16 +31,30 @@ export function useDeployAgent() {
 }
 
 /** 获取 agent host 详细信息（CPU/内存/磁盘/内核） */
-export function useAgentHostInfo(agentId: string | null) {
+export function useAgentHostInfo(agentId: string | undefined) {
   return useQuery<AgentHostInfo>({
-    queryKey: ['agents', 'host-info', agentId],
+    queryKey: ['agentHostInfo', agentId],
     queryFn: async () => {
-      const res = await apiClient.get<AgentHostInfo>(`/api/agents/${agentId}/host-info`);
-      return res.data;
+      try {
+        const res = await apiClient.get<AgentHostInfo>(`/api/agents/${agentId}/host-info`);
+        return res.data;
+      } catch (err: any) {
+        // 后端 500 时把 detail 抛给组件显示（不是只显示 status code）
+        const detail =
+          err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          err?.response?.data?.message ||
+          err?.message ||
+          'Unknown error';
+        const wrapped: any = new Error(detail);
+        wrapped.status = err?.response?.status;
+        wrapped.detail = detail;
+        throw wrapped;
+      }
     },
     enabled: !!agentId,
-    staleTime: 30_000,
     retry: 0,
+    refetchOnWindowFocus: false,
   });
 }
 
