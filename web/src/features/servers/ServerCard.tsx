@@ -68,9 +68,8 @@ function fallbackSystem(type: string): string {
   return '';
 }
 
-/** 按 type 字段兜底推导 arch（用于离线时显示） */
+/** 按 type 字段兜底推导 arch：架构是未知的，硬编码 x86_64 是错的，返回空让 UI 显示 "—" */
 function fallbackArch(type: string): string {
-  if (type.startsWith('ssh-')) return 'x86_64';
   return '';
 }
 

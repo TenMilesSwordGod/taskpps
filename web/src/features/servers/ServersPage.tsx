@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Input, Empty, Tag, Spin, Badge, Tooltip, Alert } from 'antd';
 import { Search, Server, RefreshCw, AlertCircle, Radar } from 'lucide-react';
 import { useAgentsWithConfig } from '@/api/agents';
@@ -36,6 +36,20 @@ export default function ServersPage() {
       setProbing(false);
     }
   };
+
+  // 自动探测：首次拿到 agents 后异步触发一次，填充 system/arch 真实值
+  // ref 防止 StrictMode 双触发或 refetch 重复触发
+  const autoProbedRef = useRef(false);
+  useEffect(() => {
+    if (autoProbedRef.current) return;
+    if (!agents || agents.length === 0) return;
+    // 至少有一个 agent 的 system/arch 是空才值得触发
+    const needsProbe = agents.some((a) => !a.system || !a.arch);
+    if (!needsProbe) return;
+    autoProbedRef.current = true;
+    void runProbe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents]);
 
   // 调试用：直接 raw fetch 一次，识别是"404 未重启"还是"[] 但确实没配"
   const [debugInfo, setDebugInfo] = useState<{ url: string; status: number; type: string; preview: string } | null>(null);
