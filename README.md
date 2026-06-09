@@ -9,26 +9,19 @@
 
 轻量级、可扩展的任务编排系统，替代 Jenkins 等重量级 CI/CD 工具，适合中小团队和项目。
 
-```text
-┌────────────────────────┐  ┌────────────────────────┐
-│  ppsctl (Go)           │  │  Web UI (React)        │
-│  CLI + TUI             │  │  (可选)                │
-└───────────┬────────────┘  └───────────┬────────────┘
-            │                           │
-            │         REST API          │
-            └─────────────┬─────────────┘
-                          │
-                ┌─────────┴──────────┐
-                │  Backend (Python)   │
-                │  FastAPI + SQLite   │
-                └─────────┬──────────┘
-                          │
-                     WebSocket
-                          │
-                ┌─────────┴──────────┐
-                │ Execution Agent(Go) │
-                │ 远程节点 · 断线重连 │
-                └────────────────────┘
+```mermaid
+graph TB
+    subgraph Clients["客户端"]
+        direction LR
+        P[ppsctl<br/>CLI + TUI]
+        W[Web UI<br/><i>可选</i>]
+    end
+    B[Backend<br/>FastAPI + SQLite]
+    A[Execution Agent<br/>远程节点 · 断线重连]
+
+    P -- REST API --> B
+    W -- REST API --> B
+    B -- WebSocket --> A
 ```
 
 ## 特性
