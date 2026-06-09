@@ -62,7 +62,10 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Rules:
     - reply / comment/ commit in Chinese
-
+    - reduce hardcoding/simulate data/not sure fallback
+    - reduce code duplication, use abstractions where possible
+    - use linting tools to check code quality after each change step
+    - write tests for new features or changes, and ensure they pass(just run influence domain)
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

@@ -103,11 +103,16 @@ def load_settings(config_path: str | None = None) -> Settings:
     if config_path is not None:
         p = Path(config_path)
     else:
-        root = find_project_root()
-        # Prefer .taskpps/taskpps.yaml, fall back to taskpps.yaml
-        p = root / ".taskpps" / "taskpps.yaml"
-        if not p.exists():
-            p = root / "taskpps.yaml"
+        # 优先使用 TASKPPS_CONFIG 环境变量，避免 import 阶段触发 find_project_root()
+        env_config = os.environ.get("TASKPPS_CONFIG")
+        if env_config:
+            p = Path(env_config)
+        else:
+            root = find_project_root()
+            # Prefer .taskpps/taskpps.yaml, fall back to taskpps.yaml
+            p = root / ".taskpps" / "taskpps.yaml"
+            if not p.exists():
+                p = root / "taskpps.yaml"
 
     if p.exists():
         with open(p) as f:
@@ -126,16 +131,61 @@ def get_settings() -> Settings:
 
 
 def get_project_workdir() -> Path:
+    """获取默认项目工作目录。
+
+    优先级: 全局缓存 > TASKPPS_WORKDIR 环境变量(混合期兼容) > settings.workdir > find_project_root()
+    """
     global _project_workdir
     if _project_workdir is not None:
         return _project_workdir
     env_workdir = os.environ.get("TASKPPS_WORKDIR")
     if env_workdir:
+        import logging
+
+        logging.getLogger("taskpps").warning("TASKPPS_WORKDIR is deprecated, use project registration instead")
         return Path(env_workdir)
     settings = get_settings()
     if settings.workdir:
         return Path(settings.workdir)
     return find_project_root()
+
+
+def get_project_workdir_by_id(project_id: str | None) -> Path | None:
+    """根据 project_id 从 DB 查询项目工作目录。
+
+    project_id 为 None 时返回 None（由调用方决定回退行为）。
+    """
+    if project_id is None:
+        return None
+    try:
+        import asyncio
+
+        from taskpps.db.engine import get_session_factory
+        from taskpps.db.repository import ProjectRepository
+
+        async def _query():
+            async with get_session_factory()() as session:
+                repo = ProjectRepository(session)
+                project = await repo.get_project(project_id)
+                if project:
+                    return Path(project.workdir)
+                return None
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            # 在已有 event loop 中无法直接 await，用线程安全方式
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _query())
+                return future.result()
+        else:
+            return asyncio.run(_query())
+    except Exception:
+        return None
 
 
 def get_server_home() -> Path:
@@ -145,9 +195,8 @@ def get_server_home() -> Path:
     env_server = os.environ.get("TASKPPS_SERVER_HOME")
     if env_server:
         return Path(env_server)
-    settings = get_settings()
-    if settings.server_home:
-        return Path(settings.server_home)
+    # import 阶段不调用 get_settings() 以避免触发 find_project_root()
+    # 直接使用代码路径推导
     return Path(__file__).resolve().parent.parent.parent
 
 
@@ -167,28 +216,28 @@ def get_logs_dir() -> Path:
     return logs
 
 
-def get_pipelines_dir() -> Path:
-    return get_project_workdir() / "pipelines"
+def get_pipelines_dir(project_workdir: Path | None = None) -> Path:
+    return (project_workdir or get_project_workdir()) / "pipelines"
 
 
-def get_agents_dir() -> Path:
-    return get_project_workdir() / "agents"
+def get_agents_dir(project_workdir: Path | None = None) -> Path:
+    return (project_workdir or get_project_workdir()) / "agents"
 
 
-def get_credentials_dir() -> Path:
-    return get_project_workdir() / "credentials"
+def get_credentials_dir(project_workdir: Path | None = None) -> Path:
+    return (project_workdir or get_project_workdir()) / "credentials"
 
 
-def get_tasks_dir() -> Path:
-    return get_project_workdir() / "tasks"
+def get_tasks_dir(project_workdir: Path | None = None) -> Path:
+    return (project_workdir or get_project_workdir()) / "tasks"
 
 
-def get_plugins_dir() -> Path:
-    return get_project_workdir() / "plugins"
+def get_plugins_dir(project_workdir: Path | None = None) -> Path:
+    return (project_workdir or get_project_workdir()) / "plugins"
 
 
-def get_workspaces_dir() -> Path:
-    workspaces = get_project_workdir() / ".taskpps" / "workspaces"
+def get_workspaces_dir(project_workdir: Path | None = None) -> Path:
+    workspaces = (project_workdir or get_project_workdir()) / ".taskpps" / "workspaces"
     workspaces.mkdir(parents=True, exist_ok=True)
     return workspaces
 

@@ -8,10 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from taskpps.api import agents, health, pipelines, runs, triggers, ws_agent
+from taskpps.api import agents, health, pipelines, projects, runs, triggers, ws_agent
 from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
-from taskpps.i18n import set_locale, t
+from taskpps.i18n import set_locale
 from taskpps.middleware.auth import APIKeyMiddleware
 from taskpps.services.plugin_manager import PluginManager
 from taskpps.version import __version__
@@ -35,6 +35,13 @@ async def lifespan(app: FastAPI):
         load_settings()
         settings = get_settings()
     set_locale(settings.locale)
+
+    # 在 lifespan 阶段用完整路径解析 server_home（含 settings.server_home）
+    from taskpps.config import set_server_home
+
+    if settings.server_home:
+        set_server_home(Path(settings.server_home))
+
     logger.info("Project workdir: %s", get_project_workdir())
     logger.info("Server home: %s", get_server_home())
     if settings.server.api_key is None:
@@ -57,12 +64,13 @@ async def lifespan(app: FastAPI):
     if _plugin_manager:
         _plugin_manager.stop_all()
     from taskpps.services.agent_manager import AgentManager
+
     await AgentManager.instance().stop()
     if not _external_engine:
         await close_db()
 
 
-app = FastAPI(title=t("Taskpps API"), version=__version__, lifespan=lifespan)
+app = FastAPI(title="Taskpps API", version=__version__, lifespan=lifespan)
 
 app.add_middleware(APIKeyMiddleware)
 
@@ -80,6 +88,7 @@ app.include_router(pipelines.router, prefix="/api")
 app.include_router(triggers.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(ws_agent.router, prefix="/api")
+app.include_router(projects.router, prefix="/api")
 
 # 挂载 Web UI 静态文件（生产模式）
 # 从 SERVER_HOME/web/dist 或项目根目录的 web/dist 查找构建产物
