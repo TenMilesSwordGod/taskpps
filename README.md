@@ -13,7 +13,7 @@
 graph TB
     subgraph Clients["客户端"]
         direction LR
-        P[ppsctl<br/>CLI + TUI]
+        P[ppsctl<br/>CLI]
         W[Web UI<br/><i>可选</i>]
     end
     B[Backend<br/>FastAPI + SQLite]
@@ -57,7 +57,7 @@ cd execution_agent && go build -o bin/taskpps-agent .
 
 ```
 taskpps/
-├── cli/               # Go CLI (ppsctl) — Cobra + Bubble Tea TUI
+├── cli/               # Go CLI (ppsctl) — Cobra
 ├── server/            # Python 后端 — FastAPI + SQLModel + aiosqlite
 │   ├── taskpps/       #   核心包
 │   └── tests/         #   测试
