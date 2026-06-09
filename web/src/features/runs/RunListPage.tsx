@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Table, Select, Input, DatePicker, Space, Button } from 'antd';
+import { Table, Select, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Play } from 'lucide-react';
+import { Eye, Play, Trash2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
-import { useRuns } from '@/api/runs';
+import { useRuns, useCleanRuns } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import type { RunResponse, RunStatus } from '@/types';
@@ -36,10 +36,14 @@ function formatDuration(start: string | null, end: string | null) {
 /** 运行历史页面 */
 export default function RunListPage() {
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const [statusFilter, setStatusFilter] = useState<RunStatus | undefined>();
   const [pipelineFilter, setPipelineFilter] = useState('');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
+  const [cleanOpen, setCleanOpen] = useState(false);
+  const [cleanForm] = Form.useForm();
+  const cleanRuns = useCleanRuns();
 
   const { data, isLoading } = useRuns();
 
@@ -53,6 +57,29 @@ export default function RunListPage() {
     }
     return true;
   });
+
+  // 打开清理弹窗时重置表单
+  const handleOpenClean = () => {
+    cleanForm.resetFields();
+    setCleanOpen(true);
+  };
+
+  // 提交清理
+  const handleClean = async () => {
+    try {
+      const values = await cleanForm.validateFields();
+      const params: { older_than?: number; keep?: number; force?: boolean } = {};
+      if (values.mode === 'older_than') params.older_than = values.older_than;
+      else if (values.mode === 'keep') params.keep = values.keep;
+      else if (values.mode === 'force') params.force = true;
+
+      const result = await cleanRuns.mutateAsync(params);
+      message.success(`已清理 ${result.deleted_runs} 条历史运行，删除 ${result.deleted_logs} 个日志文件`);
+      setCleanOpen(false);
+    } catch {
+      // 校验失败或请求失败（mutation onError 处理）
+    }
+  };
 
   const columns = [
     {
@@ -130,6 +157,9 @@ export default function RunListPage() {
         <Button type="primary" icon={<Play size={14} />} onClick={() => setTriggerOpen(true)}>
           触发运行
         </Button>
+        <Button icon={<Trash2 size={14} />} danger onClick={handleOpenClean}>
+          删除历史
+        </Button>
       </Space>
 
       {/* 表格 */}
@@ -142,6 +172,71 @@ export default function RunListPage() {
       />
 
       <TriggerRunModal open={triggerOpen} onClose={() => setTriggerOpen(false)} />
+
+      {/* 删除历史弹窗 */}
+      <Modal
+        title="删除历史运行"
+        open={cleanOpen}
+        onOk={handleClean}
+        onCancel={() => setCleanOpen(false)}
+        confirmLoading={cleanRuns.isPending}
+        okText="确认删除"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+        destroyOnClose
+      >
+        <Form
+          form={cleanForm}
+          layout="vertical"
+          initialValues={{ mode: 'older_than', older_than: 7, keep: 50 }}
+        >
+          <Form.Item name="mode" label="清理方式">
+            <Radio.Group>
+              <Space direction="vertical">
+                <Radio value="older_than">仅保留最近 N 天的运行</Radio>
+                <Radio value="keep">仅保留最近 N 条运行</Radio>
+                <Radio value="force">清空所有历史运行</Radio>
+              </Space>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, curr) => prev.mode !== curr.mode}
+          >
+            {({ getFieldValue }) => {
+              const mode = getFieldValue('mode');
+              if (mode === 'older_than') {
+                return (
+                  <Form.Item
+                    name="older_than"
+                    label="保留天数"
+                    rules={[{ required: true, message: '请输入天数' }]}
+                  >
+                    <InputNumber min={1} max={365} addonAfter="天" style={{ width: 200 }} />
+                  </Form.Item>
+                );
+              }
+              if (mode === 'keep') {
+                return (
+                  <Form.Item
+                    name="keep"
+                    label="保留条数"
+                    rules={[{ required: true, message: '请输入条数' }]}
+                  >
+                    <InputNumber min={0} max={10000} addonAfter="条" style={{ width: 200 }} />
+                  </Form.Item>
+                );
+              }
+              return null;
+            }}
+          </Form.Item>
+
+          <div style={{ color: '#999', fontSize: 12 }}>
+            注意：删除操作会同时清理对应的任务日志文件，且不可恢复。
+          </div>
+        </Form>
+      </Modal>
     </div>
   );
 }

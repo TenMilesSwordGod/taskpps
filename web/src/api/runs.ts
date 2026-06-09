@@ -78,6 +78,34 @@ export function useRunLogs(runId: string | undefined) {
   });
 }
 
+/** 清理历史运行响应 */
+export interface CleanRunsResponse {
+  deleted_runs: number;
+  deleted_logs: number;
+}
+
+/** 清理历史运行参数 */
+export interface CleanRunsParams {
+  older_than?: number;
+  keep?: number;
+  force?: boolean;
+}
+
+/** 清理历史运行 */
+export function useCleanRuns() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: CleanRunsParams) => {
+      const res = await apiClient.delete<CleanRunsResponse>('/api/runs/', { params });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['runs'] });
+    },
+  });
+}
+
 /** Pipeline console 日志（engine 写入的结构化 ERROR/WARN 日志） */
 export interface RunConsoleResponse {
   log_path: string;
