@@ -295,38 +295,49 @@ async def get_agent_host_info(agent_id: str):
             info.error = "execution agent 未连接或未实现 host info 上报（需 agent 端集成）"
         return info
 
-    # SSH 探测：单独 paramiko 认证（不复用 _check_ssh_auth 因为它会探测后 close）
+    # SSH 探测：复用 _check_ssh_auth 的认证方式（key_path / password / username 来自 credential）
     import paramiko
     svc = AgentService()
+    cred_data = loader.resolve_credential(cfg) or {}
+
     host = cfg.get("host", "")
     port = int(cfg.get("port", 22) or 22)
-    username = cfg.get("username", "root")
-    password = cfg.get("password")
-    private_key_path = cfg.get("private_key")
-    cred = loader.resolve_credential(cfg) or {}
+    # 优先用 credential 里的 username（参考 _check_ssh_auth）
+    username = cred_data.get("username") or cfg.get("username") or "root"
+    key_path = cred_data.get("key_path")
+    password = cred_data.get("password")
+
+    # 兜底：cfg 自身可能也含 username/password
     if not password:
-        password = cred.get("password")
-    if not private_key_path:
-        private_key_path = cred.get("private_key")
+        password = cfg.get("password")
+
+    if not key_path and not password:
+        return AgentHostInfo(
+            agent_id=agent_id,
+            error="凭据缺少 key_path 或 password（请检查 credential yaml 字段：type=ssh-key 用 key_path；type=password 用 password）",
+            source="ssh",
+        )
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     connect_kwargs: dict = {}
-    if private_key_path:
-        try:
-            pkey = paramiko.RSAKey.from_private_key_file(private_key_path)
-        except Exception:
-            try:
-                pkey = paramiko.Ed25519Key.from_private_key_file(private_key_path)
-            except Exception as e:
-                return AgentHostInfo(agent_id=agent_id, error=f"load private key failed: {e}", source="ssh")
-        connect_kwargs["pkey"] = pkey
-    if password and "pkey" not in connect_kwargs:
+    if key_path:
+        # paramiko key_filename 会自己加载文件，兼容 RSA/Ed25519/ecdsa 等
+        connect_kwargs["key_filename"] = key_path
+    if password and "key_filename" not in connect_kwargs:
         connect_kwargs["password"] = password
     try:
-        await asyncio.to_thread(client.connect, host, port=port, username=username, timeout=5, **connect_kwargs)
+        await asyncio.to_thread(
+            client.connect, host, port=port, username=username, timeout=5, **connect_kwargs
+        )
+    except paramiko.AuthenticationException as e:
+        return AgentHostInfo(
+            agent_id=agent_id,
+            error=f"SSH 认证失败：{e}（username={username}，方法={'私钥' if key_path else '密码'}）",
+            source="ssh",
+        )
     except Exception as e:
-        return AgentHostInfo(agent_id=agent_id, error=f"SSH auth failed: {e}", source="ssh")
+        return AgentHostInfo(agent_id=agent_id, error=f"SSH 连接失败：{e}", source="ssh")
     try:
         data = await asyncio.to_thread(svc._probe_remote_host_info, client, 5)
         data["agent_id"] = agent_id
