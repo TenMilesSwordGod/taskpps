@@ -230,6 +230,12 @@ setup_directories() {
     log_step "Creating project structure in workdir: $WORKDIR"
     mkdir -p "$WORKDIR"
     chown taskpps:taskpps "$WORKDIR"
+    # 2777 = setgid + rwx for owner/group/other. The workdir is intentionally
+    # world-writable: any logged-in user (aba, dady, vncuser, ...) can create,
+    # edit, and remove files in this project folder without per-user setup.
+    # setgid is kept so new files/dirs inherit the `taskpps` group, which
+    # keeps the service happy and makes `ls -l` consistent across users.
+    chmod 2777 "$WORKDIR"
 
     # Ensure taskpps user can traverse from / to the workdir.
     # Parent directories need at least 'x' (traverse/execute) permission for 'others'.
@@ -262,6 +268,8 @@ setup_directories() {
     for d in "${project_dirs[@]}"; do
         mkdir -p "$WORKDIR/$d"
         chown taskpps:taskpps "$WORKDIR/$d"
+        # 2777 = world-writable + setgid, see comment on $WORKDIR above.
+        chmod 2777 "$WORKDIR/$d"
         log_info "  created $WORKDIR/$d"
     done
 
@@ -271,6 +279,9 @@ setup_directories() {
     # "attempt to write a readonly database" on the first write attempt.
     if [[ -d "$WORKDIR/.taskpps" ]]; then
         chown -R taskpps:taskpps "$WORKDIR/.taskpps"
+        # Ensure existing subdirs under .taskpps are also world-writable so
+        # any user can drop into workspaces/ or read logs/ without setup.
+        find "$WORKDIR/.taskpps" -type d -exec chmod 2777 {} +
     fi
 }
 
@@ -295,6 +306,68 @@ install_project_deps() {
 
     chown -R taskpps:taskpps "$SERVER_HOME/server/.venv"
     log_info "Dependencies installed successfully"
+}
+
+# Build Web UI
+build_web_ui() {
+    log_step "Building Web UI..."
+
+    local web_dir="$SERVER_HOME/web"
+
+    if [[ ! -f "$web_dir/package.json" ]]; then
+        log_warn "Web UI source not found at $web_dir, skipping build"
+        return
+    fi
+
+    # 检查 Node.js 是否可用
+    if ! command -v node &>/dev/null; then
+        log_warn "Node.js not found, installing..."
+        local os_type
+        os_type=$(detect_os)
+        case $os_type in
+            debian)
+                apt-get install -y -qq nodejs npm 2>/dev/null || {
+                    # 尝试 NodeSource（使用清华镜像）
+                    curl -fsSL https://mirrors.tuna.tsinghua.edu.cn/nodesource/deb_20.x/setup_20.x | bash -
+                    apt-get install -y -qq nodejs
+                }
+                ;;
+            rhel)
+                yum install -y nodejs npm 2>/dev/null || {
+                    curl -fsSL https://mirrors.tuna.tsinghua.edu.cn/nodesource/rpm_20.x/setup_20.x | bash -
+                    yum install -y nodejs
+                }
+                ;;
+            *)
+                log_error "Cannot install Node.js automatically on this OS. Please install Node.js 18+ manually and re-run."
+                return
+                ;;
+        esac
+    fi
+
+    log_info "Node.js version: $(node --version)"
+    log_info "npm version: $(npm --version)"
+
+    cd "$web_dir"
+
+    # 配置 npm 中国镜像
+    log_info "Configuring npm with China mirror..."
+    npm config set registry https://registry.npmmirror.com
+
+    # 安装依赖并构建
+    npm install --prefer-offline 2>&1 | tail -5
+    npm run build 2>&1 | tail -10
+
+    if [[ -d "$web_dir/dist" ]]; then
+        chown -R taskpps:taskpps "$web_dir/dist"
+        log_info "Web UI built successfully → $web_dir/dist"
+    else
+        log_error "Web UI build failed — dist/ not found"
+    fi
+
+    # 清理 node_modules 减小部署体积
+    rm -rf "$web_dir/node_modules"
+    log_info "Cleaned up node_modules"
 }
 
 # Generate systemd service file (gunicorn + uvicorn worker)
@@ -633,6 +706,7 @@ install() {
     create_user
     setup_directories
     install_project_deps
+    build_web_ui
     generate_service_file
     generate_config
     generate_profile_d
@@ -656,8 +730,16 @@ install() {
     log_info "ppsctl:       /usr/local/bin/ppsctl"
     log_info "Env config:   /etc/profile.d/taskpps.sh"
     log_info ""
+    log_info "Shared workdir (world-writable):"
+    log_info "  $WORKDIR is mode 2777 (rwxrwxrwx + setgid)."
+    log_info "  Any logged-in user can create / edit / remove files here — no per-user setup."
+    log_info "  Note: new files default to 0644 (only the creator can write them)."
+    log_info "  To let everyone edit a specific file: chmod 666 <file>"
+    log_info "  To let everyone edit every new file:  umask 000  (in your shell rc)"
+    log_info ""
     log_info "Endpoints:"
     log_info "  API:       http://$(hostname -I | awk '{print $1}'):26521/api"
+    log_info "  Web UI:    http://$(hostname -I | awk '{print $1}'):26521/"
     log_info "  Agent WS:  ws://$(hostname -I | awk '{print $1}'):26521/api/ws/agent"
     log_info "  Health:    http://$(hostname -I | awk '{print $1}'):26521/api/health"
 }

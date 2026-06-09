@@ -112,6 +112,40 @@ update_deps() {
     log_info "Dependencies updated"
 }
 
+build_web_ui() {
+    log_step "Building Web UI..."
+
+    local web_dir="$SERVER_HOME/web"
+
+    if [[ ! -f "$web_dir/package.json" ]]; then
+        log_warn "Web UI source not found at $web_dir, skipping build"
+        return
+    fi
+
+    if ! command -v node &>/dev/null; then
+        log_warn "Node.js not found, skipping Web UI build"
+        return
+    fi
+
+    cd "$web_dir"
+
+    # 配置 npm 中国镜像
+    npm config set registry https://registry.npmmirror.com
+
+    npm install --prefer-offline 2>&1 | tail -5
+    npm run build 2>&1 | tail -10
+
+    if [[ -d "$web_dir/dist" ]]; then
+        chown -R taskpps:taskpps "$web_dir/dist"
+        log_info "Web UI built successfully → $web_dir/dist"
+    else
+        log_error "Web UI build failed — dist/ not found"
+    fi
+
+    rm -rf "$web_dir/node_modules"
+    log_info "Cleaned up node_modules"
+}
+
 restart_service() {
     log_step "Restarting service..."
     systemctl daemon-reload
@@ -135,6 +169,7 @@ main() {
     backup_config
     update_code
     update_deps
+    build_web_ui
     restart_service
 
     log_info "========================================"
