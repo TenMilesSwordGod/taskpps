@@ -16,6 +16,10 @@ type runningCmd struct {
 	CommandID string
 	Cancel    context.CancelFunc
 	StartTime time.Time
+	// Exited is closed by waitForCompletion after Wait() returns.
+	// Cancel() selects on this instead of calling Wait() a second time
+	// (which would return immediately with "Wait was already called").
+	Exited chan struct{}
 }
 
 type Executor struct {
@@ -91,7 +95,7 @@ func (e *Executor) Execute(req ExecCommand) {
 		return
 	}
 
-	rc := &runningCmd{Cmd: cmd, CommandID: req.CommandID, Cancel: cancel, StartTime: startTime}
+	rc := &runningCmd{Cmd: cmd, CommandID: req.CommandID, Cancel: cancel, StartTime: startTime, Exited: make(chan struct{})}
 	e.mu.Lock()
 	e.runningCmds[req.CommandID] = rc
 	e.mu.Unlock()
@@ -106,26 +110,43 @@ func (e *Executor) Cancel(commandID string) {
 	e.mu.Lock()
 	rc, exists := e.runningCmds[commandID]
 	e.mu.Unlock()
-	if !exists || rc.Cmd == nil {
+	if !exists || rc.Cmd == nil || rc.Cmd.Process == nil {
 		return
 	}
 
-	logger.Info("Cancelling command %s (PID=%d)", commandID, rc.Cmd.Process.Pid)
+	pid := rc.Cmd.Process.Pid
+	logger.Info("Cancelling command %s (PID=%d)", commandID, pid)
 
-	killProcessTree(rc.Cmd.Process.Pid, syscall.SIGTERM)
+	// Send SIGTERM to the entire process group (bash + all children).
+	// The command is launched with Setpgid=true so the process is the
+	// leader of its own pgid, and a negative PID in kill(2) targets the
+	// whole group. This is essential: bash ignores SIGTERM while waiting
+	// for its foreground child, so signalling only the parent would leak
+	// orphans (e.g. "sleep 15" surviving after bash is killed).
+	//
+	// Fall back to the per-PID tree walk if Getpgid ever fails.
+	pgid, err := syscall.Getpgid(pid)
+	if err == nil && pgid == pid {
+		_ = syscall.Kill(-pgid, syscall.SIGTERM)
+	} else {
+		killProcessTree(pid, syscall.SIGTERM)
+	}
 
-	done := make(chan struct{})
-	go func() {
-		rc.Cmd.Wait()
-		close(done)
-	}()
-
+	// waitForCompletion has already called Wait(); a second Wait() would
+	// return immediately ("Wait was already called"), which would make
+	// the select fire instantly and skip the SIGKILL fallback. Use the
+	// Exited channel that waitForCompletion closes after Wait() returns.
 	select {
-	case <-done:
+	case <-rc.Exited:
 		logger.Info("Command %s terminated after SIGTERM", commandID)
 	case <-time.After(5 * time.Second):
 		logger.Warn("Command %s did not respond to SIGTERM, sending SIGKILL", commandID)
-		killProcessTree(rc.Cmd.Process.Pid, syscall.SIGKILL)
+		if err == nil && pgid == pid {
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		} else {
+			killProcessTree(pid, syscall.SIGKILL)
+		}
+		<-rc.Exited
 	}
 
 	rc.Cancel()
@@ -145,6 +166,7 @@ func (e *Executor) CancelAll() {
 
 func (e *Executor) waitForCompletion(rc *runningCmd) {
 	err := rc.Cmd.Wait()
+	close(rc.Exited)
 	duration := time.Since(rc.StartTime).Milliseconds()
 
 	result := ExecResult{CommandID: rc.CommandID, DurationMs: duration}

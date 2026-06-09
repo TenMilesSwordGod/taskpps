@@ -2,6 +2,8 @@ package agent
 
 import (
 	"os"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -132,6 +134,73 @@ func TestExecutorCancel(t *testing.T) {
 
 	if result.ExitCode >= 0 {
 		t.Errorf("expected negative exit_code (signal), got %d", result.ExitCode)
+	}
+}
+
+// TestExecutorCancelKillsChildProcess is a regression test for the bug
+// where Cancel() killed the bash parent but left the command's child
+// process (e.g. `sleep 30`) running as an orphan. The root cause was
+// that the second Wait() in Cancel() returned immediately and skipped
+// the SIGKILL fallback, plus the parent-only signal left bash's child
+// to survive. The fix uses the process group signal so the whole
+// subtree is killed, and waits on an Exited channel that the wait
+// goroutine closes after Wait() returns.
+func TestExecutorCancelKillsChildProcess(t *testing.T) {
+	pidFile := t.TempDir() + "/child.pid"
+	_ = os.Remove(pidFile)
+
+	resultCh := make(chan ExecResult, 1)
+	executor := NewExecutor("/bin/sh", "/tmp",
+		func(cid, data string) {},
+		func(cid, data string) {},
+		func(result ExecResult) {
+			resultCh <- result
+		},
+	)
+
+	// `sh -c "sleep 30 & echo $! > pidfile; wait"`: bash spawns sleep as
+	// a child, writes the sleep PID to pidfile, then waits. Cancelling
+	// must kill the sleep child too — not only bash.
+	executor.Execute(ExecCommand{
+		CommandID: "test-cancel-child",
+		Command:   "sleep 30 & echo $! > " + pidFile + "; wait",
+		Cwd:       "/tmp",
+	})
+
+	// Wait for the child PID to be written.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(pidFile); err == nil && len(data) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	pidData, err := os.ReadFile(pidFile)
+	if err != nil || len(pidData) == 0 {
+		t.Fatalf("child PID file was not written: %v", err)
+	}
+	childPID, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+	if err != nil {
+		t.Fatalf("invalid child PID %q: %v", string(pidData), err)
+	}
+
+	executor.Cancel("test-cancel-child")
+
+	select {
+	case <-resultCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for cancel result")
+	}
+
+	// Give the kernel a moment to deliver SIGKILL and reap the child.
+	time.Sleep(200 * time.Millisecond)
+
+	if err := syscall.Kill(childPID, 0); err == nil {
+		t.Errorf("child process %d is still running after cancel (orphaned)", childPID)
+	} else if err != syscall.ESRCH {
+		// ESRCH = "No such process" = good. Anything else is suspicious.
+		t.Errorf("unexpected error checking child %d: %v", childPID, err)
 	}
 }
 
