@@ -48,6 +48,8 @@ export interface RunListResponse {
 export interface PipelineSummary {
   name: string;
   file: string;
+  /** 父文件夹（如 "debug"），根目录文件为 "" */
+  folder: string;
   task_count: number;
   subpipeline_count: number;
   last_run: {

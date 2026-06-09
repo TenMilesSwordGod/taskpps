@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, HTTPException
 
 from taskpps.loaders.pipeline_loader import PipelineLoader
@@ -9,7 +11,7 @@ router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
 @router.get("/")
 async def list_pipelines():
-    """列出已加载流水线摘要"""
+    """列出已加载流水线摘要（按文件夹分组）"""
     loader = PipelineLoader()
     all_pipelines = loader.load_all_with_files()
 
@@ -42,9 +44,13 @@ async def list_pipelines():
             success_count = await run_repo.count_runs(pipeline=spec.name, status="success")
             success_rate = round(success_count / total_count * 100) if total_count > 0 else 0
 
+            # 文件夹分组（debug/debug.yaml → folder="debug"）
+            folder = os.path.dirname(file)
+
             items.append({
                 "name": spec.name,
                 "file": file,
+                "folder": folder,
                 "task_count": task_count,
                 "subpipeline_count": subpipeline_count,
                 "last_run": last_run,
