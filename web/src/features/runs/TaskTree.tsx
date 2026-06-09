@@ -63,7 +63,7 @@ export default function TaskTree({ pipeline, taskStatuses, selectedTaskId, onSel
           <div className="flex items-center gap-2 py-0.5">
             <PartitionOutlined style={{ color: '#722ed1' }} />
             <span className="text-sm font-medium">{sub.name}</span>
-            <Tag>{sub.tasks.length} 个任务</Tag>
+            <Tag style={{ margin: 0, padding: '0 6px', fontSize: 11, lineHeight: '18px', height: 20, display: 'inline-flex', alignItems: 'center' }}>{sub.tasks.length} 个任务</Tag>
           </div>
         ),
         children,

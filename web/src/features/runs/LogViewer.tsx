@@ -95,7 +95,7 @@ export default function LogViewer({
             closable
             onClose={onClearTaskFilter}
             icon={<Filter size={12} />}
-            style={{ margin: 0 }}
+            style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}
           >
             <span style={{ fontFamily: 'monospace' }}>{selectedTaskId}</span>
           </Tag>
@@ -130,11 +130,11 @@ export default function LogViewer({
           清空
         </Button>
         <div style={{ flex: 1 }} />
-        <Tag color="default" icon={<Layers size={12} />}>
+        <Tag color="default" icon={<Layers size={12} />} style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
           {filtered.length} / {logs.length} 行
         </Tag>
         {connected && (
-          <span style={{ color: '#34d399', fontSize: 12 }}>● 已连接</span>
+          <span style={{ color: '#34d399', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>● 已连接</span>
         )}
       </div>
 

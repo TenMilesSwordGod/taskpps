@@ -161,18 +161,18 @@ export default function RunDetailPage() {
             <StatusTag status={run.status} />
             {run.started_at && (
               <Tooltip title={`开始: ${new Date(run.started_at).toLocaleString('zh-CN')}${run.finished_at ? `\n结束: ${new Date(run.finished_at).toLocaleString('zh-CN')}` : ''}`}>
-                <Tag icon={<Clock size={12} />} color="default" style={{ margin: 0 }}>
+                <Tag icon={<Clock size={12} />} color="default" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
                   {formatDuration(durationMs ?? 0)}
                 </Tag>
               </Tooltip>
             )}
             <Tooltip title="任务进度（成功+失败+跳过 / 总数）">
-              <Tag color={progress.failed > 0 ? 'error' : progress.done === progress.total && progress.total > 0 ? 'success' : 'blue'} style={{ margin: 0 }}>
+              <Tag color={progress.failed > 0 ? 'error' : progress.done === progress.total && progress.total > 0 ? 'success' : 'blue'} style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
                 进度 {progress.done}/{progress.total}
               </Tag>
             </Tooltip>
             {progress.running > 0 && (
-              <Tag color="processing" style={{ margin: 0 }}>运行中 {progress.running}</Tag>
+              <Tag color="processing" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>运行中 {progress.running}</Tag>
             )}
           </Space>
           <Space>
