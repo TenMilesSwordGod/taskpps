@@ -91,11 +91,11 @@ export default function LogViewer({
         {/* 任务过滤 - 树形选中标签优先展示 */}
         {selectedTaskId ? (
           <Tag
-            color="purple"
+            color="default"
             closable
             onClose={onClearTaskFilter}
-            icon={<Filter size={12} />}
-            style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}
+            icon={<Filter size={12} style={{ color: '#6b7280' }} />}
+            style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24, background: '#fff', borderColor: '#d1d5db' }}
           >
             <span style={{ fontFamily: 'monospace' }}>{selectedTaskId}</span>
           </Tag>
