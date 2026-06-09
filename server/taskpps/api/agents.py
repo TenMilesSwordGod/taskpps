@@ -13,6 +13,7 @@ from taskpps.schemas.agent import (
     AgentDeployResult,
     AgentExecRequest,
     AgentExecResult,
+    AgentHostInfo,
     AgentStatus,
     AgentWithConfig,
 )
