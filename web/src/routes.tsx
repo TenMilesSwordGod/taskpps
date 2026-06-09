@@ -1,37 +1,34 @@
+import { lazy, Suspense } from 'react';
 import type { RouteObject } from 'react-router-dom';
-import DashboardPage from '@/features/dashboard/DashboardPage';
-import PipelineListPage from '@/features/pipelines/PipelineListPage';
-import PipelineDetailPage from '@/features/pipelines/PipelineDetailPage';
-import RunListPage from '@/features/runs/RunListPage';
-import RunDetailPage from '@/features/runs/RunDetailPage';
-import ServersPage from '@/features/servers/ServersPage';
+import { Spin } from 'antd';
+
+// 路由级 code splitting：每个页面单独 chunk，首屏只下载必要的
+const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage'));
+const PipelineListPage = lazy(() => import('@/features/pipelines/PipelineListPage'));
+const PipelineDetailPage = lazy(() => import('@/features/pipelines/PipelineDetailPage'));
+const RunListPage = lazy(() => import('@/features/runs/RunListPage'));
+const RunDetailPage = lazy(() => import('@/features/runs/RunDetailPage'));
+const ServersPage = lazy(() => import('@/features/servers/ServersPage'));
+
+/** 路由级 Suspense fallback */
+function RouteFallback() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <Spin size="large" tip="加载中…" />
+    </div>
+  );
+}
+
+const wrap = (el: React.ReactNode) => <Suspense fallback={<RouteFallback />}>{el}</Suspense>;
 
 /** 路由定义 */
 const routes: RouteObject[] = [
-  {
-    path: '/',
-    element: <DashboardPage />,
-  },
-  {
-    path: '/pipelines',
-    element: <PipelineListPage />,
-  },
-  {
-    path: '/pipelines/:file',
-    element: <PipelineDetailPage />,
-  },
-  {
-    path: '/runs',
-    element: <RunListPage />,
-  },
-  {
-    path: '/runs/:id',
-    element: <RunDetailPage />,
-  },
-  {
-    path: '/servers',
-    element: <ServersPage />,
-  },
+  { path: '/', element: wrap(<DashboardPage />) },
+  { path: '/pipelines', element: wrap(<PipelineListPage />) },
+  { path: '/pipelines/:file', element: wrap(<PipelineDetailPage />) },
+  { path: '/runs', element: wrap(<RunListPage />) },
+  { path: '/runs/:id', element: wrap(<RunDetailPage />) },
+  { path: '/servers', element: wrap(<ServersPage />) },
 ];
 
 export default routes;

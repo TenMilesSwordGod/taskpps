@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Tooltip, Popconfirm } from 'antd';
 import type { AgentWithConfig } from '@/types';
 import { Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle, CloudUpload, Loader2 } from 'lucide-react';
@@ -102,7 +103,7 @@ function formatTs(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('zh-CN');
 }
 
-export default function ServerCard({ agent, detectedSystem, detectedArch }: ServerCardProps) {
+function ServerCard({ agent, detectedSystem, detectedArch }: ServerCardProps) {
   const online = agent.connected;
   const deploy = useDeployAgent();
   const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
@@ -316,3 +317,13 @@ export default function ServerCard({ agent, detectedSystem, detectedArch }: Serv
     </div>
   );
 }
+
+// 用 React.memo 包裹：props 不变时跳过 re-render（react-query 5s refetch 时只更新变化项）
+// 自定义比较：detected* 字符串是简单值，可走默认浅比较
+export default memo(ServerCard, (prev, next) => {
+  return (
+    prev.agent === next.agent &&
+    prev.detectedSystem === next.detectedSystem &&
+    prev.detectedArch === next.detectedArch
+  );
+});

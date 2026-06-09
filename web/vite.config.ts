@@ -6,6 +6,19 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig({
   build: {
     sourcemap: 'hidden',
+    chunkSizeWarningLimit: 1024,
+    rollupOptions: {
+      output: {
+        // 拆分 vendor 提升缓存命中率 + 减少首屏 JS 体积
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'query-vendor': ['@tanstack/react-query'],
+          'antd-vendor': ['antd', '@ant-design/icons'],
+          'flow-vendor': ['@xyflow/react', 'dagre'],
+          'chart-vendor': ['dayjs', 'html-to-image', 'react-window', 'zustand'],
+        },
+      },
+    },
   },
   plugins: [
     react(),

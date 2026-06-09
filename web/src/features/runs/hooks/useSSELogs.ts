@@ -6,6 +6,9 @@ export interface LogEntry {
   timestamp: number;
 }
 
+/** 日志最大行数（DOM 性能保护） */
+const MAX_LOG_LINES = 5000;
+
 /** SSE 实时日志 hook */
 export function useSSELogs(runId: string | undefined) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -31,10 +34,17 @@ export function useSSELogs(runId: string | undefined) {
       const lines = raw.split(/\r\n|\r|\n/).filter((l) => l.length > 0);
       if (lines.length === 0) return;
 
-      setLogs((prev) => [
-        ...prev,
-        ...lines.map((content) => ({ taskName, content, timestamp: Date.now() })),
-      ]);
+      setLogs((prev) => {
+        // 上限保护：超过 MAX 时丢弃最早的 1/4，避免 DOM 节点无限增长
+        const next = [
+          ...prev,
+          ...lines.map((content) => ({ taskName, content, timestamp: Date.now() })),
+        ];
+        if (next.length > MAX_LOG_LINES) {
+          return next.slice(next.length - Math.floor(MAX_LOG_LINES * 0.75));
+        }
+        return next;
+      });
     });
 
     es.addEventListener('done', () => {
