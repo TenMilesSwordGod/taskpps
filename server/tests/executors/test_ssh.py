@@ -428,4 +428,3 @@ class TestSSHExecutor:
     async def test_with_key_path_attr(self):
         executor = SSHExecutor(host="1.2.3.4", port=22, username="root", key_path="/tmp/key")
         assert executor.key_path == "/tmp/key"
-

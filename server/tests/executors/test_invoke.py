@@ -227,4 +227,3 @@ def greet(name="world"):
             )
         assert result.success
         assert "hello test" in result.stdout
-

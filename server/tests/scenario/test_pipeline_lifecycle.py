@@ -105,9 +105,7 @@ class TestPipelineCancel:
     async def test_cancel_pending_run(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            create_resp = await client.post(
-                "/api/runs/", json={"pipeline": "simple.yaml"}
-            )
+            create_resp = await client.post("/api/runs/", json={"pipeline": "simple.yaml"})
             assert create_resp.status_code == 201
             run_id = create_resp.json()["id"]
 

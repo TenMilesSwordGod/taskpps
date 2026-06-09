@@ -30,4 +30,3 @@ class TestTriggerService:
         svc = TriggerService()
         result = await svc.delete_trigger("nonexistent")
         assert result is False
-

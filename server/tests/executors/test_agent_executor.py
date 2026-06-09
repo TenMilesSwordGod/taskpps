@@ -175,9 +175,7 @@ class TestAgentExecutorExecute:
         result = await executor.execute("echo hello", {}, log_path, timeout=30)
 
         assert result.exit_code == 0
-        mock_manager.send_command.assert_called_once_with(
-            "agent-1", executor._command_id, "echo hello", {}, "", 30
-        )
+        mock_manager.send_command.assert_called_once_with("agent-1", executor._command_id, "echo hello", {}, "", 30)
 
     @pytest.mark.asyncio
     async def test_execute_default_timeout_from_settings(self, tmp_path, mock_manager, agent_data):
@@ -187,6 +185,7 @@ class TestAgentExecutorExecute:
         mock_manager.create_pending.return_value = fut
 
         from taskpps.config import get_settings
+
         default_timeout = get_settings().executor.default_timeout
 
         executor = AgentExecutor("agent-1", mock_manager, agent_data)
@@ -387,12 +386,12 @@ class TestAgentExecutorOutputCallback:
         silently dropping it."""
         log_path = tmp_path / "fallback.log"
 
-        from taskpps.executors import agent_executor
-
         # Simulate "no running loop" by patching get_running_loop to raise.
         # The callback must catch the RuntimeError and call _write_log_chunk
         # directly so no chunk is dropped.
         import asyncio as _asyncio
+
+        from taskpps.executors import agent_executor
 
         def _raise(*_a, **_kw):
             raise RuntimeError("no running event loop")

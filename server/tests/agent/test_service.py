@@ -261,28 +261,28 @@ class TestProbeRemoteHostInfo:
 
     def test_parses_lscpu_cores_threads(self):
         svc = AgentService()
-        client = self._make_ssh_client({
-            "hostname": "myhost",
-            "uname -a": "Linux myhost 5.15.0-amd64 #1 SMP x86_64",
-            "/etc/os-release": 'PRETTY_NAME="Debian GNU/Linux 12"\nNAME="Debian"',
-            "uptime": " 14:32:01 up 3 days, 2 users, load average: 0.05, 0.03, 0.00",
-            "lscpu": "Architecture: x86_64\n"
-                     "Model name: Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\n"
-                     "CPU(s): 4\n"
-                     "Thread(s) per core: 1\n"
-                     "Core(s) per socket: 4\n"
-                     "Socket(s): 1\n"
-                     "nproc: 4",
-            "free -h": "              total        used        free      shared  buff/cache   available\n"
-                       "Mem:           16Gi        4.2Gi       8.1Gi       0.1Gi       3.7Gi        11Gi\n"
-                       "Swap:         2.0Gi       0.0Ki       2.0Gi",
-            "/proc/meminfo": "MemTotal:       16777216 kB\n"
-                             "MemAvailable:   12000000 kB\n"
-                             "Buffers:         100000 kB",
-            "df -h": "Filesystem      Size  Used Avail Use% Mounted on\n"
-                     "/dev/sda1        50G   20G   28G  42% /\n"
-                     "/dev/sda2       200G  150G   40G  79% /var",
-        })
+        client = self._make_ssh_client(
+            {
+                "hostname": "myhost",
+                "uname -a": "Linux myhost 5.15.0-amd64 #1 SMP x86_64",
+                "/etc/os-release": 'PRETTY_NAME="Debian GNU/Linux 12"\nNAME="Debian"',
+                "uptime": " 14:32:01 up 3 days, 2 users, load average: 0.05, 0.03, 0.00",
+                "lscpu": "Architecture: x86_64\n"
+                "Model name: Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\n"
+                "CPU(s): 4\n"
+                "Thread(s) per core: 1\n"
+                "Core(s) per socket: 4\n"
+                "Socket(s): 1\n"
+                "nproc: 4",
+                "free -h": "              total        used        free      shared  buff/cache   available\n"
+                "Mem:           16Gi        4.2Gi       8.1Gi       0.1Gi       3.7Gi        11Gi\n"
+                "Swap:         2.0Gi       0.0Ki       2.0Gi",
+                "/proc/meminfo": "MemTotal:       16777216 kB\nMemAvailable:   12000000 kB\nBuffers:         100000 kB",
+                "df -h": "Filesystem      Size  Used Avail Use% Mounted on\n"
+                "/dev/sda1        50G   20G   28G  42% /\n"
+                "/dev/sda2       200G  150G   40G  79% /var",
+            }
+        )
         data = svc._probe_remote_host_info(client, timeout=5)
         assert data["hostname"] == "myhost"
         assert "Linux" in data["kernel"]
@@ -317,9 +317,11 @@ class TestProbeRemoteHostInfo:
     def test_handles_malformed_lscpu(self):
         """lscpu 输出乱码也不应该崩"""
         svc = AgentService()
-        client = self._make_ssh_client({
-            "lscpu": "garbled output \x00\xff no newlines",
-        })
+        client = self._make_ssh_client(
+            {
+                "lscpu": "garbled output \x00\xff no newlines",
+            }
+        )
         data = svc._probe_remote_host_info(client, timeout=5)
         # 不抛异常 + threads/cores 兜底走 nproc
         assert isinstance(data["cpu"]["threads"], int)

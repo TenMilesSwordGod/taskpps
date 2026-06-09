@@ -81,8 +81,7 @@ class TestSettings:
 
         config_file = tmp_path / "taskpps.yaml"
         config_file.write_text(
-            "server:\n  host: 127.0.0.1\n  port: 26521\n"
-            "executor:\n  default_timeout: 60\n  max_workers: 4\n"
+            "server:\n  host: 127.0.0.1\n  port: 26521\nexecutor:\n  default_timeout: 60\n  max_workers: 4\n"
         )
         old_settings = cfg._settings
         old_root = cfg._project_root

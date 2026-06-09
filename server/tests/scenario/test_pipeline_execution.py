@@ -241,9 +241,7 @@ class TestPipelineExecution:
     @pytest.mark.asyncio
     async def test_multiple_commands_execution(self, db_engine, clean_db):
         _setup_config()
-        tasks = [
-            ResolvedTask(name="multi", task_type="command", commands=["echo step1", "echo step2", "echo step3"])
-        ]
+        tasks = [ResolvedTask(name="multi", task_type="command", commands=["echo step1", "echo step2", "echo step3"])]
         pipeline = make_pipeline("multi-cmd", tasks)
         ctx = ExecutionContext(pipeline=pipeline, run_id="exec-multi")
 

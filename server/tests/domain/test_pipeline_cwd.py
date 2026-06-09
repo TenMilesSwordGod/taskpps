@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from taskpps.domain.pipeline import ResolvedPipeline
-from taskpps.schemas.pipeline import PipelineConfig, PipelineYAML, SubPipeline, TaskYAML
+from taskpps.schemas.pipeline import PipelineYAML
 
 
 def _resolve(yaml_dict: dict) -> ResolvedPipeline:

@@ -44,6 +44,7 @@ class TestConfigBoundary:
         config_file = tmp_path / "invalid.yaml"
         config_file.write_text(":invalid: yaml: [[")
         import yaml
+
         with pytest.raises(yaml.YAMLError):
             load_settings(str(config_file))
 
@@ -114,11 +115,12 @@ class TestConfigBoundary:
         finally:
             cfg._project_workdir = old
 
-    def test_get_project_workdir_from_settings(self, tmp_path, setup_project):
+    def test_get_project_workdir_from_settings(self, tmp_path, setup_project, monkeypatch):
         import taskpps.config as cfg
 
         old = cfg._project_workdir
         cfg._project_workdir = None
+        monkeypatch.delenv("TASKPPS_WORKDIR", raising=False)
         old_settings = cfg._settings
         cfg._settings = Settings(workdir=str(tmp_path))
         try:
@@ -140,19 +142,21 @@ class TestConfigBoundary:
         finally:
             cfg._server_home = old
 
-    def test_get_server_home_from_settings(self, tmp_path, setup_project):
+    def test_get_server_home_fallback_to_code_path(self, setup_project, monkeypatch):
         import taskpps.config as cfg
 
         old = cfg._server_home
         cfg._server_home = None
-        old_settings = cfg._settings
-        cfg._settings = Settings(server_home=str(tmp_path))
+        monkeypatch.delenv("TASKPPS_SERVER_HOME", raising=False)
         try:
             result = get_server_home()
-            assert result == tmp_path
+            # get_server_home() 不读 settings，当 _server_home=None 且无环境变量时回退到代码路径
+            from pathlib import Path
+
+            expected = Path(__file__).resolve().parent.parent.parent.parent
+            assert result == expected
         finally:
             cfg._server_home = old
-            cfg._settings = old_settings
 
     def test_compute_pipeline_version_nonexistent(self):
         result = compute_pipeline_version("nonexistent.yaml")

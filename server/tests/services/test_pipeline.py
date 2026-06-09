@@ -133,12 +133,7 @@ class TestPipelineService:
         cfg.load_settings(str(tmp_project / "taskpps.yaml"))
         pipelines_dir = tmp_project / "pipelines"
         (pipelines_dir / "max_parallel.yaml").write_text(
-            "name: max_parallel\n"
-            "options:\n"
-            "  max_parallel: 1\n"
-            "tasks:\n"
-            "  - name: t\n"
-            "    command: echo ok\n"
+            "name: max_parallel\noptions:\n  max_parallel: 1\ntasks:\n  - name: t\n    command: echo ok\n"
         )
         svc = PipelineService()
         first = await svc.create_run("max_parallel.yaml")
@@ -160,12 +155,7 @@ class TestPipelineService:
         cfg.load_settings(str(tmp_project / "taskpps.yaml"))
         pipelines_dir = tmp_project / "pipelines"
         (pipelines_dir / "max_parallel.yaml").write_text(
-            "name: max_parallel\n"
-            "options:\n"
-            "  max_parallel: 1\n"
-            "tasks:\n"
-            "  - name: t\n"
-            "    command: echo ok\n"
+            "name: max_parallel\noptions:\n  max_parallel: 1\ntasks:\n  - name: t\n    command: echo ok\n"
         )
 
         # Clear the per-pipeline lock so a previous test cannot serialize us.
@@ -360,11 +350,7 @@ class TestPipelineServiceMore:
         svc = PipelineService()
         result = await svc.create_run("deploy.yaml")
         snapshot_dir = (
-            get_logs_dir()
-            / result["pipeline_id"]
-            / f"v_{result['pipeline_version']}"
-            / "builds"
-            / result["id"]
+            get_logs_dir() / result["pipeline_id"] / f"v_{result['pipeline_version']}" / "builds" / result["id"]
         )
         snapshot = snapshot_dir / "pipeline-snapshot.yaml"
         assert snapshot.exists()
@@ -372,7 +358,6 @@ class TestPipelineServiceMore:
     @pytest.mark.asyncio
     async def test_save_pipeline_snapshot_nonexistent_file(self, tmp_project, db_engine):
         _setup_config(tmp_project)
-        from taskpps.config import get_logs_dir
 
         svc = PipelineService()
         # _save_pipeline_snapshot silently returns if source doesn't exist
@@ -383,8 +368,6 @@ class TestPipelineServiceMore:
     @pytest.mark.asyncio
     async def test_version_changed_detection(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
-        from taskpps.db.engine import get_session_factory
-        from taskpps.db.repository import RunRepository
 
         svc = PipelineService()
         # First run
@@ -448,9 +431,7 @@ class TestPipelineServiceMore:
     async def test_create_run_with_config_env(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
-        result = await svc.create_run("deploy.yaml", params={
-            "config": {"env": {"CUSTOM_KEY": "custom_value"}}
-        })
+        result = await svc.create_run("deploy.yaml", params={"config": {"env": {"CUSTOM_KEY": "custom_value"}}})
         assert "id" in result
 
     @pytest.mark.asyncio
@@ -458,9 +439,7 @@ class TestPipelineServiceMore:
         _setup_config(tmp_project)
         svc = PipelineService()
         # env is not a dict, should be handled gracefully
-        result = await svc.create_run("deploy.yaml", params={
-            "config": {"env": "not_a_dict"}
-        })
+        result = await svc.create_run("deploy.yaml", params={"config": {"env": "not_a_dict"}})
         assert "id" in result
 
     @pytest.mark.asyncio
@@ -477,4 +456,3 @@ class TestPipelineServiceMore:
         svc = PipelineService()
         clean_result = await svc.clean_runs(force=True)
         assert clean_result == {"deleted_runs": 0, "deleted_logs": 0}
-

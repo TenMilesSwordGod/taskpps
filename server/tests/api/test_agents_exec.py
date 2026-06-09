@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -8,15 +8,18 @@ import pytest
 class TestAgentExec:
     @pytest.mark.asyncio
     async def test_agent_exec_not_connected(self, client):
-        response = await client.post("/api/agents/nonexistent/exec", json={
-            "command": "echo hello",
-            "timeout": 30,
-        })
+        response = await client.post(
+            "/api/agents/nonexistent/exec",
+            json={
+                "command": "echo hello",
+                "timeout": 30,
+            },
+        )
         assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_agent_exec_connected(self, client):
-        from taskpps.services.agent_manager import AgentManager, AgentConnection
+        from taskpps.services.agent_manager import AgentConnection, AgentManager
 
         manager = AgentManager.instance()
         ws = AsyncMock()
@@ -24,10 +27,13 @@ class TestAgentExec:
         conn = AgentConnection("test-agent", ws)
         manager._connections["test-agent"] = conn
 
-        response = await client.post("/api/agents/test-agent/exec", json={
-            "command": "echo hello",
-            "timeout": 5,
-        })
+        response = await client.post(
+            "/api/agents/test-agent/exec",
+            json={
+                "command": "echo hello",
+                "timeout": 5,
+            },
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["agent_id"] == "test-agent"
@@ -45,7 +51,7 @@ class TestAgentList:
 
     @pytest.mark.asyncio
     async def test_agent_list_with_connected(self, client):
-        from taskpps.services.agent_manager import AgentManager, AgentConnection
+        from taskpps.services.agent_manager import AgentConnection, AgentManager
 
         manager = AgentManager.instance()
         ws = AsyncMock()
@@ -76,7 +82,7 @@ class TestAgentStatus:
 
     @pytest.mark.asyncio
     async def test_agent_status_connected(self, client):
-        from taskpps.services.agent_manager import AgentManager, AgentConnection
+        from taskpps.services.agent_manager import AgentConnection, AgentManager
 
         manager = AgentManager.instance()
         ws = AsyncMock()
@@ -107,10 +113,11 @@ class TestAgentDeploy:
     async def test_deploy_agent_not_found(self, client):
         # Agent not found in config
         with patch("taskpps.api.agents.AgentBootstrap") as mock_bootstrap:
-            mock_bootstrap.return_value.bootstrap = AsyncMock(
-                side_effect=Exception("Agent not found")
+            mock_bootstrap.return_value.bootstrap = AsyncMock(side_effect=Exception("Agent not found"))
+            response = await client.post(
+                "/api/agents/deploy",
+                json={
+                    "agent_id": "nonexistent-agent",
+                },
             )
-            response = await client.post("/api/agents/deploy", json={
-                "agent_id": "nonexistent-agent",
-            })
             assert response.status_code == 500

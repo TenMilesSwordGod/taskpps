@@ -7,7 +7,6 @@ class TestRunLogs:
     @pytest.mark.asyncio
     async def test_logs_no_task_filter(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
-        import taskpps.config as cfg
 
         svc = PipelineService()
         result = await svc.create_run("deploy.yaml")

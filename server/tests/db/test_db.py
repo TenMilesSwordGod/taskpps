@@ -16,7 +16,7 @@ from taskpps.db.engine import (
     reset_engine,
     set_engine,
 )
-from taskpps.db.repository import RunRepository, TaskRunRepository, TriggerRepository
+from taskpps.db.repository import ProjectRepository, RunRepository, TaskRunRepository, TriggerRepository
 from taskpps.models.run import RunStatus, TaskStatus, TaskType
 
 
@@ -168,6 +168,134 @@ class TestDBEngine:
     def test_get_repos(self):
         repos = _get_repos()
         assert repos == (RunRepository, TaskRunRepository, TriggerRepository)
+
+
+class TestProjectRepository:
+    @pytest.mark.asyncio
+    async def test_create_project(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            project = await repo.create_project("/opt/project-a", name="project-a")
+            assert project.id is not None
+            assert len(project.id) == 12
+            assert project.workdir == "/opt/project-a"
+            assert project.name == "project-a"
+            assert project.active is True
+
+    @pytest.mark.asyncio
+    async def test_get_project(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            created = await repo.create_project("/opt/project-b")
+            fetched = await repo.get_project(created.id)
+            assert fetched is not None
+            assert fetched.id == created.id
+            assert fetched.workdir == "/opt/project-b"
+
+    @pytest.mark.asyncio
+    async def test_get_project_not_found(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            fetched = await repo.get_project("nonexistent")
+            assert fetched is None
+
+    @pytest.mark.asyncio
+    async def test_get_project_by_workdir(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            await repo.create_project("/opt/project-c", name="project-c")
+            found = await repo.get_project_by_workdir("/opt/project-c")
+            assert found is not None
+            assert found.name == "project-c"
+
+    @pytest.mark.asyncio
+    async def test_get_project_by_workdir_not_found(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            found = await repo.get_project_by_workdir("/nonexistent")
+            assert found is None
+
+    @pytest.mark.asyncio
+    async def test_list_projects(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            await repo.create_project("/opt/p1", name="p1")
+            await repo.create_project("/opt/p2", name="p2")
+            projects = await repo.list_projects()
+            assert len(projects) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_projects_active_only(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            await repo.create_project("/opt/p1", name="p1")
+            p2 = await repo.create_project("/opt/p2", name="p2")
+            await repo.update_project(p2.id, active=False)
+            active = await repo.list_projects(active_only=True)
+            assert len(active) == 1
+            assert active[0].name == "p1"
+            all_projects = await repo.list_projects(active_only=False)
+            assert len(all_projects) == 2
+
+    @pytest.mark.asyncio
+    async def test_update_project(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            created = await repo.create_project("/opt/project-d", name="old-name")
+            updated = await repo.update_project(created.id, name="new-name", active=False)
+            assert updated is not None
+            assert updated.name == "new-name"
+            assert updated.active is False
+
+    @pytest.mark.asyncio
+    async def test_delete_project(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            created = await repo.create_project("/opt/project-e")
+            deleted = await repo.delete_project(created.id)
+            assert deleted is True
+            fetched = await repo.get_project(created.id)
+            assert fetched is None
+
+    @pytest.mark.asyncio
+    async def test_delete_project_not_found(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            deleted = await repo.delete_project("nonexistent")
+            assert deleted is False
+
+    @pytest.mark.asyncio
+    async def test_count_projects(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            assert await repo.count_projects() == 0
+            await repo.create_project("/opt/p1")
+            await repo.create_project("/opt/p2")
+            assert await repo.count_projects() == 2
+
+    @pytest.mark.asyncio
+    async def test_create_run_with_project_id(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            proj_repo = ProjectRepository(session)
+            run_repo = RunRepository(session)
+            project = await proj_repo.create_project("/opt/project-x", name="project-x")
+            run = await run_repo.create_run("test-pipeline", project_id=project.id)
+            assert run.project_id == project.id
+
+    @pytest.mark.asyncio
+    async def test_list_runs_by_project_id(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            proj_repo = ProjectRepository(session)
+            run_repo = RunRepository(session)
+            p1 = await proj_repo.create_project("/opt/p1")
+            p2 = await proj_repo.create_project("/opt/p2")
+            await run_repo.create_run("pipe-a", project_id=p1.id)
+            await run_repo.create_run("pipe-b", project_id=p1.id)
+            await run_repo.create_run("pipe-c", project_id=p2.id)
+            p1_runs = await run_repo.list_runs(project_id=p1.id)
+            assert len(p1_runs) == 2
+            p2_runs = await run_repo.list_runs(project_id=p2.id)
+            assert len(p2_runs) == 1
 
 
 class TestRunRepository:

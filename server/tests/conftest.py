@@ -1,21 +1,13 @@
-import asyncio
-
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
 from taskpps.db.engine import get_engine, reset_engine, set_engine
 from taskpps.main import app
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture(scope="session")
@@ -153,27 +145,30 @@ def setup_project(tmp_project):
     cfg._project_workdir = tmp_project
     cfg._settings = None
     cfg.load_settings(str(tmp_project / "taskpps.yaml"))
-    reset_engine()
     yield
 
 
 @pytest_asyncio.fixture
-async def db_engine(setup_project, tmp_path):
-    from taskpps.main import mark_external_engine
-
+async def db_engine():
     mark_external_engine()
-    db_file = tmp_path / "test.db"
     engine = create_async_engine(
-        f"sqlite+aiosqlite:///{db_file}",
+        "sqlite+aiosqlite://",
         echo=False,
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
     set_engine(engine)
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-    yield
+    yield engine
     await engine.dispose()
     reset_engine()
+
+
+def mark_external_engine():
+    from taskpps.main import mark_external_engine as _mark
+
+    _mark()
 
 
 @pytest_asyncio.fixture
@@ -190,3 +185,4 @@ async def clean_db(db_engine):
         await conn.execute(text("DELETE FROM task_runs"))
         await conn.execute(text("DELETE FROM runs"))
         await conn.execute(text("DELETE FROM triggers"))
+        await conn.execute(text("DELETE FROM projects"))

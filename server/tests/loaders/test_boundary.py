@@ -30,12 +30,7 @@ class TestPipelineLoaderBoundary:
     def test_load_pipeline_with_tasks(self, tmp_path):
         pipeline_file = tmp_path / "with_tasks.yaml"
         pipeline_file.write_text(
-            "name: build\n"
-            "tasks:\n"
-            "  - name: step1\n"
-            "    command: echo hello\n"
-            "  - name: step2\n"
-            "    command: echo world\n"
+            "name: build\ntasks:\n  - name: step1\n    command: echo hello\n  - name: step2\n    command: echo world\n"
         )
         loader = PipelineLoader(base_dir=tmp_path)
         pipeline = loader.load("with_tasks.yaml")
@@ -44,13 +39,7 @@ class TestPipelineLoaderBoundary:
     def test_load_pipeline_with_env(self, tmp_path):
         pipeline_file = tmp_path / "with_env.yaml"
         pipeline_file.write_text(
-            "name: env_test\n"
-            "config:\n"
-            "  env:\n"
-            "    GLOBAL: value\n"
-            "tasks:\n"
-            "  - name: step1\n"
-            "    command: echo $GLOBAL\n"
+            "name: env_test\nconfig:\n  env:\n    GLOBAL: value\ntasks:\n  - name: step1\n    command: echo $GLOBAL\n"
         )
         loader = PipelineLoader(base_dir=tmp_path)
         pipeline = loader.load("with_env.yaml")

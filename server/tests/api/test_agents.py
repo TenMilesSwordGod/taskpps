@@ -86,8 +86,9 @@ async def test_host_info_agent_not_found(app, setup_project, tmp_project):
 @pytest.mark.asyncio
 async def test_host_info_execution_agent(app, setup_project, tmp_project):
     """execution-agent 类型：返回 source=agent + 错误（待 agent 端实现）"""
+    from unittest.mock import MagicMock, patch
+
     import taskpps.config as cfg
-    from unittest.mock import patch, MagicMock
 
     cfg.set_project_root(tmp_project)
     cfg._settings = None
@@ -120,8 +121,9 @@ async def test_host_info_execution_agent(app, setup_project, tmp_project):
 @pytest.mark.asyncio
 async def test_host_info_ssh_missing_credential(app, setup_project, tmp_project):
     """ssh agent 但 credential 没 key_path / password → 200 + 明确错误信息"""
+    from unittest.mock import MagicMock, patch
+
     import taskpps.config as cfg
-    from unittest.mock import patch, MagicMock
 
     cfg.set_project_root(tmp_project)
     cfg._settings = None
@@ -155,8 +157,9 @@ async def test_host_info_ssh_missing_credential(app, setup_project, tmp_project)
 @pytest.mark.asyncio
 async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project):
     """SSH 认证失败 → 200 + 错误信息含 username（不发 5xx）"""
+    from unittest.mock import MagicMock, patch
+
     import taskpps.config as cfg
-    from unittest.mock import patch, MagicMock
 
     cfg.set_project_root(tmp_project)
     cfg._settings = None
@@ -177,9 +180,11 @@ async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project):
     mock_client = MagicMock()
     mock_paramiko.SSHClient.return_value = mock_client
     mock_paramiko.AutoAddPolicy.return_value = MagicMock()
+
     # 模拟 paramiko.AuthenticationException 异常类
     class _AuthExc(Exception):
         pass
+
     mock_paramiko.AuthenticationException = _AuthExc
     mock_client.connect.side_effect = _AuthExc("bad password")
 
@@ -189,7 +194,9 @@ async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project):
             loader = MagicMock()
             loader.get.return_value = agent_cfg
             loader.resolve_credential.return_value = {
-                "id": "bad-cred", "username": "admin", "password": "wrong",
+                "id": "bad-cred",
+                "username": "admin",
+                "password": "wrong",
             }
             MockLoader.return_value = loader
             with patch.dict("sys.modules", {"paramiko": mock_paramiko}):
@@ -205,8 +212,9 @@ async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project):
 @pytest.mark.asyncio
 async def test_host_info_ssh_success(app, setup_project, tmp_project):
     """SSH 成功 → 返回真实 host 数据"""
+    from unittest.mock import MagicMock, patch
+
     import taskpps.config as cfg
-    from unittest.mock import patch, MagicMock
 
     cfg.set_project_root(tmp_project)
     cfg._settings = None
@@ -259,7 +267,9 @@ async def test_host_info_ssh_success(app, setup_project, tmp_project):
             loader = MagicMock()
             loader.get.return_value = agent_cfg
             loader.resolve_credential.return_value = {
-                "id": "good-cred", "username": "admin", "key_path": "/tmp/key",
+                "id": "good-cred",
+                "username": "admin",
+                "key_path": "/tmp/key",
             }
             MockLoader.return_value = loader
             with patch.dict("sys.modules", {"paramiko": mock_paramiko}):

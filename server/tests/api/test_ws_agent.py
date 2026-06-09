@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import WebSocketDisconnect
 
 from taskpps.api import ws_agent
-from taskpps.services.agent_manager import AgentConnection, AgentManager
+from taskpps.services.agent_manager import AgentManager
 
 
 class TestAgentWebSocket:
@@ -20,10 +19,12 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
@@ -43,19 +44,23 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
         # First call: valid JSON. Second call: invalid JSON, then disconnect
-        ws.receive_text = AsyncMock(side_effect=[
-            json.dumps({"type": "heartbeat_response", "data": {}}),
-            "not json {{{",
-            WebSocketDisconnect(),
-        ])
+        ws.receive_text = AsyncMock(
+            side_effect=[
+                json.dumps({"type": "heartbeat_response", "data": {}}),
+                "not json {{{",
+                WebSocketDisconnect(),
+            ]
+        )
 
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
@@ -69,17 +74,21 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
-        ws.receive_text = AsyncMock(side_effect=[
-            json.dumps({"type": "heartbeat_response", "data": {}}),
-            WebSocketDisconnect(),
-        ])
+        ws.receive_text = AsyncMock(
+            side_effect=[
+                json.dumps({"type": "heartbeat_response", "data": {}}),
+                WebSocketDisconnect(),
+            ]
+        )
 
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
@@ -94,19 +103,23 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
         collected = []
 
-        ws.receive_text = AsyncMock(side_effect=[
-            json.dumps({"type": "stdout_chunk", "data": {"command_id": "cmd-1", "data": "hello\n"}}),
-            WebSocketDisconnect(),
-        ])
+        ws.receive_text = AsyncMock(
+            side_effect=[
+                json.dumps({"type": "stdout_chunk", "data": {"command_id": "cmd-1", "data": "hello\n"}}),
+                WebSocketDisconnect(),
+            ]
+        )
 
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
@@ -120,17 +133,21 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
-        ws.receive_text = AsyncMock(side_effect=[
-            json.dumps({"type": "exec_result", "data": {"command_id": "cmd-1", "exit_code": 0}}),
-            WebSocketDisconnect(),
-        ])
+        ws.receive_text = AsyncMock(
+            side_effect=[
+                json.dumps({"type": "exec_result", "data": {"command_id": "cmd-1", "exit_code": 0}}),
+                WebSocketDisconnect(),
+            ]
+        )
 
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
@@ -141,10 +158,12 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
@@ -162,10 +181,12 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
@@ -183,17 +204,21 @@ class TestAgentWebSocket:
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
-        ws.receive_json = AsyncMock(return_value={
-            "type": "handshake_request",
-            "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
-        })
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
-        ws.receive_text = AsyncMock(side_effect=[
-            json.dumps({"type": "unknown_type", "data": {}}),
-            WebSocketDisconnect(),
-        ])
+        ws.receive_text = AsyncMock(
+            side_effect=[
+                json.dumps({"type": "unknown_type", "data": {}}),
+                WebSocketDisconnect(),
+            ]
+        )
 
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager

@@ -33,6 +33,7 @@ class TestGitExecutorExitCodeCoverage:
     @pytest.mark.asyncio
     async def test_git_timeout_expired(self, tmp_path):
         from taskpps.executors.git import _run_subprocess
+
         log_path = tmp_path / "git_timeout.log"
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=["git"], timeout=1)):
             result = _run_subprocess(["git", "clone", "url"], log_path, dict(os.environ))
@@ -42,6 +43,7 @@ class TestGitExecutorExitCodeCoverage:
     @pytest.mark.asyncio
     async def test_git_command_not_found(self, tmp_path):
         from taskpps.executors.git import _run_subprocess
+
         log_path = tmp_path / "git_nf.log"
         with patch("subprocess.run", side_effect=FileNotFoundError("git not found")):
             result = _run_subprocess(["git", "clone", "url"], log_path, dict(os.environ))
@@ -51,6 +53,7 @@ class TestGitExecutorExitCodeCoverage:
     @pytest.mark.asyncio
     async def test_git_pull_fetch_failure(self, tmp_path):
         from taskpps.executors.git import _git_pull
+
         log_path = tmp_path / "git_fetch_fail.log"
         with patch("taskpps.executors.git._run_subprocess") as mock_run:
             mock_run.return_value = ExecutorResult(exit_code=1, stderr="fetch failed")
@@ -62,6 +65,7 @@ class TestGitExecutorExitCodeCoverage:
     @pytest.mark.asyncio
     async def test_git_pull_checkout_failure(self, tmp_path):
         from taskpps.executors.git import _git_pull
+
         log_path = tmp_path / "git_co_fail.log"
         with patch("taskpps.executors.git._run_subprocess") as mock_run:
             mock_run.side_effect = [
@@ -76,6 +80,7 @@ class TestGitExecutorExitCodeCoverage:
     @pytest.mark.asyncio
     async def test_git_stderr_written_to_log(self, tmp_path):
         from taskpps.executors.git import _run_subprocess
+
         log_path = tmp_path / "git_stderr.log"
         result = _run_subprocess(["echo", "hello"], log_path, dict(os.environ))
         assert result.success

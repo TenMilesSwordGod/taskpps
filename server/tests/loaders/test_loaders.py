@@ -278,6 +278,7 @@ class TestSubstituteEnvVars:
         # 模拟 settings.env
         import taskpps.config
         from taskpps.config import Settings
+
         original_settings = taskpps.config._settings
         try:
             taskpps.config._settings = Settings(env={"SETTINGS_ENV": "settings_value"})
@@ -304,6 +305,7 @@ tasks:
         # 模拟 settings.env
         import taskpps.config
         from taskpps.config import Settings
+
         original_settings = taskpps.config._settings
         try:
             taskpps.config._settings = Settings(env={"SETTINGS_ENV": "settings_value", "OVERLAPPED": "settings_val"})
@@ -318,10 +320,7 @@ tasks:
 """)
             loader = PipelineLoader(pipelines_dir)
             # 传入 env 参数,包含与 settings.env 重叠的变量
-            spec = loader.load("env_priority_test.yaml", env={
-                "PARAM_ENV": "param_value",
-                "OVERLAPPED": "param_val"
-            })
+            spec = loader.load("env_priority_test.yaml", env={"PARAM_ENV": "param_value", "OVERLAPPED": "param_val"})
             # 优先级:传入的 env > settings.env > os.environ
             assert spec.tasks[0].command == "echo param_value settings_value sys_value param_val"
         finally:
@@ -351,9 +350,12 @@ tasks:
         # 模拟 settings.env
         import taskpps.config
         from taskpps.config import Settings
+
         original_settings = taskpps.config._settings
         try:
-            taskpps.config._settings = Settings(env={"SETTINGS_NO_PREFIX": "settings_no_prefix", "OVERLAP_NO_PREFIX": "settings_np"})
+            taskpps.config._settings = Settings(
+                env={"SETTINGS_NO_PREFIX": "settings_no_prefix", "OVERLAP_NO_PREFIX": "settings_np"}
+            )
 
             pipelines_dir = tmp_path / "pipelines"
             pipelines_dir.mkdir()
@@ -364,10 +366,9 @@ tasks:
     command: echo ${PARAM_NO_PREFIX} ${SETTINGS_NO_PREFIX} ${SYS_NO_PREFIX} ${OVERLAP_NO_PREFIX}
 """)
             loader = PipelineLoader(pipelines_dir)
-            spec = loader.load("no_prefix_test.yaml", env={
-                "PARAM_NO_PREFIX": "param_no_prefix",
-                "OVERLAP_NO_PREFIX": "param_np"
-            })
+            spec = loader.load(
+                "no_prefix_test.yaml", env={"PARAM_NO_PREFIX": "param_no_prefix", "OVERLAP_NO_PREFIX": "param_np"}
+            )
             assert spec.tasks[0].command == "echo param_no_prefix settings_no_prefix sys_no_prefix param_np"
         finally:
             taskpps.config._settings = original_settings

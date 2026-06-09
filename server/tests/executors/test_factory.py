@@ -125,4 +125,3 @@ class TestCreateExecutor:
         task = ResolvedTask(name="t", task_type="invoke", invoke_task="mod.fn")
         executor = create_executor(task)
         assert isinstance(executor, InvokeExecutor)
-

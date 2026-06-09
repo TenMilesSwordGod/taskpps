@@ -197,9 +197,11 @@ class TestEventBusBoundary:
         counts = {}
 
         for i in range(100):
+
             def make_handler(idx):
                 def handler(*args, **kwargs):
                     counts[idx] = counts.get(idx, 0) + 1
+
                 return handler
 
             bus.on(f"event_{i}", make_handler(i))

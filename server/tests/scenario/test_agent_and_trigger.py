@@ -150,7 +150,7 @@ class TestTriggerLifecycle:
                     "/api/plugins/triggers/",
                     json={
                         "type": "cron",
-                        "config": {"schedule": f"*/{i+1} * * * *"},
+                        "config": {"schedule": f"*/{i + 1} * * * *"},
                         "pipeline_file": f"pipeline_{i}.yaml",
                         "enabled": True,
                     },

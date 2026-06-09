@@ -162,10 +162,7 @@ class TestLocalExecutorDaemon:
     async def test_daemon_fork_parent_exits(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "daemon.log"
-        cmd = (
-            '(sleep 1; echo DAEMON_DONE; exit 0) & '
-            'DAEMON_PID=$!; echo PARENT_DONE; wait $DAEMON_PID; echo ALL_DONE'
-        )
+        cmd = "(sleep 1; echo DAEMON_DONE; exit 0) & DAEMON_PID=$!; echo PARENT_DONE; wait $DAEMON_PID; echo ALL_DONE"
         result = await executor.execute(cmd, {}, log_path, timeout=10)
         assert result.success
         assert "DAEMON_DONE" in result.stdout
@@ -176,10 +173,7 @@ class TestLocalExecutorDaemon:
         executor = LocalExecutor()
         log_path = tmp_path / "nohup.log"
         out_file = tmp_path / "bg_output.txt"
-        cmd = (
-            f'nohup bash -c "sleep 1; echo BG_DONE > {out_file}" & '
-            'echo PARENT_DONE; sleep 2; cat ' + str(out_file)
-        )
+        cmd = f'nohup bash -c "sleep 1; echo BG_DONE > {out_file}" & echo PARENT_DONE; sleep 2; cat ' + str(out_file)
         result = await executor.execute(cmd, {}, log_path, timeout=10)
         assert result.success
         assert "PARENT_DONE" in result.stdout
@@ -261,8 +255,7 @@ echo "all_done"
         log_path = tmp_path / "pidfile.log"
         pid_file = tmp_path / "daemon.pid"
         cmd = (
-            f'(echo $$ > {pid_file}; sleep 1; echo PIDFILE_DONE; rm -f {pid_file}; exit 0) & '
-            'wait $!; echo PARENT_DONE'
+            f"(echo $$ > {pid_file}; sleep 1; echo PIDFILE_DONE; rm -f {pid_file}; exit 0) & wait $!; echo PARENT_DONE"
         )
         result = await executor.execute(cmd, {}, log_path, timeout=10)
         assert result.success
@@ -273,10 +266,7 @@ echo "all_done"
         executor = LocalExecutor()
         log_path = tmp_path / "sighup.log"
         marker = tmp_path / "marker.txt"
-        cmd = (
-            f'(sleep 2; echo SURVIVED > {marker}; exit 0) & '
-            'echo "parent_exit"'
-        )
+        cmd = f'(sleep 2; echo SURVIVED > {marker}; exit 0) & echo "parent_exit"'
         result = await executor.execute(cmd, {}, log_path, timeout=10)
         assert result.success
         assert "parent_exit" in result.stdout
@@ -287,12 +277,12 @@ echo "all_done"
         log_path = tmp_path / "desc.log"
         cmd = (
             'bash -c "sleep 30" & '
-            'B1=$!; '
+            "B1=$!; "
             'bash -c "sleep 30" & '
-            'B2=$!; '
+            "B2=$!; "
             'echo "children: $B1 $B2"; '
-            'kill $B1 $B2 2>/dev/null; '
-            'echo DONE'
+            "kill $B1 $B2 2>/dev/null; "
+            "echo DONE"
         )
         result = await executor.execute(cmd, {}, log_path, timeout=10)
         assert result.success
@@ -313,7 +303,7 @@ echo "all_done"
     async def test_logs_written_for_daemon(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "daemon_debug.log"
-        cmd = '(sleep 1; echo DAEMON; exit 0) & wait $!; echo DONE'
+        cmd = "(sleep 1; echo DAEMON; exit 0) & wait $!; echo DONE"
         result = await executor.execute(cmd, {}, log_path, timeout=10)
         assert result.success
         log_content = log_path.read_text()
@@ -427,7 +417,9 @@ class TestLocalExecutorBoundary:
     async def test_large_output(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "large.log"
-        result = await executor.execute("for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo line_$i; done", {}, log_path)
+        result = await executor.execute(
+            "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo line_$i; done", {}, log_path
+        )
         assert result.success
         assert "line_1" in result.stdout
         assert "line_20" in result.stdout
@@ -652,6 +644,7 @@ class TestLocalExecutorExitCodeCoverage:
     @pytest.mark.asyncio
     async def test_collect_descendants_handles_oserror(self, tmp_path):
         from taskpps.executors.local import _collect_descendants
+
         with patch("os.scandir", side_effect=OSError("proc unavailable")):
             result = _collect_descendants(1)
             assert result == []
@@ -659,6 +652,7 @@ class TestLocalExecutorExitCodeCoverage:
     @pytest.mark.asyncio
     async def test_collect_descendants_handles_bad_stat(self, tmp_path):
         from taskpps.executors.local import _collect_descendants
+
         with (
             patch("os.scandir") as mock_scandir,
             patch("builtins.open", side_effect=OSError("cannot read")),
@@ -732,6 +726,7 @@ class TestLocalExecutorExitCodeCoverage:
             assert not result.success
             assert result.exit_code == 1
 
+
 class TestLocalExecutorProductionScenario:
     @pytest.mark.asyncio
     async def test_auto_robot_daemon_with_env_and_cwd(self, tmp_path):
@@ -796,9 +791,7 @@ class TestLocalExecutorProductionScenario:
             "TASKPPS_RUN_ID": "bddf5a89a207",
             "TASKPPS_TASK_ID": "Automation Weekly Tests.AOSP",
         }
-        result = await executor.execute(
-            f"python3 {script}", env, log_path, timeout=10
-        )
+        result = await executor.execute(f"python3 {script}", env, log_path, timeout=10)
         assert result.success
         assert "RUN_ID=bddf5a89a207" in result.stdout
         assert "TASK_ID=Automation Weekly Tests.AOSP" in result.stdout
@@ -859,9 +852,7 @@ class TestLocalExecutorProductionScenario:
         executor = LocalExecutor()
         log_path = tmp_path / "long_run.log"
         env = {"TASKPPS_RUN_ID": "test_run", "TASKPPS_TASK_ID": "aosp"}
-        result = await executor.execute(
-            f"python3 {script}", env, log_path, timeout=30
-        )
+        result = await executor.execute(f"python3 {script}", env, log_path, timeout=30)
         assert result.success
         assert result.exit_code == 0
         assert "test step 1/5 passed" in result.stdout
@@ -891,9 +882,7 @@ class TestLocalExecutorProductionScenario:
         executor = LocalExecutor()
         log_path = tmp_path / "multi_long.log"
         env = {"TASKPPS_RUN_ID": "test_run", "TASKPPS_TASK_ID": "aosp"}
-        result = await executor.execute(
-            f"python3 {script}", env, log_path, timeout=30
-        )
+        result = await executor.execute(f"python3 {script}", env, log_path, timeout=30)
         assert result.success
         assert result.exit_code == 0
         assert "device_monitor unigine PID:" in result.stdout
@@ -951,9 +940,7 @@ class TestLocalExecutorProductionScenario:
         executor = LocalExecutor()
         log_path = tmp_path / "prod.log"
         env = {"TASKPPS_RUN_ID": "test_run", "TASKPPS_TASK_ID": "aosp"}
-        result = await executor.execute(
-            f"python3 {script}", env, log_path, timeout=15
-        )
+        result = await executor.execute(f"python3 {script}", env, log_path, timeout=15)
         assert result.success
         log_content = log_path.read_text()
         assert "[VERSION] executor=v4-direct" in log_content
@@ -961,4 +948,3 @@ class TestLocalExecutorProductionScenario:
         assert "[INFO] Exit code: 0" in log_content
         assert "start to run auto-robot" in log_content
         assert "device_monitor successfully" in log_content
-

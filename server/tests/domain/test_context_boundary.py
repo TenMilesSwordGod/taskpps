@@ -154,6 +154,7 @@ class TestResolveDotPath:
 class TestApplyOverrides:
     def test_empty_overrides(self):
         from copy import deepcopy
+
         data = {"name": "test", "tasks": []}
         original = deepcopy(data)
         result = apply_overrides(data, {})

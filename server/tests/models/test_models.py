@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from taskpps.models.project import Project
 from taskpps.models.run import PipelineRun, TaskRun, TaskType
 from taskpps.models.trigger import Trigger, TriggerType
 
@@ -18,12 +19,18 @@ class TestPipelineRun:
             pipeline_file="deploy.yaml",
             pipeline_id="deploy",
             pipeline_version="abc12345",
+            project_id="proj001",
             params='{"key": "val"}',
         )
         assert run.pipeline_file == "deploy.yaml"
         assert run.pipeline_id == "deploy"
         assert run.pipeline_version == "abc12345"
+        assert run.project_id == "proj001"
         assert run.params == '{"key": "val"}'
+
+    def test_project_id_default_none(self):
+        run = PipelineRun(pipeline_name="test")
+        assert run.project_id is None
 
     def test_unique_ids(self):
         r1 = PipelineRun(pipeline_name="p1")
@@ -71,7 +78,39 @@ class TestTrigger:
             type=TriggerType.WEBHOOK,
             config='{"url": "https://example.com"}',
             pipeline_file="webhook.yaml",
+            project_id="proj001",
             enabled=False,
         )
         assert trigger.type == TriggerType.WEBHOOK
+        assert trigger.project_id == "proj001"
         assert trigger.enabled is False
+
+    def test_project_id_default_none(self):
+        trigger = Trigger(type=TriggerType.CRON, config="{}", pipeline_file="test.yaml")
+        assert trigger.project_id is None
+
+
+class TestProject:
+    def test_create_with_required_fields(self):
+        project = Project(workdir="/opt/project-a")
+        assert project.id is not None
+        assert len(project.id) == 12
+        assert project.workdir == "/opt/project-a"
+        assert project.name == ""
+        assert project.active is True
+        assert project.registered_at is not None
+
+    def test_create_with_all_fields(self):
+        project = Project(
+            name="my-project",
+            workdir="/opt/project-b",
+            active=False,
+        )
+        assert project.name == "my-project"
+        assert project.workdir == "/opt/project-b"
+        assert project.active is False
+
+    def test_unique_ids(self):
+        p1 = Project(workdir="/a")
+        p2 = Project(workdir="/b")
+        assert p1.id != p2.id

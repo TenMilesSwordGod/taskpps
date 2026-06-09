@@ -433,8 +433,7 @@ class TestPipelineRunnerCancel:
         # users don't see it stuck at "running" while a long task drains.
         assert run_repo.update_run_status.call_count >= 1
         cancelled_calls = [
-            c for c in run_repo.update_run_status.call_args_list
-            if len(c.args) > 1 and c.args[1] == "cancelled"
+            c for c in run_repo.update_run_status.call_args_list if len(c.args) > 1 and c.args[1] == "cancelled"
         ]
         assert len(cancelled_calls) == 1
 
