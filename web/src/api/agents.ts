@@ -1,6 +1,34 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { message } from 'antd';
 import apiClient from './client';
 import type { AgentStatus, AgentWithConfig } from '@/types';
+
+/** 部署/引导 agent（未连接时） */
+export function useDeployAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (agentId: string) => {
+      const res = await apiClient.post<{ success: boolean; agent_id: string; message?: string }>(
+        '/api/agents/deploy',
+        { agent_id: agentId, timeout: 30 },
+      );
+      return res.data;
+    },
+    onSuccess: (data, agentId) => {
+      if (data?.success) {
+        message.success(`Agent ${agentId} 部署成功`);
+      } else {
+        message.warning(`Agent ${agentId} 部署未完成：${data?.message ?? '请检查 agent 端日志'}`);
+      }
+      qc.invalidateQueries({ queryKey: ['agents', 'all'] });
+      qc.invalidateQueries({ queryKey: ['agents', 'list'] });
+    },
+    onError: (err: Error & { response?: { data?: { detail?: string } } }, agentId) => {
+      const detail = err?.response?.data?.detail ?? err?.message ?? '未知错误';
+      message.error(`Agent ${agentId} 部署失败：${detail}`);
+    },
+  });
+}
 
 /** 获取所有已连接 agent（5s 轮询） */
 export function useAgents(enabled = true) {

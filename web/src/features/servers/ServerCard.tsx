@@ -1,6 +1,7 @@
-import { Tooltip } from 'antd';
+import { Tooltip, Popconfirm } from 'antd';
 import type { AgentWithConfig } from '@/types';
-import { Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle } from 'lucide-react';
+import { Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle, CloudUpload, Loader2 } from 'lucide-react';
+import { useDeployAgent } from '@/api/agents';
 
 interface ServerCardProps {
   agent: AgentWithConfig;
@@ -103,6 +104,8 @@ function formatTs(ts: number): string {
 
 export default function ServerCard({ agent, detectedSystem, detectedArch }: ServerCardProps) {
   const online = agent.connected;
+  const deploy = useDeployAgent();
+  const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
 
   // 优先级：detected > real > type 兜底
   const effectiveSystem = detectedSystem || agent.system || fallbackSystem(agent.type);
@@ -207,6 +210,60 @@ export default function ServerCard({ agent, detectedSystem, detectedArch }: Serv
             )}
           </Tooltip>
           <NetStatusIcon netStatus={agent.net_status} />
+          {/* 未连接 agent 显示部署按钮（已连接无需部署） */}
+          {!online && (
+            <Popconfirm
+              title={`部署 Agent "${agent.agent_id}"?`}
+              description="将通过 bootstrap 流程在该 host 部署并启动 agent。期间将消耗数分钟，请耐心等待。"
+              okText="开始部署"
+              cancelText="取消"
+              onConfirm={(e) => {
+                e?.stopPropagation();
+                deploy.mutate(agent.agent_id);
+              }}
+              onCancel={(e) => e?.stopPropagation()}
+            >
+              <Tooltip title="部署 agent 到此 host">
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 22,
+                    height: 22,
+                    borderRadius: 4,
+                    cursor: isDeploying ? 'wait' : 'pointer',
+                    background: '#eff6ff',
+                    color: '#2563eb',
+                    border: '1px solid #bfdbfe',
+                    transition: 'background 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isDeploying) {
+                      e.currentTarget.style.background = '#dbeafe';
+                      e.currentTarget.style.borderColor = '#60a5fa';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#eff6ff';
+                    e.currentTarget.style.borderColor = '#bfdbfe';
+                  }}
+                >
+                  {isDeploying ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <CloudUpload size={13} />
+                  )}
+                </span>
+              </Tooltip>
+            </Popconfirm>
+          )}
         </div>
       </div>
 
