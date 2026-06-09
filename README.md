@@ -10,18 +10,23 @@
 轻量级、可扩展的任务编排系统，替代 Jenkins 等重量级 CI/CD 工具，适合中小团队和项目。
 
 ```mermaid
-graph TB
-    subgraph Clients["客户端"]
-        direction LR
-        P[ppsctl<br/>CLI]
-        W[Web UI<br/><i>可选</i>]
+flowchart TB
+    subgraph " "
+        P["ppctl (Go)<br/>CLI · Cobra"]
+        W["Web UI (React)<br/><i>可选</i>"]
     end
-    B[Backend<br/>FastAPI + SQLite]
-    A[Execution Agent<br/>远程节点 · 断线重连]
 
-    P -- REST API --> B
-    W -- REST API --> B
-    B -- WebSocket --> A
+    B["Backend (Python)<br/>FastAPI · SQLite"]
+    A["Agent (Go)<br/>远程节点 · 断线重连"]
+
+    P -- "REST API" --> B
+    W -. "REST API" .-> B
+    B -- "WebSocket" --> A
+
+    style P fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,rx:8px
+    style W fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,stroke-dasharray:6 4,rx:8px
+    style B fill:#fef9c3,stroke:#ca8a04,stroke-width:2px,rx:8px
+    style A fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,rx:8px
 ```
 
 ## 特性
