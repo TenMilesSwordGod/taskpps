@@ -86,16 +86,17 @@ export default function ServerCard({ agent, detectedSystem, detectedArch }: Serv
   const effectiveArch = detectedArch || agent.arch || fallbackArch(agent.type);
   const fallbackSys = fallbackSystem(agent.type);
   const osIcon = getOsIcon(effectiveSystem, effectiveArch, agent.type);
-  const systemLabel = getSystemLabel(effectiveSystem);
-  const archLabel = getArchLabel(effectiveArch);
+  // 空值显示 "—"，避免出现 "Unknown" 让用户以为真的是 unknown
+  const systemLabel = effectiveSystem ? getSystemLabel(effectiveSystem) : '—';
+  const archLabel = effectiveArch ? getArchLabel(effectiveArch) : '—';
   const typeLabel = getTypeLabel(agent.type);
 
   // 显示名称优先级：yaml.name → agent.hostname（agent 报告的）→ agent_id
   const displayName = agent.name || agent.hostname || agent.agent_id;
   // IP 优先级：agent 报告的真实 IP → yaml 配置 host
   const displayIp = agent.ip || (agent.host ? (agent.port ? `${agent.host}:${agent.port}` : agent.host) : '—');
-  // Arch + System 离线兜底
-  const archDisplay = agent.arch ? archLabel : '—';
+  // Arch + System 离线兜底（label 已含 '—' 兜底）
+  const archDisplay = archLabel;
   const versionDisplay = agent.agent_version ? `v${agent.agent_version}` : '—';
 
   return (
