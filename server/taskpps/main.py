@@ -1,11 +1,14 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from taskpps.api import agents, health, runs, triggers, ws_agent
+from taskpps.api import agents, health, pipelines, runs, triggers, ws_agent
 from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale, t
@@ -73,9 +76,35 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
+app.include_router(pipelines.router, prefix="/api")
 app.include_router(triggers.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(ws_agent.router, prefix="/api")
+
+# 挂载 Web UI 静态文件（生产模式）
+# 从 SERVER_HOME/web/dist 或项目根目录的 web/dist 查找构建产物
+_web_dist = Path(get_server_home()) / "web" / "dist"
+if not _web_dist.is_dir():
+    _web_dist = Path(__file__).resolve().parent.parent.parent / "web" / "dist"
+
+if _web_dist.is_dir():
+    # 静态资源（JS/CSS/图片等）
+    app.mount("/assets", StaticFiles(directory=_web_dist / "assets"), name="web-assets")
+
+    # SPA fallback：未匹配 /api/ 的 GET 请求回退到 index.html
+    _index_html = _web_dist / "index.html"
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        """SPA 路由回退：所有非 /api/ 路径返回 index.html"""
+        # 尝试匹配静态文件
+        file_path = _web_dist / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(file_path)
+        # 回退到 index.html（SPA 路由）
+        return FileResponse(_index_html)
+
+    logger.info("Web UI mounted from %s", _web_dist)
 
 
 def cli():
