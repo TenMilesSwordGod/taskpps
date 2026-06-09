@@ -102,6 +102,7 @@ class AgentService:
         # Execution agents connect via WebSocket, check AgentManager
         if agent_type in ("execution-agent", "agent", "websocket"):
             from taskpps.services.agent_manager import AgentManager
+
             manager = AgentManager.instance()
             if manager.is_connected(agent_id):
                 conn = manager.get_connection(agent_id)
@@ -334,7 +335,6 @@ class AgentService:
 
     def _probe_remote_system(self, client, timeout: int = 5) -> tuple[str, str]:
         """通过已认证 SSH 会话执行 uname，返回 (system, arch)"""
-        import paramiko
 
         def _run(cmd: str) -> str:
             try:
@@ -442,14 +442,16 @@ class AgentService:
                 pct = int(percent.rstrip("%"))
             except Exception:
                 pass
-            info["disks"].append({
-                "filesystem": fs,
-                "size": size,
-                "used": used,
-                "avail": avail,
-                "percent": pct,
-                "mount": mount,
-            })
+            info["disks"].append(
+                {
+                    "filesystem": fs,
+                    "size": size,
+                    "used": used,
+                    "avail": avail,
+                    "percent": pct,
+                    "mount": mount,
+                }
+            )
         return info
 
 

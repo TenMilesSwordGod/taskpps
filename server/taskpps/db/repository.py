@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from taskpps.models.project import Project
 from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus
 from taskpps.models.trigger import Trigger
 
@@ -21,12 +22,14 @@ class RunRepository:
         pipeline_version: str = "",
         *,
         params: dict | None = None,
+        project_id: str | None = None,
     ) -> PipelineRun:
         run = PipelineRun(
             pipeline_name=pipeline_name,
             pipeline_file=pipeline_file,
             pipeline_id=pipeline_id,
             pipeline_version=pipeline_version,
+            project_id=project_id,
             params=json.dumps(params or {}),
             status=RunStatus.PENDING,
         )
@@ -70,6 +73,7 @@ class RunRepository:
         pipeline: str | None = None,
         status: str | None = None,
         pipeline_id: str | None = None,
+        project_id: str | None = None,
     ) -> int:
         stmt = select(func.count(PipelineRun.id))
         if pipeline:
@@ -78,6 +82,8 @@ class RunRepository:
             stmt = stmt.where(PipelineRun.pipeline_id == pipeline_id)
         if status:
             stmt = stmt.where(PipelineRun.status == status)
+        if project_id:
+            stmt = stmt.where(PipelineRun.project_id == project_id)
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -85,6 +91,7 @@ class RunRepository:
         self,
         pipeline: str | None = None,
         status: str | None = None,
+        project_id: str | None = None,
         limit: int = 50,
     ) -> Sequence[PipelineRun]:
         stmt = select(PipelineRun).order_by(PipelineRun.created_at.desc())
@@ -92,6 +99,8 @@ class RunRepository:
             stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
         if status:
             stmt = stmt.where(PipelineRun.status == status)
+        if project_id:
+            stmt = stmt.where(PipelineRun.project_id == project_id)
         stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return result.scalars().all()
@@ -212,11 +221,14 @@ class TriggerRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_trigger(self, type: str, config: dict, pipeline_file: str, enabled: bool = True) -> Trigger:
+    async def create_trigger(
+        self, type: str, config: dict, pipeline_file: str, enabled: bool = True, project_id: str | None = None
+    ) -> Trigger:
         trigger = Trigger(
             type=type,
             config=json.dumps(config),
             pipeline_file=pipeline_file,
+            project_id=project_id,
             enabled=enabled,
         )
         self.session.add(trigger)
@@ -239,3 +251,56 @@ class TriggerRepository:
         await self.session.delete(trigger)
         await self.session.commit()
         return True
+
+
+class ProjectRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_project(self, workdir: str, name: str = "") -> Project:
+        project = Project(
+            name=name,
+            workdir=workdir,
+        )
+        self.session.add(project)
+        await self.session.commit()
+        await self.session.refresh(project)
+        return project
+
+    async def get_project(self, project_id: str) -> Project | None:
+        result = await self.session.execute(select(Project).where(Project.id == project_id))
+        return result.scalar_one_or_none()
+
+    async def get_project_by_workdir(self, workdir: str) -> Project | None:
+        result = await self.session.execute(select(Project).where(Project.workdir == workdir))
+        return result.scalar_one_or_none()
+
+    async def list_projects(self, active_only: bool = True) -> Sequence[Project]:
+        stmt = select(Project).order_by(Project.registered_at)
+        if active_only:
+            stmt = stmt.where(Project.active == True)  # noqa: E712
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def update_project(self, project_id: str, **kwargs) -> Project | None:
+        project = await self.get_project(project_id)
+        if project is None:
+            return None
+        for key, value in kwargs.items():
+            if hasattr(project, key):
+                setattr(project, key, value)
+        await self.session.commit()
+        await self.session.refresh(project)
+        return project
+
+    async def delete_project(self, project_id: str) -> bool:
+        project = await self.get_project(project_id)
+        if project is None:
+            return False
+        await self.session.delete(project)
+        await self.session.commit()
+        return True
+
+    async def count_projects(self) -> int:
+        result = await self.session.execute(select(func.count(Project.id)))
+        return result.scalar() or 0

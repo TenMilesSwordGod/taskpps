@@ -40,6 +40,7 @@ class PipelineRun(SQLModel, table=True):
     pipeline_file: str = ""
     pipeline_id: str = ""
     pipeline_version: str = ""
+    project_id: str | None = None
     status: RunStatus = RunStatus.PENDING
     params: str = "{}"
     started_at: datetime | None = None

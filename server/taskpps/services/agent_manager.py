@@ -178,7 +178,11 @@ class AgentManager:
         self._connections[agent_id] = conn
         logger.info(
             "Agent '%s' connected (hostname=%s, platform=%s, version=%s, pid=%d)",
-            agent_id, hostname_info, conn.platform, version, agent_pid,
+            agent_id,
+            hostname_info,
+            conn.platform,
+            version,
+            agent_pid,
         )
         return agent_id, conn
 

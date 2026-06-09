@@ -48,6 +48,7 @@ class AgentExecutor(BaseExecutor):
         self._log(log_path, f"[INFO] Agent '{self._agent_id}' not connected, bootstrapping...\n")
         try:
             from taskpps.services.agent_bootstrap import AgentBootstrap
+
             bootstrap = AgentBootstrap()
             result = await bootstrap.bootstrap(self._agent_id)
             self._log(log_path, f"[INFO] Agent bootstrap result: {result}\n")
@@ -109,9 +110,7 @@ class AgentExecutor(BaseExecutor):
         fut = self._manager.create_pending(self._agent_id, command_id)
 
         try:
-            await self._manager.send_command(
-                self._agent_id, command_id, command, env, effective_cwd, effective_timeout
-            )
+            await self._manager.send_command(self._agent_id, command_id, command, env, effective_cwd, effective_timeout)
         except Exception as e:
             logger.exception("Failed to send command to agent '%s'", self._agent_id)
             return ExecutorResult(exit_code=-1, stderr=str(e))

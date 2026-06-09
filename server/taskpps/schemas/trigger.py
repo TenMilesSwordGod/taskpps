@@ -10,6 +10,7 @@ class CreateTriggerRequest(BaseModel):
     type: TriggerType = TriggerType.CRON
     config: dict[str, Any] = {}
     pipeline_file: str
+    project_id: str | None = None
     enabled: bool = True
 
 
@@ -18,6 +19,7 @@ class TriggerResponse(BaseModel):
     type: TriggerType
     config: dict[str, Any] = {}
     pipeline_file: str
+    project_id: str | None = None
     enabled: bool
     created_at: datetime
 
@@ -32,6 +34,7 @@ class TriggerResponse(BaseModel):
             "type": obj.type,
             "config": json.loads(obj.config) if isinstance(obj.config, str) else obj.config,
             "pipeline_file": obj.pipeline_file,
+            "project_id": getattr(obj, "project_id", None),
             "enabled": obj.enabled,
             "created_at": obj.created_at,
         }

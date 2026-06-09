@@ -48,10 +48,13 @@ class PipelineService:
             cls._pipeline_locks[pipeline_id] = lock
         return lock
 
-    async def create_run(self, pipeline_file: str, params: dict[str, Any] | None = None) -> dict:
+    async def create_run(
+        self, pipeline_file: str, params: dict[str, Any] | None = None, project_id: str | None = None
+    ) -> dict:
         try:
             # 构建完整的 env 字典, 包含从 settings 和 params 提取的环境变量
             from taskpps.config import get_settings
+
             settings = get_settings()
             loader_env = settings.env.copy()
 
@@ -61,7 +64,20 @@ class PipelineService:
                 if isinstance(config_env, dict):
                     loader_env.update(config_env)
 
-            spec = self.loader.load(pipeline_file, loader_env)
+            # 如果指定了 project_id，使用对应项目的 loader
+            loader = self.loader
+            if project_id:
+                from taskpps.config import get_project_workdir_by_id
+
+                project_workdir = get_project_workdir_by_id(project_id)
+                if project_workdir:
+                    from taskpps.config import get_pipelines_dir
+
+                    loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
+                else:
+                    raise ValueError(f"Project not found: {project_id}")
+
+            spec = loader.load(pipeline_file, loader_env)
         except FileNotFoundError as e:
             raise ValueError(str(e)) from e
         except Exception as e:
@@ -94,6 +110,7 @@ class PipelineService:
                 params=params,
                 pipeline_id=pipeline_id,
                 pipeline_version=pipeline_version,
+                project_id=project_id,
             )
 
     async def _create_run_locked(
@@ -104,6 +121,7 @@ class PipelineService:
         params: dict[str, Any] | None,
         pipeline_id: str,
         pipeline_version: str,
+        project_id: str | None = None,
     ) -> dict:
         # The caller is expected to hold PipelineService._get_pipeline_lock(pipeline_id).
         async with get_session_factory()() as session:
@@ -117,8 +135,11 @@ class PipelineService:
                 active_count += await run_repo.count_runs(pipeline_id=pipeline_id, status="pending")
                 if active_count >= max_parallel:
                     raise ValueError(
-                        t("Cannot start pipeline: max_parallel={max} reached ({active} active runs)",
-                          max=max_parallel, active=active_count)
+                        t(
+                            "Cannot start pipeline: max_parallel={max} reached ({active} active runs)",
+                            max=max_parallel,
+                            active=active_count,
+                        )
                     )
 
             last_run = await run_repo.get_last_run_by_pipeline(pipeline_id)
@@ -134,6 +155,7 @@ class PipelineService:
                 pipeline_id=pipeline_id,
                 pipeline_version=pipeline_version,
                 params=params,
+                project_id=project_id,
             )
 
             task_run_ids = {}
@@ -161,6 +183,7 @@ class PipelineService:
         runner._pipeline_version = pipeline_version
 
         from taskpps.engine.runner import _active_runs
+
         _active_runs[run.id] = runner
 
         asyncio_task = asyncio.create_task(runner.run())
@@ -226,6 +249,7 @@ class PipelineService:
                 "pipeline_file": run.pipeline_file,
                 "pipeline_id": run.pipeline_id,
                 "pipeline_version": run.pipeline_version,
+                "project_id": getattr(run, "project_id", None),
                 "status": run.status,
                 "params": params,
                 "started_at": run.started_at,
@@ -249,10 +273,12 @@ class PipelineService:
                 ],
             }
 
-    async def list_runs(self, pipeline: str | None = None, status: str | None = None, limit: int = 50) -> dict:
+    async def list_runs(
+        self, pipeline: str | None = None, status: str | None = None, project_id: str | None = None, limit: int = 50
+    ) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
-            runs = await run_repo.list_runs(pipeline=pipeline, status=status, limit=limit)
+            runs = await run_repo.list_runs(pipeline=pipeline, status=status, project_id=project_id, limit=limit)
             items = []
             for run in runs:
                 params = {}
@@ -269,6 +295,7 @@ class PipelineService:
                         "pipeline_file": run.pipeline_file,
                         "pipeline_id": run.pipeline_id,
                         "pipeline_version": run.pipeline_version,
+                        "project_id": getattr(run, "project_id", None),
                         "status": run.status,
                         "params": params,
                         "started_at": run.started_at,
@@ -277,7 +304,7 @@ class PipelineService:
                         "tasks": [],
                     }
                 )
-            total = await run_repo.count_runs(pipeline=pipeline, status=status)
+            total = await run_repo.count_runs(pipeline=pipeline, status=status, project_id=project_id)
             return {"items": items, "total": total}
 
     async def cancel_run(self, run_id: str) -> bool:

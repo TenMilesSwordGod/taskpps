@@ -9,6 +9,7 @@ from taskpps.models.run import RunStatus, TaskStatus, TaskType
 class CreateRunRequest(BaseModel):
     pipeline: str
     params: dict[str, Any] = {}
+    project_id: str | None = None
 
 
 class TaskRunResponse(BaseModel):
@@ -33,6 +34,7 @@ class RunResponse(BaseModel):
     pipeline_file: str = ""
     pipeline_id: str = ""
     pipeline_version: str = ""
+    project_id: str | None = None
     version_changed: bool = False
     status: RunStatus
     params: dict[str, Any] = {}
@@ -53,6 +55,7 @@ class RunResponse(BaseModel):
             "pipeline_file": obj.pipeline_file,
             "pipeline_id": getattr(obj, "pipeline_id", ""),
             "pipeline_version": getattr(obj, "pipeline_version", ""),
+            "project_id": getattr(obj, "project_id", None),
             "version_changed": False,
             "status": obj.status,
             "params": json.loads(obj.params) if isinstance(obj.params, str) else (obj.params or {}),

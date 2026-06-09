@@ -7,6 +7,7 @@ import paramiko
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.schemas.agent import (
     AgentCheckRequest,
     AgentCheckResponse,
@@ -21,7 +22,6 @@ from taskpps.schemas.agent import (
 )
 from taskpps.services.agent_manager import AgentManager
 from taskpps.services.agent_service import AgentService
-from taskpps.loaders.agent_loader import AgentLoader
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -122,6 +122,7 @@ async def agent_all():
     loader = AgentLoader()
     agents = loader.load_all()
     result: list[AgentWithConfig] = []
+
     # 并发探测所有 agent 的网络可达性
     async def probe_net(host: str, port: int) -> str:
         if not host or not port:
@@ -192,6 +193,7 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
     cwd = body.cwd or ""
     if not cwd:
         from taskpps.loaders.agent_loader import AgentLoader
+
         loader = AgentLoader()
         agent_data = loader.get(agent_id)
         if agent_data and agent_data.get("agent_work_dir"):
@@ -328,9 +330,7 @@ async def get_agent_host_info(agent_id: str):
     if password and "key_filename" not in connect_kwargs:
         connect_kwargs["password"] = password
     try:
-        await asyncio.to_thread(
-            client.connect, host, port=port, username=username, timeout=5, **connect_kwargs
-        )
+        await asyncio.to_thread(client.connect, host, port=port, username=username, timeout=5, **connect_kwargs)
     except paramiko.AuthenticationException as e:
         return AgentHostInfo(
             agent_id=agent_id,

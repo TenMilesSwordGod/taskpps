@@ -72,12 +72,7 @@ class SSHExecutor(BaseExecutor):
                     "[ -f ~/.bash_profile ] && source ~/.bash_profile 2>/dev/null; "
                     "[ -f ~/.bashrc ] && source ~/.bashrc 2>/dev/null"
                 )
-                full_command = (
-                    f"{profile_setup}; "
-                    f"cd {shlex.quote(effective_cwd)} && "
-                    f"{env_exports} && "
-                    f"{command}"
-                )
+                full_command = f"{profile_setup}; cd {shlex.quote(effective_cwd)} && {env_exports} && {command}"
 
                 transport = client.get_transport()
                 if transport is None:

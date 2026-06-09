@@ -89,9 +89,13 @@ _MIGRATIONS = {
     "runs": [
         ("pipeline_id", "TEXT NOT NULL DEFAULT ''"),
         ("pipeline_version", "TEXT NOT NULL DEFAULT ''"),
+        ("project_id", "TEXT"),
     ],
     "task_runs": [
         ("subpipeline_name", "TEXT NOT NULL DEFAULT ''"),
+    ],
+    "triggers": [
+        ("project_id", "TEXT"),
     ],
 }
 

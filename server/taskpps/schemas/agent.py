@@ -17,9 +17,9 @@ class AgentCheckResult(BaseModel):
     status: str
     latency_ms: int
     # 远端系统信息（SSH 认证成功后通过 uname 获取）
-    system: str = ""      # 操作系统内核名（Linux/Darwin/Windows）
-    arch: str = ""        # CPU 架构（x86_64/aarch64/...）
-    platform: str = ""    # system/arch 简写
+    system: str = ""  # 操作系统内核名（Linux/Darwin/Windows）
+    arch: str = ""  # CPU 架构（x86_64/aarch64/...）
+    platform: str = ""  # system/arch 简写
     error: str | None = None
 
 
@@ -51,6 +51,7 @@ class AgentStatus(BaseModel):
 
 class AgentWithConfig(BaseModel):
     """合并 agent yaml 配置与实时连接状态"""
+
     agent_id: str
     name: str = ""
     type: str = ""

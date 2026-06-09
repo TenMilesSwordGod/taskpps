@@ -17,5 +17,6 @@ class Trigger(SQLModel, table=True):
     type: TriggerType = TriggerType.CRON
     config: str = "{}"
     pipeline_file: str = ""
+    project_id: str | None = None
     enabled: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

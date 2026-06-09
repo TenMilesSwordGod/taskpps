@@ -16,6 +16,7 @@ async def create_trigger(body: CreateTriggerRequest):
         config=body.config,
         pipeline_file=body.pipeline_file,
         enabled=body.enabled,
+        project_id=body.project_id,
     )
     return TriggerResponse.from_orm_with_parsed_config(result)
 

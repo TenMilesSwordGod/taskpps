@@ -86,8 +86,7 @@ class AgentBootstrap:
             logger.info("Agent will connect to: %s", server_url)
 
             pid = await self._start_agent_daemon(
-                ssh, agent_binary_path, agent_log_dir, agent_pid_file,
-                agent_id, agent_secret, server_url, agent_data
+                ssh, agent_binary_path, agent_log_dir, agent_pid_file, agent_id, agent_secret, server_url, agent_data
             )
             if pid:
                 logger.info("Agent '%s' started on %s with PID %d", agent_id, host, pid)
@@ -109,7 +108,8 @@ class AgentBootstrap:
                 ssh2 = await self._ssh_connect(host, port, username, password, key_path)
                 try:
                     _, log_out, _ = await self._ssh_exec(
-                        ssh2, f"tail -n 30 {agent_log_path} 2>/dev/null || echo '(no log file)")
+                        ssh2, f"tail -n 30 {agent_log_path} 2>/dev/null || echo '(no log file)"
+                    )
                     if log_out.strip():
                         log_tail = log_out.strip()
                 finally:
@@ -125,8 +125,7 @@ class AgentBootstrap:
             )
             raise AgentBootstrapError(error_msg) from e
 
-    def _check_server_reachability(self, ssh, remote_host: str,
-                                     server_host: str, server_port: int) -> None:
+    def _check_server_reachability(self, ssh, remote_host: str, server_host: str, server_port: int) -> None:
         settings = __import__("taskpps.config", fromlist=["get_settings"]).get_settings()
         bind_host = settings.server.host
 
@@ -134,18 +133,21 @@ class AgentBootstrap:
             logger.warning(
                 "Server binds to %s but agent on %s may not reach it. "
                 "Set server.host to 0.0.0.0 or a reachable IP for remote agents.",
-                bind_host, remote_host,
+                bind_host,
+                remote_host,
             )
 
         if server_host in ("127.0.0.1", "::1", "localhost"):
             logger.warning(
                 "Agent will try to connect to %s:%s — this address is local-only and not reachable from %s",
-                server_host, server_port, remote_host,
+                server_host,
+                server_port,
+                remote_host,
             )
 
-    async def _ssh_connect(self, host: str, port: int, username: str,
-                           password: str | None, key_path: str | None):
+    async def _ssh_connect(self, host: str, port: int, username: str, password: str | None, key_path: str | None):
         import paramiko
+
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -155,9 +157,7 @@ class AgentBootstrap:
         elif password:
             connect_kwargs["password"] = password
 
-        await asyncio.to_thread(
-            client.connect, hostname=host, port=port, username=username, **connect_kwargs
-        )
+        await asyncio.to_thread(client.connect, hostname=host, port=port, username=username, **connect_kwargs)
         return client
 
     async def _ssh_close(self, client) -> None:
@@ -168,6 +168,7 @@ class AgentBootstrap:
         def _run():
             _stdin, stdout, stderr = client.exec_command(command, timeout=10)
             return stdout.channel.recv_exit_status(), stdout.read().decode(), stderr.read().decode()
+
         return await asyncio.to_thread(_run)
 
     async def _get_remote_user_info(self, client) -> tuple[str, bool]:
@@ -177,11 +178,12 @@ class AgentBootstrap:
         home = home.strip()
 
         exit_code, uid, _ = await self._ssh_exec(client, "id -u")
-        is_root = (exit_code == 0 and uid.strip() == "0")
+        is_root = exit_code == 0 and uid.strip() == "0"
         return home, is_root
 
     async def _ensure_remote_dir(self, client, file_path: str) -> None:
         import posixpath
+
         parent = posixpath.dirname(file_path)
         if parent and parent != "/":
             await self._ssh_exec(client, f"mkdir -p {parent}")
@@ -192,6 +194,7 @@ class AgentBootstrap:
 
     async def _deploy_binary(self, client, host: str, dest_path: str) -> None:
         import platform
+
         arch = platform.machine()
         if arch == "x86_64":
             arch = "amd64"
@@ -201,13 +204,16 @@ class AgentBootstrap:
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         local_binary = os.path.join(
             project_root,
-            "execution_agent", "build", f"taskpps-agent-linux-{arch}",
+            "execution_agent",
+            "build",
+            f"taskpps-agent-linux-{arch}",
         )
 
         if not os.path.exists(local_binary):
             local_binary = os.path.join(
                 project_root,
-                "execution_agent", "taskpps-agent",
+                "execution_agent",
+                "taskpps-agent",
             )
 
         if not os.path.exists(local_binary):
@@ -219,17 +225,21 @@ class AgentBootstrap:
         finally:
             sftp.close()
 
-    async def _start_agent_daemon(self, client, binary_path: str,
-                                   log_dir: str, pid_file: str,
-                                   agent_id: str, secret: str, server_url: str,
-                                   agent_data: dict) -> int:
+    async def _start_agent_daemon(
+        self,
+        client,
+        binary_path: str,
+        log_dir: str,
+        pid_file: str,
+        agent_id: str,
+        secret: str,
+        server_url: str,
+        agent_data: dict,
+    ) -> int:
         log_file = f"{log_dir}/agent.log"
         work_dir = agent_data.get("agent_work_dir", "")
 
-        cmd = (
-            f"mkdir -p {log_dir} && "
-            f"{binary_path} run --server {server_url} --agent-id {agent_id}"
-        )
+        cmd = f"mkdir -p {log_dir} && {binary_path} run --server {server_url} --agent-id {agent_id}"
         if secret:
             cmd += f" --secret {secret}"
         if work_dir:
@@ -263,6 +273,7 @@ class AgentBootstrap:
             return external_ip
 
         import socket
+
         hostname = socket.gethostname()
         try:
             ip = socket.gethostbyname(hostname)
@@ -279,6 +290,7 @@ class AgentBootstrap:
 
     def _get_external_ip(self) -> str | None:
         import socket
+
         try:
             import netifaces
         except ImportError:
@@ -316,6 +328,7 @@ class AgentBootstrap:
     def _get_ws_port(self) -> int:
         try:
             from taskpps.config import get_settings
+
             settings = get_settings()
             return settings.server.port
         except Exception:

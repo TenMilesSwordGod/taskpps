@@ -21,7 +21,7 @@ _pipeline_service = PipelineService()
 @router.post("/", status_code=201)
 async def create_run(body: CreateRunRequest):
     try:
-        result = await _pipeline_service.create_run(body.pipeline, body.params)
+        result = await _pipeline_service.create_run(body.pipeline, body.params, project_id=body.project_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -31,9 +31,10 @@ async def create_run(body: CreateRunRequest):
 async def list_runs(
     pipeline: str | None = Query(None),
     status: str | None = Query(None),
+    project_id: str | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
 ):
-    runs_data = await _pipeline_service.list_runs(pipeline=pipeline, status=status, limit=limit)
+    runs_data = await _pipeline_service.list_runs(pipeline=pipeline, status=status, project_id=project_id, limit=limit)
     return runs_data
 
 
@@ -204,5 +205,6 @@ async def clean_runs(
         return result
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e

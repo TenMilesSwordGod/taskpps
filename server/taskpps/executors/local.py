@@ -158,7 +158,9 @@ class LocalExecutor(BaseExecutor):
             exit_code = -1 if self._cancelled else self._process.returncode
             logger.info(
                 "LocalExecutor: process finished PID=%d exit_code=%s (cancelled=%s)",
-                self._process.pid, exit_code, self._cancelled,
+                self._process.pid,
+                exit_code,
+                self._cancelled,
             )
 
         except asyncio.TimeoutError:

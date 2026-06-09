@@ -80,8 +80,9 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
     return LocalExecutor()
 
 
-def _make_ssh_executor(host: str, port: int, username: str,
-                       agent_data: dict[str, Any], task: ResolvedTask) -> SSHExecutor:
+def _make_ssh_executor(
+    host: str, port: int, username: str, agent_data: dict[str, Any], task: ResolvedTask
+) -> SSHExecutor:
     password = None
     key_path = None
 

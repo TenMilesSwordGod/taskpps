@@ -2,9 +2,9 @@ import os
 
 from fastapi import APIRouter, HTTPException
 
-from taskpps.loaders.pipeline_loader import PipelineLoader
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository
+from taskpps.loaders.pipeline_loader import PipelineLoader
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -47,15 +47,17 @@ async def list_pipelines():
             # 文件夹分组（debug/debug.yaml → folder="debug"）
             folder = os.path.dirname(file)
 
-            items.append({
-                "name": spec.name,
-                "file": file,
-                "folder": folder,
-                "task_count": task_count,
-                "subpipeline_count": subpipeline_count,
-                "last_run": last_run,
-                "success_rate": success_rate,
-            })
+            items.append(
+                {
+                    "name": spec.name,
+                    "file": file,
+                    "folder": folder,
+                    "task_count": task_count,
+                    "subpipeline_count": subpipeline_count,
+                    "last_run": last_run,
+                    "success_rate": success_rate,
+                }
+            )
 
     return {"items": items}
 
