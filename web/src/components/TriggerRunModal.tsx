@@ -8,10 +8,12 @@ interface TriggerRunModalProps {
   onClose: () => void;
   /** 预填充的流水线文件名 */
   defaultPipeline?: string;
+  /** 预填充的项目 ID */
+  defaultProjectId?: string | null;
 }
 
 /** 触发运行弹窗 */
-export default function TriggerRunModal({ open, onClose, defaultPipeline }: TriggerRunModalProps) {
+export default function TriggerRunModal({ open, onClose, defaultPipeline, defaultProjectId }: TriggerRunModalProps) {
   const [form] = Form.useForm();
   const [paramsText, setParamsText] = useState('{}');
   const createRun = useCreateRun();
@@ -31,6 +33,7 @@ export default function TriggerRunModal({ open, onClose, defaultPipeline }: Trig
       const result = await createRun.mutateAsync({
         pipeline: values.pipeline,
         params,
+        project_id: defaultProjectId,
       });
 
       message.success('运行已创建');

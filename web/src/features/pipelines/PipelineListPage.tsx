@@ -19,6 +19,7 @@ export default function PipelineListPage() {
   const [keyword, setKeyword] = useState('');
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [triggerPipeline, setTriggerPipeline] = useState<string | undefined>();
+  const [triggerProjectId, setTriggerProjectId] = useState<string | null>(null);
 
   // 前端搜索过滤
   const filtered = useMemo(() => {
@@ -71,11 +72,12 @@ export default function PipelineListPage() {
 
   // 稳定化回调：避免 Table 每次输入都重新渲染
   const handleOpenDetail = useCallback(
-    (file: string) => navigate(`/pipelines/${file}`),
+    (file: string) => navigate(`/pipelines/${encodeURIComponent(file)}`),
     [navigate],
   );
-  const handleOpenTrigger = useCallback((file?: string) => {
+  const handleOpenTrigger = useCallback((file?: string, projectId?: string | null) => {
     setTriggerPipeline(file);
+    setTriggerProjectId(projectId ?? null);
     setTriggerOpen(true);
   }, []);
   const handleExportImage = useCallback(() => {
@@ -105,7 +107,7 @@ export default function PipelineListPage() {
       render: (_: unknown, record: Row) => {
         if (record.isFolder) return <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>;
         return (
-          <Link to={`/pipelines/${record.file}`} style={{ fontFamily: 'monospace', fontSize: 12 }}>
+          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontFamily: 'monospace', fontSize: 12 }}>
             {record.file}
           </Link>
         );
@@ -170,7 +172,7 @@ export default function PipelineListPage() {
               <Button type="text" size="small" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.file)} />
             </Tooltip>
             <Tooltip title="触发运行">
-              <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.file)} />
+              <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.file, record.project_id)} />
             </Tooltip>
             <Tooltip title="导出图片（暂未实现）">
               <Button type="text" size="small" icon={<Image size={14} />} onClick={handleExportImage} />
@@ -237,6 +239,7 @@ export default function PipelineListPage() {
         open={triggerOpen}
         onClose={() => setTriggerOpen(false)}
         defaultPipeline={triggerPipeline}
+        defaultProjectId={triggerProjectId}
       />
     </div>
   );
