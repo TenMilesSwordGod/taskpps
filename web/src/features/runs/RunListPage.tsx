@@ -5,6 +5,7 @@ import { Eye, Play, Trash2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import { useRuns, useCleanRuns } from '@/api/runs';
+import { useProjectId } from '@/contexts/ProjectContext';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import type { RunResponse, RunStatus } from '@/types';
@@ -45,7 +46,8 @@ export default function RunListPage() {
   const [cleanForm] = Form.useForm();
   const cleanRuns = useCleanRuns();
 
-  const { data, isLoading } = useRuns();
+  const projectId = useProjectId();
+  const { data, isLoading } = useRuns({ project_id: projectId });
 
   // 前端过滤
   const filtered = useMemo(() => {

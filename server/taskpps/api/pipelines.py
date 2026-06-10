@@ -1,7 +1,8 @@
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
+from taskpps.config import get_pipelines_dir, get_project_workdir_by_id
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository
 from taskpps.loaders.pipeline_loader import PipelineLoader
@@ -10,9 +11,20 @@ router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
 
 @router.get("/")
-async def list_pipelines():
-    """列出已加载流水线摘要（按文件夹分组）"""
-    loader = PipelineLoader()
+async def list_pipelines(project_id: str | None = Query(None)):
+    """列出已加载流水线摘要（按文件夹分组）
+
+    支持 project_id 查询参数，指定后加载对应项目的 pipelines/ 目录。
+    """
+    base_dir = None
+    if project_id:
+        project_workdir = get_project_workdir_by_id(project_id)
+        if project_workdir:
+            base_dir = get_pipelines_dir(project_workdir)
+        else:
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    loader = PipelineLoader(base_dir=base_dir)
     all_pipelines = loader.load_all_with_files()
 
     items = []
@@ -63,9 +75,17 @@ async def list_pipelines():
 
 
 @router.get("/{file:path}")
-async def get_pipeline(file: str):
+async def get_pipeline(file: str, project_id: str | None = Query(None)):
     """返回 YAML 解析后的完整 JSON"""
-    loader = PipelineLoader()
+    base_dir = None
+    if project_id:
+        project_workdir = get_project_workdir_by_id(project_id)
+        if project_workdir:
+            base_dir = get_pipelines_dir(project_workdir)
+        else:
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    loader = PipelineLoader(base_dir=base_dir)
     try:
         spec = loader.load(file)
     except FileNotFoundError as e:

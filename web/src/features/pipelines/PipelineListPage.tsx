@@ -4,6 +4,7 @@ import { Search, RefreshCw, Play, Eye, Image, Folder, FolderOpen, ChevronRight, 
 import { Link, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { usePipelines } from '@/api/pipelines';
+import { useProjectId } from '@/contexts/ProjectContext';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import type { PipelineSummary, RunStatus } from '@/types';
@@ -15,7 +16,8 @@ type Row =
 
 export default function PipelineListPage() {
   const navigate = useNavigate();
-  const { data, isLoading, refetch } = usePipelines();
+  const projectId = useProjectId();
+  const { data, isLoading, refetch } = usePipelines(projectId);
   const [keyword, setKeyword] = useState('');
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [triggerPipeline, setTriggerPipeline] = useState<string | undefined>();

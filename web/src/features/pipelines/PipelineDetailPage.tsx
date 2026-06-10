@@ -8,6 +8,7 @@ import {
   PlayCircleOutlined,
 } from '@ant-design/icons';
 import { usePipeline } from '@/api/pipelines';
+import { useProjectId } from '@/contexts/ProjectContext';
 import PipelineGraph from './PipelineGraph';
 import PropertiesPanel from './PropertiesPanel';
 import TriggerRunModal from '@/components/TriggerRunModal';
@@ -17,7 +18,8 @@ import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 export default function PipelineDetailPage() {
   const { file } = useParams<{ file: string }>();
   const navigate = useNavigate();
-  const { data: pipeline, isLoading } = usePipeline(file);
+  const projectId = useProjectId();
+  const { data: pipeline, isLoading } = usePipeline(file, projectId);
   const graphWrapperRef = useRef<HTMLDivElement>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
 

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePipelines } from '@/api/pipelines';
 import { useRuns } from '@/api/runs';
 import { useHealthCheck } from '@/api/health';
+import { useProjectId } from '@/contexts/ProjectContext';
 import StatusTag from '@/components/StatusTag';
 import type { RunResponse, RunStatus } from '@/types';
 
@@ -22,8 +23,9 @@ function formatDuration(run: RunResponse): string {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { data: pipelinesData } = usePipelines();
-  const { data: runsData } = useRuns({ limit: 100 });
+  const projectId = useProjectId();
+  const { data: pipelinesData } = usePipelines(projectId);
+  const { data: runsData } = useRuns({ limit: 100, project_id: projectId });
   const { data: healthData } = useHealthCheck();
 
   const pipelines = pipelinesData?.items ?? [];

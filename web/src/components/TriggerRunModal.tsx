@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Form, Input, message } from 'antd';
 import { useCreateRun } from '@/api/runs';
 import { useNavigate } from 'react-router-dom';
+import { useProjectId } from '@/contexts/ProjectContext';
 
 interface TriggerRunModalProps {
   open: boolean;
@@ -16,6 +17,7 @@ export default function TriggerRunModal({ open, onClose, defaultPipeline }: Trig
   const [paramsText, setParamsText] = useState('{}');
   const createRun = useCreateRun();
   const navigate = useNavigate();
+  const projectId = useProjectId();
 
   const handleOk = async () => {
     try {
@@ -31,6 +33,7 @@ export default function TriggerRunModal({ open, onClose, defaultPipeline }: Trig
       const result = await createRun.mutateAsync({
         pipeline: values.pipeline,
         params,
+        project_id: projectId,
       });
 
       message.success('运行已创建');

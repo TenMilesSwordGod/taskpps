@@ -268,3 +268,13 @@ export interface AgentCheckResponse {
   results: AgentCheckResult[];
   summary: AgentCheckSummary;
 }
+
+/** 项目信息 */
+export interface ProjectResponse {
+  id: string;
+  name: string;
+  workdir: string;
+  registered_at: string;
+  last_used_at: string | null;
+  active: boolean;
+}

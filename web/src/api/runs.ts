@@ -8,11 +8,16 @@ export interface RunLogsResponse {
 }
 
 /** 获取运行列表 */
-export function useRuns(params?: { pipeline?: string; status?: string; limit?: number }) {
+export function useRuns(params?: { pipeline?: string; status?: string; limit?: number; project_id?: string | null }) {
   return useQuery<RunListResponse>({
     queryKey: ['runs', params],
     queryFn: async () => {
-      const res = await apiClient.get('/api/runs/', { params });
+      const cleanParams: Record<string, string | number> = {};
+      if (params?.pipeline) cleanParams.pipeline = params.pipeline;
+      if (params?.status) cleanParams.status = params.status;
+      if (params?.limit) cleanParams.limit = params.limit;
+      if (params?.project_id) cleanParams.project_id = params.project_id;
+      const res = await apiClient.get('/api/runs/', { params: cleanParams });
       return res.data;
     },
   });
@@ -40,7 +45,7 @@ export function useCreateRun() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: { pipeline: string; params?: Record<string, unknown> }) => {
+    mutationFn: async (body: { pipeline: string; params?: Record<string, unknown>; project_id?: string | null }) => {
       const res = await apiClient.post('/api/runs/', body);
       return res.data as { id: string; pipeline_name: string; status: string };
     },
