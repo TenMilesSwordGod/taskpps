@@ -28,6 +28,8 @@ function makeAgent(overrides: Partial<AgentWithConfig> = {}): AgentWithConfig {
     port: 22,
     source_file: 'test.yaml',
     connected: true,
+    project_id: '',
+    project_name: '',
     hostname: 'test-host',
     platform: 'linux',
     system: 'Ubuntu 22.04',

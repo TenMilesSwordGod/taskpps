@@ -226,6 +226,10 @@ export interface AgentWithConfig {
   port: number;
   source_file: string;
   connected: boolean;
+  /** 所属项目 ID */
+  project_id: string;
+  /** 所属项目名称 */
+  project_name: string;
   hostname: string;
   platform: string;
   system: string;

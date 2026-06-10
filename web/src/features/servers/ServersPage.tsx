@@ -92,7 +92,9 @@ export default function ServersPage() {
         (a.host ?? '').toLowerCase().includes(s) ||
         (a.system ?? '').toLowerCase().includes(s) ||
         (a.arch ?? '').toLowerCase().includes(s) ||
-        (a.type ?? '').toLowerCase().includes(s),
+        (a.type ?? '').toLowerCase().includes(s) ||
+        (a.project_id ?? '').toLowerCase().includes(s) ||
+        (a.project_name ?? '').toLowerCase().includes(s),
     );
   }, [agents, search]);
 

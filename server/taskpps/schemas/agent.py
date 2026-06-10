@@ -59,6 +59,9 @@ class AgentWithConfig(BaseModel):
     port: int = 0
     source_file: str = ""
     connected: bool = False
+    # 所属项目信息
+    project_id: str = ""
+    project_name: str = ""
     # 实时状态字段（未连接时为空）
     hostname: str = ""
     platform: str = ""

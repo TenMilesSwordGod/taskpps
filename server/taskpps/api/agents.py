@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import time
 import uuid
+from pathlib import Path
 
 import paramiko
 from fastapi import APIRouter, HTTPException
@@ -26,6 +27,66 @@ from taskpps.services.agent_service import AgentService
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 _agent_service = AgentService()
+
+
+async def _query_all_projects() -> list:
+    """安全查询所有已注册项目，DB 不可用时返回空列表。"""
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import ProjectRepository
+
+    try:
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            return await repo.list_projects()
+    except Exception:
+        return []
+
+
+def _load_agents_from_projects() -> tuple[list[dict], list]:
+    """从所有已注册项目加载 agents 配置，返回 (items, projects)。
+
+    items 每项包含 agent cfg + _project_id/_project_name。
+    DB 不可用时回退到默认 AgentLoader。
+    """
+    from taskpps.config import get_agents_dir
+
+    projects = []
+    try:
+        import asyncio
+
+        async def _q():
+            return await _query_all_projects()
+
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                projects = pool.submit(asyncio.run, _q()).result()
+        else:
+            projects = asyncio.run(_q())
+    except Exception:
+        projects = []
+
+    if not projects:
+        loader = AgentLoader()
+        agents = loader.load_all()
+        return [
+            {**cfg, "id": agent_id, "_project_id": "", "_project_name": "", "_project_workdir": ""}
+            for agent_id, cfg in agents.items()
+        ], []
+
+    items = []
+    for project in projects:
+        project_workdir = Path(project.workdir)
+        loader = AgentLoader(base_dir=get_agents_dir(project_workdir))
+        for agent_id, cfg in loader.load_all().items():
+            cfg["id"] = agent_id
+            cfg["_project_id"] = project.id
+            cfg["_project_name"] = project.name or project.id
+            cfg["_project_workdir"] = str(project_workdir)
+            items.append(cfg)
+    return items, projects
 
 
 @router.post("/try-connect", response_model=AgentCheckResult)
@@ -115,13 +176,39 @@ async def agent_list():
 
 @router.get("/all", response_model=list[AgentWithConfig])
 async def agent_all():
-    """返回所有 yaml 中配置的 agent + 实时连接状态（未连接也展示）"""
-    import asyncio
-
+    """返回所有已注册项目中 yaml 配置的 agent + 实时连接状态（未连接也展示）"""
     manager = AgentManager.instance()
-    loader = AgentLoader()
-    agents = loader.load_all()
     result: list[AgentWithConfig] = []
+
+    agent_items, _ = _load_agents_from_projects()
+    for cfg in agent_items:
+        agent_id = str(cfg.get("id", "") or "")
+        item = AgentWithConfig(
+            agent_id=agent_id,
+            name=str(cfg.get("name", "") or ""),
+            type=str(cfg.get("type", "") or ""),
+            host=str(cfg.get("host", "") or ""),
+            port=int(cfg.get("port", 0) or 0),
+            source_file=str(cfg.get("_source_file", "") or ""),
+            project_id=str(cfg.get("_project_id", "") or ""),
+            project_name=str(cfg.get("_project_name", "") or ""),
+        )
+        if manager.is_connected(agent_id):
+            conn = manager.get_connection(agent_id)
+            if conn is not None:
+                item.connected = True
+                item.hostname = conn.hostname
+                item.platform = conn.platform
+                item.system = conn.system
+                item.arch = conn.arch
+                item.ip = conn.ip
+                item.agent_version = conn.agent_version
+                item.agent_pid = conn.agent_pid
+                item.connected_at = conn.connected_at
+                item.last_heartbeat = conn.last_heartbeat
+                item.running_commands = len(conn._pending_commands)
+                item.net_status = "reachable"
+        result.append(item)
 
     # 并发探测所有 agent 的网络可达性
     async def probe_net(host: str, port: int) -> str:
@@ -139,33 +226,6 @@ async def agent_all():
             return "reachable"
         except Exception:
             return "unreachable"
-
-    for agent_id, cfg in agents.items():
-        item = AgentWithConfig(
-            agent_id=agent_id,
-            name=str(cfg.get("name", "") or ""),
-            type=str(cfg.get("type", "") or ""),
-            host=str(cfg.get("host", "") or ""),
-            port=int(cfg.get("port", 0) or 0),
-            source_file=str(cfg.get("_source_file", "") or ""),
-        )
-        if manager.is_connected(agent_id):
-            conn = manager.get_connection(agent_id)
-            if conn is not None:
-                item.connected = True
-                item.hostname = conn.hostname
-                item.platform = conn.platform
-                item.system = conn.system
-                item.arch = conn.arch
-                item.ip = conn.ip
-                item.agent_version = conn.agent_version
-                item.agent_pid = conn.agent_pid
-                item.connected_at = conn.connected_at
-                item.last_heartbeat = conn.last_heartbeat
-                item.running_commands = len(conn._pending_commands)
-                # ws 已连接 → 网络必然可达
-                item.net_status = "reachable"
-        result.append(item)
 
     # 并发执行所有探测，填回 net_status（ws 连接的 agent 跳过，已填 reachable）
     if result:
@@ -192,12 +252,11 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
 
     cwd = body.cwd or ""
     if not cwd:
-        from taskpps.loaders.agent_loader import AgentLoader
-
-        loader = AgentLoader()
-        agent_data = loader.get(agent_id)
-        if agent_data and agent_data.get("agent_work_dir"):
-            cwd = agent_data["agent_work_dir"]
+        agent_items, _ = _load_agents_from_projects()
+        for item in agent_items:
+            if item.get("id") == agent_id and item.get("agent_work_dir"):
+                cwd = item["agent_work_dir"]
+                break
 
     command_id = str(uuid.uuid4())
     start_time = time.monotonic()
@@ -278,11 +337,25 @@ async def get_agent_host_info(agent_id: str):
     - ssh-* 类型：复用 paramiko + uname/lscpu/free/df 探测
     - 失败返回 error 字段而非 5xx
     """
-    from taskpps.loaders.agent_loader import AgentLoader
     from taskpps.services.agent_service import AgentService
 
+    # 先用默认 loader 查找（测试环境会 mock AgentLoader）
     loader = AgentLoader()
     cfg = loader.get(agent_id)
+
+    # 默认 loader 找不到时，从已注册项目扫描
+    if not cfg:
+        agent_items, _ = _load_agents_from_projects()
+        for item in agent_items:
+            if item.get("id") == agent_id:
+                cfg = item
+                project_workdir = item.get("_project_workdir", "")
+                if project_workdir:
+                    from taskpps.config import get_agents_dir
+
+                    loader = AgentLoader(base_dir=get_agents_dir(Path(project_workdir)))
+                break
+
     if not cfg:
         raise HTTPException(status_code=404, detail=f"agent {agent_id} not found")
 

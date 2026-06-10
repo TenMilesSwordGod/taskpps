@@ -19,16 +19,68 @@ class AgentService:
     def __init__(self):
         self._loader = AgentLoader()
 
+    def _load_all_from_projects(self) -> dict[str, dict]:
+        """从所有已注册项目的 agents/ 目录加载 agent 配置。
+
+        如果 DB 不可用（如测试环境未初始化），回退到默认 AgentLoader。
+        """
+        from pathlib import Path
+
+        from taskpps.config import get_agents_dir
+
+        projects = self._query_projects_safe()
+        if not projects:
+            # DB 不可用或无已注册项目，回退到当前项目 workdir
+            return self._loader.load_all()
+
+        result: dict[str, dict] = {}
+        for project in projects:
+            project_workdir = Path(project.workdir)
+            loader = AgentLoader(base_dir=get_agents_dir(project_workdir))
+            agents = loader.load_all()
+            for agent_id, cfg in agents.items():
+                cfg["_project_id"] = project.id
+                cfg["_project_name"] = project.name or project.id
+                result[agent_id] = cfg
+        return result
+
+    def _query_projects_safe(self) -> list:
+        """安全查询已注册项目列表，DB 异常时返回空列表。"""
+        import asyncio
+
+        async def _query():
+            from taskpps.db.engine import get_session_factory
+            from taskpps.db.repository import ProjectRepository
+
+            async with get_session_factory()() as session:
+                repo = ProjectRepository(session)
+                return await repo.list_projects()
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        try:
+            if loop and loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(asyncio.run, _query())
+                    return future.result()
+            else:
+                return asyncio.run(_query())
+        except Exception:
+            return []
+
     def try_connect(self, agent_id: str, timeout: int = 5) -> AgentCheckResult:
-        self._loader.clear_cache()
-        agent_data = self._loader.get(agent_id)
+        all_agents = self._load_all_from_projects()
+        agent_data = all_agents.get(agent_id)
         if agent_data is None:
             raise ValueError(t("Agent not found: {id}", id=agent_id))
         return self._check_one(agent_data, timeout)
 
     def check(self, request: AgentCheckRequest) -> AgentCheckResponse:
-        self._loader.clear_cache()
-        all_agents = self._loader.load_all()
+        all_agents = self._load_all_from_projects()
         results = []
 
         for agent_id, agent_data in all_agents.items():
@@ -53,8 +105,7 @@ class AgentService:
         )
 
     async def check_stream(self, request: AgentCheckRequest) -> AsyncGenerator[str, None]:
-        self._loader.clear_cache()
-        all_agents = self._loader.load_all()
+        all_agents = self._load_all_from_projects()
 
         target: list[dict] = []
         for agent_id, agent_data in all_agents.items():

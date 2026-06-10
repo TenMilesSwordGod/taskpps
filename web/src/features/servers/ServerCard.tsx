@@ -1,9 +1,9 @@
 import { memo } from 'react';
-import { Tooltip, Popconfirm } from 'antd';
+import { Tooltip, Popconfirm, Tag } from 'antd';
 import type { AgentWithConfig } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, Server,
+  CloudUpload, Loader2, Info, Server, FolderOpen,
 } from 'lucide-react';
 import { useDeployAgent } from '@/api/agents';
 
@@ -197,12 +197,23 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
               />
             </Tooltip>
           </div>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Tooltip title={agent.source_file || agent.agent_id}>
               <span>{agent.agent_id}</span>
             </Tooltip>
             {typeLabel !== 'unknown' && (
-              <span style={{ marginLeft: 6, color: '#9ca3af' }}>· {typeLabel}</span>
+              <span style={{ color: '#9ca3af' }}>· {typeLabel}</span>
+            )}
+            {agent.project_id && (
+              <Tooltip title={`项目: ${agent.project_name || agent.project_id}`}>
+                <Tag
+                  icon={<FolderOpen size={10} />}
+                  style={{ marginInlineStart: 0, fontSize: 11, lineHeight: '18px', paddingInline: 4 }}
+                  color="blue"
+                >
+                  {agent.project_id}
+                </Tag>
+              </Tooltip>
             )}
           </div>
         </div>
