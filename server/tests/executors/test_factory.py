@@ -121,6 +121,45 @@ class TestCreateExecutor:
         executor = create_executor(task)
         assert isinstance(executor, LocalExecutor)
 
+    def test_project_workdir_passed_to_agent_loader(self, tmp_path):
+        """project_workdir 应传递给 AgentLoader，使其在正确的 agents 目录查找。"""
+        project_dir = tmp_path / "myproject"
+        project_dir.mkdir()
+        agents_dir = project_dir / "agents"
+        agents_dir.mkdir()
+        agent_file = agents_dir / "auto-03.yaml"
+        agent_file.write_text("host: 10.0.0.1\nport: 22\nexecution_agent: true\n")
+
+        task = ResolvedTask(
+            name="t",
+            task_type="command",
+            command="echo",
+            host="auto-03",
+        )
+
+        executor = create_executor(task, project_workdir=str(project_dir))
+        from taskpps.executors.agent_executor import AgentExecutor
+
+        assert isinstance(executor, AgentExecutor)
+        assert executor._agent_id == "auto-03"
+
+    def test_project_workdir_not_found_agent(self, tmp_path):
+        """project_workdir 指向的目录没有对应 agent 时应抛出 AgentNotFoundError。"""
+        project_dir = tmp_path / "empty_project"
+        project_dir.mkdir()
+        agents_dir = project_dir / "agents"
+        agents_dir.mkdir()
+
+        task = ResolvedTask(
+            name="t",
+            task_type="command",
+            command="echo",
+            host="auto-03",
+        )
+
+        with pytest.raises(AgentNotFoundError, match="auto-03"):
+            create_executor(task, project_workdir=str(project_dir))
+
     def test_invoke_type(self):
         task = ResolvedTask(name="t", task_type="invoke", invoke_task="mod.fn")
         executor = create_executor(task)

@@ -185,10 +185,12 @@ class ExecutionContext:
         pipeline: ResolvedPipeline,
         run_id: str,
         env: dict[str, str] | None = None,
+        project_workdir: str | None = None,
     ):
         self.pipeline = pipeline
         self.run_id = run_id
         self.env = env or {}
+        self.project_workdir = project_workdir
         self._workspaces: dict[str, str] = {}
 
     def set_workspace(self, task_name: str, path: str) -> None:

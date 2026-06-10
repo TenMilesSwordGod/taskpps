@@ -23,7 +23,7 @@ class AgentNotFoundError(Exception):
     pass
 
 
-def create_executor(task: ResolvedTask) -> BaseExecutor:
+def create_executor(task: ResolvedTask, project_workdir: str | None = None) -> BaseExecutor:
     if task.task_type == "invoke":
         return InvokeExecutor()
 
@@ -56,7 +56,11 @@ def create_executor(task: ResolvedTask) -> BaseExecutor:
         )
 
     if task.host:
-        agent_loader = AgentLoader()
+        from taskpps.config import get_agents_dir
+        from pathlib import Path
+
+        agents_dir = get_agents_dir(Path(project_workdir)) if project_workdir else None
+        agent_loader = AgentLoader(base_dir=agents_dir) if agents_dir else AgentLoader()
         agent_data = _resolve_agent(agent_loader, task.host)
 
         if agent_data is None:

@@ -554,7 +554,7 @@ class PipelineRunner:
             effective_cwd = task.cwd or self.context.get_workspace()
 
             try:
-                executor = create_executor(task)
+                executor = create_executor(task, self.context.project_workdir)
                 self._running_executors[task.name] = executor
 
                 logger.debug(
@@ -628,6 +628,13 @@ class PipelineRunner:
                 logger.exception(error_msg)
                 self._write_pipeline_log("ERROR", error_msg)
                 self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
+                # 将错误信息写入 task.log，确保 UI 上可查看
+                try:
+                    with open(log_path, "a") as f:
+                        f.write(f"\n[ERROR] {error_msg}\n")
+                        f.write(f"[ERROR] Traceback:\n{traceback.format_exc()}")
+                except Exception:
+                    pass
                 result = ExecutorResult(exit_code=1, stderr=str(e))
 
             self._running_executors.pop(task.name, None)

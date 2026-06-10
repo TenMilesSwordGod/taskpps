@@ -64,6 +64,7 @@ class PipelineService:
                 if isinstance(config_env, dict):
                     loader_env.update(config_env)
 
+            project_workdir = None
             if project_id:
                 from taskpps.config import get_project_workdir_by_id
 
@@ -89,6 +90,7 @@ class PipelineService:
                     try:
                         spec = loader.load(pipeline_file, loader_env)
                         project_id = proj.id
+                        project_workdir = Path(proj.workdir)
                         break
                     except FileNotFoundError:
                         continue
@@ -129,6 +131,7 @@ class PipelineService:
                 pipeline_id=pipeline_id,
                 pipeline_version=pipeline_version,
                 project_id=project_id,
+                project_workdir=str(project_workdir) if project_workdir else None,
             )
 
     async def _create_run_locked(
@@ -140,6 +143,7 @@ class PipelineService:
         pipeline_id: str,
         pipeline_version: str,
         project_id: str | None = None,
+        project_workdir: str | None = None,
     ) -> dict:
         # The caller is expected to hold PipelineService._get_pipeline_lock(pipeline_id).
         async with get_session_factory()() as session:
@@ -193,7 +197,7 @@ class PipelineService:
 
         self._save_pipeline_snapshot(pipeline_file, pipeline_id, pipeline_version, run.id)
 
-        context = ExecutionContext(pipeline=resolved, run_id=run.id, env=params)
+        context = ExecutionContext(pipeline=resolved, run_id=run.id, env=params, project_workdir=project_workdir)
 
         runner = PipelineRunner(run_id=run.id, pipeline=resolved, context=context)
         runner._task_run_ids = task_run_ids
