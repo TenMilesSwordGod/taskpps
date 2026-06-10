@@ -83,9 +83,11 @@ class TestAgentWebSocket:
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
+        # heartbeat_response 重置超时计时器，然后 timeout 触发 heartbeat_request
         ws.receive_text = AsyncMock(
             side_effect=[
                 json.dumps({"type": "heartbeat_response", "data": {}}),
+                asyncio.TimeoutError(),
                 WebSocketDisconnect(),
             ]
         )
@@ -94,9 +96,9 @@ class TestAgentWebSocket:
             mock_mgr_cls.instance.return_value = manager
             await ws_agent.agent_websocket(ws)
 
-        conn = manager.get_connection("agent-1")
-        assert conn is not None
-        assert conn.last_heartbeat > 0
+        # heartbeat_response 被处理后 should NOT 立即发送 heartbeat_request
+        #（但在下一个 timeout 后会发）
+        ws.send_json.assert_any_call({"type": "heartbeat_request", "data": {}})
 
     @pytest.mark.asyncio
     async def test_stdout_chunk(self):
@@ -173,8 +175,10 @@ class TestAgentWebSocket:
             mock_mgr_cls.instance.return_value = manager
             await ws_agent.agent_websocket(ws)
 
-        # Should disconnect the agent
-        assert manager.get_connection("agent-1") is None
+        # disconnect 保留连接对象但标记 last_heartbeat = -1（支持重连）
+        conn = manager.get_connection("agent-1")
+        assert conn is not None
+        assert conn.last_heartbeat == -1
 
     @pytest.mark.asyncio
     async def test_generic_exception(self):
@@ -196,8 +200,10 @@ class TestAgentWebSocket:
             mock_mgr_cls.instance.return_value = manager
             await ws_agent.agent_websocket(ws)
 
-        # Should disconnect the agent
-        assert manager.get_connection("agent-1") is None
+        # disconnect 保留连接对象但标记 last_heartbeat = -1（支持重连）
+        conn = manager.get_connection("agent-1")
+        assert conn is not None
+        assert conn.last_heartbeat == -1
 
     @pytest.mark.asyncio
     async def test_unknown_message_type(self):

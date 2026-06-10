@@ -152,6 +152,8 @@ func (c *WsClient) readLoop() {
 		}
 
 		var msg Message
+		// 设置读超时，快速检测连接断开（2 倍心跳间隔 + 缓冲）
+		conn.SetReadDeadline(time.Now().Add(90 * time.Second))
 		if err := conn.ReadJSON(&msg); err != nil {
 			logger.Warn("WebSocket read error: %v", err)
 			c.handleDisconnect()
@@ -242,12 +244,17 @@ func (c *WsClient) handleDisconnect() {
 
 func (c *WsClient) tryReconnect() {
 	backoffs := []time.Duration{1, 2, 4, 8, 16, 30, 60}
-	for _, d := range backoffs {
+	for i := 0; ; i++ {
 		select {
 		case <-c.done:
 			return
 		default:
 		}
+		idx := i
+		if idx >= len(backoffs) {
+			idx = len(backoffs) - 1
+		}
+		d := backoffs[idx]
 		logger.Info("Reconnecting in %v...", d)
 		time.Sleep(d * time.Second)
 		err := c.Connect()
@@ -256,6 +263,10 @@ func (c *WsClient) tryReconnect() {
 			return
 		}
 		logger.Warn("Reconnect failed: %v", err)
+		// 已耗尽初始回退序列后，每次等待 60s 再试
+		if i >= len(backoffs)-1 {
+			i = len(backoffs) - 2 // 下次循环使用 60s
+		}
 	}
 }
 
