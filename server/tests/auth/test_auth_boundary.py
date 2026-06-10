@@ -33,25 +33,27 @@ def _restore_config(tmp_project, original):
 
 
 @pytest.mark.asyncio
-async def test_missing_api_key_header(app, setup_project, tmp_project):
+async def test_missing_api_key_header(app, setup_project, tmp_project, db_engine):
+    """api_key 认证已废弃，无 X-API-Key 头也应放行。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/api/runs/")
-            assert response.status_code == 401
+            assert response.status_code == 200
     finally:
         _restore_config(tmp_project, original)
 
 
 @pytest.mark.asyncio
-async def test_invalid_api_key(app, setup_project, tmp_project):
+async def test_invalid_api_key(app, setup_project, tmp_project, db_engine):
+    """api_key 认证已废弃，错误 key 也不拒绝。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/api/runs/", headers={"X-API-Key": "wrong_key"})
-            assert response.status_code == 401
+            assert response.status_code == 200
     finally:
         _restore_config(tmp_project, original)
 
@@ -117,13 +119,14 @@ async def test_ws_path_bypasses_auth(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
-async def test_empty_api_key(app, setup_project, tmp_project):
+async def test_empty_api_key(app, setup_project, tmp_project, db_engine):
+    """api_key 认证已废弃，空 key 也不拒绝。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/api/runs/", headers={"X-API-Key": ""})
-            assert response.status_code == 401
+            assert response.status_code == 200
     finally:
         _restore_config(tmp_project, original)
 

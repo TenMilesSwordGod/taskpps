@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
 
 from taskpps.config import get_settings
-from taskpps.i18n import t
+
+logger = logging.getLogger("taskpps")
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
+    """API Key 认证中间件（已废弃强制执行，仅保留日志提示）。
+
+    当 server.api_key 已配置时，记录一条警告但不再拒绝请求。
+    如需恢复强制认证，取消下方注释即可。
+    """
+
     async def dispatch(self, request: Request, call_next):
         # 静态文件（/、/assets/*、/favicon.ico 等）无需认证
         if not request.url.path.startswith("/api/"):
@@ -20,17 +28,13 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if api_key is None:
             return await call_next(request)
 
-        if request.url.path == "/api/health":
-            return await call_next(request)
-
-        if request.url.path.startswith("/api/ws/"):
-            return await call_next(request)
-
-        if request.method == "OPTIONS":
-            return await call_next(request)
-
-        provided = request.headers.get("X-API-Key")
-        if provided != api_key:
-            return JSONResponse(status_code=401, content={"detail": t("Invalid or missing API key")})
+        # 已废弃: 不再强制校验 X-API-Key
+        # 仅首次访问时输出警告，提醒用户 api_key 配置已无效
+        if not getattr(APIKeyMiddleware, "_warned", False):
+            APIKeyMiddleware._warned = True
+            logger.warning(
+                "server.api_key 认证已废弃，所有 API 请求放行。"
+                "请从 taskpps.yaml 中移除 server.api_key 配置。"
+            )
 
         return await call_next(request)
