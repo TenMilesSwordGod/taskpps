@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/taskpps/ppsctl/client"
@@ -233,6 +234,14 @@ def health_check(c, url="http://localhost:8000"):
 
 		if registerCurrentFolder {
 			fmt.Println("\n正在注册项目到 server...")
+
+			// 解析 api_key: flag --api-key > env PPSCTL_API_KEY
+			if apiKeyFlag := cmd.Flag("api-key"); apiKeyFlag != nil && apiKeyFlag.Value.String() != "" {
+				config.ApiKeyOverride = apiKeyFlag.Value.String()
+			} else if envKey := os.Getenv("PPSCTL_API_KEY"); envKey != "" {
+				config.ApiKeyOverride = envKey
+			}
+
 			cfg, err := config.Load(cfgFile, projectFlag)
 			if err != nil {
 				return fmt.Errorf("加载配置失败(无法连接 server): %w", err)
@@ -240,6 +249,10 @@ def health_check(c, url="http://localhost:8000"):
 			c := client.New(cfg)
 			project, err := c.RegisterProject(absCwd, filepath.Base(absCwd))
 			if err != nil {
+				errMsg := err.Error()
+				if strings.Contains(errMsg, "401") {
+					return fmt.Errorf("注册项目失败: %w\n\n提示: 服务端要求 API Key 认证，请使用 -k 参数或设置 PPSCTL_API_KEY 环境变量\n  例如: ppsctl init --register-current-folder -k <your-api-key>", err)
+				}
 				return fmt.Errorf("注册项目失败: %w", err)
 			}
 			fmt.Printf("  项目已注册: id=%s workdir=%s\n", project.ID, project.Workdir)

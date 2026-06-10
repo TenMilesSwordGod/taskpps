@@ -23,20 +23,21 @@ type Client struct {
 func New(cfg *config.Config) *Client {
 	addr := config.GetServerAddr(cfg)
 	os.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	apiKey := config.ResolveApiKey(cfg.Server.ApiKey)
 	r := req.New()
-	if cfg.Server.ApiKey != "" {
+	if apiKey != "" {
 		transport := r.Client().Transport
 		if transport == nil {
 			transport = http.DefaultTransport
 		}
 		r.Client().Transport = &authTransport{
-			apiKey: cfg.Server.ApiKey,
+			apiKey: apiKey,
 			base:   transport,
 		}
 	}
 	return &Client{
 		baseURL: fmt.Sprintf("http://%s/api", addr),
-		apiKey:  cfg.Server.ApiKey,
+		apiKey:  apiKey,
 		http:    r,
 	}
 }

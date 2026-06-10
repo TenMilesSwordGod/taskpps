@@ -56,6 +56,12 @@ backend server via REST API.`,
 		if cmd.Name() == "init" || cmd.Name() == "version" {
 			return nil
 		}
+		// 解析 api_key: flag --api-key > env PPSCTL_API_KEY
+		if apiKeyFlag := cmd.Flag("api-key"); apiKeyFlag != nil && apiKeyFlag.Value.String() != "" {
+			config.ApiKeyOverride = apiKeyFlag.Value.String()
+		} else if envKey := os.Getenv("PPSCTL_API_KEY"); envKey != "" {
+			config.ApiKeyOverride = envKey
+		}
 		var err error
 		appConfig, err = config.Load(cfgFile, projectFlag)
 		if err != nil {
@@ -103,5 +109,6 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "path to taskpps.yaml config file")
 	RootCmd.PersistentFlags().StringVarP(&projectFlag, "project", "P", "", "项目工作目录路径")
 	RootCmd.PersistentFlags().StringP("server", "s", "", "server address (host:port)")
+	RootCmd.PersistentFlags().StringP("api-key", "k", "", "API key for server authentication (overrides config file and PPSCTL_API_KEY env)")
 	RootCmd.PersistentFlags().CountVarP(&verbose, "verbose", "v", "increase verbosity (-v: warn, -vv: info, -vvv: debug)")
 }

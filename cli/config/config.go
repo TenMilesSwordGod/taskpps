@@ -10,6 +10,20 @@ import (
 
 var App *Config
 
+// ApiKeyOverride 由 cmd 层在 PersistentPreRunE 中设置，优先级高于配置文件
+// flag --api-key > 环境变量 PPSCTL_API_KEY > 配置文件 server.api_key
+var ApiKeyOverride string
+
+func ResolveApiKey(configApiKey string) string {
+	if ApiKeyOverride != "" {
+		return ApiKeyOverride
+	}
+	if configApiKey != "" {
+		return configApiKey
+	}
+	return os.Getenv("PPSCTL_API_KEY")
+}
+
 type Config struct {
 	Server   ServerConfig      `mapstructure:"server"`
 	Executor ExecutorConfig    `mapstructure:"executor"`
