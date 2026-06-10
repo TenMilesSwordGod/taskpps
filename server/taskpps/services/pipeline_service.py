@@ -286,6 +286,7 @@ class PipelineService:
                         "task_type": t.task_type,
                         "status": t.status,
                         "exit_code": t.exit_code,
+                        "error": getattr(t, "error", None),
                         "log_path": t.log_path,
                         "started_at": t.started_at,
                         "finished_at": t.finished_at,

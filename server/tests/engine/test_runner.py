@@ -154,6 +154,7 @@ class TestPipelineRunnerRun:
         assert log_path.exists()
         content = log_path.read_text()
         assert "Pipeline Execution Log" in content
+        assert "[PIPELINE:SETUP]" in content
         assert "[SYSTEM] Run ID: flush_test" in content
         assert "[PIPELINE] SubPipelines:" in content
         assert "SUCCESS" in content

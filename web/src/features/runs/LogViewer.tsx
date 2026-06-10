@@ -76,9 +76,12 @@ export default function LogViewer({
   const [taskFilter, setTaskFilter] = useState<string | undefined>();
   const [searchText, setSearchText] = useState('');
   const [levelFilter, setLevelFilter] = useState<LogLevel[]>([...ALL_LEVELS]);
+  const [showTaskNames, setShowTaskNames] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 跟踪是否用户已向上滚动，暂停自动滚动
   const stickyToBottomRef = useRef(true);
+  // 记录上一次选中的任务，用于取消选中时滚动定位
+  const prevSelectedTaskIdRef = useRef<string | null | undefined>(undefined);
   const taskNames = useMemo(
     () => [...new Set(logs.map((l) => l.taskName).filter(Boolean))],
     [logs],
@@ -87,16 +90,29 @@ export default function LogViewer({
   // 当前生效的过滤（外部选中优先）
   const effectiveFilter = selectedTaskId ?? taskFilter;
 
+  // phase 节点选中时，提取匹配的 taskName 前缀
+  const phaseFilter = useMemo(() => {
+    if (!effectiveFilter || !effectiveFilter.startsWith('__phase__')) return null;
+    // key 格式: __phase__scope__name__phase → 提取 scope__name
+    const parts = effectiveFilter.split('__'); // ['', 'phase', 'scope', 'name', 'setup']
+    if (parts.length >= 4) return `__phase__${parts[2]}`;
+    return effectiveFilter;
+  }, [effectiveFilter]);
+
   // 过滤日志
   const filtered = useMemo(() => {
     let result = logs;
-    if (effectiveFilter) result = result.filter((l) => l.taskName === effectiveFilter);
+    if (phaseFilter) {
+      result = result.filter((l) => l.taskName === phaseFilter);
+    } else if (effectiveFilter) {
+      result = result.filter((l) => l.taskName === effectiveFilter);
+    }
     if (searchText) result = result.filter((l) => l.content.includes(searchText));
     if (levelFilter.length < ALL_LEVELS.length) {
       result = result.filter((l) => levelFilter.includes(detectLevel(l.content)));
     }
     return result;
-  }, [logs, effectiveFilter, searchText, levelFilter]);
+  }, [logs, effectiveFilter, phaseFilter, searchText, levelFilter]);
 
   // 统计各级别数量
   const levelStats = useMemo(() => {
@@ -115,6 +131,24 @@ export default function LogViewer({
       el.scrollTop = el.scrollHeight;
     }
   }, [filtered.length, filtered, autoScroll]);
+
+  // 取消选中时，滚动到刚取消选中任务的日志位置
+  useEffect(() => {
+    const prev = prevSelectedTaskIdRef.current;
+    prevSelectedTaskIdRef.current = selectedTaskId;
+    if (prev == null || selectedTaskId != null) return;
+    const target = prev;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const row = el.querySelector(`[data-task-name="${CSS.escape(target)}"]`);
+      if (row) {
+        const containerRect = el.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        el.scrollTop = rowRect.top - containerRect.top + el.scrollTop - containerRect.height * 0.2;
+      }
+    });
+  }, [selectedTaskId]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -173,7 +207,7 @@ export default function LogViewer({
               background: '#fff', borderColor: '#d1d5db',
             }}
           >
-            <span style={{ fontFamily: 'monospace' }}>{selectedTaskId}</span>
+            <span style={{ fontFamily: 'monospace' }}>{selectedTaskId.startsWith('__phase__') ? selectedTaskId.split('__').slice(2).join(' → ') : selectedTaskId}</span>
           </Tag>
         ) : (
           <Select
@@ -225,6 +259,14 @@ export default function LogViewer({
         <Button size="small" icon={<Download size={14} />} onClick={handleExport} disabled={filtered.length === 0}>
           导出
         </Button>
+        <Button
+          size="small"
+          type={showTaskNames ? 'default' : 'text'}
+          onClick={() => setShowTaskNames((v) => !v)}
+          title={showTaskNames ? '隐藏任务名' : '显示任务名'}
+        >
+          {showTaskNames ? '≡ 任务名' : '≡'}
+        </Button>
 
         <div style={{ flex: 1 }} />
 
@@ -274,9 +316,10 @@ export default function LogViewer({
               return (
                 <div
                   key={log.seq}
+                  data-task-name={log.taskName || ''}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'auto auto 1fr',
+                    gridTemplateColumns: showTaskNames ? 'auto auto 1fr' : 'auto 1fr',
                     columnGap: 8,
                     padding: '1px 12px',
                     fontSize: 13,
@@ -293,18 +336,20 @@ export default function LogViewer({
                     </span>
                   </Tooltip>
                   {/* task name */}
-                  {log.taskName ? (
-                    <span
-                      style={{
-                        color: getTaskColor(log.taskName),
-                        fontWeight: 500,
-                        minWidth: 0,
-                      }}
-                    >
-                      [{log.taskName}]
-                    </span>
-                  ) : (
-                    <span />
+                  {showTaskNames && (
+                    log.taskName ? (
+                      <span
+                        style={{
+                          color: getTaskColor(log.taskName),
+                          fontWeight: 500,
+                          minWidth: 0,
+                        }}
+                      >
+                        [{log.taskName}]
+                      </span>
+                    ) : (
+                      <span />
+                    )
                   )}
                   {/* content */}
                   <span style={{ color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>

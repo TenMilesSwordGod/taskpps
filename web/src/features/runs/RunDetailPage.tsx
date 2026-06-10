@@ -3,13 +3,13 @@ import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress } from 'antd';
 import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRun, useCancelRun, useRunLogs } from '@/api/runs';
+import { useRun, useCancelRun, useRunLogs, useRunConsole } from '@/api/runs';
 import { usePipeline } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
 import { useSSELogs } from './hooks/useSSELogs';
-import type { TaskStatus, RunResponse } from '@/types';
+import type { RunResponse } from '@/types';
 import type { LogEntry } from './hooks/useSSELogs';
 
 /** 将 REST 日志响应转为 LogEntry[]（每条严格单行） */
@@ -69,26 +69,54 @@ export default function RunDetailPage() {
   const { data: restLogs, refetch: refetchLogs, isFetching: logsFetching } = useRunLogs(!isLive ? id : undefined);
 
   // 合并日志：运行中用 SSE，否则用 REST
-  const logs = useMemo(() => {
+  const baseLogs = useMemo(() => {
     if (isLive) return sseResult.logs;
     if (restLogs?.logs) return restLogsToEntries(restLogs.logs);
     return [];
   }, [isLive, sseResult.logs, restLogs?.logs]);
 
+  // Debug 模式：拉取 console.log 并合并 phase 日志
+  const { data: consoleData } = useRunConsole(debugVisible ? id : undefined, 500);
+
+  // 解析 phase groups 并转为 LogEntry
+  const phaseLogEntries = useMemo(() => {
+    if (!debugVisible || !consoleData?.content) return [];
+    const entries: LogEntry[] = [];
+    const lines = consoleData.content.split('\n');
+    let currentPhase = '';
+    for (const line of lines) {
+      const phaseMatch = line.match(/^\[(PIPELINE:SETUP|PIPELINE:TEARDOWN|SUB:([^:]+):SETUP|SUB:([^:]+):TEARDOWN|TASK:([^:]+):SETUP|TASK:([^:]+):TEARDOWN)\]/);
+      if (phaseMatch) {
+        const tag = phaseMatch[1];
+        if (tag.startsWith('TASK:')) {
+          const rest = tag.slice(5);
+          const lastColon = rest.lastIndexOf(':');
+          currentPhase = rest.slice(0, lastColon);
+        } else if (tag.startsWith('SUB:')) {
+          const parts = tag.split(':');
+          currentPhase = parts[1];
+        } else {
+          currentPhase = 'pipeline';
+        }
+        continue;
+      }
+      if (line.trim()) {
+        entries.push({ taskName: `__phase__${currentPhase}`, content: line, timestamp: 0, seq: 0 });
+      }
+    }
+    return entries;
+  }, [debugVisible, consoleData?.content]);
+
+  // 合并日志：debug 模式下 phase 日志在前，任务日志在后
+  const logs = useMemo(() => {
+    if (!debugVisible || phaseLogEntries.length === 0) return baseLogs;
+    return [...phaseLogEntries, ...baseLogs];
+  }, [baseLogs, debugVisible, phaseLogEntries]);
+
   const connected = isLive ? sseResult.connected : false;
   const autoScroll = isLive ? sseResult.autoScroll : true;
   const setAutoScroll = sseResult.setAutoScroll;
   const clearLogs = sseResult.clearLogs;
-
-  // 从 run.tasks 构建 taskStatuses
-  const taskStatuses = useMemo<Record<string, TaskStatus>>(() => {
-    if (!run?.tasks) return {};
-    const map: Record<string, TaskStatus> = {};
-    for (const t of run.tasks) {
-      map[t.task_name] = t.status;
-    }
-    return map;
-  }, [run?.tasks]);
 
   // 进度与耗时
   const progress = useMemo(() => calcProgress(run), [run]);
@@ -250,7 +278,6 @@ export default function RunDetailPage() {
               {pipeline ? (
                 <TaskTree
                   pipeline={pipeline}
-                  taskStatuses={taskStatuses}
                   taskRuns={run?.tasks}
                   selectedTaskId={selectedTaskId ?? undefined}
                   onSelect={setSelectedTaskId}

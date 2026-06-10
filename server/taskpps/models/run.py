@@ -58,6 +58,7 @@ class TaskRun(SQLModel, table=True):
     task_type: TaskType = TaskType.COMMAND
     status: TaskStatus = TaskStatus.PENDING
     exit_code: int | None = None
+    error: str | None = Field(default=None)
     log_path: str = ""
     started_at: datetime | None = None
     finished_at: datetime | None = None

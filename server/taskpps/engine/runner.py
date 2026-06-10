@@ -87,6 +87,7 @@ class PipelineRunner:
                 f.write(f"{'=' * 80}\n")
                 f.write("Pipeline Execution Log\n")
                 f.write(f"{'=' * 80}\n\n")
+                f.write(f"[PIPELINE:SETUP]\n")
                 f.write(f"[SYSTEM] Run ID: {self.run_id}\n")
                 f.write(f"[SYSTEM] Pipeline ID: {self._pipeline_id}\n")
                 f.write(f"[SYSTEM] Pipeline Version: {self._pipeline_version}\n")
@@ -290,6 +291,7 @@ class PipelineRunner:
 
                 await run_repo.update_run_status(self.run_id, final_status, finished_at=end_time)
 
+            self._write_pipeline_log("PIPELINE:TEARDOWN", "")
             self._write_pipeline_log("SYSTEM", f"End Time: {end_time.isoformat()}")
             self._write_pipeline_log("SYSTEM", f"Duration: {duration}")
             self._write_pipeline_log("SYSTEM", "=" * 80)
@@ -360,6 +362,7 @@ class PipelineRunner:
         )
         self.context.get_subpipeline_env(sub)
         self._write_separator("=", f"[subpipeline] {sub_name} start")
+        self._write_pipeline_log(f"SUB:{sub_name}:SETUP", "")
         self._write_pipeline_log("INFO", f"Starting SubPipeline '{sub_name}' with {len(sub.tasks)} tasks")
 
         try:
@@ -461,6 +464,8 @@ class PipelineRunner:
             self._write_pipeline_log(
                 "FAILED", f"SubPipeline '{sub_name}' finished with {len(failed_tasks)} failed tasks"
             )
+            self._write_pipeline_log(f"SUB:{sub_name}:TEARDOWN", "")
+            self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' finished")
             self._write_separator("=", f"[subpipeline] {sub_name} end")
             return {"success": False, "failed_tasks": list(failed_tasks)}
 
@@ -468,6 +473,8 @@ class PipelineRunner:
             "SUCCESS",
             f"SubPipeline '{sub_name}' completed successfully ({len(completed_tasks)}/{len(sub.tasks)} tasks)",
         )
+        self._write_pipeline_log(f"SUB:{sub_name}:TEARDOWN", "")
+        self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' finished")
         self._write_separator("=", f"[subpipeline] {sub_name} end")
         return {"success": True}
 
@@ -513,6 +520,7 @@ class PipelineRunner:
             return ExecutorResult(exit_code=-1, stdout="Task cancelled")
 
         self._write_separator("-", f"[task] {qualified_name} start")
+        self._write_pipeline_log(f"TASK:{qualified_name}:SETUP", "")
         self._write_pipeline_log(
             "INFO", f"Executing task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})"
         )
@@ -658,10 +666,14 @@ class PipelineRunner:
 
         async with get_session_factory()() as session:
             task_repo = TaskRunRepository(session)
+            task_error: str | None = None
+            if task_status == TaskStatus.FAILED:
+                task_error = last_result.stderr[:500] if last_result.stderr else f"exit_code={last_result.exit_code}"
             await task_repo.update_task_status(
                 task_run_id,
                 task_status,
                 exit_code=last_result.exit_code,
+                error=task_error,
                 finished_at=datetime.now(timezone.utc),
             )
 
@@ -672,6 +684,8 @@ class PipelineRunner:
             if last_result.stderr:
                 self._write_pipeline_log("ERROR", f"Error output: {last_result.stderr[:500]}")
 
+        self._write_pipeline_log(f"TASK:{qualified_name}:TEARDOWN", "")
+        self._write_pipeline_log("INFO", f"Task '{qualified_name}' finished with exit_code={last_result.exit_code}")
         self._write_separator("-", f"[task] {qualified_name} end")
         return last_result
 

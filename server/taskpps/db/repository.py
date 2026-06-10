@@ -184,6 +184,7 @@ class TaskRunRepository:
         task_run_id: str,
         status: TaskStatus,
         exit_code: int | None = None,
+        error: str | None = None,
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
     ) -> None:
@@ -193,6 +194,8 @@ class TaskRunRepository:
         tr.status = status
         if exit_code is not None:
             tr.exit_code = exit_code
+        if error is not None:
+            tr.error = error
         if started_at is not None:
             tr.started_at = started_at
         if finished_at is not None:

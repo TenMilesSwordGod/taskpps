@@ -20,6 +20,7 @@ class TaskRunResponse(BaseModel):
     task_type: TaskType
     status: TaskStatus
     exit_code: int | None = None
+    error: str | None = None
     log_path: str = ""
     started_at: datetime | None = None
     finished_at: datetime | None = None
