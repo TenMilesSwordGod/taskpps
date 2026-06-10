@@ -91,15 +91,37 @@ async def list_pipelines(project_id: str | None = Query(None)):
 @router.get("/{file:path}")
 async def get_pipeline(file: str, project_id: str | None = Query(None)):
     """返回 YAML 解析后的完整 JSON"""
-    base_dir = None
     if project_id:
         project_workdir = get_project_workdir_by_id(project_id)
         if project_workdir:
-            base_dir = get_pipelines_dir(project_workdir)
+            loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
         else:
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+        try:
+            spec = loader.load(file)
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return spec.model_dump()
 
-    loader = PipelineLoader(base_dir=base_dir)
+    # 未指定 project_id 时，遍历所有已注册项目查找 pipeline
+    async with get_session_factory()() as session:
+        from taskpps.db.repository import ProjectRepository
+
+        repo = ProjectRepository(session)
+        projects = await repo.list_projects()
+
+    for proj in projects:
+        loader = PipelineLoader(base_dir=get_pipelines_dir(proj.workdir))
+        try:
+            spec = loader.load(file)
+            return spec.model_dump()
+        except FileNotFoundError:
+            continue
+
+    # 回退到默认目录
+    loader = PipelineLoader()
     try:
         spec = loader.load(file)
     except FileNotFoundError as e:
