@@ -42,31 +42,15 @@ async def _query_all_projects() -> list:
         return []
 
 
-def _load_agents_from_projects() -> tuple[list[dict], list]:
+async def _load_agents_from_projects() -> tuple[list[dict], list]:
     """从所有已注册项目加载 agents 配置，返回 (items, projects)。
 
     items 每项包含 agent cfg + _project_id/_project_name。
-    DB 不可用时回退到默认 AgentLoader。
+    DB 不可用时回退到默认 AgentLoader（仅返回当前 workdir 的 agent）。
     """
     from taskpps.config import get_agents_dir
 
-    projects = []
-    try:
-        import asyncio
-
-        async def _q():
-            return await _query_all_projects()
-
-        loop = asyncio.get_running_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                projects = pool.submit(asyncio.run, _q()).result()
-        else:
-            projects = asyncio.run(_q())
-    except Exception:
-        projects = []
+    projects = await _query_all_projects()
 
     if not projects:
         loader = AgentLoader()
@@ -345,7 +329,7 @@ async def get_agent_host_info(agent_id: str):
 
     # 默认 loader 找不到时，从已注册项目扫描
     if not cfg:
-        agent_items, _ = _load_agents_from_projects()
+        agent_items, _ = await _load_agents_from_projects()
         for item in agent_items:
             if item.get("id") == agent_id:
                 cfg = item
