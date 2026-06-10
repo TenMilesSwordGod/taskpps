@@ -402,7 +402,8 @@ ExecStart=${venv_dir}/bin/gunicorn \\
     taskpps.main:app \\
     --worker-class uvicorn.workers.UvicornWorker \\
     --bind 0.0.0.0:26521 \\
-    --workers 2 \\
+    --workers 1 \\
+    --threads 4 \\
     --worker-tmp-dir /dev/shm \\
     --timeout 120 \\
     --graceful-timeout 30 \\

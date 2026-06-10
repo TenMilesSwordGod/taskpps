@@ -228,9 +228,9 @@ async def agent_all():
 @router.post("/{agent_id}/exec")
 async def agent_exec(agent_id: str, body: AgentExecRequest):
     manager = AgentManager.instance()
-    conn = manager.get_connection(agent_id)
-    if conn is None:
+    if not manager.is_connected(agent_id):
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not connected")
+    conn = manager.get_connection(agent_id)
 
     cwd = body.cwd or ""
     if not cwd:

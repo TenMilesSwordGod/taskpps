@@ -18,6 +18,30 @@ class TestAgentExec:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_agent_exec_disconnected_agent(self, client):
+        """agent 断开后（last_heartbeat=-1），exec 应返回 404 而非 500。"""
+        from taskpps.services.agent_manager import AgentConnection, AgentManager
+
+        manager = AgentManager.instance()
+        ws = AsyncMock()
+        ws.send_json = AsyncMock()
+        conn = AgentConnection("disconnected-agent", ws)
+        conn.last_heartbeat = -1  # 标记为断开
+        manager._connections["disconnected-agent"] = conn
+
+        response = await client.post(
+            "/api/agents/disconnected-agent/exec",
+            json={
+                "command": "echo hello",
+                "timeout": 5,
+            },
+        )
+        assert response.status_code == 404
+
+        # cleanup
+        manager._connections.pop("disconnected-agent", None)
+
+    @pytest.mark.asyncio
     async def test_agent_exec_connected(self, client):
         from taskpps.services.agent_manager import AgentConnection, AgentManager
 
