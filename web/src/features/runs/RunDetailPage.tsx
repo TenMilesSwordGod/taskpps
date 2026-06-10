@@ -20,7 +20,7 @@ function restLogsToEntries(logsMap: Record<string, string>): LogEntry[] {
     const lines = content.split(/\r\n|\r|\n/);
     for (const line of lines) {
       if (line.length === 0) continue;
-      entries.push({ taskName, content: line, timestamp: 0 });
+      entries.push({ taskName, content: line, timestamp: 0, seq: 0 });
     }
   }
   return entries;

@@ -285,14 +285,14 @@ export default function LogViewer({
           </div>
         ) : (
           <div style={{ padding: '6px 0' }}>
-            {filtered.map((log, i) => {
+            {filtered.map((log) => {
               const level = detectLevel(log.content);
               const stderr = isStderr(log.content);
               const ls = LEVEL_STYLE[level];
               const showBg = level === 'error' || stderr;
               return (
                 <div
-                  key={`${i}-${log.taskName}-${log.timestamp}`}
+                  key={log.seq}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: 'auto auto 1fr',

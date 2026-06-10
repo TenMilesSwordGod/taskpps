@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Table, Select, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Play, Trash2 } from 'lucide-react';
@@ -48,24 +48,29 @@ export default function RunListPage() {
   const { data, isLoading } = useRuns();
 
   // 前端过滤
-  const filtered = (data?.items ?? []).filter((run) => {
-    if (statusFilter && run.status !== statusFilter) return false;
-    if (pipelineFilter && !run.pipeline_name.toLowerCase().includes(pipelineFilter.toLowerCase())) return false;
-    if (dateRange) {
-      const created = dayjs(run.created_at);
-      if (created.isBefore(dateRange[0]) || created.isAfter(dateRange[1])) return false;
-    }
-    return true;
-  });
+  const filtered = useMemo(() => {
+    const all = data?.items ?? [];
+    if (!statusFilter && !pipelineFilter && !dateRange) return all;
+    const kw = pipelineFilter.toLowerCase();
+    return all.filter((run) => {
+      if (statusFilter && run.status !== statusFilter) return false;
+      if (kw && !run.pipeline_name.toLowerCase().includes(kw)) return false;
+      if (dateRange) {
+        const created = dayjs(run.created_at);
+        if (created.isBefore(dateRange[0]) || created.isAfter(dateRange[1])) return false;
+      }
+      return true;
+    });
+  }, [data?.items, statusFilter, pipelineFilter, dateRange]);
 
   // 打开清理弹窗时重置表单
-  const handleOpenClean = () => {
+  const handleOpenClean = useCallback(() => {
     cleanForm.resetFields();
     setCleanOpen(true);
-  };
+  }, [cleanForm]);
 
   // 提交清理
-  const handleClean = async () => {
+  const handleClean = useCallback(async () => {
     try {
       const values = await cleanForm.validateFields();
       const params: { older_than?: number; keep?: number; force?: boolean } = {};
@@ -79,16 +84,22 @@ export default function RunListPage() {
     } catch {
       // 校验失败或请求失败（mutation onError 处理）
     }
-  };
+  }, [cleanForm, cleanRuns, message]);
 
-  const columns = [
+  // 稳定化：Table 不必要的重建
+  const handleOpenDetail = useCallback(
+    (id: string) => navigate(`/runs/${id}`),
+    [navigate],
+  );
+
+  const columns = useMemo(() => [
     {
       title: 'Run ID',
       dataIndex: 'id',
       key: 'id',
       width: 100,
       render: (id: string) => (
-        <a onClick={() => navigate(`/runs/${id}`)} style={{ fontFamily: 'monospace' }}>
+        <a onClick={() => handleOpenDetail(id)} style={{ fontFamily: 'monospace' }}>
           {id.slice(0, 8)}
         </a>
       ),
@@ -123,12 +134,12 @@ export default function RunListPage() {
       key: 'action',
       width: 80,
       render: (_: unknown, record: RunResponse) => (
-        <Button type="link" icon={<Eye size={14} />} onClick={() => navigate(`/runs/${record.id}`)}>
+        <Button type="link" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.id)}>
           查看
         </Button>
       ),
     },
-  ];
+  ], [handleOpenDetail]);
 
   return (
     <div className="p-4">

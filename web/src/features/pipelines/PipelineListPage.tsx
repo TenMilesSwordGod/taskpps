@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Card, Table, Button, Input, Space, Progress, Tooltip, message, Tag } from 'antd';
 import { Search, RefreshCw, Play, Eye, Image, Folder, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -20,16 +20,15 @@ export default function PipelineListPage() {
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [triggerPipeline, setTriggerPipeline] = useState<string | undefined>();
 
-  const pipelines = data?.items ?? [];
-
   // 前端搜索过滤
   const filtered = useMemo(() => {
-    if (!keyword.trim()) return pipelines;
+    const list = data?.items ?? [];
+    if (!keyword.trim()) return list;
     const kw = keyword.toLowerCase();
-    return pipelines.filter(
+    return list.filter(
       (p) => p.name.toLowerCase().includes(kw) || p.file.toLowerCase().includes(kw),
     );
-  }, [pipelines, keyword]);
+  }, [data?.items, keyword]);
 
   // 按 folder 分组：folder=="" 走根分组"/"，folder 走对应名字
   // 返回 Row[]：folder 行（可展开）+ 根目录 pipeline 行
@@ -69,7 +68,20 @@ export default function PipelineListPage() {
     return out;
   }, [filtered]);
 
-  const columns = [
+  // 稳定化回调：避免 Table 每次输入都重新渲染
+  const handleOpenDetail = useCallback(
+    (file: string) => navigate(`/pipelines/${file}`),
+    [navigate],
+  );
+  const handleOpenTrigger = useCallback((file?: string) => {
+    setTriggerPipeline(file);
+    setTriggerOpen(true);
+  }, []);
+  const handleExportImage = useCallback(() => {
+    message.info('导出图片功能将在详情页实现');
+  }, []);
+
+  const columns = useMemo(() => [
     {
       title: '名称',
       key: 'name',
@@ -141,19 +153,19 @@ export default function PipelineListPage() {
         return (
           <Space>
             <Tooltip title="查看详情">
-              <Button type="text" size="small" icon={<Eye size={14} />} onClick={() => navigate(`/pipelines/${record.file}`)} />
+              <Button type="text" size="small" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.file)} />
             </Tooltip>
             <Tooltip title="触发运行">
-              <Button type="text" size="small" icon={<Play size={14} />} onClick={() => { setTriggerPipeline(record.file); setTriggerOpen(true); }} />
+              <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.file)} />
             </Tooltip>
             <Tooltip title="导出图片（暂未实现）">
-              <Button type="text" size="small" icon={<Image size={14} />} onClick={() => message.info('导出图片功能将在详情页实现')} />
+              <Button type="text" size="small" icon={<Image size={14} />} onClick={handleExportImage} />
             </Tooltip>
           </Space>
         );
       },
     },
-  ];
+  ], [handleOpenDetail, handleOpenTrigger, handleExportImage]);
 
   return (
     <div className="p-4">
@@ -170,7 +182,7 @@ export default function PipelineListPage() {
           />
           <Space>
             <Button icon={<RefreshCw size={14} />} onClick={() => refetch()}>刷新</Button>
-            <Button type="primary" icon={<Play size={14} />} onClick={() => { setTriggerPipeline(undefined); setTriggerOpen(true); }}>触发运行</Button>
+            <Button type="primary" icon={<Play size={14} />} onClick={() => handleOpenTrigger(undefined)}>触发运行</Button>
           </Space>
         </div>
 

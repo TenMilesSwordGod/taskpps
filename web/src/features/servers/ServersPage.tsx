@@ -82,14 +82,14 @@ export default function ServersPage() {
     const s = search.toLowerCase();
     return list.filter(
       (a) =>
-        a.agent_id.toLowerCase().includes(s) ||
-        a.hostname.toLowerCase().includes(s) ||
-        a.name.toLowerCase().includes(s) ||
-        a.ip.toLowerCase().includes(s) ||
-        a.host.toLowerCase().includes(s) ||
-        a.system.toLowerCase().includes(s) ||
-        a.arch.toLowerCase().includes(s) ||
-        a.type.toLowerCase().includes(s),
+        (a.agent_id ?? '').toLowerCase().includes(s) ||
+        (a.hostname ?? '').toLowerCase().includes(s) ||
+        (a.name ?? '').toLowerCase().includes(s) ||
+        (a.ip ?? '').toLowerCase().includes(s) ||
+        (a.host ?? '').toLowerCase().includes(s) ||
+        (a.system ?? '').toLowerCase().includes(s) ||
+        (a.arch ?? '').toLowerCase().includes(s) ||
+        (a.type ?? '').toLowerCase().includes(s),
     );
   }, [agents, search]);
 

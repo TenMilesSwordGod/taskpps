@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 export interface LogEntry {
+  /** 全局自增序列号，保证同毫秒内多条日志 key 唯一 */
+  seq: number;
   taskName: string;
   content: string;
   timestamp: number;
@@ -8,6 +10,9 @@ export interface LogEntry {
 
 /** 日志最大行数（DOM 性能保护） */
 const MAX_LOG_LINES = 5000;
+
+/** 全局日志序列号（模块级，避免 hook 重 mount 后 seq 回零导致冲突） */
+let globalSeq = 0;
 
 /** SSE 实时日志 hook */
 export function useSSELogs(runId: string | undefined) {
@@ -35,11 +40,14 @@ export function useSSELogs(runId: string | undefined) {
       if (lines.length === 0) return;
 
       setLogs((prev) => {
+        const appended = lines.map((content) => ({
+          seq: ++globalSeq,
+          taskName,
+          content,
+          timestamp: Date.now(),
+        }));
         // 上限保护：超过 MAX 时丢弃最早的 1/4，避免 DOM 节点无限增长
-        const next = [
-          ...prev,
-          ...lines.map((content) => ({ taskName, content, timestamp: Date.now() })),
-        ];
+        const next = [...prev, ...appended];
         if (next.length > MAX_LOG_LINES) {
           return next.slice(next.length - Math.floor(MAX_LOG_LINES * 0.75));
         }
