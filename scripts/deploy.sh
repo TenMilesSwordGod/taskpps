@@ -457,24 +457,6 @@ show_logs() {
     journalctl -u "$SERVICE_NAME" --no-pager -f
 }
 
-# 独立修复 service file:不动其它部署产物,仅检测并按需重写
-# /etc/systemd/system/taskpps.service。供已经在跑旧版本 service 的人
-# 单独跑一次把过期的 TASKPPS_WORKDIR/不可写路径刷掉。
-fix_service_file() {
-    check_root
-    export LIB_SERVER_HOME="$SERVER_HOME"
-    export LIB_VENV_DIR="$VENV_DIR"
-    local reason
-    reason=$(service_file_needs_rewrite)
-    if [[ "$reason" == "ok" ]]; then
-        log_info "service file 无需修复 ($SERVICE_FILE)"
-        return 0
-    fi
-    log_warn "service file 需要重写 (原因: $reason)"
-    generate_systemd_service_file
-    log_info "修复完成。重启服务请运行: $0 restart"
-}
-
 # Restart service
 restart_service() {
     log_step "Restarting $SERVICE_NAME service..."
@@ -578,7 +560,7 @@ parse_args() {
 
 # 打印帮助(单独抽出来,这样 --help 和默认 usage 都复用)
 show_usage() {
-    echo "Usage: $0 [install|uninstall|status|restart|logs|stop|start|fix] [options]"
+    echo "Usage: $0 [install|uninstall|status|restart|logs|stop|start] [options]"
     echo ""
     echo "Commands:"
     echo "  install    - Full installation with systemd (default)"
@@ -588,8 +570,6 @@ show_usage() {
     echo "  logs       - Follow service logs"
     echo "  stop       - Stop the service"
     echo "  start      - Start the service"
-    echo "  fix        - 检测并重写 /etc/systemd/system/taskpps.service"
-    echo "               (用于旧版残留的 TASKPPS_WORKDIR 或不可写 ReadWritePaths)"
     echo ""
     echo "Options:"
     echo "  --binary-source <mode>    ppsctl / execution-agent 二进制来源"
@@ -627,9 +607,6 @@ case "$CMD" in
     start)
         check_root
         start_service
-        ;;
-    fix)
-        fix_service_file
         ;;
     help)
         show_usage
