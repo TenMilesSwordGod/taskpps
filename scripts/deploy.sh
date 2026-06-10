@@ -231,79 +231,11 @@ build_web_ui() {
 }
 
 # Generate systemd service file (gunicorn + uvicorn worker)
+# 实际生成逻辑在 _lib_build.sh,deploy.sh / update.sh 共享,避免模板漂移
 generate_service_file() {
-    log_step "Generating systemd service file (gunicorn)..."
-
-    cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=TaskPPS Pipeline Server (Gunicorn)
-Documentation=https://github.com/liheng/taskpps
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-User=taskpps
-Group=taskpps
-WorkingDirectory=$SERVER_HOME/server
-Environment=PYTHONPATH=$SERVER_HOME/server
-Environment=PATH=${VENV_DIR}/bin:/usr/local/bin:/usr/bin:/bin
-Environment=HOME=/var/lib/taskpps
-Environment=TASKPPS_CONFIG=$SERVER_HOME/taskpps.yaml
-Environment=TASKPPS_SERVER_HOME=$SERVER_HOME
-
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=$SERVER_HOME /var/lib/taskpps /var/log/taskpps
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
-RestrictSUIDSGID=true
-RestrictRealtime=true
-RestrictNamespaces=true
-LockPersonality=true
-MemoryDenyWriteExecute=true
-SystemCallFilter=@system-service
-SystemCallErrorNumber=EPERM
-
-# Resource limits
-LimitNOFILE=65536
-LimitNPROC=4096
-
-# Restart policy
-Restart=on-failure
-RestartSec=5
-StartLimitInterval=60s
-StartLimitBurst=3
-
-# Graceful shutdown
-TimeoutStopSec=30
-KillSignal=SIGTERM
-
-ExecStart=${VENV_DIR}/bin/gunicorn \\
-    taskpps.main:app \\
-    --worker-class uvicorn.workers.UvicornWorker \\
-    --bind 0.0.0.0:26521 \\
-    --workers 2 \\
-    --worker-tmp-dir /dev/shm \\
-    --timeout 120 \\
-    --graceful-timeout 30 \\
-    --access-logfile /var/log/taskpps/access.log \\
-    --error-logfile /var/log/taskpps/error.log \\
-    --log-level info \\
-    --capture-output
-
-ExecReload=/bin/kill -HUP \$MAINPID
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    chmod 644 "$SERVICE_FILE"
-    log_info "Service file created at $SERVICE_FILE"
+    export LIB_SERVER_HOME="$SERVER_HOME"
+    export LIB_VENV_DIR="$VENV_DIR"
+    generate_systemd_service_file
 }
 
 # Generate server config
@@ -525,6 +457,24 @@ show_logs() {
     journalctl -u "$SERVICE_NAME" --no-pager -f
 }
 
+# 独立修复 service file:不动其它部署产物,仅检测并按需重写
+# /etc/systemd/system/taskpps.service。供已经在跑旧版本 service 的人
+# 单独跑一次把过期的 TASKPPS_WORKDIR/不可写路径刷掉。
+fix_service_file() {
+    check_root
+    export LIB_SERVER_HOME="$SERVER_HOME"
+    export LIB_VENV_DIR="$VENV_DIR"
+    local reason
+    reason=$(service_file_needs_rewrite)
+    if [[ "$reason" == "ok" ]]; then
+        log_info "service file 无需修复 ($SERVICE_FILE)"
+        return 0
+    fi
+    log_warn "service file 需要重写 (原因: $reason)"
+    generate_systemd_service_file
+    log_info "修复完成。重启服务请运行: $0 restart"
+}
+
 # Restart service
 restart_service() {
     log_step "Restarting $SERVICE_NAME service..."
@@ -628,7 +578,7 @@ parse_args() {
 
 # 打印帮助(单独抽出来,这样 --help 和默认 usage 都复用)
 show_usage() {
-    echo "Usage: $0 [install|uninstall|status|restart|logs|stop|start] [options]"
+    echo "Usage: $0 [install|uninstall|status|restart|logs|stop|start|fix] [options]"
     echo ""
     echo "Commands:"
     echo "  install    - Full installation with systemd (default)"
@@ -638,6 +588,8 @@ show_usage() {
     echo "  logs       - Follow service logs"
     echo "  stop       - Stop the service"
     echo "  start      - Start the service"
+    echo "  fix        - 检测并重写 /etc/systemd/system/taskpps.service"
+    echo "               (用于旧版残留的 TASKPPS_WORKDIR 或不可写 ReadWritePaths)"
     echo ""
     echo "Options:"
     echo "  --binary-source <mode>    ppsctl / execution-agent 二进制来源"
@@ -675,6 +627,9 @@ case "$CMD" in
     start)
         check_root
         start_service
+        ;;
+    fix)
+        fix_service_file
         ;;
     help)
         show_usage

@@ -138,6 +138,19 @@ build_web_ui() {
 
 restart_service() {
     log_step "Restarting service..."
+
+    # 防御:在 restart 之前先检测 service file 是否需要重写
+    # 旧版本残留的 TASKPPS_WORKDIR 或不可写 ReadWritePaths 会让
+    # gunicorn 启动即崩,提前修掉避免 restart 之后还是 fail。
+    export LIB_SERVER_HOME="$SERVER_HOME"
+    export LIB_VENV_DIR="$VENV_DIR"
+    local reason
+    reason=$(service_file_needs_rewrite)
+    if [[ "$reason" != "ok" ]]; then
+        log_warn "service file 需要重写 (原因: $reason),先修复再 restart"
+        generate_systemd_service_file
+    fi
+
     systemctl daemon-reload
     systemctl restart "$SERVICE_NAME"
 

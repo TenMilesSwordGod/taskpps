@@ -276,3 +276,183 @@ print_install_paths() {
     lib_log_info "    - $LIB_SERVER_HOME/execution_agent/build/taskpps-agent-linux-arm64"
     echo ""
 }
+
+# ============================================================================
+# systemd service file 生成
+# deploy.sh 和 update.sh 都共用同一份模板,避免两份脚本漂移
+# ============================================================================
+
+# 探测 $path 是否存在且 taskpps 用户可写
+# 返回 0 表示可写,1 表示不可写/不存在
+_path_writable_by_taskpps() {
+    local path="$1"
+    if [[ -z "$path" || "$path" == "/" ]]; then
+        return 1
+    fi
+    [[ -d "$path" ]] || return 1
+    # taskpps 用户存在吗?不存在(非 deploy 阶段)直接 return 0 让 system 接手
+    if ! id -u taskpps >/dev/null 2>&1; then
+        return 0
+    fi
+    # 优先用 sudo -u 真测,失败再退回到"目录存在+taskpps 用户存在即认为可写"
+    if command -v sudo >/dev/null 2>&1; then
+        sudo -u taskpps -n test -w "$path" 2>/dev/null && return 0
+    fi
+    # 兜底:root 跑 deploy 时,目录所有权正确(taskpps:taskpps)即认为可写
+    local owner
+    owner=$(stat -c '%U' "$path" 2>/dev/null)
+    [[ "$owner" == "taskpps" ]] && return 0
+    # 进一步兜底:当前进程是 root 且 taskpps 用户存在,统一信任(目录权限通常由 deploy 自己 chown)
+    if [[ $EUID -eq 0 ]]; then
+        return 0
+    fi
+    test -w "$path"
+}
+
+# 过滤掉不存在或 taskpps 不可写的路径,空格分隔
+# 空字符串表示"无可写路径"——调用方应避免生成空 ReadWritePaths(会被 systemd 拒收)
+_filter_writable_paths() {
+    local out=""
+    local p
+    # 用 read 把空格分隔的输入拆分到数组,避免全局 IFS 副作用
+    local -a parts
+    # shellcheck disable=SC2206
+    parts=( $1 )
+    for p in "${parts[@]}"; do
+        [[ -z "$p" ]] && continue
+        if _path_writable_by_taskpps "$p"; then
+            out="${out:+$out }$p"
+        else
+            lib_log_warn "  跳过 ReadWritePaths: $p(不存在或 taskpps 不可写)"
+        fi
+    done
+    echo "$out"
+}
+
+# 生成 /etc/systemd/system/taskpps.service
+# 调用方需要先 export:
+#   LIB_SERVER_HOME  部署根(默认 /opt/taskpps)
+#   LIB_VENV_DIR     venv 路径(默认 /opt/taskpps/server/.venv)
+# service_name 固定 taskpps(全项目唯一)
+generate_systemd_service_file() {
+    local server_home="${LIB_SERVER_HOME:-/opt/taskpps}"
+    local venv_dir="${LIB_VENV_DIR:-$server_home/server/.venv}"
+    local service_file="/etc/systemd/system/taskpps.service"
+
+    lib_log_step "生成 systemd service file → $service_file"
+
+    # 防御性:过滤掉不可写的 ReadWritePaths,避免 systemd 启动失败
+    local rw_paths
+    rw_paths=$(_filter_writable_paths "$server_home /var/lib/taskpps /var/log/taskpps")
+    if [[ -z "$rw_paths" ]]; then
+        lib_log_error "没有可写路径可作为 ReadWritePaths,放弃生成 service file"
+        return 1
+    fi
+
+    cat > "$service_file" <<EOF
+[Unit]
+Description=TaskPPS Pipeline Server (Gunicorn)
+Documentation=https://github.com/liheng/taskpps
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=taskpps
+Group=taskpps
+WorkingDirectory=$server_home/server
+Environment=PYTHONPATH=$server_home/server
+Environment=PATH=${venv_dir}/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/var/lib/taskpps
+Environment=TASKPPS_CONFIG=$server_home/taskpps.yaml
+Environment=TASKPPS_SERVER_HOME=$server_home
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$rw_paths
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+ExecStart=${venv_dir}/bin/gunicorn \\
+    taskpps.main:app \\
+    --worker-class uvicorn.workers.UvicornWorker \\
+    --bind 0.0.0.0:26521 \\
+    --workers 2 \\
+    --worker-tmp-dir /dev/shm \\
+    --timeout 120 \\
+    --graceful-timeout 30 \\
+    --access-logfile /var/log/taskpps/access.log \\
+    --error-logfile /var/log/taskpps/error.log \\
+    --log-level info \\
+    --capture-output
+
+ExecReload=/bin/kill -HUP \$MAINPID
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    chmod 644 "$service_file"
+    lib_log_info "service file 已生成: $service_file"
+    systemctl daemon-reload
+}
+
+# 探测现有 service file 是否需要重写(配置漂移检测)
+# 触发条件:
+#   1) 不存在
+#   2) 包含 TASKPPS_WORKDIR 环境变量(旧模板的残留,新模板不应再写)
+#   3) ReadWritePaths 含 taskpps 不可写的路径
+#   4) ExecStart 路径跟当前 server_home/venv 不一致
+service_file_needs_rewrite() {
+    local service_file="/etc/systemd/system/taskpps.service"
+    local server_home="${LIB_SERVER_HOME:-/opt/taskpps}"
+    local venv_dir="${LIB_VENV_DIR:-$server_home/server/.venv}"
+
+    if [[ ! -f "$service_file" ]]; then
+        echo "missing"
+        return 0
+    fi
+    if grep -qE '^Environment=TASKPPS_WORKDIR=' "$service_file"; then
+        echo "stale-workdir"
+        return 0
+    fi
+    if ! grep -q "ExecStart=${venv_dir}/bin/gunicorn" "$service_file"; then
+        echo "exec-mismatch"
+        return 0
+    fi
+    # 检查 ReadWritePaths 里每个路径是否 taskpps 仍可写
+    local rw_line
+    rw_line=$(grep '^ReadWritePaths=' "$service_file" | head -1 | cut -d= -f2-)
+    for p in $rw_line; do
+        if ! _path_writable_by_taskpps "$p"; then
+            echo "unwritable: $p"
+            return 0
+        fi
+    done
+    echo "ok"
+    return 1
+}
