@@ -216,28 +216,34 @@ def get_logs_dir() -> Path:
     return logs
 
 
-def get_pipelines_dir(project_workdir: Path | None = None) -> Path:
-    return (project_workdir or get_project_workdir()) / "pipelines"
+def _ensure_path(p: Path | str | None) -> Path | None:
+    if p is None or isinstance(p, Path):
+        return p
+    return Path(p)
 
 
-def get_agents_dir(project_workdir: Path | None = None) -> Path:
-    return (project_workdir or get_project_workdir()) / "agents"
+def get_pipelines_dir(project_workdir: Path | str | None = None) -> Path:
+    return (_ensure_path(project_workdir) or get_project_workdir()) / "pipelines"
 
 
-def get_credentials_dir(project_workdir: Path | None = None) -> Path:
-    return (project_workdir or get_project_workdir()) / "credentials"
+def get_agents_dir(project_workdir: Path | str | None = None) -> Path:
+    return (_ensure_path(project_workdir) or get_project_workdir()) / "agents"
 
 
-def get_tasks_dir(project_workdir: Path | None = None) -> Path:
-    return (project_workdir or get_project_workdir()) / "tasks"
+def get_credentials_dir(project_workdir: Path | str | None = None) -> Path:
+    return (_ensure_path(project_workdir) or get_project_workdir()) / "credentials"
 
 
-def get_plugins_dir(project_workdir: Path | None = None) -> Path:
-    return (project_workdir or get_project_workdir()) / "plugins"
+def get_tasks_dir(project_workdir: Path | str | None = None) -> Path:
+    return (_ensure_path(project_workdir) or get_project_workdir()) / "tasks"
 
 
-def get_workspaces_dir(project_workdir: Path | None = None) -> Path:
-    workspaces = (project_workdir or get_project_workdir()) / ".taskpps" / "workspaces"
+def get_plugins_dir(project_workdir: Path | str | None = None) -> Path:
+    return (_ensure_path(project_workdir) or get_project_workdir()) / "plugins"
+
+
+def get_workspaces_dir(project_workdir: Path | str | None = None) -> Path:
+    workspaces = (_ensure_path(project_workdir) or get_project_workdir()) / ".taskpps" / "workspaces"
     workspaces.mkdir(parents=True, exist_ok=True)
     return workspaces
 
