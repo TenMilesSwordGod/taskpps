@@ -3,15 +3,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from taskpps.api import agents, health, pipelines, projects, runs, triggers, ws_agent
 from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale
+from taskpps.logging_config import setup_logging
 from taskpps.middleware.auth import APIKeyMiddleware
 from taskpps.services.plugin_manager import PluginManager
 from taskpps.version import __version__
@@ -30,6 +31,9 @@ def mark_external_engine():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _plugin_manager
+
+    setup_logging()
+
     settings = get_settings()
     if settings is None:
         load_settings()
@@ -82,6 +86,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.critical("Unhandled exception: %s %s", request.method, request.url.path, exc_info=True)
+    logger.debug("Request details: headers=%s query=%s", dict(request.headers), dict(request.query_params))
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error", "path": request.url.path})
+
+
 app.include_router(health.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(pipelines.router, prefix="/api")
@@ -117,6 +129,7 @@ if _web_dist.is_dir():
 
 
 def cli():
+    setup_logging()
     load_settings()
     settings = get_settings()
     uvicorn.run(

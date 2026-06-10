@@ -253,6 +253,9 @@ def health_check(c, url="http://localhost:8000"):
 				if strings.Contains(errMsg, "401") {
 					return fmt.Errorf("注册项目失败: %w\n\n提示: 服务端要求 API Key 认证，请使用 -k 参数或设置 PPSCTL_API_KEY 环境变量\n  例如: ppsctl init --register-current-folder -k <your-api-key>", err)
 				}
+				if strings.Contains(errMsg, "500") {
+					return fmt.Errorf("注册项目失败: %w\n\n提示: 服务端内部错误，请检查服务端日志（.taskpps/server.log 或 taskpps start-server 输出）", err)
+				}
 				return fmt.Errorf("注册项目失败: %w", err)
 			}
 			fmt.Printf("  项目已注册: id=%s workdir=%s\n", project.ID, project.Workdir)

@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import fcntl
+import logging
 import os
+from pathlib import Path
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -11,6 +13,8 @@ from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
 from taskpps.config import get_data_dir, get_db_path
+
+logger = logging.getLogger("taskpps.db")
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -39,26 +43,41 @@ def _cross_process_lock():
     间互斥(同进程内多个 fd 调 flock 不互斥,所以这一步不替代 asyncio.Lock)。
     每次调用新开一个 fd,持锁期间在调用方所在线程阻塞,典型 <1ms。
 
-    当 data dir 为只读文件系统时（如部分容器环境），lock file 无法创建，
-    直接跳过锁保护（此时假定同进程内 asyncio.Lock 已足够）。
+    当 data dir 为只读文件系统时，fallback 到 /tmp 创建 lock file，
+    确保跨进程互斥始终生效。
     """
-    lock_path = get_data_dir() / ".db_init.lock"
-    try:
-        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
-    except OSError:
-        import logging
+    _lock_fds: list[int] = []
 
-        logging.getLogger("taskpps.db").warning(
-            "Cannot create lock file %s — proceeding without cross-process lock", lock_path
+    def _try_lock(path: Path) -> bool:
+        try:
+            fd = os.open(str(path), os.O_CREAT | os.O_RDWR, 0o644)
+        except OSError:
+            return False
+        _lock_fds.append(fd)
+        return True
+
+    primary = get_data_dir() / ".db_init.lock"
+    locked = _try_lock(primary)
+    if not locked:
+        import tempfile
+
+        fallback = Path(tempfile.gettempdir()) / f"taskpps_db_init_{abs(hash(str(primary))) % 100000}.lock"
+        logger.warning(
+            "Cannot create lock file %s (read-only filesystem?), using fallback %s", primary, fallback
         )
-        yield
-        return
+        locked = _try_lock(fallback)
+        if not locked:
+            logger.error("Cannot create lock file at either location — proceeding without cross-process lock")
+            yield
+            return
+
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        fcntl.flock(_lock_fds[0], fcntl.LOCK_EX)
         yield
     finally:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        os.close(fd)
+        for fd in _lock_fds:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
 
 
 def get_engine() -> AsyncEngine:
@@ -67,6 +86,7 @@ def get_engine() -> AsyncEngine:
         db_path = get_db_path()
         db_path.parent.mkdir(parents=True, exist_ok=True)
         url = f"sqlite+aiosqlite:///{db_path}"
+        logger.debug("Creating engine: url=%s db_path=%s", url, db_path)
         _engine = create_async_engine(
             url,
             echo=False,
@@ -87,6 +107,7 @@ def get_engine() -> AsyncEngine:
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
     global _session_factory
     if _session_factory is None:
+        logger.debug("Creating session factory")
         _session_factory = async_sessionmaker(get_engine(), class_=AsyncSession, expire_on_commit=False)
     return _session_factory
 
@@ -121,16 +142,14 @@ async def _migrate_schema() -> None:
         for table_name, columns in _MIGRATIONS.items():
             result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
             existing = {row[1] for row in result.fetchall()}
+            logger.debug("Checking table %s (existing columns: %s)", table_name, sorted(existing))
             # 表不存在时跳过迁移（create_all 应已创建，若被跳过则下次重启会创建）
             if not existing:
-                import logging
-
-                logging.getLogger("taskpps.db").warning(
-                    "Table '%s' does not exist — skipping migration (will retry on next restart)", table_name
-                )
+                logger.warning("Table '%s' does not exist — skipping migration (will retry on next restart)", table_name)
                 continue
             for col_name, col_def in columns:
                 if col_name not in existing:
+                    logger.debug("Adding column %s.%s %s", table_name, col_name, col_def)
                     await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
 
 
@@ -148,26 +167,33 @@ async def init_db() -> None:
 
     第一个调用者跑 create_all + 迁移,后续调用者等锁释放后再进,
     看到表已存在直接 no-op,迁移也跳过(已存在列)。
+
+    防御层:即使极少数情况下锁失效，create_all 带重试可容忍 "table already exists"。
     """
+    logger.info("Initializing database...")
     async with _get_in_process_lock():
         with _cross_process_lock():
+            logger.debug("Acquired lock, creating tables")
             engine = get_engine()
             async with engine.begin() as conn:
-                await conn.run_sync(SQLModel.metadata.create_all)
+                try:
+                    await conn.run_sync(SQLModel.metadata.create_all)
+                except Exception:
+                    # 竞态防御：另一个 worker 可能已创建表，重试一次
+                    logger.debug("create_all failed (likely concurrent worker), retrying...", exc_info=True)
+                    await conn.run_sync(SQLModel.metadata.create_all)
+            logger.debug("Tables created, running schema migration")
             try:
                 await _migrate_schema()
             except Exception:
-                import logging
-
-                logging.getLogger("taskpps.db").error(
-                    "Schema migration failed — the database may be in an inconsistent state",
-                    exc_info=True,
-                )
+                logger.error("Schema migration failed — the database may be in an inconsistent state", exc_info=True)
+        logger.info("Database initialized")
 
 
 async def close_db() -> None:
     global _engine, _session_factory
     if _engine is not None:
+        logger.debug("Disposing database engine")
         await _engine.dispose()
         _engine = None
         _session_factory = None

@@ -11,6 +11,7 @@ import (
 
 	"github.com/imroc/req"
 	"github.com/taskpps/ppsctl/config"
+	"github.com/taskpps/ppsctl/logger"
 	"github.com/taskpps/ppsctl/models"
 )
 
@@ -68,10 +69,13 @@ func parseResp(resp *req.Resp, v interface{}) error {
 	status := resp.Response().StatusCode
 	if status < 200 || status >= 300 {
 		body := resp.String()
+		logger.Debug("HTTP error response: status=%d url=%s headers=%v body=%s",
+			status, resp.Response().Request.URL.String(), resp.Response().Header, body)
 		return fmt.Errorf("unexpected status %d: %s", status, body)
 	}
 	if err := resp.ToJSON(v); err != nil {
 		body := resp.String()
+		logger.Debug("HTTP parse failed: status=%d body=%s err=%v", status, body, err)
 		return fmt.Errorf("failed to parse response: %w (body: %s)", err, body)
 	}
 	return nil
@@ -493,6 +497,7 @@ func (c *Client) RegisterProject(workdir, name string) (*models.Project, error) 
 		Workdir: workdir,
 		Name:    name,
 	}
+	logger.Debug("POST %s/projects/ body={workdir:%q name:%q}", c.baseURL, workdir, name)
 	resp, err := c.http.Post(c.baseURL+"/projects/", req.BodyJSON(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to register project: %w", err)
