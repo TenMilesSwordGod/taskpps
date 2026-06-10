@@ -18,8 +18,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Host   string `mapstructure:"host"`
+	Port   int    `mapstructure:"port"`
+	ApiKey string `mapstructure:"api_key"`
 }
 
 type ExecutorConfig struct {

@@ -16,15 +16,45 @@ import (
 
 type Client struct {
 	baseURL string
+	apiKey  string
 	http    *req.Req
 }
 
 func New(cfg *config.Config) *Client {
 	addr := config.GetServerAddr(cfg)
 	os.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	r := req.New()
+	if cfg.Server.ApiKey != "" {
+		transport := r.Client().Transport
+		if transport == nil {
+			transport = http.DefaultTransport
+		}
+		r.Client().Transport = &authTransport{
+			apiKey: cfg.Server.ApiKey,
+			base:   transport,
+		}
+	}
 	return &Client{
 		baseURL: fmt.Sprintf("http://%s/api", addr),
-		http:    req.New(),
+		apiKey:  cfg.Server.ApiKey,
+		http:    r,
+	}
+}
+
+// authTransport 是一个 http.RoundTripper，自动为所有请求注入 X-API-Key 头
+type authTransport struct {
+	apiKey string
+	base   http.RoundTripper
+}
+
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("X-API-Key", t.apiKey)
+	return t.base.RoundTrip(req)
+}
+
+func (c *Client) setAuthHeader(req *http.Request) {
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
 	}
 }
 
@@ -149,6 +179,7 @@ func (c *Client) FollowLogs(runID, task string, handler func(taskName, line stri
 	if err != nil {
 		return err
 	}
+	c.setAuthHeader(httpReq)
 	httpResp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("failed to connect to log stream: %w", err)
@@ -358,6 +389,7 @@ func (c *Client) CheckAgentsStream(agentID, fileFilter string, timeout int, hand
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(httpReq)
 
 	httpResp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {

@@ -12,4 +12,10 @@ const apiClient = axios.create({
   },
 });
 
+// 通过 VITE_API_KEY 环境变量注入 API Key 认证
+const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
+if (apiKey) {
+  apiClient.defaults.headers.common['X-API-Key'] = apiKey;
+}
+
 export default apiClient;

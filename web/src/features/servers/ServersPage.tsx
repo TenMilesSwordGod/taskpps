@@ -58,7 +58,10 @@ export default function ServersPage() {
     const baseURL = (import.meta.env.VITE_API_BASE_URL as string) ?? '';
     const url = `${baseURL}/api/agents/all`;
     try {
-      const res = await fetch(url);
+      const apiKey = (import.meta.env.VITE_API_KEY as string) ?? '';
+      const headers: Record<string, string> = {};
+      if (apiKey) headers['X-API-Key'] = apiKey;
+      const res = await fetch(url, { headers });
       const text = await res.text();
       let type = 'unknown';
       let preview = text.slice(0, 200);
