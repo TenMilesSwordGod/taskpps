@@ -10,6 +10,10 @@ from taskpps.i18n import t
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # 静态文件（/、/assets/*、/favicon.ico 等）无需认证
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
         settings = get_settings()
         api_key = settings.server.api_key
 

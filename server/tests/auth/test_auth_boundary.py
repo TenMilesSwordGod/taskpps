@@ -126,3 +126,43 @@ async def test_empty_api_key(app, setup_project, tmp_project):
             assert response.status_code == 401
     finally:
         _restore_config(tmp_project, original)
+
+
+@pytest.mark.asyncio
+async def test_root_path_not_blocked_by_auth(app, setup_project, tmp_project):
+    """GET / 不应被 API key 拦截返回 401，应透传到静态文件处理（200 或 404）。"""
+    original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/")
+            # 不是 401 就对了（实际可能是 200 有 index.html 或 404 没有静态目录）
+            assert response.status_code != 401
+    finally:
+        _restore_config(tmp_project, original)
+
+
+@pytest.mark.asyncio
+async def test_favicon_not_blocked_by_auth(app, setup_project, tmp_project):
+    """GET /favicon.ico 不应被 API key 拦截返回 401。"""
+    original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/favicon.ico")
+            assert response.status_code != 401
+    finally:
+        _restore_config(tmp_project, original)
+
+
+@pytest.mark.asyncio
+async def test_assets_path_not_blocked_by_auth(app, setup_project, tmp_project):
+    """GET /assets/... 不应被 API key 拦截返回 401。"""
+    original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/assets/index-abc123.js")
+            assert response.status_code != 401
+    finally:
+        _restore_config(tmp_project, original)
