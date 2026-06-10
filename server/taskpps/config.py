@@ -201,7 +201,9 @@ def get_server_home() -> Path:
 
 
 def get_data_dir() -> Path:
-    data_dir = get_project_workdir() / ".taskpps"
+    """返回 server 级别的数据目录（如 state.db），与项目 workdir 解耦。"""
+    server_home = Path(__file__).resolve().parent.parent
+    data_dir = server_home / ".taskpps"
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 
@@ -211,7 +213,9 @@ def get_db_path() -> Path:
 
 
 def get_logs_dir() -> Path:
-    logs = get_project_workdir() / ".taskpps" / "logs"
+    """返回 server 级别的日志目录，与项目 workdir 解耦。"""
+    server_home = Path(__file__).resolve().parent.parent
+    logs = server_home / ".taskpps" / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     return logs
 

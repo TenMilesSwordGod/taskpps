@@ -8,6 +8,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import TaskNode from './nodes/TaskNode';
+import SubpipelineGroupNode from './nodes/SubpipelineGroupNode';
 import { usePipelineGraph } from './hooks/usePipelineGraph';
 import { useAppStore } from '@/stores/appStore';
 import type { PipelineDetail, TaskStatus } from '@/types';
@@ -15,6 +16,7 @@ import type { PipelineDetail, TaskStatus } from '@/types';
 /** 注册自定义节点类型 */
 const nodeTypes = {
   taskNode: TaskNode,
+  subpipelineGroup: SubpipelineGroupNode,
 };
 
 interface PipelineGraphProps {

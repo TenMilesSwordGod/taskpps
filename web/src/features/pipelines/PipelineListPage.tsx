@@ -20,6 +20,7 @@ export default function PipelineListPage() {
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [triggerPipeline, setTriggerPipeline] = useState<string | undefined>();
   const [triggerProjectId, setTriggerProjectId] = useState<string | null>(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Set<string>>(new Set());
 
   // 前端搜索过滤
   const filtered = useMemo(() => {
@@ -212,6 +213,15 @@ export default function PipelineListPage() {
           size="middle"
           expandable={{
             childrenColumnName: 'children',
+            expandedRowKeys: [...expandedRowKeys],
+            onExpand: (expanded, record) => {
+              const key = (record as Row).isFolder ? `__folder__${(record as Row).name}` : (record as Row).file;
+              setExpandedRowKeys((prev) => {
+                const next = new Set(prev);
+                if (expanded) next.add(key); else next.delete(key);
+                return next;
+              });
+            },
             defaultExpandAllRows: false,
             rowExpandable: (record) => (record as Row).isFolder === true,
             expandIcon: ({ expanded, onExpand, record }) => {
@@ -232,6 +242,20 @@ export default function PipelineListPage() {
             },
           }}
           rowClassName={(record: Row) => (record.isFolder ? 'pipeline-folder-row' : '')}
+          onRow={(record: Row) => {
+            if (!record.isFolder) return {};
+            const key = `__folder__${record.name}`;
+            return {
+              style: { cursor: 'pointer' },
+              onClick: () => {
+                setExpandedRowKeys((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key); else next.add(key);
+                  return next;
+                });
+              },
+            };
+          }}
         />
       </Card>
 

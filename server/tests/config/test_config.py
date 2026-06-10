@@ -187,19 +187,13 @@ class TestDirectories:
     def test_data_dir(self, setup_project, tmp_project):
         d = get_data_dir()
         assert d.exists()
-        assert str(tmp_project) in str(d)
+        # data_dir 基于 server 安装目录，不是项目 workdir
+        assert ".taskpps" in str(d)
 
     def test_data_dir_creates(self, tmp_path, setup_project):
-        import taskpps.config as cfg
-
-        old_workdir = cfg._project_workdir
-        cfg._project_workdir = tmp_path
-        try:
-            d = get_data_dir()
-            assert d.exists()
-            assert (tmp_path / ".taskpps").exists()
-        finally:
-            cfg._project_workdir = old_workdir
+        # data_dir 由 server_home 决定，不受 _project_workdir 影响
+        d = get_data_dir()
+        assert d.exists()
 
     def test_db_path(self, setup_project, tmp_project):
         p = get_db_path()
@@ -214,7 +208,8 @@ class TestDirectories:
         try:
             p = get_db_path()
             assert p.name == "state.db"
-            assert p.parent == tmp_path / ".taskpps"
+            # db_path 基于 server_home 而非 project_workdir
+            assert ".taskpps" in str(p.parent)
         finally:
             cfg._project_workdir = old_workdir
 
@@ -223,6 +218,7 @@ class TestDirectories:
         assert d.exists()
 
     def test_logs_dir_creates(self, tmp_path, setup_project):
+        # logs_dir 由 server_home 决定，不受 _project_workdir 影响
         import taskpps.config as cfg
 
         old_workdir = cfg._project_workdir
@@ -230,7 +226,8 @@ class TestDirectories:
         try:
             d = get_logs_dir()
             assert d.exists()
-            assert d == tmp_path / ".taskpps" / "logs"
+            assert ".taskpps" in str(d)
+            assert d.name == "logs"
         finally:
             cfg._project_workdir = old_workdir
 
