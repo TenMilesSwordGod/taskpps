@@ -167,8 +167,6 @@ async def init_db() -> None:
 
     第一个调用者跑 create_all + 迁移,后续调用者等锁释放后再进,
     看到表已存在直接 no-op,迁移也跳过(已存在列)。
-
-    防御层:即使极少数情况下锁失效，create_all 带重试可容忍 "table already exists"。
     """
     logger.info("Initializing database...")
     async with _get_in_process_lock():
@@ -176,17 +174,9 @@ async def init_db() -> None:
             logger.debug("Acquired lock, creating tables")
             engine = get_engine()
             async with engine.begin() as conn:
-                try:
-                    await conn.run_sync(SQLModel.metadata.create_all)
-                except Exception:
-                    # 竞态防御：另一个 worker 可能已创建表，重试一次
-                    logger.debug("create_all failed (likely concurrent worker), retrying...", exc_info=True)
-                    await conn.run_sync(SQLModel.metadata.create_all)
+                await conn.run_sync(SQLModel.metadata.create_all)
             logger.debug("Tables created, running schema migration")
-            try:
-                await _migrate_schema()
-            except Exception:
-                logger.error("Schema migration failed — the database may be in an inconsistent state", exc_info=True)
+            await _migrate_schema()
         logger.info("Database initialized")
 
 

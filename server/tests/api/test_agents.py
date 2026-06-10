@@ -68,7 +68,7 @@ async def test_check_agent_not_found(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
-async def test_host_info_agent_not_found(app, setup_project, tmp_project):
+async def test_host_info_agent_not_found(app, setup_project, tmp_project, db_engine):
     """不存在的 agent_id → 404"""
     import taskpps.config as cfg
 
@@ -155,7 +155,7 @@ async def test_host_info_ssh_missing_credential(app, setup_project, tmp_project)
 
 
 @pytest.mark.asyncio
-async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project):
+async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project, db_engine):
     """SSH 认证失败 → 200 + 错误信息含 username（不发 5xx）"""
     from unittest.mock import MagicMock, patch
 
@@ -210,7 +210,7 @@ async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
-async def test_host_info_ssh_success(app, setup_project, tmp_project):
+async def test_host_info_ssh_success(app, setup_project, tmp_project, db_engine):
     """SSH 成功 → 返回真实 host 数据"""
     from unittest.mock import MagicMock, patch
 

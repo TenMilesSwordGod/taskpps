@@ -30,16 +30,13 @@ _agent_service = AgentService()
 
 
 async def _query_all_projects() -> list:
-    """安全查询所有已注册项目，DB 不可用时返回空列表。"""
+    """查询所有已注册项目。"""
     from taskpps.db.engine import get_session_factory
     from taskpps.db.repository import ProjectRepository
 
-    try:
-        async with get_session_factory()() as session:
-            repo = ProjectRepository(session)
-            return await repo.list_projects()
-    except Exception:
-        return []
+    async with get_session_factory()() as session:
+        repo = ProjectRepository(session)
+        return await repo.list_projects()
 
 
 async def _load_agents_from_projects() -> tuple[list[dict], list]:
@@ -164,7 +161,7 @@ async def agent_all():
     manager = AgentManager.instance()
     result: list[AgentWithConfig] = []
 
-    agent_items, _ = _load_agents_from_projects()
+    agent_items, _ = await _load_agents_from_projects()
     for cfg in agent_items:
         agent_id = str(cfg.get("id", "") or "")
         item = AgentWithConfig(
@@ -236,7 +233,7 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
 
     cwd = body.cwd or ""
     if not cwd:
-        agent_items, _ = _load_agents_from_projects()
+        agent_items, _ = await _load_agents_from_projects()
         for item in agent_items:
             if item.get("id") == agent_id and item.get("agent_work_dir"):
                 cwd = item["agent_work_dir"]
