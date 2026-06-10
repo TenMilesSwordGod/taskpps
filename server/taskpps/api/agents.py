@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from taskpps.loaders.agent_loader import AgentLoader
+from taskpps.i18n import t
 from taskpps.schemas.agent import (
     AgentCheckRequest,
     AgentCheckResponse,
@@ -302,13 +303,36 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
 @router.post("/deploy", response_model=AgentDeployResult)
 async def deploy_agent(body: AgentDeployRequest):
     try:
+        from taskpps.config import get_agents_dir
+        from taskpps.loaders.agent_loader import AgentLoader
         from taskpps.services.agent_bootstrap import AgentBootstrap
 
+        # 先从已注册项目查找 agent 配置
+        agent_items, _ = await _load_agents_from_projects()
+        agent_cfg = None
+        project_workdir = None
+        for item in agent_items:
+            if item.get("id") == body.agent_id:
+                agent_cfg = item
+                project_workdir = item.get("_project_workdir", "")
+                break
+
+        if not agent_cfg:
+            raise HTTPException(status_code=404, detail=t("Agent not found: {id}", id=body.agent_id))
+
+        loader = (
+            AgentLoader(base_dir=get_agents_dir(Path(project_workdir)))
+            if project_workdir
+            else AgentLoader()
+        )
+
         bootstrap = AgentBootstrap()
-        await bootstrap.bootstrap(body.agent_id)
+        await bootstrap.bootstrap(body.agent_id, agent_loader=loader)
         return AgentDeployResult(success=True, agent_id=body.agent_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        detail = str(e)
+        status_code = 404 if "not found" in detail.lower() else 500
+        raise HTTPException(status_code=status_code, detail=detail) from e
 
 
 @router.get("/{agent_id}/host-info", response_model=AgentHostInfo)
