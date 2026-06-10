@@ -88,11 +88,11 @@ update_code() {
         --exclude='.pytest_cache' \
         --exclude='.venv' \
         --exclude='node_modules' \
-        --exclude='pipelines/' \
-        --exclude='agents/' \
-        --exclude='credentials/' \
-        --exclude='tasks/' \
-        --exclude='plugins/' \
+        --exclude='/pipelines/' \
+        --exclude='/agents/' \
+        --exclude='/credentials/' \
+        --exclude='/tasks/' \
+        --exclude='/plugins/' \
         "$PROJECT_ROOT/" "$SERVER_HOME/"
 
     chown -R taskpps:taskpps "$SERVER_HOME"

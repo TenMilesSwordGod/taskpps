@@ -38,9 +38,21 @@ def _cross_process_lock():
     gunicorn 多 worker 是不同进程,asyncio.Lock 帮不到。fcntl(LOCK_EX) 在不同进程
     间互斥(同进程内多个 fd 调 flock 不互斥,所以这一步不替代 asyncio.Lock)。
     每次调用新开一个 fd,持锁期间在调用方所在线程阻塞,典型 <1ms。
+
+    当 data dir 为只读文件系统时（如部分容器环境），lock file 无法创建，
+    直接跳过锁保护（此时假定同进程内 asyncio.Lock 已足够）。
     """
     lock_path = get_data_dir() / ".db_init.lock"
-    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    except OSError:
+        import logging
+
+        logging.getLogger("taskpps.db").warning(
+            "Cannot create lock file %s — proceeding without cross-process lock", lock_path
+        )
+        yield
+        return
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         yield
@@ -97,6 +109,9 @@ _MIGRATIONS = {
     "triggers": [
         ("project_id", "TEXT"),
     ],
+    "projects": [
+        ("last_used_at", "TIMESTAMP"),
+    ],
 }
 
 
@@ -106,6 +121,14 @@ async def _migrate_schema() -> None:
         for table_name, columns in _MIGRATIONS.items():
             result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
             existing = {row[1] for row in result.fetchall()}
+            # 表不存在时跳过迁移（create_all 应已创建，若被跳过则下次重启会创建）
+            if not existing:
+                import logging
+
+                logging.getLogger("taskpps.db").warning(
+                    "Table '%s' does not exist — skipping migration (will retry on next restart)", table_name
+                )
+                continue
             for col_name, col_def in columns:
                 if col_name not in existing:
                     await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
@@ -131,7 +154,15 @@ async def init_db() -> None:
             engine = get_engine()
             async with engine.begin() as conn:
                 await conn.run_sync(SQLModel.metadata.create_all)
-            await _migrate_schema()
+            try:
+                await _migrate_schema()
+            except Exception:
+                import logging
+
+                logging.getLogger("taskpps.db").error(
+                    "Schema migration failed — the database may be in an inconsistent state",
+                    exc_info=True,
+                )
 
 
 async def close_db() -> None:
