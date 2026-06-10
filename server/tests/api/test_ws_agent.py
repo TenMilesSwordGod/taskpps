@@ -40,6 +40,71 @@ class TestAgentWebSocket:
         ws.send_json.assert_any_call({"type": "heartbeat_request", "data": {}})
 
     @pytest.mark.asyncio
+    async def test_no_ping_messages_sent(self):
+        """验证 _ping_loop 已移除，不再发送 ping 类型消息。"""
+        manager = AgentManager()
+        ws = AsyncMock()
+        ws.accept = AsyncMock()
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
+        ws.send_json = AsyncMock()
+        ws.close = AsyncMock()
+
+        # 收到一次心跳响应后超时断开
+        ws.receive_text = AsyncMock(
+            side_effect=[
+                json.dumps({"type": "heartbeat_response", "data": {}}),
+                asyncio.TimeoutError(),
+                WebSocketDisconnect(),
+            ]
+        )
+
+        with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
+            mock_mgr_cls.instance.return_value = manager
+            await ws_agent.agent_websocket(ws)
+
+        # 确认没有发送 ping 类型消息
+        for call in ws.send_json.call_args_list:
+            msg = call[0][0]
+            assert msg.get("type") != "ping", f"不应发送 ping 消息，但收到了: {msg}"
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_request_uses_send_lock(self):
+        """验证 heartbeat_request 通过 conn.send_msg（即 _send_lock）发送，而非直接 ws.send_json。"""
+        manager = AgentManager()
+        ws = AsyncMock()
+        ws.accept = AsyncMock()
+        ws.receive_json = AsyncMock(
+            return_value={
+                "type": "handshake_request",
+                "data": {"agent_id": "agent-1", "secret": "s", "version": "1.0"},
+            }
+        )
+        ws.send_json = AsyncMock()
+        ws.close = AsyncMock()
+
+        # 超时触发 heartbeat_request，然后断开
+        ws.receive_text = AsyncMock(
+            side_effect=[asyncio.TimeoutError(), WebSocketDisconnect()]
+        )
+
+        with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
+            mock_mgr_cls.instance.return_value = manager
+            await ws_agent.agent_websocket(ws)
+
+        # heartbeat_request 应该通过 send_json 发送（经过 _send_lock）
+        ws.send_json.assert_any_call({"type": "heartbeat_request", "data": {}})
+
+        # 验证 conn 对象存在且 last_heartbeat 被标记为断开
+        conn = manager.get_connection("agent-1")
+        assert conn is not None
+        assert conn.last_heartbeat == -1
+
+    @pytest.mark.asyncio
     async def test_json_decode_error(self):
         manager = AgentManager()
         ws = AsyncMock()

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import logging
 import time
@@ -21,29 +20,15 @@ async def agent_websocket(ws: WebSocket):
     manager = AgentManager.instance()
     agent_id = None
     conn = None
-    _ping_task: asyncio.Task | None = None
-
-    async def _ping_loop() -> None:
-        """发送 WebSocket 协议级 ping 帧，快速检测连接断开。"""
-        try:
-            while True:
-                await asyncio.sleep(15)
-                try:
-                    await ws.send_json({"type": "ping", "data": {}})
-                except Exception:
-                    break
-        except asyncio.CancelledError:
-            pass
 
     try:
         agent_id, conn = await manager.handle_connection(ws)
-        _ping_task = asyncio.create_task(_ping_loop())
 
         while True:
             try:
                 raw = await asyncio.wait_for(ws.receive_text(), timeout=45)
             except asyncio.TimeoutError:
-                await ws.send_json({"type": "heartbeat_request", "data": {}})
+                await conn.send_msg("heartbeat_request", {})
                 continue
 
             try:
@@ -68,9 +53,5 @@ async def agent_websocket(ws: WebSocket):
     except Exception:
         logger.exception("Agent WebSocket error")
     finally:
-        if _ping_task and not _ping_task.done():
-            _ping_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await _ping_task
         if agent_id:
             await manager.disconnect(agent_id, conn)

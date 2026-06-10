@@ -196,6 +196,9 @@ func (c *WsClient) handleMessage(msg Message) {
 
 	case MsgTypeHeartbeatRequest:
 		c.SendHeartbeatResponse()
+
+	case MsgTypePing:
+		c.SendHeartbeatResponse()
 	}
 }
 

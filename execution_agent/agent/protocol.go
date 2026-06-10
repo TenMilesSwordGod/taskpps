@@ -10,6 +10,7 @@ const (
 	MsgTypeStdoutChunk       MessageType = "stdout_chunk"
 	MsgTypeStderrChunk       MessageType = "stderr_chunk"
 	MsgTypeExecResult        MessageType = "exec_result"
+	MsgTypePing              MessageType = "ping"
 	MsgTypeHeartbeatRequest  MessageType = "heartbeat_request"
 	MsgTypeHeartbeatResponse MessageType = "heartbeat_response"
 )
