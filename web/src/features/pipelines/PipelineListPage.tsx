@@ -4,7 +4,6 @@ import { Search, RefreshCw, Play, Eye, Image, Folder, FolderOpen, ChevronRight, 
 import { Link, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { usePipelines } from '@/api/pipelines';
-import { useProjectId } from '@/contexts/ProjectContext';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import type { PipelineSummary, RunStatus } from '@/types';
@@ -16,8 +15,7 @@ type Row =
 
 export default function PipelineListPage() {
   const navigate = useNavigate();
-  const projectId = useProjectId();
-  const { data, isLoading, refetch } = usePipelines(projectId);
+  const { data, isLoading, refetch } = usePipelines();
   const [keyword, setKeyword] = useState('');
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [triggerPipeline, setTriggerPipeline] = useState<string | undefined>();
@@ -57,6 +55,7 @@ export default function PipelineListPage() {
         name: folder,
         file: '',
         folder,
+        project_id: null,
         task_count: children.reduce((s, c) => s + c.task_count, 0),
         subpipeline_count: children.reduce((s, c) => s + c.subpipeline_count, 0),
         last_run: null,
@@ -109,6 +108,19 @@ export default function PipelineListPage() {
           <Link to={`/pipelines/${record.file}`} style={{ fontFamily: 'monospace', fontSize: 12 }}>
             {record.file}
           </Link>
+        );
+      },
+    },
+    {
+      title: '项目',
+      key: 'project_id',
+      width: 110,
+      render: (_: unknown, record: Row) => {
+        if (record.isFolder) return <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>;
+        return record.project_id ? (
+          <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{record.project_id}</Tag>
+        ) : (
+          <span style={{ color: '#9ca3af', fontSize: 12 }}>默认</span>
         );
       },
     },

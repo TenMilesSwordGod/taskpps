@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -15,61 +18,72 @@ async def list_pipelines(project_id: str | None = Query(None)):
     """列出已加载流水线摘要（按文件夹分组）
 
     支持 project_id 查询参数，指定后加载对应项目的 pipelines/ 目录。
+    不指定 project_id 时，加载所有已注册项目的 pipelines，每条记录附 project_id。
     """
-    base_dir = None
+    # 确定要加载的项目列表（(project_id, base_dir) pairs）
+    project_dirs: list[tuple[str | None, Path | None]] = []
     if project_id:
         project_workdir = get_project_workdir_by_id(project_id)
         if project_workdir:
-            base_dir = get_pipelines_dir(project_workdir)
+            project_dirs.append((project_id, get_pipelines_dir(project_workdir)))
         else:
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    else:
+        # 加载所有已注册项目
+        async with get_session_factory()() as session:
+            from taskpps.db.repository import ProjectRepository
 
-    loader = PipelineLoader(base_dir=base_dir)
-    all_pipelines = loader.load_all_with_files()
+            repo = ProjectRepository(session)
+            projects = await repo.list_projects()
+            for proj in projects:
+                project_dirs.append((proj.id, get_pipelines_dir(proj.workdir)))
+        # 如果没有注册项目，回退到默认 loader
+        if not project_dirs:
+            project_dirs.append((None, None))
 
     items = []
     async with get_session_factory()() as session:
         run_repo = RunRepository(session)
-        for file, spec in all_pipelines.items():
-            # 计算任务数和子流水线数
-            task_count = 0
-            subpipeline_count = len(spec.pipelines) if spec.pipelines else 0
-            if spec.pipelines:
-                for sub in spec.pipelines:
-                    task_count += len(sub.tasks)
-            elif spec.tasks:
-                task_count = len(spec.tasks)
+        for pid, pdir in project_dirs:
+            loader = PipelineLoader(base_dir=pdir)
+            all_pipelines = loader.load_all_with_files()
+            for file, spec in all_pipelines.items():
+                task_count = 0
+                subpipeline_count = len(spec.pipelines) if spec.pipelines else 0
+                if spec.pipelines:
+                    for sub in spec.pipelines:
+                        task_count += len(sub.tasks)
+                elif spec.tasks:
+                    task_count = len(spec.tasks)
 
-            # 查询最近运行
-            runs = await run_repo.list_runs(pipeline=spec.name, limit=1)
-            last_run = None
-            if runs:
-                r = runs[0]
-                last_run = {
-                    "id": r.id,
-                    "status": r.status,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                }
+                runs = await run_repo.list_runs(pipeline=spec.name, limit=1)
+                last_run = None
+                if runs:
+                    r = runs[0]
+                    last_run = {
+                        "id": r.id,
+                        "status": r.status,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
 
-            # 计算成功率
-            total_count = await run_repo.count_runs(pipeline=spec.name)
-            success_count = await run_repo.count_runs(pipeline=spec.name, status="success")
-            success_rate = round(success_count / total_count * 100) if total_count > 0 else 0
+                total_count = await run_repo.count_runs(pipeline=spec.name)
+                success_count = await run_repo.count_runs(pipeline=spec.name, status="success")
+                success_rate = round(success_count / total_count * 100) if total_count > 0 else 0
 
-            # 文件夹分组（debug/debug.yaml → folder="debug"）
-            folder = os.path.dirname(file)
+                folder = os.path.dirname(file)
 
-            items.append(
-                {
-                    "name": spec.name,
-                    "file": file,
-                    "folder": folder,
-                    "task_count": task_count,
-                    "subpipeline_count": subpipeline_count,
-                    "last_run": last_run,
-                    "success_rate": success_rate,
-                }
-            )
+                items.append(
+                    {
+                        "name": spec.name,
+                        "file": file,
+                        "folder": folder,
+                        "project_id": pid,
+                        "task_count": task_count,
+                        "subpipeline_count": subpipeline_count,
+                        "last_run": last_run,
+                        "success_rate": success_rate,
+                    }
+                )
 
     return {"items": items}
 

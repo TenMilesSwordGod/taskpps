@@ -1,11 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Table, Select, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App } from 'antd';
+import { Table, Select, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Play, Trash2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import { useRuns, useCleanRuns } from '@/api/runs';
-import { useProjectId } from '@/contexts/ProjectContext';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import type { RunResponse, RunStatus } from '@/types';
@@ -46,8 +45,7 @@ export default function RunListPage() {
   const [cleanForm] = Form.useForm();
   const cleanRuns = useCleanRuns();
 
-  const projectId = useProjectId();
-  const { data, isLoading } = useRuns({ project_id: projectId });
+  const { data, isLoading } = useRuns();
 
   // 前端过滤
   const filtered = useMemo(() => {
@@ -110,6 +108,14 @@ export default function RunListPage() {
       title: '流水线名',
       dataIndex: 'pipeline_name',
       key: 'pipeline_name',
+    },
+    {
+      title: '项目',
+      dataIndex: 'project_id',
+      key: 'project_id',
+      width: 110,
+      render: (pid: string | null) =>
+        pid ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{pid}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
     },
     {
       title: '状态',

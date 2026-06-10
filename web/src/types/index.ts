@@ -14,6 +14,7 @@ export interface RunResponse {
   pipeline_file: string;
   pipeline_id: string;
   pipeline_version: string;
+  project_id: string | null;
   version_changed: boolean;
   status: RunStatus;
   params: Record<string, unknown>;
@@ -50,6 +51,8 @@ export interface PipelineSummary {
   file: string;
   /** 父文件夹（如 "debug"），根目录文件为 "" */
   folder: string;
+  /** 所属项目 ID */
+  project_id: string | null;
   task_count: number;
   subpipeline_count: number;
   last_run: {

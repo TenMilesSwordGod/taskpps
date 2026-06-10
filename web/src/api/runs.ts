@@ -8,7 +8,7 @@ export interface RunLogsResponse {
 }
 
 /** 获取运行列表 */
-export function useRuns(params?: { pipeline?: string; status?: string; limit?: number; project_id?: string | null }) {
+export function useRuns(params?: { pipeline?: string; status?: string; limit?: number }) {
   return useQuery<RunListResponse>({
     queryKey: ['runs', params],
     queryFn: async () => {
@@ -16,7 +16,6 @@ export function useRuns(params?: { pipeline?: string; status?: string; limit?: n
       if (params?.pipeline) cleanParams.pipeline = params.pipeline;
       if (params?.status) cleanParams.status = params.status;
       if (params?.limit) cleanParams.limit = params.limit;
-      if (params?.project_id) cleanParams.project_id = params.project_id;
       const res = await apiClient.get('/api/runs/', { params: cleanParams });
       return res.data;
     },

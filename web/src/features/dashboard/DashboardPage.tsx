@@ -1,11 +1,10 @@
-import { Card, Col, Row, Statistic, Table } from 'antd';
+import { Card, Col, Row, Statistic, Table, Tag } from 'antd';
 import { GitBranch, Play, Loader, AlertCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { usePipelines } from '@/api/pipelines';
 import { useRuns } from '@/api/runs';
 import { useHealthCheck } from '@/api/health';
-import { useProjectId } from '@/contexts/ProjectContext';
 import StatusTag from '@/components/StatusTag';
 import type { RunResponse, RunStatus } from '@/types';
 
@@ -23,9 +22,8 @@ function formatDuration(run: RunResponse): string {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const projectId = useProjectId();
-  const { data: pipelinesData } = usePipelines(projectId);
-  const { data: runsData } = useRuns({ limit: 100, project_id: projectId });
+  const { data: pipelinesData } = usePipelines();
+  const { data: runsData } = useRuns({ limit: 100 });
   const { data: healthData } = useHealthCheck();
 
   const pipelines = pipelinesData?.items ?? [];
@@ -42,6 +40,14 @@ export default function DashboardPage() {
 
   const columns = [
     { title: '流水线', dataIndex: 'pipeline_name', key: 'pipeline_name' },
+    {
+      title: '项目',
+      dataIndex: 'project_id',
+      key: 'project_id',
+      width: 110,
+      render: (pid: string | null) =>
+        pid ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{pid}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
+    },
     {
       title: '状态',
       dataIndex: 'status',
