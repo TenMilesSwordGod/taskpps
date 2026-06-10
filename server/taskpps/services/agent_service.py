@@ -291,7 +291,6 @@ class AgentService:
         agent_type = agent_data.get("type", "unknown")
         host = agent_data.get("host", "")
         port = agent_data.get("port", 22)
-        username = agent_data.get("username", "root")
         source_file = agent_data.get("_source_file", "")
         credential_id = agent_data.get("credential_id", "")
 
@@ -309,7 +308,8 @@ class AgentService:
                 error=t("Credential not found: {id}", id=credential_id),
             )
 
-        cred_username = cred_data.get("username", username)
+        # 优先从 credential 获取 username，回退到 agent 配置或默认值
+        username = cred_data.get("username") or agent_data.get("username", "root")
         connect_kwargs: dict = {}
         key_path = cred_data.get("key_path")
         password = cred_data.get("password")
@@ -338,7 +338,7 @@ class AgentService:
             client.connect(
                 hostname=host,
                 port=port,
-                username=cred_username,
+                username=username,
                 timeout=timeout,
                 **connect_kwargs,
             )

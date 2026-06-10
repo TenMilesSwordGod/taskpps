@@ -56,37 +56,52 @@ def create_executor(task: ResolvedTask, project_workdir: str | None = None) -> B
         )
 
     if task.host:
-        from taskpps.config import get_agents_dir
         from pathlib import Path
+
+        from taskpps.config import get_agents_dir
 
         agents_dir = get_agents_dir(Path(project_workdir)) if project_workdir else None
         agent_loader = AgentLoader(base_dir=agents_dir) if agents_dir else AgentLoader()
         agent_data = _resolve_agent(agent_loader, task.host)
 
+        # 如果在项目 agents 目录未找到，尝试默认 agents 目录
+        if agent_data is None and agents_dir is not None:
+            default_loader = AgentLoader()
+            agent_data = _resolve_agent(default_loader, task.host)
+
+        # 对于已通过 WebSocket 连接的 execution-agent，即使没有配置文件也可执行
         if agent_data is None:
-            raise AgentNotFoundError(
-                t(
-                    "Agent not found for host: '{host}'. Please create an agent config in the agents/ directory.",
-                    host=task.host,
+            manager = AgentManager.instance()
+            if manager.is_connected(task.host):
+                logger.info(
+                    "Agent '%s' not found in config but connected via WebSocket, using AgentExecutor",
+                    task.host,
                 )
-            )
+                agent_data = {"id": task.host, "execution_agent": True}
+            else:
+                raise AgentNotFoundError(
+                    t(
+                        "Agent not found for host: '{host}'. Please create an agent config in the agents/ directory.",
+                        host=task.host,
+                    )
+                )
 
         host = agent_data.get("host", task.host)
         port = agent_data.get("port", 22)
-        username = agent_data.get("username", "root")
 
         if agent_data.get("execution_agent", True):
             manager = AgentManager.instance()
             return AgentExecutor(agent_id=task.host, manager=manager, agent_data=agent_data)
 
-        return _make_ssh_executor(host, port, username, agent_data, task)
+        return _make_ssh_executor(host, port, agent_data, task)
 
     return LocalExecutor()
 
 
 def _make_ssh_executor(
-    host: str, port: int, username: str, agent_data: dict[str, Any], task: ResolvedTask
+    host: str, port: int, agent_data: dict[str, Any], task: ResolvedTask
 ) -> SSHExecutor:
+    username = None
     password = None
     key_path = None
 
@@ -95,9 +110,22 @@ def _make_ssh_executor(
         cred_loader = CredentialLoader()
         cred_data = _resolve_credential(cred_loader, credential_id)
         if cred_data:
-            username = cred_data.get("username", username)
+            username = cred_data.get("username")
             password = cred_data.get("password")
             key_path = cred_data.get("key_path")
+
+    # 仅在 credential 未提供 username 时回退到 agent 配置或默认值
+    if username is None:
+        username = agent_data.get("username", "root")
+
+    if not password and not key_path:
+        logger.warning(
+            t(
+                "No authentication method for host '{host}'. "
+                "Set credential_id with password or key_path in agent config.",
+                host=host,
+            )
+        )
 
     return SSHExecutor(
         host=host,

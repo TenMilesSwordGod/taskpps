@@ -40,16 +40,30 @@ class AgentBootstrap:
         if not host or host in ("localhost", "127.0.0.1", "::1"):
             return {"success": True, "agent_pid": 0, "message": "local agent"}
 
-        username = agent_data.get("username", "root")
+        username = None
         password = None
         key_path = None
 
         if credential_id:
             cred_data = self._credential_loader.get(credential_id)
             if cred_data:
-                username = cred_data.get("username", username)
+                username = cred_data.get("username")
                 password = cred_data.get("password")
                 key_path = cred_data.get("key_path")
+
+        # 仅在 credential 未提供 username 时回退到 agent 配置或默认值
+        if username is None:
+            username = agent_data.get("username", "root")
+
+        if not password and not key_path:
+            raise AgentBootstrapError(
+                t(
+                    "No authentication method for agent '{id}' (host={host}). "
+                    "Set credential_id with password or key_path in agent config.",
+                    id=agent_id,
+                    host=host,
+                )
+            )
 
         ssh = await self._ssh_connect(host, port, username, password, key_path)
         try:

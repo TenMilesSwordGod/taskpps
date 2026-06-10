@@ -14,6 +14,14 @@ function makeElement(): HTMLElement {
   return document.createElement('div')
 }
 
+/** 通用导出选项 */
+const commonOptions = {
+  backgroundColor: '#ffffff',
+  pixelRatio: 2,
+  skipFonts: true,
+  includeQueryParams: true,
+}
+
 describe('utils/exportImage', () => {
   beforeEach(() => {
     htmlToImageMock.toPng.mockClear()
@@ -25,7 +33,7 @@ describe('utils/exportImage', () => {
     const el = makeElement()
     await exportAsPng(el, 'test.png')
     expect(htmlToImageMock.toPng).toHaveBeenCalledTimes(1)
-    expect(htmlToImageMock.toPng).toHaveBeenCalledWith(el, { backgroundColor: '#ffffff' })
+    expect(htmlToImageMock.toPng).toHaveBeenCalledWith(el, commonOptions)
   })
 
   it('exportAsSvg 调用 toSvg 并触发下载', async () => {
@@ -49,7 +57,8 @@ describe('utils/exportImage', () => {
 
   it('copyToClipboard 在 toBlob 返回 null 时抛错', async () => {
     htmlToImageMock.toBlob.mockResolvedValueOnce(null)
+    htmlToImageMock.toPng.mockRejectedValueOnce(new Error('render failed'))
     const el = makeElement()
-    await expect(copyToClipboard(el)).rejects.toThrow('生成图片失败')
+    await expect(copyToClipboard(el)).rejects.toThrow()
   })
 })

@@ -630,6 +630,7 @@ class PipelineRunner:
                 self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
                 # 将错误信息写入 task.log，确保 UI 上可查看
                 try:
+                    log_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(log_path, "a") as f:
                         f.write(f"\n[ERROR] {error_msg}\n")
                         f.write(f"[ERROR] Traceback:\n{traceback.format_exc()}")

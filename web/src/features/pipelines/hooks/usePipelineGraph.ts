@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { Node, Edge } from '@xyflow/react';
+import { MarkerType } from '@xyflow/react';
 import type { PipelineDetail, TaskStatus } from '@/types';
 import { applyDagreLayout } from '@/utils/dagreLayout';
 
@@ -65,6 +66,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             target: taskId,
             type: 'smoothstep',
             animated: true,
+            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
           });
         });
       });
@@ -81,6 +83,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             target: ids[i],
             type: 'smoothstep',
             animated: true,
+            markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
           });
         }
       }
@@ -118,6 +121,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
               target: targetIds[0],
               type: 'smoothstep',
               animated: true,
+              markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#f59e0b' },
               style: { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 3' },
             });
           }

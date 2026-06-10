@@ -36,7 +36,7 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_, node) => {
-      if (node.type === 'taskNode') {
+      if (node.type === 'taskNode' || node.type === 'subpipelineGroup') {
         setSelectedNodeId(node.id);
         onNodeClick?.(node.id);
       }

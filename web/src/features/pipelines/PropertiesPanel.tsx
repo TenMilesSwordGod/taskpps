@@ -16,8 +16,9 @@ import {
   EnvironmentOutlined,
   BranchesOutlined,
   SettingOutlined,
+  PartitionOutlined,
 } from '@ant-design/icons';
-import type { PipelineDetail, TaskYAML, TaskType } from '@/types';
+import type { PipelineDetail, TaskYAML, TaskType, SubPipeline } from '@/types';
 import { useAppStore } from '@/stores/appStore';
 
 /** 任务类型颜色 */
@@ -49,7 +50,7 @@ function inferTaskType(task: TaskYAML): TaskType {
   return 'command';
 }
 
-/** 根据 selectedNodeId 在 pipeline 中查找对应任务 */
+/** 根据 selectedNodeId 在 pipeline 中查找对应任务或子流水线 */
 function findTask(
   pipeline: PipelineDetail | undefined,
   selectedNodeId: string | null,
@@ -65,6 +66,18 @@ function findTask(
     }
   }
   return null;
+}
+
+/** 根据 selectedNodeId 查找子流水线 */
+function findSubpipeline(
+  pipeline: PipelineDetail | undefined,
+  selectedNodeId: string | null,
+): SubPipeline | null {
+  if (!pipeline || !selectedNodeId || !selectedNodeId.startsWith('__group__')) return null;
+
+  const subName = selectedNodeId.replace('__group__', '');
+  const subpipelines = pipeline.pipelines || [];
+  return subpipelines.find((s) => s.name === subName) ?? null;
 }
 
 /** 基本 Tab 内容 */
@@ -315,6 +328,99 @@ interface PropertiesPanelProps {
   pipeline: PipelineDetail | undefined;
 }
 
+/** 子流水线信息面板 */
+function SubpipelinePanel({ sub }: { sub: SubPipeline }) {
+  const config = sub.config;
+  const envEntries = Object.entries(config?.env || {});
+
+  return (
+    <div className="flex flex-col gap-3 px-2 pt-2">
+      <div>
+        <label className="text-xs text-gray-500 mb-1 block">名称</label>
+        <Input value={sub.name} readOnly size="small" />
+      </div>
+      <div>
+        <label className="text-xs text-gray-500 mb-1 block">任务数</label>
+        <Input value={String(sub.tasks.length)} readOnly size="small" />
+      </div>
+      {sub.depends_on.length > 0 && (
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">依赖</label>
+          <div className="flex flex-wrap gap-1">
+            {sub.depends_on.map((dep) => (
+              <Tag key={dep}>{dep}</Tag>
+            ))}
+          </div>
+        </div>
+      )}
+      {config && (
+        <>
+          <div className="border-t border-gray-100 pt-2 mt-1">
+            <label className="text-xs text-gray-500 mb-1 block">执行策略</label>
+            <Input value={config.execution_strategy || 'sequential'} readOnly size="small" />
+          </div>
+          {config.on_failure && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">失败处理</label>
+              <Input value={config.on_failure} readOnly size="small" />
+            </div>
+          )}
+          {config.host && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">主机</label>
+              <Input value={config.host} readOnly size="small" />
+            </div>
+          )}
+          {config.credential && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">凭据</label>
+              <Input value={config.credential} readOnly size="small" />
+            </div>
+          )}
+          {config.timeout != null && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">超时 (秒)</label>
+              <Input value={String(config.timeout)} readOnly size="small" />
+            </div>
+          )}
+          {config.retry != null && config.retry > 0 && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">重试次数</label>
+              <Input value={String(config.retry)} readOnly size="small" />
+            </div>
+          )}
+          {config.max_parallel != null && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">最大并行数</label>
+              <Input value={String(config.max_parallel)} readOnly size="small" />
+            </div>
+          )}
+          {config.cwd && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">工作目录</label>
+              <Input value={config.cwd} readOnly size="small" />
+            </div>
+          )}
+        </>
+      )}
+      {envEntries.length > 0 && (
+        <div className="border-t border-gray-100 pt-2 mt-1">
+          <label className="text-xs text-gray-500 mb-2 block">
+            <EnvironmentOutlined /> 环境变量
+          </label>
+          <Descriptions column={1} size="small" bordered>
+            {envEntries.map(([key, value]) => (
+              <Descriptions.Item key={key} label={key}>
+                <span className="text-xs font-mono">{String(value)}</span>
+              </Descriptions.Item>
+            ))}
+          </Descriptions>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 属性面板组件 */
 export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
   const selectedNodeId = useAppStore((s) => s.selectedNodeId);
@@ -325,6 +431,11 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
 
   const found = useMemo(
     () => findTask(pipeline, selectedNodeId),
+    [pipeline, selectedNodeId],
+  );
+
+  const foundSub = useMemo(
+    () => findSubpipeline(pipeline, selectedNodeId),
     [pipeline, selectedNodeId],
   );
 
@@ -347,8 +458,8 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
     );
   }
 
-  // 无选中任务
-  if (!found) {
+  // 无选中任务或子流水线
+  if (!found && !foundSub) {
     return (
       <div
         className="flex flex-col bg-white border-l border-gray-200"
@@ -377,13 +488,50 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
           </div>
         </div>
         <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
-          点击任务节点查看属性
+          点击节点查看属性
         </div>
       </div>
     );
   }
 
-  const { task, subName } = found;
+  // 子流水线选中
+  if (foundSub && !found) {
+    return (
+      <div
+        className="flex flex-col bg-white border-l border-gray-200"
+        style={{ width: panelMaximized ? '70vw' : 420 }}
+      >
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+          <span className="text-sm font-medium text-gray-800 truncate">
+            <PartitionOutlined className="mr-1" />{foundSub.name}
+          </span>
+          <div className="flex gap-1 shrink-0">
+            <Tooltip title="最小化">
+              <Button
+                type="text"
+                size="small"
+                icon={<MinusOutlined />}
+                onClick={() => setPanelMinimized(true)}
+              />
+            </Tooltip>
+            <Tooltip title={panelMaximized ? '还原' : '最大化'}>
+              <Button
+                type="text"
+                size="small"
+                icon={panelMaximized ? <CompressOutlined /> : <ExpandOutlined />}
+                onClick={() => setPanelMaximized(!panelMaximized)}
+              />
+            </Tooltip>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <SubpipelinePanel sub={foundSub} />
+        </div>
+      </div>
+    );
+  }
+
+  const { task, subName } = found!;
 
   return (
     <div
