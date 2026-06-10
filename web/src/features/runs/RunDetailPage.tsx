@@ -1,13 +1,14 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress } from 'antd';
-import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, FileText } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRun, useCancelRun, useRunLogs } from '@/api/runs';
 import { usePipeline } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
+import ConsolePanel from './ConsolePanel';
 import { useSSELogs } from './hooks/useSSELogs';
 import type { TaskStatus, RunResponse } from '@/types';
 import type { LogEntry } from './hooks/useSSELogs';
@@ -58,6 +59,7 @@ export default function RunDetailPage() {
 
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [consoleVisible, setConsoleVisible] = useState(true);
 
   const isLive = run?.status === 'running' || run?.status === 'pending';
 
@@ -199,6 +201,14 @@ export default function RunDetailPage() {
             >
               {treeCollapsed ? '显示任务树' : '隐藏任务树'}
             </Button>
+            <Button
+              size="small"
+              icon={<FileText size={14} />}
+              onClick={() => setConsoleVisible((v) => !v)}
+              type={consoleVisible ? 'primary' : 'default'}
+            >
+              {consoleVisible ? '隐藏 Console' : 'Console'}
+            </Button>
             {canCancel && (
               <Popconfirm title="确认取消运行？" onConfirm={handleCancel}>
                 <Button danger size="small" icon={<XCircle size={14} />} loading={cancelRun.isPending}>
@@ -242,6 +252,7 @@ export default function RunDetailPage() {
                 <TaskTree
                   pipeline={pipeline}
                   taskStatuses={taskStatuses}
+                  taskRuns={run?.tasks}
                   selectedTaskId={selectedTaskId ?? undefined}
                   onSelect={setSelectedTaskId}
                 />
@@ -267,6 +278,13 @@ export default function RunDetailPage() {
           </Splitter>
         )}
       </div>
+
+      {/* 内嵌 Console Log */}
+      {consoleVisible && id && (
+        <div className="shrink-0 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+          <ConsolePanel runId={id} />
+        </div>
+      )}
     </div>
   );
 }
