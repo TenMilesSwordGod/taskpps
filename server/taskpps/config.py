@@ -202,9 +202,7 @@ def get_server_home() -> Path:
 
 def get_data_dir() -> Path:
     """返回部署根目录下的数据目录（如 state.db），与项目 workdir 解耦。"""
-    # config.py 在 server/taskpps/ 下，上溯三层到部署根目录
-    server_home = Path(__file__).resolve().parent.parent.parent
-    data_dir = server_home / ".taskpps"
+    data_dir = get_server_home() / ".taskpps"
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 
@@ -215,8 +213,7 @@ def get_db_path() -> Path:
 
 def get_logs_dir() -> Path:
     """返回部署根目录下的日志目录，与项目 workdir 解耦。"""
-    server_home = Path(__file__).resolve().parent.parent.parent
-    logs = server_home / ".taskpps" / "logs"
+    logs = get_server_home() / ".taskpps" / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     return logs
 

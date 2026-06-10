@@ -15,10 +15,12 @@ from taskpps.config import (
     get_logs_dir,
     get_pipelines_dir,
     get_plugins_dir,
+    get_server_home,
     get_settings,
     get_tasks_dir,
     load_settings,
     set_project_root,
+    set_server_home,
 )
 
 
@@ -305,3 +307,51 @@ class TestDirectories:
             assert d == tmp_path / "plugins"
         finally:
             cfg._project_workdir = old_workdir
+
+
+class TestServerHome:
+    def test_data_dir_uses_server_home(self, tmp_path):
+        """get_data_dir 应使用 get_server_home() 而非硬编码路径。"""
+        import taskpps.config as cfg
+
+        custom_home = tmp_path / "custom_deploy"
+        custom_home.mkdir()
+        old_home = cfg._server_home
+        try:
+            set_server_home(custom_home)
+            d = get_data_dir()
+            assert d == custom_home / ".taskpps"
+            assert d.exists()
+        finally:
+            cfg._server_home = old_home
+
+    def test_logs_dir_uses_server_home(self, tmp_path):
+        """get_logs_dir 应使用 get_server_home() 而非硬编码路径。"""
+        import taskpps.config as cfg
+
+        custom_home = tmp_path / "custom_deploy"
+        custom_home.mkdir()
+        old_home = cfg._server_home
+        try:
+            set_server_home(custom_home)
+            d = get_logs_dir()
+            assert d == custom_home / ".taskpps" / "logs"
+            assert d.exists()
+        finally:
+            cfg._server_home = old_home
+
+    def test_logs_dir_respects_env_var(self, tmp_path, monkeypatch):
+        """get_logs_dir 应尊重 TASKPPS_SERVER_HOME 环境变量。"""
+        import taskpps.config as cfg
+
+        custom_home = tmp_path / "env_deploy"
+        custom_home.mkdir()
+        old_home = cfg._server_home
+        cfg._server_home = None
+        monkeypatch.setenv("TASKPPS_SERVER_HOME", str(custom_home))
+        try:
+            d = get_logs_dir()
+            assert d == custom_home / ".taskpps" / "logs"
+            assert d.exists()
+        finally:
+            cfg._server_home = old_home

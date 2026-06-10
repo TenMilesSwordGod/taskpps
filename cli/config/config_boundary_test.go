@@ -141,8 +141,8 @@ func TestGetServerAddr_ZeroPort(t *testing.T) {
 		},
 	}
 	addr := GetServerAddr(cfg)
-	if addr != "localhost:0" {
-		t.Errorf("expected localhost:0, got %s", addr)
+	if addr != "localhost" {
+		t.Errorf("expected localhost, got %s", addr)
 	}
 }
 

@@ -70,6 +70,11 @@ backend server via REST API.`,
 			}
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+		// --server flag 覆盖配置文件中的 server 地址
+		if serverFlag := cmd.Flag("server"); serverFlag != nil && serverFlag.Value.String() != "" {
+			appConfig.Server.Host = serverFlag.Value.String()
+			appConfig.Server.Port = 0
+		}
 		if verbose >= 3 {
 			logger.Info("Config loaded successfully")
 		}

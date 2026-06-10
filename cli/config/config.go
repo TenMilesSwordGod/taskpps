@@ -100,14 +100,13 @@ func Load(path string, projectFlag string) (*Config, error) {
 		v.SetConfigFile(path)
 	} else {
 		workDir, err := FindWorkDir(projectFlag)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			configPath := filepath.Join(workDir, ".taskpps", "taskpps.yaml")
+			if _, statErr := os.Stat(configPath); statErr != nil {
+				configPath = filepath.Join(workDir, "taskpps.yaml")
+			}
+			v.SetConfigFile(configPath)
 		}
-		configPath := filepath.Join(workDir, ".taskpps", "taskpps.yaml")
-		if _, statErr := os.Stat(configPath); statErr != nil {
-			configPath = filepath.Join(workDir, "taskpps.yaml")
-		}
-		v.SetConfigFile(configPath)
 	}
 
 	v.SetDefault("server.host", "127.0.0.1")
@@ -131,5 +130,8 @@ func Load(path string, projectFlag string) (*Config, error) {
 }
 
 func GetServerAddr(cfg *Config) string {
+	if cfg.Server.Port == 0 {
+		return cfg.Server.Host
+	}
 	return fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 }
