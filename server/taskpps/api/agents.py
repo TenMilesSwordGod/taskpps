@@ -303,8 +303,9 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
 @router.post("/deploy", response_model=AgentDeployResult)
 async def deploy_agent(body: AgentDeployRequest):
     try:
-        from taskpps.config import get_agents_dir
+        from taskpps.config import get_agents_dir, get_credentials_dir
         from taskpps.loaders.agent_loader import AgentLoader
+        from taskpps.loaders.credential_loader import CredentialLoader
         from taskpps.services.agent_bootstrap import AgentBootstrap
 
         # 先从已注册项目查找 agent 配置
@@ -326,8 +327,14 @@ async def deploy_agent(body: AgentDeployRequest):
             else AgentLoader()
         )
 
+        cred_loader = (
+            CredentialLoader(base_dir=get_credentials_dir(Path(project_workdir)))
+            if project_workdir
+            else None
+        )
+
         bootstrap = AgentBootstrap()
-        await bootstrap.bootstrap(body.agent_id, agent_loader=loader)
+        await bootstrap.bootstrap(body.agent_id, agent_loader=loader, credential_loader=cred_loader)
         return AgentDeployResult(success=True, agent_id=body.agent_id)
     except Exception as e:
         detail = str(e)

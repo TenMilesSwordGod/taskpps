@@ -24,8 +24,10 @@ class AgentBootstrap:
         self._agent_loader = AgentLoader()
         self._credential_loader = CredentialLoader()
 
-    async def bootstrap(self, agent_id: str, agent_loader: AgentLoader | None = None) -> dict:
+    async def bootstrap(self, agent_id: str, agent_loader: AgentLoader | None = None, credential_loader: CredentialLoader | None = None) -> dict:
         loader = agent_loader or self._agent_loader
+        if credential_loader is not None:
+            self._credential_loader = credential_loader
         agent_data = loader.get(agent_id)
         if agent_data is None:
             raise AgentBootstrapError(t("Agent not found: {id}", id=agent_id))
