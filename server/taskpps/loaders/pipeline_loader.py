@@ -126,6 +126,15 @@ class PipelineLoader:
         if data is None:
             raise ValueError(t("Pipeline file is empty: {path}", path=pipeline_file))
 
+        # 提取 pipeline 自身的 config.env，合并到 env 中，使这些变量在替换时可用
+        # 解决 config.env 中定义的变量无法在命令中通过 ${env.X} 引用的问题
+        # 优先级: 传入的 env (params) > config.env
+        config_env = (data.get("config") or {}).get("env") or {}
+        if isinstance(config_env, dict) and config_env:
+            merged = dict(config_env)
+            merged.update(env or {})
+            env = merged
+
         # 始终执行变量替换, 即使 env 为空也支持 settings.env 和 os.environ
         data = substitute_env_vars(data, env or {})
 

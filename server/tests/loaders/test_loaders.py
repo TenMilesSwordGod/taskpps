@@ -372,3 +372,44 @@ tasks:
             assert spec.tasks[0].command == "echo param_no_prefix settings_no_prefix sys_no_prefix param_np"
         finally:
             taskpps.config._settings = original_settings
+
+    def test_config_env_available_in_command_substitution(self, tmp_path):
+        """测试 pipeline config.env 中定义的变量能在命令的 ${env.X} 中被正确替换"""
+        pipelines_dir = tmp_path / "pipelines"
+        pipelines_dir.mkdir()
+        p = pipelines_dir / "config_env_test.yaml"
+        p.write_text(
+            "name: config_env_test\n"
+            "config:\n"
+            "  env:\n"
+            "    DUT_IP: 192.168.1.100\n"
+            "    APP_ENV: staging\n"
+            "tasks:\n"
+            "  - name: step1\n"
+            "    command: echo ${env.DUT_IP}\n"
+            "  - name: step2\n"
+            "    command: echo ${env.APP_ENV} ${env.DUT_IP}\n"
+        )
+        loader = PipelineLoader(pipelines_dir)
+        spec = loader.load("config_env_test.yaml")
+        assert spec.tasks[0].command == "echo 192.168.1.100"
+        assert spec.tasks[1].command == "echo staging 192.168.1.100"
+
+    def test_config_env_not_overriding_params_env(self, tmp_path):
+        """测试传入的 params.env 优先级高于 config.env"""
+        pipelines_dir = tmp_path / "pipelines"
+        pipelines_dir.mkdir()
+        p = pipelines_dir / "priority_test.yaml"
+        p.write_text(
+            "name: priority_test\n"
+            "config:\n"
+            "  env:\n"
+            "    KEY: config_val\n"
+            "tasks:\n"
+            "  - name: step1\n"
+            "    command: echo ${env.KEY}\n"
+        )
+        loader = PipelineLoader(pipelines_dir)
+        spec = loader.load("priority_test.yaml", env={"KEY": "param_val"})
+        # params.env 应优先于 config.env
+        assert spec.tasks[0].command == "echo param_val"
