@@ -68,10 +68,12 @@ export default function RunDetailPage() {
   // REST 历史日志（仅非运行中）
   const { data: restLogs, refetch: refetchLogs, isFetching: logsFetching } = useRunLogs(!isLive ? id : undefined);
 
-  // 合并日志：运行中用 SSE，否则用 REST
+  // 合并日志：运行中用 SSE，否则用 REST；过渡期保留 SSE 日志避免闪空
   const baseLogs = useMemo(() => {
     if (isLive) return sseResult.logs;
-    if (restLogs?.logs) return restLogsToEntries(restLogs.logs);
+    if (restLogs?.logs && Object.keys(restLogs.logs).length > 0) return restLogsToEntries(restLogs.logs);
+    // REST 数据尚未就绪时，保留 SSE 日志防止切换时日志消失
+    if (sseResult.logs.length > 0) return sseResult.logs;
     return [];
   }, [isLive, sseResult.logs, restLogs?.logs]);
 
