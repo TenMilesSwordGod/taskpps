@@ -104,31 +104,25 @@ def set_dot_path(data: dict, path: str, value: Any) -> None:
         current[int(last_key)] = value
 
 
-_ALLOWED_OVERRIDE_PATHS = {
-    "options.host",
-    "options.credential",
-    "options.timeout",
-    "options.on_failure",
-    "options.env",
-    "config.host",
-    "config.credential",
-    "config.timeout",
-    "config.on_failure",
-    "config.env",
-    "config.retry",
-    "config.execution_strategy",
+from taskpps.schemas.pipeline import PipelineConfig, TaskYAML
+
+
+def _build_allowed_override_paths() -> set[str]:
+    fields = set(PipelineConfig.model_fields.keys())
+    return {f"options.{f}" for f in fields} | {f"config.{f}" for f in fields}
+
+
+_NON_OVERRIDABLE_TASK_KEYS = {
+    "name", "command", "commands", "invoke", "steps", "git", "nexus", "depends_on",
 }
 
-_ALLOWED_TASK_OVERRIDE_KEYS = {
-    "timeout",
-    "on_failure",
-    "env",
-    "cwd",
-    "host",
-    "credential",
-    "retry",
-    "when",
-}
+
+def _build_task_override_keys() -> set[str]:
+    return set(TaskYAML.model_fields.keys()) - _NON_OVERRIDABLE_TASK_KEYS
+
+
+_ALLOWED_OVERRIDE_PATHS = _build_allowed_override_paths()
+_ALLOWED_TASK_OVERRIDE_KEYS = _build_task_override_keys()
 
 
 def apply_overrides(pipeline_data: dict, overrides: dict[str, Any]) -> dict:

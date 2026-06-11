@@ -278,6 +278,16 @@ export interface AgentCheckResponse {
   summary: AgentCheckSummary;
 }
 
+/** 参数字段定义 — 用于动态生成表单，与 CLI -p key=val 一一对应 */
+export interface ParamFieldDef {
+  key: string;
+  path: string;
+  label: string;
+  type: 'number' | 'string' | 'select' | 'json';
+  options?: { label: string; value: string }[];
+  placeholder?: string;
+}
+
 /** 项目信息 */
 export interface ProjectResponse {
   id: string;

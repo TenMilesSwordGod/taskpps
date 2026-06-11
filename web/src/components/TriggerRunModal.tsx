@@ -1,33 +1,48 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { Modal, Form, Input, message } from 'antd';
 import { useCreateRun } from '@/api/runs';
 import { useNavigate } from 'react-router-dom';
+import type { PipelineDetail } from '@/types';
+import ParamsForm, { buildInitialValues, buildOverrideParams } from './ParamsForm';
 
 interface TriggerRunModalProps {
   open: boolean;
   onClose: () => void;
-  /** 预填充的流水线文件名 */
   defaultPipeline?: string;
-  /** 预填充的项目 ID */
   defaultProjectId?: string | null;
+  pipelineData?: PipelineDetail | null;
 }
 
-/** 触发运行弹窗 */
-export default function TriggerRunModal({ open, onClose, defaultPipeline, defaultProjectId }: TriggerRunModalProps) {
+export default function TriggerRunModal({
+  open,
+  onClose,
+  defaultPipeline,
+  defaultProjectId,
+  pipelineData,
+}: TriggerRunModalProps) {
   const [form] = Form.useForm();
-  const [paramsText, setParamsText] = useState('{}');
   const createRun = useCreateRun();
   const navigate = useNavigate();
+
+  const initialValues = useMemo(() => {
+    if (!pipelineData) return {};
+    return buildInitialValues(pipelineData);
+  }, [pipelineData]);
 
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
+
       let params: Record<string, unknown> = {};
-      try {
-        params = JSON.parse(paramsText);
-      } catch {
-        message.error('params 必须是合法的 JSON');
-        return;
+      if (pipelineData) {
+        params = buildOverrideParams(values, pipelineData);
+      } else {
+        try {
+          params = JSON.parse(values.params || '{}');
+        } catch {
+          message.error('params 必须是合法的 JSON');
+          return;
+        }
       }
 
       const result = await createRun.mutateAsync({
@@ -40,7 +55,7 @@ export default function TriggerRunModal({ open, onClose, defaultPipeline, defaul
       onClose();
       navigate(`/runs/${result.id}`);
     } catch {
-      // 表单验证失败，不做处理
+      // 表单验证失败或 API 错误
     }
   };
 
@@ -56,7 +71,7 @@ export default function TriggerRunModal({ open, onClose, defaultPipeline, defaul
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ pipeline: defaultPipeline || '' }}
+        initialValues={{ pipeline: defaultPipeline || '', ...initialValues }}
       >
         <Form.Item
           name="pipeline"
@@ -66,14 +81,20 @@ export default function TriggerRunModal({ open, onClose, defaultPipeline, defaul
           <Input placeholder="例如: deploy.yaml" />
         </Form.Item>
 
-        <Form.Item label="参数 (JSON)">
-          <Input.TextArea
-            rows={6}
-            value={paramsText}
-            onChange={(e) => setParamsText(e.target.value)}
-            placeholder='{"key": "value"}'
-          />
-        </Form.Item>
+        {pipelineData ? (
+          <ParamsForm pipelineData={pipelineData} />
+        ) : (
+          <Form.Item
+            name="params"
+            label="参数 (JSON)"
+            initialValue="{}"
+          >
+            <Input.TextArea
+              rows={6}
+              placeholder='{"config": {"timeout": 120}}'
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   );

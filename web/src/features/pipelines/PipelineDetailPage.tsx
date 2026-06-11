@@ -128,6 +128,7 @@ export default function PipelineDetailPage() {
         open={triggerOpen}
         onClose={() => setTriggerOpen(false)}
         defaultPipeline={file}
+        pipelineData={pipeline}
       />
     </div>
   );
