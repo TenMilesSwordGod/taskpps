@@ -283,9 +283,10 @@ export interface ParamFieldDef {
   key: string;
   path: string;
   label: string;
-  type: 'number' | 'string' | 'select' | 'json';
+  type: 'number' | 'string' | 'select' | 'json' | 'host' | 'env';
   options?: { label: string; value: string }[];
   placeholder?: string;
+  hint?: string;
 }
 
 /** 项目信息 */

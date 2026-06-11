@@ -3,6 +3,7 @@ import { Modal, Form, Input, message, Spin } from 'antd';
 import { useCreateRun } from '@/api/runs';
 import { useNavigate } from 'react-router-dom';
 import { usePipeline } from '@/api/pipelines';
+import { useAgentsWithConfig } from '@/api/agents';
 import type { PipelineDetail } from '@/types';
 import ParamsForm, { buildInitialValues, buildOverrideParams } from './ParamsForm';
 
@@ -30,6 +31,8 @@ export default function TriggerRunModal({
     shouldFetch ? defaultPipeline : undefined,
   );
   const effectivePipeline = pipelineData || fetchedPipeline || null;
+
+  const { data: agents } = useAgentsWithConfig(open);
 
   useEffect(() => {
     if (open && effectivePipeline) {
@@ -74,6 +77,7 @@ export default function TriggerRunModal({
       onCancel={onClose}
       confirmLoading={createRun.isPending}
       destroyOnClose
+      width={800}
     >
       <Form
         form={form}
@@ -93,7 +97,7 @@ export default function TriggerRunModal({
             <Spin tip="加载流水线参数..." />
           </div>
         ) : effectivePipeline ? (
-          <ParamsForm pipelineData={effectivePipeline} />
+          <ParamsForm pipelineData={effectivePipeline} agents={agents} />
         ) : null}
       </Form>
     </Modal>
