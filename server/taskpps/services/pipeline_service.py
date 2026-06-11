@@ -122,7 +122,10 @@ class PipelineService:
                 raise ValueError(t("SubPipeline '{name}': {error}", name=sub.name, error=str(e))) from e
 
         pipeline_id = compute_pipeline_id(pipeline_file)
-        pipeline_version = compute_pipeline_version(pipeline_file)
+        pipeline_version = compute_pipeline_version(
+            pipeline_file,
+            pipelines_dir=get_pipelines_dir(project_workdir) if project_workdir else None,
+        )
 
         async with self._get_pipeline_lock(pipeline_id):
             return await self._create_run_locked(

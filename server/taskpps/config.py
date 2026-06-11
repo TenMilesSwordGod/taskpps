@@ -254,13 +254,13 @@ def compute_pipeline_id(pipeline_file: str) -> str:
     return Path(pipeline_file).with_suffix("").as_posix().replace("/", "_")
 
 
-def compute_pipeline_version(pipeline_file: str) -> str:
-    pipelines_dir = get_pipelines_dir()
+def compute_pipeline_version(pipeline_file: str, pipelines_dir: Path | None = None) -> str:
+    pd = pipelines_dir or get_pipelines_dir()
     p = Path(pipeline_file)
-    if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:
+    if len(p.parts) > 0 and p.parts[0] == pd.name:
         p = Path(*p.parts[1:])
         pipeline_file = str(p)
-    path = pipelines_dir / pipeline_file
+    path = pd / pipeline_file
     if not path.exists():
         return ""
     content = path.read_bytes()
