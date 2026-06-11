@@ -122,7 +122,9 @@ export default function RunListPage() {
       dataIndex: 'status',
       key: 'status',
       width: 120,
-      render: (status: RunStatus) => <StatusTag status={status} />,
+      render: (_status: RunStatus, record: RunResponse) => (
+        <StatusTag status={record.status} error={record.error} />
+      ),
     },
     {
       title: '开始时间',

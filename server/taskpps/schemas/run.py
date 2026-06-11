@@ -38,6 +38,7 @@ class RunResponse(BaseModel):
     project_id: str | None = None
     version_changed: bool = False
     status: RunStatus
+    error: str | None = None
     params: dict[str, Any] = {}
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -59,6 +60,7 @@ class RunResponse(BaseModel):
             "project_id": getattr(obj, "project_id", None),
             "version_changed": False,
             "status": obj.status,
+            "error": getattr(obj, "error", None),
             "params": json.loads(obj.params) if isinstance(obj.params, str) else (obj.params or {}),
             "started_at": obj.started_at,
             "finished_at": obj.finished_at,

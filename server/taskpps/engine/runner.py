@@ -77,6 +77,7 @@ class PipelineRunner:
         self._pipeline_version: str = ""
         self._pipeline_log_path: Path | None = None
         self._start_time: datetime | None = None
+        self._error_messages: list[str] = []
 
     def _init_pipeline_log(self) -> None:
         """Initialize pipeline-level console.log for runtime logging."""
@@ -181,6 +182,7 @@ class PipelineRunner:
                 self._write_pipeline_log("ERROR", error_msg)
                 self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
                 self._unexpected_error = True
+                self._error_messages.append(error_msg)
                 sub_levels = []
 
             if sub_levels:
@@ -233,14 +235,20 @@ class PipelineRunner:
                             self._write_pipeline_log("ERROR", error_msg)
                             self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
                             self._unexpected_error = True
+                            self._error_messages.append(error_msg)
                             failed_subpipelines.add(sub_name)
                             for dep_sub in self._get_subpipeline_dependents(sub_name):
                                 failed_subpipelines.add(dep_sub)
                         elif isinstance(result, dict) and not result.get("success"):
                             failed_tasks = result.get("failed_tasks", [])
+                            error_detail = result.get("error", "")
+                            error_msg = f"SubPipeline '{sub_name}' failed: {', '.join(failed_tasks)}"
+                            if error_detail:
+                                error_msg += f" ({error_detail})"
                             self._write_pipeline_log(
                                 "FAILED", f"SubPipeline '{sub_name}' failed. Failed tasks: {failed_tasks}"
                             )
+                            self._error_messages.append(error_msg)
                             failed_subpipelines.add(sub_name)
                             on_failure = sub.config.on_failure
                             if on_failure != "continue":
@@ -254,11 +262,12 @@ class PipelineRunner:
                             self._write_pipeline_log("SUCCESS", f"SubPipeline '{sub_name}' completed successfully")
 
             except Exception as e:
-                error_msg = f"Pipeline runner {self.run_id} encountered an unexpected error"
+                error_msg = f"Pipeline runner {self.run_id} encountered an unexpected error: {e}"
                 logger.exception(error_msg)
-                self._write_pipeline_log("ERROR", f"{error_msg}: {e}")
+                self._write_pipeline_log("ERROR", error_msg)
                 self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
                 self._unexpected_error = True
+                self._error_messages.append(str(e))
 
             end_time = datetime.now(timezone.utc)
             duration = end_time - self._start_time
@@ -289,7 +298,8 @@ class PipelineRunner:
                     duration,
                 )
 
-                await run_repo.update_run_status(self.run_id, final_status, finished_at=end_time)
+                run_error = "; ".join(self._error_messages) if self._error_messages else None
+                await run_repo.update_run_status(self.run_id, final_status, finished_at=end_time, error=run_error)
 
             self._write_pipeline_log("PIPELINE:TEARDOWN", "")
             self._write_pipeline_log("SYSTEM", f"End Time: {end_time.isoformat()}")
@@ -379,6 +389,7 @@ class PipelineRunner:
 
         failed_tasks: set[str] = set()
         completed_tasks: set[str] = set()
+        task_error_details: list[str] = []  # 收集每个失败任务的根因
         strategy = sub.config.execution_strategy
         self._write_pipeline_log("INFO", f"Execution strategy: {strategy}")
 
@@ -439,6 +450,10 @@ class PipelineRunner:
                         failed_tasks.add(qualified_name)
                         if isinstance(result, ExecutorResult):
                             exit_code = result.exit_code
+                            # 收集任务错误根因（取 stderr 前 200 字符，避免 run.error 过长）
+                            err_detail = (result.stderr or "").strip()[:200]
+                            if err_detail:
+                                task_error_details.append(f"{qualified_name}: {err_detail}")
                             if exit_code < 0:
                                 self._write_pipeline_log(
                                     "FAILED",
@@ -450,6 +465,8 @@ class PipelineRunner:
                                 )
                         else:
                             exit_code = -1
+                            err_detail = str(result).strip()[:200]
+                            task_error_details.append(f"{qualified_name}: {err_detail}")
                             self._write_pipeline_log(
                                 "FAILED", f"Task '{qualified_name}' failed with unexpected exception: {result}"
                             )
@@ -467,7 +484,7 @@ class PipelineRunner:
             self._write_pipeline_log(f"SUB:{sub_name}:TEARDOWN", "")
             self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' finished")
             self._write_separator("=", f"[subpipeline] {sub_name} end")
-            return {"success": False, "failed_tasks": list(failed_tasks)}
+            return {"success": False, "failed_tasks": list(failed_tasks), "error": "; ".join(task_error_details) if task_error_details else ""}
 
         self._write_pipeline_log(
             "SUCCESS",

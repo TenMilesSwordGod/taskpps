@@ -123,6 +123,7 @@ _MIGRATIONS = {
         ("pipeline_id", "TEXT NOT NULL DEFAULT ''"),
         ("pipeline_version", "TEXT NOT NULL DEFAULT ''"),
         ("project_id", "TEXT"),
+        ("error", "TEXT"),
     ],
     "task_runs": [
         ("subpipeline_name", "TEXT NOT NULL DEFAULT ''"),

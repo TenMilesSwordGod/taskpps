@@ -52,7 +52,9 @@ export default function DashboardPage() {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (status: RunStatus) => <StatusTag status={status} />,
+      render: (_status: RunStatus, record: RunResponse) => (
+        <StatusTag status={record.status} error={record.error} />
+      ),
     },
     {
       title: '开始时间',

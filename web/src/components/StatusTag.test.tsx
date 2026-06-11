@@ -22,4 +22,14 @@ describe('<StatusTag />', () => {
     render(<StatusTag status="skipped" />)
     expect(screen.getByText('已跳过')).toBeInTheDocument()
   })
+
+  it('有 error 时 Tag 存在', () => {
+    render(<StatusTag status="failed" error="Agent not found" />)
+    expect(screen.getByText('失败')).toBeInTheDocument()
+  })
+
+  it('无 error 时 Tag 正常渲染', () => {
+    render(<StatusTag status="success" error={null} />)
+    expect(screen.getByText('成功')).toBeInTheDocument()
+  })
 })

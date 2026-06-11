@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress } from 'antd';
+import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
 import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRun, useCancelRun, useRunConsole } from '@/api/runs';
@@ -165,7 +165,7 @@ export default function RunDetailPage() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <Space size={12} wrap>
             <span style={{ fontSize: 18, fontWeight: 600 }}>{run.pipeline_name}</span>
-            <StatusTag status={run.status} />
+            <StatusTag status={run.status} error={run.error} />
             {run.started_at && (
               <Tooltip title={`开始: ${new Date(run.started_at).toLocaleString('zh-CN')}${run.finished_at ? `\n结束: ${new Date(run.finished_at).toLocaleString('zh-CN')}` : ''}`}>
                 <Tag icon={<Clock size={12} />} color="default" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
@@ -223,6 +223,19 @@ export default function RunDetailPage() {
           </Space>
         </div>
       </div>
+
+      {/* 失败原因横幅 */}
+      {run.error && (run.status === 'failed' || run.status === 'partial') && (
+        <Alert
+          type="error"
+          showIcon
+          icon={<AlertCircle size={16} />}
+          message="失败原因"
+          description={run.error}
+          style={{ borderRadius: 8 }}
+          closable
+        />
+      )}
 
       {/* 主内容区：树 + 日志（可拖拽调整） */}
       <div className="flex flex-1 min-h-0">

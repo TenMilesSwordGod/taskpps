@@ -17,6 +17,7 @@ export interface RunResponse {
   project_id: string | null;
   version_changed: boolean;
   status: RunStatus;
+  error: string | null;
   params: Record<string, unknown>;
   started_at: string | null;
   finished_at: string | null;
@@ -33,6 +34,7 @@ export interface TaskRunResponse {
   task_type: TaskType;
   status: TaskStatus;
   exit_code: number | null;
+  error: string | null;
   log_path: string;
   started_at: string | null;
   finished_at: string | null;

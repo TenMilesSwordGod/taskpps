@@ -110,7 +110,12 @@ class RunRepository:
         return result.scalars().all()
 
     async def update_run_status(
-        self, run_id: str, status: RunStatus, started_at: datetime | None = None, finished_at: datetime | None = None
+        self,
+        run_id: str,
+        status: RunStatus,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+        error: str | None = None,
     ) -> None:
         logger.debug("Updating run status: id=%s status=%s", run_id, status)
         run = await self.get_run(run_id)
@@ -122,6 +127,8 @@ class RunRepository:
             run.started_at = started_at
         if finished_at is not None:
             run.finished_at = finished_at
+        if error is not None:
+            run.error = error
         await self.session.commit()
 
     async def delete_runs_older_than(self, days: int) -> int:

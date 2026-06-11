@@ -1,4 +1,4 @@
-import { Tag } from 'antd';
+import { Tag, Tooltip } from 'antd';
 import type { RunStatus, TaskStatus } from '@/types';
 
 type StatusType = RunStatus | TaskStatus;
@@ -27,13 +27,25 @@ const STATUS_LABEL_MAP: Record<StatusType, string> = {
 
 interface StatusTagProps {
   status: StatusType;
+  /** 失败原因，有值时 hover 显示 Tooltip */
+  error?: string | null;
 }
 
 /** 状态标签组件 */
-export default function StatusTag({ status }: StatusTagProps) {
-  return (
+export default function StatusTag({ status, error }: StatusTagProps) {
+  const tag = (
     <Tag color={STATUS_COLOR_MAP[status]}>
       {STATUS_LABEL_MAP[status]}
     </Tag>
   );
+
+  if (error) {
+    return (
+      <Tooltip title={error} placement="top" overlayStyle={{ maxWidth: 420 }}>
+        {tag}
+      </Tooltip>
+    );
+  }
+
+  return tag;
 }

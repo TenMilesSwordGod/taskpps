@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Tree, Tooltip } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import { PartitionOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { PartitionOutlined, AppstoreOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 
 import { useRunConsole } from '@/api/runs';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
@@ -241,9 +241,14 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
                   {TYPE_LABEL[type]}
                 </span>
               </Tooltip>
-              <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1d4ed8' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1d4ed8' : exitBad ? '#b91c1c' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {task.name}
               </span>
+              {run?.error && (
+                <Tooltip title={run.error} placement="topRight" overlayStyle={{ maxWidth: 420 }}>
+                  <ExclamationCircleOutlined style={{ color: '#ef4444', fontSize: 12, flexShrink: 0 }} />
+                </Tooltip>
+              )}
               <span style={{ flex: 1, minWidth: 4 }} />
               {durStr && (
                 <Tooltip title={run?.started_at ? `开始: ${new Date(run.started_at).toLocaleString('zh-CN')}` : ''}>
