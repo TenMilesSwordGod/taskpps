@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress } from 'antd';
 import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRun, useCancelRun, useRunLogs, useRunConsole } from '@/api/runs';
+import { useRun, useCancelRun, useRunConsole } from '@/api/runs';
 import { usePipeline } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
@@ -11,20 +11,6 @@ import TaskTree from './TaskTree';
 import { useSSELogs } from './hooks/useSSELogs';
 import type { RunResponse } from '@/types';
 import type { LogEntry } from './hooks/useSSELogs';
-
-/** 将 REST 日志响应转为 LogEntry[]（每条严格单行） */
-function restLogsToEntries(logsMap: Record<string, string>): LogEntry[] {
-  const entries: LogEntry[] = [];
-  for (const [taskName, content] of Object.entries(logsMap)) {
-    if (!content) continue;
-    const lines = content.split(/\r\n|\r|\n/);
-    for (const line of lines) {
-      if (line.length === 0) continue;
-      entries.push({ taskName, content: line, timestamp: 0, seq: 0 });
-    }
-  }
-  return entries;
-}
 
 /** 计算任务进度 */
 function calcProgress(run: RunResponse | undefined) {
@@ -62,20 +48,11 @@ export default function RunDetailPage() {
 
   const isLive = run?.status === 'running' || run?.status === 'pending';
 
-  // SSE 实时日志（仅运行中/等待中）
-  const sseResult = useSSELogs(isLive ? id : undefined);
+  // SSE 日志（始终连接 — running 时实时推送，completed 时一次全推完 done）
+  const sseResult = useSSELogs(id);
 
-  // REST 历史日志（仅非运行中）
-  const { data: restLogs, refetch: refetchLogs, isFetching: logsFetching } = useRunLogs(!isLive ? id : undefined);
-
-  // 合并日志：运行中用 SSE，否则用 REST；过渡期保留 SSE 日志避免闪空
-  const baseLogs = useMemo(() => {
-    if (isLive) return sseResult.logs;
-    if (restLogs?.logs && Object.keys(restLogs.logs).length > 0) return restLogsToEntries(restLogs.logs);
-    // REST 数据尚未就绪时，保留 SSE 日志防止切换时日志消失
-    if (sseResult.logs.length > 0) return sseResult.logs;
-    return [];
-  }, [isLive, sseResult.logs, restLogs?.logs]);
+  // 日志：SSE 直接提供，无 SSE/REST 切换
+  const baseLogs = sseResult.logs;
 
   // Debug 模式：拉取 console.log 并合并 phase 日志
   const { data: consoleData } = useRunConsole(debugVisible ? id : undefined, 500);
@@ -115,8 +92,8 @@ export default function RunDetailPage() {
     return [...phaseLogEntries, ...baseLogs];
   }, [baseLogs, debugVisible, phaseLogEntries]);
 
-  const connected = isLive ? sseResult.connected : false;
-  const autoScroll = isLive ? sseResult.autoScroll : true;
+  const connected = sseResult.connected;
+  const autoScroll = sseResult.autoScroll;
   const setAutoScroll = sseResult.setAutoScroll;
   const clearLogs = sseResult.clearLogs;
 
@@ -147,7 +124,6 @@ export default function RunDetailPage() {
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['run', id] });
-    refetchLogs();
   };
 
   const handleCopyLogs = async () => {
@@ -208,12 +184,11 @@ export default function RunDetailPage() {
             )}
           </Space>
           <Space>
-            <Tooltip title="手动刷新运行状态与日志">
+            <Tooltip title="手动刷新运行状态">
               <Button
                 size="small"
-                icon={<RefreshCw size={14} className={logsFetching ? 'animate-spin' : ''} />}
+                icon={<RefreshCw size={14} />}
                 onClick={handleRefresh}
-                loading={logsFetching}
               >
                 刷新
               </Button>
