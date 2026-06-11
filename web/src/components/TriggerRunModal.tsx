@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
-import { Modal, Form, Input, message } from 'antd';
+import { useEffect } from 'react';
+import { Modal, Form, Input, message, Spin } from 'antd';
 import { useCreateRun } from '@/api/runs';
 import { useNavigate } from 'react-router-dom';
+import { usePipeline } from '@/api/pipelines';
 import type { PipelineDetail } from '@/types';
 import ParamsForm, { buildInitialValues, buildOverrideParams } from './ParamsForm';
 
@@ -24,26 +25,28 @@ export default function TriggerRunModal({
   const createRun = useCreateRun();
   const navigate = useNavigate();
 
-  const initialValues = useMemo(() => {
-    if (!pipelineData) return {};
-    return buildInitialValues(pipelineData);
-  }, [pipelineData]);
+  const shouldFetch = !pipelineData && !!defaultPipeline;
+  const { data: fetchedPipeline, isLoading: isFetching } = usePipeline(
+    shouldFetch ? defaultPipeline : undefined,
+  );
+  const effectivePipeline = pipelineData || fetchedPipeline || null;
+
+  useEffect(() => {
+    if (open && effectivePipeline) {
+      form.resetFields();
+      form.setFieldsValue({
+        pipeline: defaultPipeline || '',
+        ...buildInitialValues(effectivePipeline),
+      });
+    }
+  }, [open, effectivePipeline, form, defaultPipeline]);
 
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-
-      let params: Record<string, unknown> = {};
-      if (pipelineData) {
-        params = buildOverrideParams(values, pipelineData);
-      } else {
-        try {
-          params = JSON.parse(values.params || '{}');
-        } catch {
-          message.error('params 必须是合法的 JSON');
-          return;
-        }
-      }
+      const params = effectivePipeline
+        ? buildOverrideParams(values, effectivePipeline)
+        : {};
 
       const result = await createRun.mutateAsync({
         pipeline: values.pipeline,
@@ -54,8 +57,12 @@ export default function TriggerRunModal({
       message.success('运行已创建');
       onClose();
       navigate(`/runs/${result.id}`);
-    } catch {
-      // 表单验证失败或 API 错误
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'errorFields' in e) {
+        return;
+      }
+      const msg = e instanceof Error ? e.message : '创建运行失败';
+      message.error(msg);
     }
   };
 
@@ -71,7 +78,7 @@ export default function TriggerRunModal({
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ pipeline: defaultPipeline || '', ...initialValues }}
+        initialValues={{ pipeline: defaultPipeline || '' }}
       >
         <Form.Item
           name="pipeline"
@@ -81,20 +88,13 @@ export default function TriggerRunModal({
           <Input placeholder="例如: deploy.yaml" />
         </Form.Item>
 
-        {pipelineData ? (
-          <ParamsForm pipelineData={pipelineData} />
-        ) : (
-          <Form.Item
-            name="params"
-            label="参数 (JSON)"
-            initialValue="{}"
-          >
-            <Input.TextArea
-              rows={6}
-              placeholder='{"config": {"timeout": 120}}'
-            />
-          </Form.Item>
-        )}
+        {shouldFetch && isFetching ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin tip="加载流水线参数..." />
+          </div>
+        ) : effectivePipeline ? (
+          <ParamsForm pipelineData={effectivePipeline} />
+        ) : null}
       </Form>
     </Modal>
   );
