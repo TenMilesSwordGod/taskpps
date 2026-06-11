@@ -10,6 +10,7 @@ from typing import Any
 
 from taskpps.config import (
     build_log_path,
+    build_pipeline_log_path,
     compute_pipeline_id,
     compute_pipeline_version,
     get_logs_dir,
@@ -265,6 +266,10 @@ class PipelineService:
             elif isinstance(run.params, dict):
                 params = run.params
 
+            console_log_path = ""
+            if run.pipeline_id and run.pipeline_version:
+                console_log_path = str(build_pipeline_log_path(run.pipeline_id, run.pipeline_version, run.id))
+
             return {
                 "id": run.id,
                 "pipeline_name": run.pipeline_name,
@@ -275,6 +280,7 @@ class PipelineService:
                 "status": run.status,
                 "error": getattr(run, "error", None),
                 "params": params,
+                "console_log_path": console_log_path,
                 "started_at": run.started_at,
                 "finished_at": run.finished_at,
                 "created_at": run.created_at,
@@ -312,6 +318,10 @@ class PipelineService:
                 elif isinstance(run.params, dict):
                     params = run.params
 
+                console_log_path = ""
+                if run.pipeline_id and run.pipeline_version:
+                    console_log_path = str(build_pipeline_log_path(run.pipeline_id, run.pipeline_version, run.id))
+
                 items.append(
                     {
                         "id": run.id,
@@ -323,6 +333,7 @@ class PipelineService:
                         "status": run.status,
                         "error": getattr(run, "error", None),
                         "params": params,
+                        "console_log_path": console_log_path,
                         "started_at": run.started_at,
                         "finished_at": run.finished_at,
                         "created_at": run.created_at,

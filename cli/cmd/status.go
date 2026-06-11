@@ -49,7 +49,7 @@ Example:
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Task", "Type", "Status", "Exit Code", "Started", "Finished"})
+		table.SetHeader([]string{"Task", "Type", "Status", "Exit Code", "Started", "Finished", "Log Path"})
 		table.SetBorder(false)
 		table.SetColumnSeparator(" ")
 		table.SetAutoWrapText(false)
@@ -77,6 +77,7 @@ Example:
 				exitCode,
 				started,
 				finished,
+				task.LogPath,
 			})
 		}
 

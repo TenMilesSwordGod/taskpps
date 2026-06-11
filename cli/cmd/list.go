@@ -35,7 +35,7 @@ Examples:
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"ID", "Pipeline", "Status", "Started", "Finished"})
+		table.SetHeader([]string{"ID", "Pipeline", "Status", "Started", "Finished", "Console"})
 		table.SetBorder(false)
 		table.SetColumnSeparator(" ")
 		table.SetAutoWrapText(false)
@@ -60,6 +60,7 @@ Examples:
 				statusStr,
 				started,
 				finished,
+				run.ConsoleLogPath,
 			})
 		}
 

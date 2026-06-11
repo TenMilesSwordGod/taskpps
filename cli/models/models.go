@@ -45,6 +45,7 @@ type Run struct {
 	ProjectID       *string                `json:"project_id"`
 	Status          RunStatus              `json:"status"`
 	Params          map[string]interface{} `json:"params"`
+	ConsoleLogPath  string                 `json:"console_log_path"`
 	StartedAt       *string                `json:"started_at"`
 	FinishedAt      *string                `json:"finished_at"`
 	CreatedAt       string                 `json:"created_at"`

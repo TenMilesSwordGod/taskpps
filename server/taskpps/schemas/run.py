@@ -40,6 +40,7 @@ class RunResponse(BaseModel):
     status: RunStatus
     error: str | None = None
     params: dict[str, Any] = {}
+    console_log_path: str = ""
     started_at: datetime | None = None
     finished_at: datetime | None = None
     created_at: datetime
@@ -62,6 +63,7 @@ class RunResponse(BaseModel):
             "status": obj.status,
             "error": getattr(obj, "error", None),
             "params": json.loads(obj.params) if isinstance(obj.params, str) else (obj.params or {}),
+            "console_log_path": getattr(obj, "console_log_path", ""),
             "started_at": obj.started_at,
             "finished_at": obj.finished_at,
             "created_at": obj.created_at,

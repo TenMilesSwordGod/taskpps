@@ -81,8 +81,8 @@ class PipelineRunner:
 
     def _init_pipeline_log(self) -> None:
         """Initialize pipeline-level console.log for runtime logging."""
-        if self._pipeline_id and self._pipeline_version:
-            self._pipeline_log_path = build_pipeline_log_path(self._pipeline_id, self._pipeline_version, self.run_id)
+        if self._pipeline_id:
+            self._pipeline_log_path = build_pipeline_log_path(self._pipeline_id, self._pipeline_version or "", self.run_id)
 
             with open(self._pipeline_log_path, "w") as f:
                 f.write(f"{'=' * 80}\n")
@@ -501,8 +501,8 @@ class PipelineRunner:
         qualified_name = f"{sub_name}.{task.name}" if sub_name else task.name
         task_run_id = self._task_run_ids.get(qualified_name, "")
 
-        if self._pipeline_id and self._pipeline_version:
-            log_path = build_log_path(self._pipeline_id, self._pipeline_version, self.run_id, qualified_name)
+        if self._pipeline_id:
+            log_path = build_log_path(self._pipeline_id, self._pipeline_version or "", self.run_id, qualified_name)
         else:
             log_path = Path(self._task_run_ids.get(qualified_name, "task.log"))
 
