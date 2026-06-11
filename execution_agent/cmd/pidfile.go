@@ -36,6 +36,12 @@ func checkInstanceRunning(pidFile string) (running bool, pid int, err error) {
 		return false, 0, nil
 	}
 
+	// 如果是当前进程自身（daemon 模式下子进程在父进程写入 PID 文件后
+	// 立即检查实例，会出现 TOCTOU 竞态），不视为已有实例运行。
+	if parsed == os.Getpid() {
+		return false, 0, nil
+	}
+
 	process, err := os.FindProcess(parsed)
 	if err != nil {
 		return false, parsed, nil

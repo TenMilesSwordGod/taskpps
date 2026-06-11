@@ -80,7 +80,8 @@ func TestCheckInstanceRunning_StalePidFile(t *testing.T) {
 }
 
 func TestCheckInstanceRunning_CurrentProcess(t *testing.T) {
-	// Our own PID is guaranteed to exist; this confirms the happy path.
+	// 当 PID 文件中的 PID 就是当前进程自身时（daemon 模式子进程启动时
+	// 父进程刚写完 PID 文件会出现），不视为已有实例运行，避免 TOCTOU 竞态。
 	dir := t.TempDir()
 	pidFile := filepath.Join(dir, "agent.pid")
 	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
@@ -91,10 +92,30 @@ func TestCheckInstanceRunning_CurrentProcess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !running {
-		t.Fatalf("expected running=true for the current process (pid %d)", os.Getpid())
+	if running {
+		t.Fatalf("expected running=false when pid file points to current process (pid %d)", os.Getpid())
 	}
-	if pid != os.Getpid() {
-		t.Fatalf("expected pid=%d, got %d", os.Getpid(), pid)
+	if pid != 0 {
+		t.Fatalf("expected pid=0, got %d", pid)
+	}
+}
+
+func TestCheckInstanceRunning_OtherProcess(t *testing.T) {
+	// PID 1 (init) 在 Linux 上总是存在，用于验证非自身进程的检测。
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "agent.pid")
+	if err := os.WriteFile(pidFile, []byte("1\n"), 0o644); err != nil {
+		t.Fatalf("write pid file: %v", err)
+	}
+
+	running, pid, err := checkInstanceRunning(pidFile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !running {
+		t.Fatalf("expected running=true for PID 1 (init)")
+	}
+	if pid != 1 {
+		t.Fatalf("expected pid=1, got %d", pid)
 	}
 }

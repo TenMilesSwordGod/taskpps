@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/taskpps/execution-agent/logger"
 )
@@ -51,16 +52,27 @@ func NewAgent(config *AgentConfig) *Agent {
 }
 
 func (a *Agent) Start() error {
-	if err := a.wsClient.Connect(); err != nil {
-		return err
+	backoffs := []time.Duration{1, 2, 4, 8, 16}
+	var lastErr error
+	for i, d := range backoffs {
+		if i > 0 {
+			logger.Info("Retrying WebSocket connection in %v (attempt %d/%d)...", d, i+1, len(backoffs))
+			time.Sleep(d * time.Second)
+		}
+		if err := a.wsClient.Connect(); err != nil {
+			lastErr = err
+			logger.Warn("WebSocket connect attempt %d/%d failed: %v", i+1, len(backoffs), err)
+			continue
+		}
+		a.wsClient.Run()
+
+		hostname, _ := os.Hostname()
+		logger.Info("Agent started: id=%s host=%s pid=%d", a.config.AgentID, hostname, os.Getpid())
+
+		a.handleSignals()
+		return nil
 	}
-	a.wsClient.Run()
-
-	hostname, _ := os.Hostname()
-	logger.Info("Agent started: id=%s host=%s pid=%d", a.config.AgentID, hostname, os.Getpid())
-
-	a.handleSignals()
-	return nil
+	return lastErr
 }
 
 func (a *Agent) Stop() {
