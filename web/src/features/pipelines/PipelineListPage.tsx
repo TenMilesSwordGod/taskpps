@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Card, Table, Button, Input, Space, Progress, Tooltip, Tag } from 'antd';
 import { Search, RefreshCw, Play, Eye } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -14,28 +14,7 @@ type Row =
   | (PipelineSummary & { kind: 'folder'; children: PipelineSummary[]; pipelineCount: number })
   | (PipelineSummary & { kind: 'pipeline' });
 
-/** 三角展开指示器 */
-function ExpandArrow({ expanded }: { expanded: boolean }) {
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 16,
-        height: 16,
-        fontSize: 10,
-        color: '#9ca3af',
-        flexShrink: 0,
-        marginRight: 2,
-        transition: 'transform 0.15s',
-        transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-      }}
-    >
-      &#9654;
-    </span>
-  );
-}
+
 
 export default function PipelineListPage() {
   const navigate = useNavigate();
@@ -137,6 +116,20 @@ export default function PipelineListPage() {
 
   const isExpandable = (r: Row) => r.kind === 'project' || r.kind === 'folder';
 
+  // 首次加载时按 pipelineCount 决定默认展开（≤10 展开，>10 收起）
+  const defaultedRef = useRef(false);
+  useEffect(() => {
+    if (defaultedRef.current || rows.length === 0) return;
+    defaultedRef.current = true;
+    const keys = new Set<string>();
+    for (const r of rows) {
+      if (r.kind === 'project' && (r.pipelineCount ?? 0) <= 10) {
+        keys.add(`__proj__${r.name}`);
+      }
+    }
+    setExpandedRowKeys(keys);
+  }, [rows]);
+
   const handleOpenDetail = useCallback(
     (file: string) => navigate(`/pipelines/${encodeURIComponent(file)}`),
     [navigate],
@@ -152,17 +145,9 @@ export default function PipelineListPage() {
       title: '名称',
       key: 'name',
       render: (_: unknown, record: Row) => {
-        const rowKey = record.kind === 'project'
-          ? `__proj__${record.name}`
-          : record.kind === 'folder'
-            ? `__folder__${record.name}`
-            : record.file;
-        const expanded = expandedRowKeys.has(rowKey);
-
         if (record.kind === 'project') {
           return (
             <span style={{ fontWeight: 600, color: '#1f2937', display: 'inline-flex', alignItems: 'center' }}>
-              <ExpandArrow expanded={expanded} />
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 width: 18, height: 18, borderRadius: 4, background: '#3b82f6' + '18',
@@ -178,7 +163,6 @@ export default function PipelineListPage() {
         if (record.kind === 'folder') {
           return (
             <span style={{ fontWeight: 600, color: '#1f2937', display: 'inline-flex', alignItems: 'center' }}>
-              <ExpandArrow expanded={expanded} />
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 width: 18, height: 18, borderRadius: 4, background: '#f59e0b' + '18',
@@ -192,7 +176,7 @@ export default function PipelineListPage() {
           );
         }
         return (
-          <span style={{ fontWeight: 500, paddingLeft: 22 }}>{record.name}</span>
+          <span style={{ fontWeight: 500 }}>{record.name}</span>
         );
       },
     },
@@ -273,7 +257,7 @@ export default function PipelineListPage() {
         );
       },
     },
-  ], [handleOpenDetail, handleOpenTrigger, expandedRowKeys]);
+  ], [handleOpenDetail, handleOpenTrigger]);
 
   return (
     <div className="p-4">
@@ -320,7 +304,7 @@ export default function PipelineListPage() {
             rowExpandable: isExpandable,
             // 不渲染 chevron 按钮
             expandIcon: () => null,
-            indentSize: 0,
+            indentSize: 22,
           }}
           onRow={(record: Row) => {
             if (!isExpandable(record)) return {};
