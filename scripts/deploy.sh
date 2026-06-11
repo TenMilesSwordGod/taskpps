@@ -20,9 +20,11 @@ SERVER_HOME="/opt/taskpps"
 BINARY_SOURCE=""   # build | download,由 select_binary_source 填充,也可由 --binary-source 覆盖
 RELEASE_TAG=""     # 仅 download 模式使用,可由 --release-tag 覆盖
 
-# 公共构建/下载/安装库(deploy.sh 与 update.sh 共用)
+# 公共库
 # shellcheck source=./_lib_build.sh
 source "$SCRIPT_DIR/_lib_build.sh"
+# shellcheck source=./migrate.sh
+source "$SCRIPT_DIR/migrate.sh"
 
 # Colors
 RED='\033[0;31m'
@@ -480,6 +482,12 @@ install() {
     generate_config
     generate_profile_d
     install_cli_and_agent_binaries
+
+    # 若存在旧数据库则执行 schema 迁移（新安装跳过）
+    if [[ -f "$SERVER_HOME/.taskpps/state.db" ]]; then
+        run_migration "$SERVER_HOME" "$VENV_DIR"
+    fi
+
     enable_service
     start_service
 

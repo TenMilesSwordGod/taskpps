@@ -126,6 +126,7 @@ _MIGRATIONS = {
     ],
     "task_runs": [
         ("subpipeline_name", "TEXT NOT NULL DEFAULT ''"),
+        ("error", "TEXT"),
     ],
     "triggers": [
         ("project_id", "TEXT"),
