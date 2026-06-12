@@ -287,3 +287,10 @@ def build_legacy_log_path(pipeline_file: str, run_id: str, task_run_id: str) -> 
     log_dir = logs_dir / log_rel_dir / run_id / task_run_id
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir / "task.log"
+
+
+def build_retry_log_path(pipeline_id: str, pipeline_version: str, run_id: str, task_name: str, retry_version: int) -> Path:
+    base = get_logs_dir() / pipeline_id / f"v_{pipeline_version}" / "builds" / run_id
+    retry_dir = base / "retries"
+    retry_dir.mkdir(parents=True, exist_ok=True)
+    return retry_dir / f"{task_name}.retry-{retry_version}.log"

@@ -182,6 +182,7 @@ async def client(db_engine):
 async def clean_db(db_engine):
     engine = get_engine()
     async with engine.begin() as conn:
+        await conn.execute(text("DELETE FROM task_retry_records"))
         await conn.execute(text("DELETE FROM task_runs"))
         await conn.execute(text("DELETE FROM runs"))
         await conn.execute(text("DELETE FROM triggers"))

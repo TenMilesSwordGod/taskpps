@@ -40,6 +40,9 @@ SIGNAL_TASK_FINISHED = "task_finished"
 SIGNAL_RUN_COMPLETED = "run_completed"
 SIGNAL_RUN_CANCELLED = "run_cancelled"
 
+SIGNAL_RETRY_STARTED = "retry_started"
+SIGNAL_RETRY_FINISHED = "retry_finished"
+
 
 def get_event_bus() -> EventBus:
     return EventBus.get_instance()

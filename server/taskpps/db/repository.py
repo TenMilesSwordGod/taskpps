@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskpps.models.project import Project
-from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus
+from taskpps.models.run import PipelineRun, RunStatus, TaskRetryRecord, TaskRun, TaskStatus
 from taskpps.models.trigger import Trigger
 
 logger = logging.getLogger("taskpps.db.repository")
@@ -234,6 +234,104 @@ class TaskRunRepository:
 
     async def delete_tasks_for_run(self, run_id: str) -> int:
         stmt = delete(TaskRun).where(TaskRun.run_id == run_id)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
+
+
+class RetryRecordRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_retry_record(
+        self,
+        run_id: str,
+        task_run_id: str,
+        task_name: str,
+        subpipeline_name: str,
+        retry_version: int,
+        command: str,
+        original_command: str,
+        log_path: str,
+    ) -> TaskRetryRecord:
+        record = TaskRetryRecord(
+            run_id=run_id,
+            task_run_id=task_run_id,
+            task_name=task_name,
+            subpipeline_name=subpipeline_name,
+            retry_version=retry_version,
+            command=command,
+            original_command=original_command,
+            log_path=log_path,
+            status=TaskStatus.PENDING,
+        )
+        self.session.add(record)
+        await self.session.commit()
+        await self.session.refresh(record)
+        return record
+
+    async def get_retry_record(self, retry_id: str) -> TaskRetryRecord | None:
+        result = await self.session.execute(
+            select(TaskRetryRecord).where(TaskRetryRecord.id == retry_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_retries_by_task(self, run_id: str, task_name: str) -> Sequence[TaskRetryRecord]:
+        result = await self.session.execute(
+            select(TaskRetryRecord)
+            .where(TaskRetryRecord.run_id == run_id, TaskRetryRecord.task_name == task_name)
+            .order_by(TaskRetryRecord.retry_version)
+        )
+        return result.scalars().all()
+
+    async def list_retries_by_run(self, run_id: str) -> Sequence[TaskRetryRecord]:
+        result = await self.session.execute(
+            select(TaskRetryRecord)
+            .where(TaskRetryRecord.run_id == run_id)
+            .order_by(TaskRetryRecord.created_at)
+        )
+        return result.scalars().all()
+
+    async def update_retry_status(
+        self,
+        retry_id: str,
+        status: TaskStatus,
+        exit_code: int | None = None,
+        error: str | None = None,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        record = await self.get_retry_record(retry_id)
+        if record is None:
+            return
+        record.status = status
+        if exit_code is not None:
+            record.exit_code = exit_code
+        if error is not None:
+            record.error = error
+        if started_at is not None:
+            record.started_at = started_at
+        if finished_at is not None:
+            record.finished_at = finished_at
+        await self.session.commit()
+
+    async def update_retry_command(self, retry_id: str, command: str) -> None:
+        record = await self.get_retry_record(retry_id)
+        if record is None:
+            return
+        record.command = command
+        await self.session.commit()
+
+    async def get_next_retry_version(self, run_id: str, task_name: str) -> int:
+        result = await self.session.execute(
+            select(func.max(TaskRetryRecord.retry_version))
+            .where(TaskRetryRecord.run_id == run_id, TaskRetryRecord.task_name == task_name)
+        )
+        max_ver = result.scalar()
+        return (max_ver or 0) + 1
+
+    async def delete_retries_for_run(self, run_id: str) -> int:
+        stmt = delete(TaskRetryRecord).where(TaskRetryRecord.run_id == run_id)
         result = await self.session.execute(stmt)
         await self.session.commit()
         return result.rowcount

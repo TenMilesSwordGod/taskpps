@@ -7,11 +7,24 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from taskpps.config import build_pipeline_log_path
+from taskpps.config import build_pipeline_log_path, build_retry_log_path
 from taskpps.db.engine import get_session_factory
-from taskpps.db.repository import RunRepository, TaskRunRepository
+from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.i18n import t
-from taskpps.schemas.run import CleanResponse, CreateRunRequest, RunListResponse, RunResponse
+from taskpps.schemas.run import (
+    BatchSelectReportRequest,
+    CleanResponse,
+    CreateRunRequest,
+    DependencyTreeResponse,
+    RetryCommandResponse,
+    RetryRecordResponse,
+    RetryRequest,
+    RetryVersionsResponse,
+    RunListResponse,
+    RunResponse,
+    SelectReportRequest,
+    UpdateRetryCommandRequest,
+)
 from taskpps.services.pipeline_service import PipelineService
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -235,3 +248,156 @@ async def clean_runs(
 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.post("/{run_id}/retry")
+async def retry_run(run_id: str, body: RetryRequest):
+    try:
+        result = await _pipeline_service.retry_run(
+            run_id=run_id,
+            tasks=body.tasks,
+            subpipeline=body.subpipeline,
+            include_upstream=body.include_upstream,
+            command_overrides=body.command_overrides,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+# 静态路径必须定义在 /{retry_id} 之前，避免被动态参数捕获
+@router.get("/{run_id}/retry/versions", response_model=RetryVersionsResponse)
+async def get_retry_versions(run_id: str):
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        run = await run_repo.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=t("Run not found"))
+    result = await _pipeline_service.get_retry_versions(run_id)
+    return result
+
+
+@router.post("/{run_id}/retry/select-report")
+async def batch_select_retry_report(run_id: str, body: BatchSelectReportRequest):
+    try:
+        result = await _pipeline_service.batch_select_retry_report(
+            run_id=run_id, selections=body.selections,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/{run_id}/retry/dependency-tree", response_model=DependencyTreeResponse)
+async def get_dependency_tree(run_id: str, task: str = Query(..., description="Task name")):
+    try:
+        result = await _pipeline_service.get_dependency_tree(run_id, task)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+# 以下是有动态 retry_id 的路由
+@router.get("/{run_id}/retry/{retry_id}")
+async def get_retry_record(run_id: str, retry_id: str):
+    result = await _pipeline_service.get_retry_record(retry_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=t("Retry record not found"))
+    return result
+
+
+@router.get("/{run_id}/retry/{retry_id}/logs")
+async def get_retry_logs(
+    run_id: str,
+    retry_id: str,
+    tail: int | None = Query(None, ge=1),
+    follow: bool = Query(False),
+):
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        run = await run_repo.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=t("Run not found"))
+        retry_repo = RetryRecordRepository(session)
+        record = await retry_repo.get_retry_record(retry_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=t("Retry record not found"))
+
+    log_path = Path(record.log_path)
+    if not log_path.exists():
+        return {"log_path": str(log_path), "content": "", "exists": False}
+
+    if not follow:
+        if tail:
+            with open(log_path, "rb") as f:
+                f.seek(0, 2)
+                file_size = f.tell()
+                chunk_size = min(file_size, tail * 256)
+                f.seek(max(0, file_size - chunk_size))
+                raw = f.read().decode("utf-8", errors="replace")
+                lines = raw.split("\n")
+                if file_size > chunk_size:
+                    lines = lines[1:]
+                content = "\n".join(lines[-tail:])
+        else:
+            with open(log_path) as f:
+                content = f.read()
+        return {"log_path": str(log_path), "content": content, "exists": True}
+
+    async def _retry_log_stream():
+        position = 0
+        active = True
+        while active:
+            if not log_path.exists():
+                await asyncio.sleep(0.3)
+                continue
+            with open(log_path) as f:
+                f.seek(position)
+                new_content = f.read()
+                if new_content:
+                    position = f.tell()
+                    for line in new_content.splitlines():
+                        if line:
+                            yield {"event": "retry_log", "data": line}
+            async with get_session_factory()() as session:
+                retry_repo = RetryRecordRepository(session)
+                record = await retry_repo.get_retry_record(retry_id)
+                is_active = record and record.status in (
+                    TaskStatus.PENDING, TaskStatus.RUNNING,
+                )
+                if not is_active:
+                    active = False
+            if active:
+                await asyncio.sleep(0.3)
+        yield {"event": "done", "data": ""}
+
+    from taskpps.models.run import TaskStatus
+    return EventSourceResponse(_retry_log_stream())
+
+
+@router.get("/{run_id}/retry/{retry_id}/command", response_model=RetryCommandResponse)
+async def get_retry_command(run_id: str, retry_id: str):
+    result = await _pipeline_service.get_retry_command(retry_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=t("Retry record not found"))
+    return result
+
+
+@router.put("/{run_id}/retry/{retry_id}/command")
+async def update_retry_command(run_id: str, retry_id: str, body: UpdateRetryCommandRequest):
+    try:
+        result = await _pipeline_service.update_retry_command(retry_id, body.command)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/{run_id}/retry/{retry_id}/select-report")
+async def select_retry_report(run_id: str, retry_id: str, body: SelectReportRequest):
+    try:
+        result = await _pipeline_service.select_retry_report(
+            run_id=run_id, task_name=body.task_name, selected_retry_id=body.selected_retry_id,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

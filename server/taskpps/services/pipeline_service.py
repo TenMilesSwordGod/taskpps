@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,19 +12,24 @@ from typing import Any
 from taskpps.config import (
     build_log_path,
     build_pipeline_log_path,
+    build_retry_log_path,
     compute_pipeline_id,
     compute_pipeline_version,
     get_logs_dir,
     get_pipelines_dir,
 )
 from taskpps.db.engine import get_session_factory
-from taskpps.db.repository import RunRepository, TaskRunRepository
+from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext, apply_overrides
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline
+from taskpps.engine.retry_runner import RetryRunner
 from taskpps.engine.runner import PipelineRunner
 from taskpps.i18n import t
 from taskpps.loaders.pipeline_loader import PipelineLoader
+
+logger = logging.getLogger("taskpps.services.pipeline_service")
+from taskpps.models.run import RunStatus, TaskStatus
 from taskpps.schemas.pipeline import PipelineYAML
 
 
@@ -425,6 +431,353 @@ class PipelineService:
                         count += 1
             shutil.rmtree(run_dir, ignore_errors=True)
         return count
+
+    async def retry_run(
+        self,
+        run_id: str,
+        tasks: list[str] | None = None,
+        subpipeline: str | None = None,
+        include_upstream: bool = False,
+        command_overrides: dict[str, str] | None = None,
+    ) -> dict:
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            retry_repo = RetryRecordRepository(session)
+
+            run = await run_repo.get_run(run_id)
+            if run is None:
+                raise ValueError("Run not found")
+            if run.status == RunStatus.RUNNING:
+                raise ValueError(t("Run is still running, cannot retry"))
+            if run.status == RunStatus.CANCELLED:
+                raise ValueError(t("Run is cancelled, cannot retry"))
+
+            if tasks and subpipeline:
+                raise ValueError("Cannot specify both tasks and subpipeline")
+
+            resolved = self._load_resolved_pipeline(run)
+            if resolved is None:
+                raise ValueError("Cannot load pipeline definition for retry")
+
+            task_targets: list[str] = []
+            if tasks:
+                task_targets = tasks
+            elif subpipeline:
+                sub_obj = resolved.get_subpipeline_by_name(subpipeline)
+                if sub_obj is None:
+                    raise ValueError(f"SubPipeline '{subpipeline}' not found")
+                task_targets = [f"{subpipeline}.{t.name}" for t in sub_obj.tasks]
+            else:
+                raise ValueError("Must specify either tasks or subpipeline")
+
+            if include_upstream:
+                dag = DAG(resolved.tasks)
+                upstream_set: set[str] = set()
+                for t_name in task_targets:
+                    upstream_set |= dag.get_dependencies(t_name)
+                for t_name in task_targets:
+                    upstream_set.discard(t_name)
+                task_targets = list(upstream_set) + task_targets
+                task_levels = dag.get_execution_levels()
+                task_targets.sort(key=lambda n: next((i for i, lev in enumerate(task_levels) if n in lev), 999))
+
+            all_task_runs = await task_repo.list_task_runs(run_id)
+            task_run_map = {tr.task_name: tr for tr in all_task_runs}
+
+            for t_name in task_targets:
+                if t_name not in task_run_map:
+                    raise ValueError(f"Task '{t_name}' not found in run")
+                tr = task_run_map[t_name]
+                if tr.status == TaskStatus.SKIPPED:
+                    raise ValueError(t("Task was skipped, cannot retry"))
+
+                existing = await retry_repo.list_retries_by_task(run_id, t_name)
+                pending = [r for r in existing if r.status == TaskStatus.PENDING or r.status == TaskStatus.RUNNING]
+                if pending:
+                    raise ValueError(t("Task has a retry already in progress"))
+
+            context = ExecutionContext(
+                pipeline=resolved,
+                run_id=run_id,
+                env=json.loads(run.params) if isinstance(run.params, str) else (run.params or {}),
+                project_workdir=getattr(run, "project_workdir", None),
+            )
+
+            retry_records = []
+            for t_name in task_targets:
+                tr = task_run_map[t_name]
+                task_obj = resolved.get_task_by_name(t_name.split(".", 1)[1])
+
+                original_raw = getattr(task_obj, "command", "") or ""
+                env_dict = context.get_task_env(task_obj) if task_obj else {}
+                resolved_cmd = self._resolve_template(original_raw, env_dict)
+                if command_overrides and t_name in command_overrides:
+                    resolved_cmd = command_overrides[t_name]
+
+                retry_version = await retry_repo.get_next_retry_version(run_id, t_name)
+                log_path = build_retry_log_path(
+                    run.pipeline_id, run.pipeline_version, run_id, t_name, retry_version,
+                )
+
+                record = await retry_repo.create_retry_record(
+                    run_id=run_id,
+                    task_run_id=tr.id,
+                    task_name=t_name,
+                    subpipeline_name=tr.subpipeline_name,
+                    retry_version=retry_version,
+                    command=resolved_cmd,
+                    original_command=resolved_cmd,
+                    log_path=str(log_path),
+                )
+                retry_records.append(record)
+
+        max_parallel = resolved.top_config.max_parallel
+        runner = RetryRunner(run_id=run_id, pipeline=resolved, context=context, max_parallel=max_parallel)
+
+        task_plan = [
+            {
+                "name": r.task_name,
+                "command": r.command,
+                "retry_record_id": r.id,
+                "log_path": r.log_path,
+            }
+            for r in retry_records
+        ]
+
+        await runner.retry_tasks(task_plan)
+
+        async with get_session_factory()() as session:
+            retry_repo = RetryRecordRepository(session)
+            for r in retry_records:
+                record = await retry_repo.get_retry_record(r.id)
+                if record and record.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
+                    await self._auto_select_latest_retry(session, run_id, r.task_name)
+
+        return {
+            "run_id": run_id,
+            "retry_records": [
+                {
+                    "id": r.id,
+                    "task_name": r.task_name,
+                    "retry_version": r.retry_version,
+                    "status": r.status.value if hasattr(r.status, "value") else r.status,
+                    "command": r.command,
+                    "log_path": r.log_path,
+                }
+                for r in retry_records
+            ],
+        }
+
+    async def _auto_select_latest_retry(self, session, run_id: str, task_name: str) -> None:
+        from taskpps.db.repository import RetryRecordRepository, TaskRunRepository
+
+        retry_repo = RetryRecordRepository(session)
+        task_repo = TaskRunRepository(session)
+
+        records = await retry_repo.list_retries_by_task(run_id, task_name)
+        if not records:
+            return
+
+        latest = max(records, key=lambda r: r.retry_version)
+        await self._select_retry_report_internal(session, run_id, task_name, latest.id)
+
+    async def _select_retry_report_internal(
+        self, session, run_id: str, task_name: str, selected_retry_id: str,
+    ) -> dict:
+        from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
+
+        retry_repo = RetryRecordRepository(session)
+        run_repo = RunRepository(session)
+        task_repo = TaskRunRepository(session)
+
+        selected = await retry_repo.get_retry_record(selected_retry_id)
+        if selected is None:
+            raise ValueError(t("Retry record not found"))
+        if selected.task_name != task_name or selected.run_id != run_id:
+            raise ValueError("Retry record does not match task/run")
+
+        task_runs = await task_repo.list_task_runs(run_id)
+        tr = next((t for t in task_runs if t.task_name == task_name), None)
+        if tr is None:
+            raise ValueError(f"Task run '{task_name}' not found")
+
+        tr.selected_retry_id = selected_retry_id
+        if selected.status == TaskStatus.SUCCESS and tr.status != TaskStatus.SUCCESS:
+            tr.status = TaskStatus.SUCCESS
+        session.add(tr)
+        await session.commit()
+
+        all_tr = await task_repo.list_task_runs(run_id)
+        all_failed_or_cancelled = all(
+            t.status in (TaskStatus.SUCCESS, TaskStatus.SKIPPED) for t in all_tr
+        )
+        if all_failed_or_cancelled:
+            run = await run_repo.get_run(run_id)
+            if run:
+                await run_repo.update_run_status(run_id, RunStatus.SUCCESS)
+
+        logger.info(t("Selected retry report for '{task}': version {ver}",
+                       task=task_name, ver=selected.retry_version))
+        return {"task_name": task_name, "selected_retry_id": selected_retry_id}
+
+    async def select_retry_report(self, run_id: str, task_name: str, selected_retry_id: str) -> dict:
+        async with get_session_factory()() as session:
+            return await self._select_retry_report_internal(session, run_id, task_name, selected_retry_id)
+
+    async def batch_select_retry_report(self, run_id: str, selections: dict[str, str]) -> dict:
+        async with get_session_factory()() as session:
+            for task_name, retry_id in selections.items():
+                await self._select_retry_report_internal(session, run_id, task_name, retry_id)
+            return {"selected": selections}
+
+    async def get_retry_versions(self, run_id: str) -> dict:
+        async with get_session_factory()() as session:
+            retry_repo = RetryRecordRepository(session)
+            task_repo = TaskRunRepository(session)
+
+            records = await retry_repo.list_retries_by_run(run_id)
+            task_runs = await task_repo.list_task_runs(run_id)
+
+            grouped: dict[str, list[dict]] = {}
+            for r in records:
+                task_name = r.task_name
+                if task_name not in grouped:
+                    grouped[task_name] = []
+                grouped[task_name].append({
+                    "id": r.id,
+                    "run_id": r.run_id,
+                    "task_run_id": r.task_run_id,
+                    "task_name": r.task_name,
+                    "subpipeline_name": r.subpipeline_name,
+                    "retry_version": r.retry_version,
+                    "status": r.status.value if hasattr(r.status, "value") else r.status,
+                    "command": r.command,
+                    "original_command": r.original_command,
+                    "log_path": r.log_path,
+                    "exit_code": r.exit_code,
+                    "error": r.error,
+                    "started_at": _ensure_utc(r.started_at),
+                    "finished_at": _ensure_utc(r.finished_at),
+                    "created_at": _ensure_utc(r.created_at),
+                })
+
+            selected: dict[str, str | None] = {}
+            for tr in task_runs:
+                selected[tr.task_name] = tr.selected_retry_id
+
+            return {"task_retries": grouped, "selected": selected}
+
+    async def get_retry_record(self, retry_id: str) -> dict | None:
+        async with get_session_factory()() as session:
+            retry_repo = RetryRecordRepository(session)
+            r = await retry_repo.get_retry_record(retry_id)
+            if r is None:
+                return None
+            return {
+                "id": r.id,
+                "run_id": r.run_id,
+                "task_run_id": r.task_run_id,
+                "task_name": r.task_name,
+                "subpipeline_name": r.subpipeline_name,
+                "retry_version": r.retry_version,
+                "status": r.status.value if hasattr(r.status, "value") else r.status,
+                "command": r.command,
+                "original_command": r.original_command,
+                "log_path": r.log_path,
+                "exit_code": r.exit_code,
+                "error": r.error,
+                "started_at": _ensure_utc(r.started_at),
+                "finished_at": _ensure_utc(r.finished_at),
+                "created_at": _ensure_utc(r.created_at),
+            }
+
+    async def get_retry_command(self, retry_id: str) -> dict | None:
+        async with get_session_factory()() as session:
+            retry_repo = RetryRecordRepository(session)
+            r = await retry_repo.get_retry_record(retry_id)
+            if r is None:
+                return None
+
+            resolved_cmd = r.command or r.original_command
+            return {
+                "retry_id": r.id,
+                "task_name": r.task_name,
+                "original_command": r.original_command,
+                "resolved_command": resolved_cmd,
+                "variables": {},
+                "editable": r.status == TaskStatus.PENDING,
+                "status": r.status.value if hasattr(r.status, "value") else r.status,
+            }
+
+    async def update_retry_command(self, retry_id: str, command: str) -> dict:
+        async with get_session_factory()() as session:
+            retry_repo = RetryRecordRepository(session)
+            r = await retry_repo.get_retry_record(retry_id)
+            if r is None:
+                raise ValueError(t("Retry record not found"))
+            if r.status != TaskStatus.PENDING:
+                raise ValueError(t("Retry command can only be edited when pending"))
+            await retry_repo.update_retry_command(retry_id, command)
+            return {"retry_id": retry_id, "command": command}
+
+    async def get_dependency_tree(self, run_id: str, task_name: str) -> dict:
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            run = await run_repo.get_run(run_id)
+            if run is None:
+                raise ValueError("Run not found")
+
+        resolved = self._load_resolved_pipeline(run)
+        if resolved is None:
+            raise ValueError("Cannot load pipeline definition")
+
+        parts = task_name.split(".", 1)
+        sub_name = parts[0] if len(parts) > 1 else ""
+        task_short = parts[1] if len(parts) > 1 else parts[0]
+
+        dag = DAG(resolved.tasks)
+        deps = dag.get_dependencies(task_name)
+        levels = dag.get_execution_levels()
+
+        tree = []
+        for level_idx, level in enumerate(levels):
+            for t_name in level:
+                if t_name == task_name or t_name in deps:
+                    task_obj = resolved.get_task_by_name(t_name.split(".", 1)[1])
+                    is_upstream = t_name in deps
+                    tree.append(DependencyNode(
+                        name=t_name,
+                        depends_on=list(dag.reverse_adjacency.get(t_name, [])),
+                        level=level_idx,
+                        upstream_of_target=is_upstream,
+                        mandatory_if_upstream=is_upstream,
+                    ))
+
+        return {
+            "target": task_name,
+            "subpipeline": sub_name,
+            "tree": [n.model_dump() for n in tree],
+        }
+
+    def _load_resolved_pipeline(self, run) -> ResolvedPipeline | None:
+        try:
+            from taskpps.config import get_pipelines_dir
+            base_dir = get_pipelines_dir()
+            spec = self.loader.load(run.pipeline_file)
+            return ResolvedPipeline.from_yaml(spec, pipeline_file=run.pipeline_file)
+        except Exception:
+            import traceback
+            logger.warning("Failed to reload pipeline for retry: %s", traceback.format_exc())
+            return None
+
+    @staticmethod
+    def _resolve_template(command: str, env: dict[str, str]) -> str:
+        import re
+        def _replace(match):
+            var_name = match.group(1)
+            return env.get(var_name, match.group(0))
+        return re.sub(r'\$\{env\.([^}]+)\}', _replace, command)
 
     def list_pipelines(self) -> list[str]:
         all_pipelines = self.loader.load_all()

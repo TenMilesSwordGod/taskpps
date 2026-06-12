@@ -86,3 +86,72 @@ class CleanRequest(BaseModel):
 class CleanResponse(BaseModel):
     deleted_runs: int
     deleted_logs: int
+
+
+class RetryRequest(BaseModel):
+    tasks: list[str] | None = None
+    subpipeline: str | None = None
+    include_upstream: bool = False
+    command_overrides: dict[str, str] | None = None
+
+
+class RetryRecordResponse(BaseModel):
+    id: str
+    run_id: str
+    task_run_id: str
+    task_name: str
+    subpipeline_name: str = ""
+    retry_version: int
+    status: TaskStatus
+    command: str = ""
+    original_command: str = ""
+    log_path: str = ""
+    exit_code: int | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RetryVersionsResponse(BaseModel):
+    task_retries: dict[str, list[RetryRecordResponse]]
+    selected: dict[str, str | None]
+
+
+class RetryCommandResponse(BaseModel):
+    retry_id: str
+    task_name: str
+    original_command: str
+    resolved_command: str
+    variables: dict[str, str] = {}
+    editable: bool = True
+    status: TaskStatus
+
+
+class UpdateRetryCommandRequest(BaseModel):
+    command: str
+
+
+class SelectReportRequest(BaseModel):
+    task_name: str
+    selected_retry_id: str
+
+
+class BatchSelectReportRequest(BaseModel):
+    selections: dict[str, str]
+
+
+class DependencyNode(BaseModel):
+    name: str
+    depends_on: list[str]
+    level: int
+    upstream_of_target: bool = False
+    mandatory_if_upstream: bool = False
+
+
+class DependencyTreeResponse(BaseModel):
+    target: str
+    subpipeline: str
+    tree: list[DependencyNode]

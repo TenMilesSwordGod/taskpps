@@ -64,3 +64,24 @@ class TaskRun(SQLModel, table=True):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    selected_retry_id: str | None = Field(default=None)
+
+
+class TaskRetryRecord(SQLModel, table=True):
+    __tablename__ = "task_retry_records"
+
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12], primary_key=True)
+    run_id: str = Field(foreign_key="runs.id")
+    task_run_id: str = Field(foreign_key="task_runs.id")
+    task_name: str
+    subpipeline_name: str = ""
+    retry_version: int
+    status: TaskStatus = TaskStatus.PENDING
+    command: str = ""
+    original_command: str = ""
+    log_path: str = ""
+    exit_code: int | None = None
+    error: str | None = Field(default=None)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -40,6 +40,16 @@ _zh: dict[str, str] = {
     "CronTrigger started: {name}": "定时触发器已启动:{name}",
     "CronTrigger stopped: {name}": "定时触发器已停止:{name}",
     "CronTrigger callback error: {error}": "定时触发器回调错误:{error}",
+    # Retry
+    "Run is still running, cannot retry": "运行仍在进行中，无法重试",
+    "Run is cancelled, cannot retry": "运行已取消，无法重试",
+    "Task was skipped, cannot retry": "任务被跳过，无法重试",
+    "Task has a retry already in progress": "任务已有正在进行的重试",
+    "Retry record not found": "重试记录未找到",
+    "Retry command can only be edited when pending": "重试命令只能在待执行状态时修改",
+    "Task '{task}' retry {n} started": "任务'{task}'重试第{n}次开始",
+    "Task '{task}' retry {n} finished (status: {status})": "任务'{task}'重试第{n}次完成(状态:{status})",
+    "Selected retry report for '{task}': version {ver}": "已选择'{task}'的重试报告:版本{ver}",
     # App
     "Taskpps API": "Taskpps 接口服务",
 }
