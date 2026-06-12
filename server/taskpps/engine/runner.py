@@ -412,7 +412,8 @@ class PipelineRunner:
 
                 should_skip = False
                 for dep in task.depends_on:
-                    if dep in failed_tasks:
+                    qualified_dep = f"{sub.name}.{dep}"
+                    if qualified_dep in failed_tasks:
                         should_skip = on_failure != "continue"
                         break
 
