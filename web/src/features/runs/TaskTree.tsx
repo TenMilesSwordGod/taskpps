@@ -236,7 +236,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
           key: taskId,
           title: (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', minWidth: 0, whiteSpace: 'nowrap' }}>
-              <Tooltip title={run?.error ? run.error : hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
+              <Tooltip title={hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 18, fontSize: 10, fontWeight: 600, borderRadius: 4, background: badgeBg, color: badgeColor, flexShrink: 0 }}>
                   {TYPE_LABEL[type]}
                 </span>
