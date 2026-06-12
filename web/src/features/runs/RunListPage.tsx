@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Table, Select, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Play, Trash2 } from 'lucide-react';
@@ -22,10 +22,10 @@ const STATUS_OPTIONS: { label: string; value: RunStatus }[] = [
 ];
 
 /** 计算耗时 */
-function formatDuration(start: string | null, end: string | null) {
+function formatDuration(start: string | null, end: string | null, nowTs?: number) {
   if (!start) return '-';
-  const s = dayjs(start);
-  const e = end ? dayjs(end) : dayjs();
+  const s = dayjs(start.endsWith('Z') || start.includes('+') ? start : start + 'Z');
+  const e = end ? dayjs(end.endsWith('Z') || end.includes('+') ? end : end + 'Z') : dayjs(nowTs || undefined);
   const ms = e.diff(s);
   const d = dayjs.duration(ms);
   if (d.asHours() >= 1) return `${Math.floor(d.asHours())}h ${d.minutes()}m`;
@@ -46,6 +46,18 @@ export default function RunListPage() {
   const cleanRuns = useCleanRuns();
 
   const { data, isLoading } = useRuns();
+
+  // 实时刷新运行中任务的耗时
+  const [now, setNow] = useState(Date.now());
+  const hasRunning = useMemo(
+    () => (data?.items ?? []).some((r) => r.status === 'running'),
+    [data?.items],
+  );
+  useEffect(() => {
+    if (!hasRunning) return;
+    const t = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, [hasRunning]);
 
   // 前端过滤
   const filtered = useMemo(() => {
@@ -137,7 +149,7 @@ export default function RunListPage() {
       title: '耗时',
       key: 'duration',
       width: 120,
-      render: (_: unknown, record: RunResponse) => formatDuration(record.started_at, record.finished_at),
+      render: (_: unknown, record: RunResponse) => formatDuration(record.started_at, record.finished_at, now),
     },
     {
       title: '操作',
@@ -149,7 +161,7 @@ export default function RunListPage() {
         </Button>
       ),
     },
-  ], [handleOpenDetail]);
+  ], [handleOpenDetail, now]);
 
   return (
     <div className="p-4">
