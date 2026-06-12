@@ -78,12 +78,15 @@ class RunRepository:
         status: str | None = None,
         pipeline_id: str | None = None,
         project_id: str | None = None,
+        pipeline_file: str | None = None,
     ) -> int:
         stmt = select(func.count(PipelineRun.id))
         if pipeline:
             stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
         if pipeline_id:
             stmt = stmt.where(PipelineRun.pipeline_id == pipeline_id)
+        if pipeline_file:
+            stmt = stmt.where(PipelineRun.pipeline_file == pipeline_file)
         if status:
             stmt = stmt.where(PipelineRun.status == status)
         if project_id:
@@ -97,10 +100,13 @@ class RunRepository:
         status: str | None = None,
         project_id: str | None = None,
         limit: int = 50,
+        pipeline_file: str | None = None,
     ) -> Sequence[PipelineRun]:
         stmt = select(PipelineRun).order_by(PipelineRun.created_at.desc())
         if pipeline:
             stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
+        if pipeline_file:
+            stmt = stmt.where(PipelineRun.pipeline_file == pipeline_file)
         if status:
             stmt = stmt.where(PipelineRun.status == status)
         if project_id:

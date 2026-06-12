@@ -27,6 +27,12 @@ from taskpps.loaders.pipeline_loader import PipelineLoader
 from taskpps.schemas.pipeline import PipelineYAML
 
 
+def _ensure_utc(dt: datetime | None) -> datetime | None:
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class PipelineService:
     # Per-pipeline asyncio.Lock to make the max_parallel check and run
     # creation atomic within a single event loop. The dict is class-level
@@ -284,9 +290,9 @@ class PipelineService:
                 "error": getattr(run, "error", None),
                 "params": params,
                 "console_log_path": console_log_path,
-                "started_at": run.started_at,
-                "finished_at": run.finished_at,
-                "created_at": run.created_at,
+                "started_at": _ensure_utc(run.started_at),
+                "finished_at": _ensure_utc(run.finished_at),
+                "created_at": _ensure_utc(run.created_at),
                 "tasks": [
                     {
                         "id": t.id,
@@ -298,9 +304,9 @@ class PipelineService:
                         "exit_code": t.exit_code,
                         "error": getattr(t, "error", None),
                         "log_path": t.log_path,
-                        "started_at": t.started_at,
-                        "finished_at": t.finished_at,
-                        "created_at": t.created_at,
+                        "started_at": _ensure_utc(t.started_at),
+                        "finished_at": _ensure_utc(t.finished_at),
+                        "created_at": _ensure_utc(t.created_at),
                     }
                     for t in tasks
                 ],
@@ -337,9 +343,9 @@ class PipelineService:
                         "error": getattr(run, "error", None),
                         "params": params,
                         "console_log_path": console_log_path,
-                        "started_at": run.started_at,
-                        "finished_at": run.finished_at,
-                        "created_at": run.created_at,
+                        "started_at": _ensure_utc(run.started_at),
+                        "finished_at": _ensure_utc(run.finished_at),
+                        "created_at": _ensure_utc(run.created_at),
                         "tasks": [],
                     }
                 )

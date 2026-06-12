@@ -9,7 +9,7 @@ export interface LogEntry {
 }
 
 /** 日志最大行数（DOM 性能保护） */
-const MAX_LOG_LINES = 5000;
+const MAX_LOG_LINES = 50000;
 
 /** 全局日志序列号（模块级，避免 hook 重 mount 后 seq 回零导致冲突） */
 let globalSeq = 0;

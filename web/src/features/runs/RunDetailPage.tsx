@@ -34,6 +34,10 @@ function formatDuration(ms: number): string {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+function parseUTC(s: string): number {
+  return new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z').getTime();
+}
+
 /** 运行详情页面 */
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -107,8 +111,8 @@ export default function RunDetailPage() {
   }, [isLive]);
   const durationMs = useMemo(() => {
     if (!run?.started_at) return null;
-    const start = new Date(run.started_at).getTime();
-    const end = run.finished_at ? new Date(run.finished_at).getTime() : now;
+    const start = parseUTC(run.started_at);
+    const end = run.finished_at ? parseUTC(run.finished_at) : now;
     return Math.max(0, end - start);
   }, [run?.started_at, run?.finished_at, now]);
 
@@ -251,7 +255,6 @@ export default function RunDetailPage() {
               selectedTaskId={selectedTaskId}
               onClearTaskFilter={() => setSelectedTaskId(null)}
               failedCount={progress.failed}
-              runId={id}
             />
           </div>
         ) : (
@@ -289,7 +292,6 @@ export default function RunDetailPage() {
                   selectedTaskId={selectedTaskId}
                   onClearTaskFilter={() => setSelectedTaskId(null)}
                   failedCount={progress.failed}
-                  runId={id}
                 />
               </div>
             </Splitter.Panel>

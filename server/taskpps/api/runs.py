@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from taskpps.config import build_pipeline_log_path
@@ -96,41 +97,57 @@ async def get_run_logs(
             log_paths[tr.task_name] = Path(tr.log_path)
 
         positions = {name: 0 for name in log_paths}
+        task_ids = {tr.task_name: tr.id for tr in task_runs}
         active = True
+
+        from taskpps.models.run import TaskStatus as TS
 
         while active:
             active = False
+
+            async with get_session_factory()() as session:
+                task_repo = TaskRunRepository(session)
+                statuses: dict[str, TS | None] = {}
+                for task_name, tid in task_ids.items():
+                    tr = await task_repo.get_task_run(tid)
+                    statuses[task_name] = tr.status if tr else None
+
             for task_name, log_path in log_paths.items():
                 if not log_path.exists():  # pragma: no cover
                     active = True  # pragma: no cover
                     continue  # pragma: no cover
 
+                had_output = False
                 with open(log_path) as f:
                     f.seek(positions[task_name])
                     new_content = f.read()
                     if new_content:
+                        had_output = True
                         positions[task_name] = f.tell()
-                        yield {"event": "log", "data": f"{task_name}: {new_content}"}
+                        for line in new_content.splitlines():
+                            if line:
+                                yield {"event": "log", "data": f"{task_name}: {line}"}
 
-                    from taskpps.models.run import TaskStatus
+                task_status = statuses.get(task_name)
+                is_active = task_status and task_status not in (
+                    TS.SUCCESS, TS.FAILED, TS.CANCELLED, TS.SKIPPED,
+                )
 
-                    async with get_session_factory()() as session:
-                        task_repo = TaskRunRepository(session)
-                        task_run = await task_repo.get_task_run(
-                            next((t.id for t in task_runs if t.task_name == task_name), "")
-                        )
-                        if task_run and task_run.status in (
-                            TaskStatus.SUCCESS,
-                            TaskStatus.FAILED,
-                            TaskStatus.CANCELLED,
-                            TaskStatus.SKIPPED,
-                        ):
-                            pass
-                        else:  # pragma: no cover
-                            active = True  # pragma: no cover
+                if is_active:  # pragma: no cover
+                    active = True  # pragma: no cover
+                    if had_output:  # pragma: no cover
+                        await asyncio.sleep(0.05)  # pragma: no cover
+                        with open(log_path) as f:  # pragma: no cover
+                            f.seek(positions[task_name])  # pragma: no cover
+                            more = f.read()  # pragma: no cover
+                            if more:  # pragma: no cover
+                                positions[task_name] = f.tell()  # pragma: no cover
+                                for line in more.splitlines():  # pragma: no cover
+                                    if line:  # pragma: no cover
+                                        yield {"event": "log", "data": f"{task_name}: {line}"}  # pragma: no cover
 
             if active:  # pragma: no cover
-                await asyncio.sleep(0.5)  # pragma: no cover
+                await asyncio.sleep(0.3)  # pragma: no cover
 
         yield {"event": "done", "data": ""}
 
@@ -163,11 +180,15 @@ async def get_run_console(
         pipeline_version = run.pipeline_version
 
     log_path = build_pipeline_log_path(pipeline_id, pipeline_version, run_id)
+    headers = {"Cache-Control": "private, max-age=30"}
+
     if not log_path.exists():
-        return {"log_path": str(log_path), "content": "", "lines": 0, "exists": False}
+        return JSONResponse(
+            content={"log_path": str(log_path), "content": "", "lines": 0, "exists": False},
+            headers=headers,
+        )
 
     if tail:
-        # 高效 tail：反向 seek N 行
         with open(log_path, "rb") as f:
             f.seek(0, 2)
             size = f.tell()
@@ -177,21 +198,27 @@ async def get_run_console(
             lines = raw.splitlines()
             if size > block:
                 lines = lines[1:]
-            return {
-                "log_path": str(log_path),
-                "content": "\n".join(lines[-tail:]),
-                "lines": len(lines[-tail:]),
-                "exists": True,
-            }
+            return JSONResponse(
+                content={
+                    "log_path": str(log_path),
+                    "content": "\n".join(lines[-tail:]),
+                    "lines": len(lines[-tail:]),
+                    "exists": True,
+                },
+                headers=headers,
+            )
 
     with open(log_path) as f:
         content = f.read()
-    return {
-        "log_path": str(log_path),
-        "content": content,
-        "lines": content.count("\n") + (1 if content and not content.endswith("\n") else 0),
-        "exists": True,
-    }
+    return JSONResponse(
+        content={
+            "log_path": str(log_path),
+            "content": content,
+            "lines": content.count("\n") + (1 if content and not content.endswith("\n") else 0),
+            "exists": True,
+        },
+        headers=headers,
+    )
 
 
 @router.delete("/", response_model=CleanResponse)

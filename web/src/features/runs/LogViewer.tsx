@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Select, Input, Switch, Button, Empty, Tag, Tooltip } from 'antd';
 import { Trash2, Filter, Layers, Download, AlertCircle, AlertTriangle, Info, Bug, Terminal } from 'lucide-react';
+import { FixedSizeList as List } from 'react-window';
 import type { LogEntry } from './hooks/useSSELogs';
 
 interface LogViewerProps {
@@ -9,17 +10,11 @@ interface LogViewerProps {
   autoScroll: boolean;
   onAutoScrollChange: (v: boolean) => void;
   onClear: () => void;
-  /** 外部选中的任务 ID（树形点击），用于过滤日志 */
   selectedTaskId?: string | null;
-  /** 清除外部选择 */
   onClearTaskFilter?: () => void;
-  /** 任务执行状态（用于显示 N failed 等） */
   failedCount?: number;
-  /** run id - 用于拉 console log */
-  runId?: string;
 }
 
-/** 任务名颜色映射 */
 const TASK_COLORS = [
   '#60a5fa', '#34d399', '#fbbf24', '#f87171',
   '#a78bfa', '#fb923c', '#2dd4bf', '#f472b6',
@@ -32,6 +27,11 @@ function getTaskColor(name: string) {
 }
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'unknown';
+
+interface FilteredLogEntry extends LogEntry {
+  level: LogLevel;
+  stderr: boolean;
+}
 
 const LEVEL_PATTERNS: Array<{ level: LogLevel; regex: RegExp }> = [
   { level: 'error', regex: /^(?:\[ERROR\]|\[ERR\]|ERROR:|\[FATAL\]|Traceback \(most recent call last\)[:\s]|\bError:|\bException:)/i },
@@ -60,8 +60,8 @@ const LEVEL_STYLE: Record<LogLevel, { color: string; bg: string; icon: typeof In
 };
 
 const ALL_LEVELS: LogLevel[] = ['error', 'warn', 'info', 'debug'];
+const ROW_HEIGHT = 20;
 
-/** SSE 日志查看器 */
 export default function LogViewer({
   logs,
   connected,
@@ -71,37 +71,37 @@ export default function LogViewer({
   selectedTaskId,
   onClearTaskFilter,
   failedCount = 0,
-  runId,
 }: LogViewerProps) {
   const [taskFilter, setTaskFilter] = useState<string | undefined>();
   const [searchText, setSearchText] = useState('');
   const [levelFilter, setLevelFilter] = useState<LogLevel[]>([...ALL_LEVELS]);
   const [showTaskNames, setShowTaskNames] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  // 跟踪是否用户已向上滚动，暂停自动滚动
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<List>(null);
+  const [containerHeight, setContainerHeight] = useState(400);
   const stickyToBottomRef = useRef(true);
-  // 记录上一次选中的任务，用于取消选中时滚动定位
   const prevSelectedTaskIdRef = useRef<string | null | undefined>(undefined);
   const taskNames = useMemo(
     () => [...new Set(logs.map((l) => l.taskName).filter(Boolean))],
     [logs],
   );
 
-  // 当前生效的过滤（外部选中优先）
   const effectiveFilter = selectedTaskId ?? taskFilter;
 
-  // phase 节点选中时，提取匹配的 taskName 前缀
   const phaseFilter = useMemo(() => {
     if (!effectiveFilter || !effectiveFilter.startsWith('__phase__')) return null;
-    // key 格式: __phase__scope__name__phase → 提取 scope__name
-    const parts = effectiveFilter.split('__'); // ['', 'phase', 'scope', 'name', 'setup']
+    const parts = effectiveFilter.split('__');
     if (parts.length >= 4) return `__phase__${parts[2]}`;
     return effectiveFilter;
   }, [effectiveFilter]);
 
-  // 过滤日志
   const filtered = useMemo(() => {
-    let result = logs;
+    let result: FilteredLogEntry[] = logs.map((l) => ({
+      ...l,
+      level: detectLevel(l.content),
+      stderr: isStderr(l.content),
+    }));
+
     if (phaseFilter) {
       result = result.filter((l) => l.taskName === phaseFilter);
     } else if (effectiveFilter) {
@@ -109,59 +109,65 @@ export default function LogViewer({
     }
     if (searchText) result = result.filter((l) => l.content.includes(searchText));
     if (levelFilter.length < ALL_LEVELS.length) {
-      result = result.filter((l) => levelFilter.includes(detectLevel(l.content)));
+      result = result.filter((l) => levelFilter.includes(l.level));
     }
     return result;
   }, [logs, effectiveFilter, phaseFilter, searchText, levelFilter]);
 
-  // 统计各级别数量
   const levelStats = useMemo(() => {
     const stats: Record<LogLevel, number> = { error: 0, warn: 0, info: 0, debug: 0, unknown: 0 };
-    const scoped = effectiveFilter ? logs.filter((l) => l.taskName === effectiveFilter) : logs;
-    for (const l of scoped) stats[detectLevel(l.content)]++;
+    const scoped = effectiveFilter ? logs.map((l) => ({ ...l, level: detectLevel(l.content) })) : logs;
+    for (const l of scoped) {
+      const lv = 'level' in l ? (l as FilteredLogEntry).level : detectLevel((l as LogEntry).content);
+      stats[lv]++;
+    }
     return stats;
   }, [logs, effectiveFilter]);
 
-  // 自动滚动到底部
   useEffect(() => {
-    if (!autoScroll || filtered.length === 0) return;
-    const el = scrollRef.current;
+    const el = containerRef.current;
     if (!el) return;
-    if (stickyToBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
-    }
+    const obs = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!autoScroll || filtered.length === 0 || !stickyToBottomRef.current) return;
+    listRef.current?.scrollToItem(filtered.length - 1, 'end');
   }, [filtered.length, filtered, autoScroll]);
 
-  // 取消选中时，滚动到刚取消选中任务的日志位置
   useEffect(() => {
     const prev = prevSelectedTaskIdRef.current;
     prevSelectedTaskIdRef.current = selectedTaskId;
     if (prev == null || selectedTaskId != null) return;
     const target = prev;
     requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-      const row = el.querySelector(`[data-task-name="${CSS.escape(target)}"]`);
-      if (row) {
-        const containerRect = el.getBoundingClientRect();
-        const rowRect = row.getBoundingClientRect();
-        el.scrollTop = rowRect.top - containerRect.top + el.scrollTop - containerRect.height * 0.2;
+      const idx = filtered.findIndex((l) => l.taskName === target);
+      if (idx >= 0) {
+        listRef.current?.scrollToItem(idx, 'center');
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTaskId]);
 
-  const handleScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stickyToBottomRef.current = distanceToBottom < 24;
-  };
+  const handleItemsRendered = useCallback(
+    ({ visibleStopIndex }: { visibleStopIndex: number }) => {
+      if (autoScroll && filtered.length > 0) {
+        stickyToBottomRef.current = visibleStopIndex >= filtered.length - 2;
+      }
+    },
+    [autoScroll, filtered.length],
+  );
 
   useEffect(() => {
     if (filtered.length === 0) stickyToBottomRef.current = true;
   }, [filtered.length]);
 
-  // 导出当前过滤后日志为文件
   const handleExport = () => {
     const text = filtered
       .map((l) => {
@@ -180,9 +186,52 @@ export default function LogViewer({
     URL.revokeObjectURL(url);
   };
 
+  const LogRow = useCallback(
+    ({ index, style }: { index: number; style: React.CSSProperties }) => {
+      const log = filtered[index];
+      const ls = LEVEL_STYLE[log.level];
+      const showBg = log.level === 'error' || log.stderr;
+      return (
+        <div
+          style={{
+            ...style,
+            display: 'grid',
+            gridTemplateColumns: showTaskNames ? 'auto auto 1fr' : 'auto 1fr',
+            columnGap: 8,
+            padding: '1px 12px',
+            fontSize: 13,
+            fontFamily: 'monospace',
+            lineHeight: `${ROW_HEIGHT}px`,
+            background: showBg ? ls.bg : 'transparent',
+            borderLeft: log.level === 'error' ? '3px solid #ef4444' : log.stderr ? '3px solid #f59e0b' : '3px solid transparent',
+          }}
+          data-task-name={log.taskName || ''}
+        >
+          <Tooltip title={log.stderr ? 'STDERR' : ls.label}>
+            <span style={{ color: ls.color, fontWeight: 600, minWidth: 48, fontSize: 11, paddingTop: 2 }}>
+              {log.stderr ? 'ERR ' : ls.label}
+            </span>
+          </Tooltip>
+          {showTaskNames && (
+            log.taskName ? (
+              <span style={{ color: getTaskColor(log.taskName), fontWeight: 500, minWidth: 0 }}>
+                [{log.taskName}]
+              </span>
+            ) : (
+              <span />
+            )
+          )}
+          <span style={{ color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {log.content}
+          </span>
+        </div>
+      );
+    },
+    [filtered, showTaskNames],
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* 工具栏 */}
       <div
         style={{
           display: 'flex',
@@ -194,7 +243,6 @@ export default function LogViewer({
           flexWrap: 'wrap',
         }}
       >
-        {/* 任务过滤 - 树形选中标签优先展示 */}
         {selectedTaskId ? (
           <Tag
             color="default"
@@ -221,7 +269,6 @@ export default function LogViewer({
           />
         )}
 
-        {/* Level 过滤 */}
         <Select
           mode="multiple"
           size="small"
@@ -292,11 +339,9 @@ export default function LogViewer({
         )}
       </div>
 
-      {/* 日志内容 */}
       <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        style={{ flex: 1, background: '#111827', minHeight: 120, overflow: 'auto' }}
+        ref={containerRef}
+        style={{ flex: 1, background: '#111827', minHeight: 120, overflow: 'hidden' }}
       >
         {logs.length === 0 ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -307,58 +352,16 @@ export default function LogViewer({
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: '#6b7280' }}>无匹配日志</span>} />
           </div>
         ) : (
-          <div style={{ padding: '6px 0' }}>
-            {filtered.map((log) => {
-              const level = detectLevel(log.content);
-              const stderr = isStderr(log.content);
-              const ls = LEVEL_STYLE[level];
-              const showBg = level === 'error' || stderr;
-              return (
-                <div
-                  key={log.seq}
-                  data-task-name={log.taskName || ''}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: showTaskNames ? 'auto auto 1fr' : 'auto 1fr',
-                    columnGap: 8,
-                    padding: '1px 12px',
-                    fontSize: 13,
-                    fontFamily: 'monospace',
-                    lineHeight: '20px',
-                    background: showBg ? ls.bg : 'transparent',
-                    borderLeft: level === 'error' ? '3px solid #ef4444' : stderr ? '3px solid #f59e0b' : '3px solid transparent',
-                  }}
-                >
-                  {/* level badge */}
-                  <Tooltip title={stderr ? 'STDERR' : ls.label}>
-                    <span style={{ color: ls.color, fontWeight: 600, minWidth: 48, fontSize: 11, paddingTop: 2 }}>
-                      {stderr ? 'ERR ' : ls.label}
-                    </span>
-                  </Tooltip>
-                  {/* task name */}
-                  {showTaskNames && (
-                    log.taskName ? (
-                      <span
-                        style={{
-                          color: getTaskColor(log.taskName),
-                          fontWeight: 500,
-                          minWidth: 0,
-                        }}
-                      >
-                        [{log.taskName}]
-                      </span>
-                    ) : (
-                      <span />
-                    )
-                  )}
-                  {/* content */}
-                  <span style={{ color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {log.content}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <List
+            ref={listRef}
+            height={containerHeight}
+            itemCount={filtered.length}
+            itemSize={ROW_HEIGHT}
+            width="100%"
+            onItemsRendered={handleItemsRendered}
+          >
+            {LogRow}
+          </List>
         )}
       </div>
     </div>

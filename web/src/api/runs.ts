@@ -50,6 +50,7 @@ export function useCreateRun() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['runs'] });
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
     },
   });
 }

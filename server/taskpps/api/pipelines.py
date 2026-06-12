@@ -56,7 +56,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
                 elif spec.tasks:
                     task_count = len(spec.tasks)
 
-                runs = await run_repo.list_runs(pipeline=spec.name, limit=1)
+                runs = await run_repo.list_runs(pipeline_file=file, limit=1)
                 last_run = None
                 if runs:
                     r = runs[0]
@@ -66,8 +66,8 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "created_at": r.created_at.isoformat() if r.created_at else None,
                     }
 
-                total_count = await run_repo.count_runs(pipeline=spec.name)
-                success_count = await run_repo.count_runs(pipeline=spec.name, status="success")
+                total_count = await run_repo.count_runs(pipeline_file=file)
+                success_count = await run_repo.count_runs(pipeline_file=file, status="success")
                 success_rate = round(success_count / total_count * 100) if total_count > 0 else 0
 
                 folder = os.path.dirname(file)

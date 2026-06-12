@@ -456,3 +456,30 @@ class TestPipelineServiceMore:
         svc = PipelineService()
         clean_result = await svc.clean_runs(force=True)
         assert clean_result == {"deleted_runs": 0, "deleted_logs": 0}
+
+
+class TestEnsureUTC:
+    def test_naive_datetime_becomes_utc_aware(self):
+        from datetime import datetime
+
+        from taskpps.services.pipeline_service import _ensure_utc
+
+        naive = datetime(2026, 6, 11, 14, 16, 52, 858530)
+        result = _ensure_utc(naive)
+        assert result is not None
+        assert result.tzinfo is not None
+        assert str(result.tzinfo) == "UTC"
+
+    def test_utc_aware_datetime_unchanged(self):
+        from datetime import datetime, timezone
+
+        from taskpps.services.pipeline_service import _ensure_utc
+
+        aware = datetime(2026, 6, 11, 14, 16, 52, 858530, tzinfo=timezone.utc)
+        result = _ensure_utc(aware)
+        assert result is aware
+
+    def test_none_returns_none(self):
+        from taskpps.services.pipeline_service import _ensure_utc
+
+        assert _ensure_utc(None) is None

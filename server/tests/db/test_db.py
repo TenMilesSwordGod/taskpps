@@ -338,6 +338,31 @@ class TestRunRepository:
             assert runs[0].pipeline_name == "pipeline-1"
 
     @pytest.mark.asyncio
+    async def test_list_runs_filter_by_file(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("pipe-a", pipeline_file="proj1/deploy.yaml")
+            await repo.create_run("pipe-a", pipeline_file="proj2/deploy.yaml")
+            runs = await repo.list_runs(pipeline_file="proj1/deploy.yaml")
+            assert len(runs) == 1
+            assert runs[0].pipeline_file == "proj1/deploy.yaml"
+
+    @pytest.mark.asyncio
+    async def test_list_runs_same_name_different_file(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("build", pipeline_file="proj1/build.yaml")
+            # Update status to running
+            await repo.update_run_status((await repo.list_runs(pipeline_file="proj1/build.yaml"))[0].id, RunStatus.RUNNING)
+            await repo.create_run("build", pipeline_file="proj2/build.yaml")
+            proj1_runs = await repo.list_runs(pipeline_file="proj1/build.yaml")
+            proj2_runs = await repo.list_runs(pipeline_file="proj2/build.yaml")
+            assert len(proj1_runs) == 1
+            assert proj1_runs[0].status == RunStatus.RUNNING
+            assert len(proj2_runs) == 1
+            assert proj2_runs[0].status == RunStatus.PENDING
+
+    @pytest.mark.asyncio
     async def test_update_run_status(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -495,6 +520,16 @@ class TestRunRepositoryMore:
             assert await repo.count_runs() == 2
             assert await repo.count_runs(pipeline="pipe-a") == 1
             assert await repo.count_runs(status="pending") == 2
+
+    @pytest.mark.asyncio
+    async def test_count_runs_by_file(self, db_engine, clean_db):
+        async with get_session_factory()() as session:
+            repo = RunRepository(session)
+            await repo.create_run("deploy", pipeline_file="proj1/deploy.yaml")
+            await repo.create_run("deploy", pipeline_file="proj2/deploy.yaml")
+            assert await repo.count_runs(pipeline_file="proj1/deploy.yaml") == 1
+            assert await repo.count_runs(pipeline_file="proj2/deploy.yaml") == 1
+            assert await repo.count_runs(pipeline_file="proj1/deploy.yaml", status="pending") == 1
 
     @pytest.mark.asyncio
     async def test_delete_runs_older_than(self, db_engine, clean_db):
