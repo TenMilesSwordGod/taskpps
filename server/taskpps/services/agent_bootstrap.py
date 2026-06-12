@@ -210,13 +210,28 @@ class AgentBootstrap:
         return exit_code == 0
 
     async def _deploy_binary(self, client, host: str, dest_path: str) -> None:
-        import platform
+        exit_code, remote_arch_out, _ = await self._ssh_exec(client, "uname -m")
+        if exit_code != 0 or not remote_arch_out.strip():
+            raise AgentBootstrapError(t("Failed to detect remote architecture on {host}", host=host))
+        remote_arch = remote_arch_out.strip()
+        logger.info("Remote host %s architecture: %s", host, remote_arch)
 
-        arch = platform.machine()
-        if arch == "x86_64":
-            arch = "amd64"
-        elif arch == "aarch64":
-            arch = "arm64"
+        arch_map: dict[str, str] = {
+            "x86_64": "amd64",
+            "amd64": "amd64",
+            "aarch64": "arm64",
+            "arm64": "arm64",
+            "armv8l": "arm64",
+            "armv7l": "arm",
+            "armv6l": "arm",
+        }
+        arch = arch_map.get(remote_arch)
+        if arch is None:
+            raise AgentBootstrapError(
+                t("Unsupported remote architecture '{arch}' on {host}. "
+                  "Supported: x86_64/amd64, aarch64/arm64",
+                  arch=remote_arch, host=host)
+            )
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         local_binary = os.path.join(
@@ -226,16 +241,23 @@ class AgentBootstrap:
             f"taskpps-agent-linux-{arch}",
         )
 
-        if not os.path.exists(local_binary):
+        found = os.path.exists(local_binary)
+        if not found:
             local_binary = os.path.join(
                 project_root,
                 "execution_agent",
                 "taskpps-agent",
             )
+            found = os.path.exists(local_binary)
 
-        if not os.path.exists(local_binary):
-            raise AgentBootstrapError(t("Agent binary not found at {path}", path=local_binary))
+        if not found:
+            raise AgentBootstrapError(
+                t("Agent binary for arch '{remote_arch}' not found. "
+                  "Build it with: cd execution_agent && ./build/build.sh",
+                  remote_arch=remote_arch)
+            )
 
+        logger.info("Deploying binary %s to %s:%s", local_binary, host, dest_path)
         sftp = client.open_sftp()
         try:
             sftp.put(local_binary, dest_path)

@@ -38,17 +38,22 @@ export default function ServersPage() {
     }
   };
 
-  // 自动探测：首次拿到 agents 后异步触发一次，填充 system/arch 真实值
-  // ref 防止 StrictMode 双触发或 refetch 重复触发
-  const autoProbedRef = useRef(false);
+  // 自动探测：首次拿到 agents 后异步触发，填充 system/arch 真实值
+  // trackedIds 记录已触发的 agent 集合，避免重复探测同一批
+  const trackedIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (autoProbedRef.current) return;
     if (!agents || agents.length === 0) return;
-    // 至少有一个 agent 的 system/arch 是空才值得触发
-    const needsProbe = agents.some((a) => !a.system || !a.arch);
-    if (!needsProbe) return;
-    autoProbedRef.current = true;
-    void runProbe();
+    const currentIds = new Set(agents.map((a) => a.agent_id));
+    // 找出需要探测且未触发过的 agent
+    const needsProbe = agents.filter((a) => (!a.system || !a.arch) && !trackedIdsRef.current.has(a.agent_id));
+    if (needsProbe.length === 0) return;
+    // 标记已触发，避免重复
+    for (const a of needsProbe) {
+      trackedIdsRef.current.add(a.agent_id);
+    }
+    // 延迟执行，确保页面渲染完成后再发起探测请求
+    const timer = setTimeout(() => { void runProbe(); }, 300);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agents]);
 
