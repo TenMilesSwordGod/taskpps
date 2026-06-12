@@ -3,32 +3,25 @@ import { Tooltip, Popconfirm, Tag } from 'antd';
 import type { AgentWithConfig } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, Server, FolderOpen,
+  CloudUpload, Loader2, Info, FolderOpen,
 } from 'lucide-react';
 import { useDeployAgent } from '@/api/agents';
 
 interface ServerCardProps {
   agent: AgentWithConfig;
-  /** 探测后的 system/arch 覆盖（来自 POST /api/agents/check） */
   detectedSystem?: string;
   detectedArch?: string;
-  /** 点击"查看 host 详情"图标 */
   onShowDetail?: (agent: AgentWithConfig) => void;
 }
 
-/** 把 system 字段映射到图标（Linux/Darwin/Windows/...） */
-function getOsIcon(system: string, arch: string, type: string): string {
-  void type;
+function getOsIcon(system: string): string {
   const s = (system || '').toLowerCase();
   if (s.includes('linux')) return '/static/servers/linux.svg';
   if (s.includes('darwin') || s.includes('macos') || s.includes('mac os') || s.includes('apple')) return '/static/servers/apple.svg';
   if (s.includes('windows')) return '/static/servers/windows.svg';
-  void arch;
-  // 通用 server 图标
   return '/static/servers/server.svg';
 }
 
-/** 把 system 字段规整为友好的系统名称 */
 function getSystemLabel(system: string): string {
   const s = (system || '').toLowerCase();
   if (!s) return 'Unknown';
@@ -44,7 +37,6 @@ function getSystemLabel(system: string): string {
   return system.charAt(0).toUpperCase() + system.slice(1);
 }
 
-/** 把 arch 字段规整为友好名称 */
 function getArchLabel(arch: string): string {
   const a = (arch || '').toLowerCase();
   if (!a) return 'Unknown';
@@ -55,7 +47,6 @@ function getArchLabel(arch: string): string {
   return arch;
 }
 
-/** 把 type 字段规整为友好名称 */
 function getTypeLabel(type: string): string {
   if (!type) return 'Local';
   if (type.startsWith('ssh-')) return 'SSH';
@@ -64,47 +55,49 @@ function getTypeLabel(type: string): string {
   return type;
 }
 
-/** 按 type 字段兜底推导 system（用于离线 / 未探测时显示） */
 function fallbackSystem(type: string): string {
   if (!type) return 'Local';
   if (type.startsWith('ssh-')) return 'Linux';
   if (type === 'local') return 'Local';
-  if (type === 'execution-agent' || type === 'agent' || type === 'websocket') return '';
   return '';
 }
 
-/** 按 type 字段兜底推导 arch：架构是未知的，硬编码 x86_64 是错的，返回空让 UI 显示 "—" */
-function fallbackArch(type: string): string {
+function fallbackArch(): string {
   return '';
 }
 
-/** 网络可达性图标 */
 function NetStatusIcon({ netStatus }: { netStatus: 'unknown' | 'reachable' | 'unreachable' }) {
   if (netStatus === 'reachable') {
     return (
-      <Tooltip title="网络可达：TCP 端口可连接">
-        <Plug size={16} color="#10b981" />
+      <Tooltip title="网络可达">
+        <Plug size={14} color="#17b26a" />
       </Tooltip>
     );
   }
   if (netStatus === 'unreachable') {
     return (
-      <Tooltip title="网络不可达：TCP 端口无法连接">
-        <Unplug size={16} color="#ef4444" />
+      <Tooltip title="网络不可达">
+        <Unplug size={14} color="#f04438" />
       </Tooltip>
     );
   }
   return (
-    <Tooltip title="网络状态未知：未配置 host:port">
-      <HelpCircle size={16} color="#9ca3af" />
+    <Tooltip title="网络状态未知">
+      <HelpCircle size={14} color="#98a2b3" />
     </Tooltip>
   );
 }
 
-/** 把时间戳格式化为 hh:mm:ss */
 function formatTs(ts: number): string {
   if (!ts) return '—';
   return new Date(ts * 1000).toLocaleTimeString('zh-CN');
+}
+
+function osArchLabel(systemLabel: string, archLabel: string): string {
+  const parts: string[] = [];
+  if (systemLabel && systemLabel !== '—') parts.push(systemLabel);
+  if (archLabel && archLabel !== '—') parts.push(archLabel);
+  return parts.length > 0 ? parts.join(' · ') : '—';
 }
 
 function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: ServerCardProps) {
@@ -112,69 +105,62 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
   const deploy = useDeployAgent();
   const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
 
-  // 优先级：detected > real > type 兜底
   const effectiveSystem = detectedSystem || agent.system || fallbackSystem(agent.type);
-  const effectiveArch = detectedArch || agent.arch || fallbackArch(agent.type);
-  const fallbackSys = fallbackSystem(agent.type);
-  const osIcon = getOsIcon(effectiveSystem, effectiveArch, agent.type);
-  // 空值显示 "—"，避免出现 "Unknown" 让用户以为真的是 unknown
+  const effectiveArch = detectedArch || agent.arch || fallbackArch();
+  const osIcon = getOsIcon(effectiveSystem);
   const systemLabel = effectiveSystem ? getSystemLabel(effectiveSystem) : '—';
   const archLabel = effectiveArch ? getArchLabel(effectiveArch) : '—';
   const typeLabel = getTypeLabel(agent.type);
 
-  // 显示名称优先级：yaml.name → agent.hostname（agent 报告的）→ agent_id
   const displayName = agent.name || agent.hostname || agent.agent_id;
-  // IP 优先级：agent 报告的真实 IP → yaml 配置 host
   const displayIp = agent.ip || (agent.host ? (agent.port ? `${agent.host}:${agent.port}` : agent.host) : '—');
-  // Arch + System 离线兜底（label 已含 '—' 兜底）
-  const archDisplay = archLabel;
   const versionDisplay = agent.agent_version ? `v${agent.agent_version}` : '—';
+  const osArchText = osArchLabel(systemLabel, archLabel);
 
   return (
     <div
       style={{
         background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 10,
-        padding: 16,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-        transition: 'box-shadow 0.2s, transform 0.2s',
+        border: '1px solid #eaecf0',
+        borderLeft: online ? '3px solid #17b26a' : '3px solid #eaecf0',
+        borderRadius: '6px 8px 8px 6px',
+        padding: '12px 14px',
+        transition: 'box-shadow 0.15s, transform 0.15s, border-color 0.15s',
         position: 'relative',
-        opacity: online ? 1 : 0.85,
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
         e.currentTarget.style.transform = 'translateY(-1px)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
+        e.currentTarget.style.boxShadow = '';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
-      {/* 顶部：图标 + 名称 + 状态灯 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+      {/* 顶部：图标 + 名称 + 状态 + 连接 */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
         <div
           style={{
-            width: 44,
-            height: 44,
+            width: 36,
+            height: 36,
             borderRadius: 8,
-            background: '#f3f4f6',
+            background: '#f9fafb',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            overflow: 'hidden',
+            opacity: online ? 1 : 0.6,
           }}
         >
-          <img src={osIcon} alt="OS" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+          <img src={osIcon} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span
               style={{
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: 600,
-                color: online ? '#111827' : '#6b7280',
+                color: '#1d2939',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -183,216 +169,141 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
             >
               {displayName}
             </span>
-            <Tooltip title={online ? '在线' : '离线'}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: online ? '#10b981' : '#9ca3af',
-                  boxShadow: online ? '0 0 0 3px rgba(16,185,129,0.18)' : 'none',
-                  flexShrink: 0,
-                }}
-              />
-            </Tooltip>
+            <Tag
+              color={online ? 'green' : 'default'}
+              style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 5px', borderRadius: 4, border: 'none' }}
+            >
+              {online ? '在线' : '离线'}
+            </Tag>
           </div>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Tooltip title={agent.source_file || agent.agent_id}>
-              <span>{agent.agent_id}</span>
-            </Tooltip>
-            {typeLabel !== 'unknown' && (
-              <span style={{ color: '#9ca3af' }}>· {typeLabel}</span>
-            )}
+          <div style={{ fontSize: 11, color: '#667085', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+            <span title={agent.source_file || agent.agent_id}>{agent.agent_id}</span>
+            <span style={{ color: '#d0d5dd' }}>·</span>
+            <span>{typeLabel}</span>
             {agent.project_id && (
-              <Tooltip title={`项目: ${agent.project_name || agent.project_id}`}>
-                <Tag
-                  icon={<FolderOpen size={10} />}
-                  style={{ marginInlineStart: 0, fontSize: 11, lineHeight: '18px', paddingInline: 4 }}
-                  color="blue"
-                >
-                  {agent.project_id}
-                </Tag>
-              </Tooltip>
+              <>
+                <span style={{ color: '#d0d5dd' }}>·</span>
+                <Tooltip title={`项目: ${agent.project_name || agent.project_id}`}>
+                  <Tag
+                    icon={<FolderOpen size={10} />}
+                    style={{ margin: 0, fontSize: 10, lineHeight: '16px', paddingInline: 4, borderRadius: 4 }}
+                    color="blue"
+                  >
+                    {agent.project_id}
+                  </Tag>
+                </Tooltip>
+              </>
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <Tooltip title={online ? 'Agent WS 已连接' : 'Agent WS 未连接'}>
-            {online ? (
-              <Wifi size={16} color="#10b981" />
-            ) : (
-              <WifiOff size={16} color="#9ca3af" />
-            )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 2 }}>
+          <Tooltip title={online ? 'Agent 已连接' : 'Agent 未连接'}>
+            {online ? <Wifi size={14} color="#17b26a" /> : <WifiOff size={14} color="#98a2b3" />}
           </Tooltip>
           <NetStatusIcon netStatus={agent.net_status} />
-          {/* 查看 host 详情（CPU/内存/磁盘） */}
-          <Tooltip title="查看 host 详情（CPU / 内存 / 磁盘）">
+        </div>
+      </div>
+
+      {/* 信息行：简洁双行布局 */}
+      <div
+        style={{
+          background: '#f9fafb',
+          borderRadius: 6,
+          padding: '8px 10px',
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475467', minWidth: 0 }}>
+            <Globe size={11} style={{ flexShrink: 0, color: '#98a2b3' }} />
+            <span style={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {displayIp}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475467', flexShrink: 0 }}>
+            <Hash size={11} style={{ flexShrink: 0, color: '#98a2b3' }} />
+            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{versionDisplay}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 12, color: '#475467' }}>
+          <Cpu size={11} style={{ flexShrink: 0, color: '#98a2b3' }} />
+          <span style={{ fontSize: 12 }}>{osArchText}</span>
+        </div>
+      </div>
+
+      {/* 底部：运行命令数 / 连接时间 + 操作按钮 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#98a2b3' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Activity size={11} />
+          运行中 {agent.running_commands}
+          <span style={{ marginLeft: 8, color: '#d0d5dd' }}>|</span>
+          <span style={{ marginLeft: 4 }}>{online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}</span>
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Tooltip title="主机详情">
             <span
               role="button"
               tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onShowDetail?.(agent);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.stopPropagation();
-                  onShowDetail?.(agent);
-                }
-              }}
+              onClick={(e) => { e.stopPropagation(); onShowDetail?.(agent); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onShowDetail?.(agent); } }}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 22,
-                height: 22,
-                borderRadius: 4,
-                cursor: 'pointer',
-                background: '#f9fafb',
-                color: '#4b5563',
-                border: '1px solid #e5e7eb',
-                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 24, height: 24, borderRadius: 6, cursor: 'pointer',
+                color: '#667085', transition: 'background 0.15s, color 0.15s',
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#eff6ff';
-                e.currentTarget.style.borderColor = '#bfdbfe';
-                e.currentTarget.style.color = '#2563eb';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#f9fafb';
-                e.currentTarget.style.borderColor = '#e5e7eb';
-                e.currentTarget.style.color = '#4b5563';
-              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#f2f4f7'; e.currentTarget.style.color = '#1d2939'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#667085'; }}
             >
-              <Info size={13} />
+              <Info size={14} />
             </span>
           </Tooltip>
-          {/* 未连接 agent 显示部署按钮（已连接无需部署） */}
           {!online && (
-            <Tooltip
-              title={
-                agent.net_status === 'unreachable'
-                  ? '需先检查连接（TCP 不可达）'
-                  : '部署 agent 到此 host'
-              }
-            >
+            <Tooltip title={agent.net_status === 'unreachable' ? 'TCP 不可达，无法部署' : '部署 agent'}>
               <Popconfirm
                 title={`部署 Agent "${agent.agent_id}"?`}
                 description={
                   agent.net_status === 'unreachable'
-                    ? '⚠️ 当前主机 TCP 不可达，部署可能失败。是否仍要继续？'
-                    : '将通过 bootstrap 流程在该 host 部署并启动 agent。期间将消耗数分钟，请耐心等待。'
+                    ? '主机 TCP 不可达，部署可能失败。是否继续？'
+                    : '将在该主机部署并启动 agent，耗时数分钟。'
                 }
-                okText="开始部署"
+                okText="部署"
                 cancelText="取消"
                 disabled={agent.net_status === 'unreachable'}
-                onConfirm={(e) => {
-                  e?.stopPropagation();
-                  deploy.mutate(agent.agent_id);
-                }}
+                onConfirm={(e) => { e?.stopPropagation(); deploy.mutate(agent.agent_id); }}
                 onCancel={(e) => e?.stopPropagation()}
               >
                 <span
                   role="button"
                   tabIndex={agent.net_status === 'unreachable' ? -1 : 0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (agent.net_status === 'unreachable') return;
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); if (agent.net_status === 'unreachable') return; }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}
                   style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 22,
-                    height: 22,
-                    borderRadius: 4,
-                    cursor: agent.net_status === 'unreachable'
-                      ? 'not-allowed'
-                      : isDeploying ? 'wait' : 'pointer',
-                    background: agent.net_status === 'unreachable' ? '#f3f4f6' : '#eff6ff',
-                    color: agent.net_status === 'unreachable' ? '#9ca3af' : '#2563eb',
-                    border: `1px solid ${agent.net_status === 'unreachable' ? '#e5e7eb' : '#bfdbfe'}`,
-                    transition: 'background 0.15s, border-color 0.15s',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 24, height: 24, borderRadius: 6,
+                    cursor: agent.net_status === 'unreachable' ? 'not-allowed' : isDeploying ? 'wait' : 'pointer',
+                    color: agent.net_status === 'unreachable' ? '#d0d5dd' : '#2e90fa',
+                    transition: 'background 0.15s',
                   }}
                   onMouseEnter={(e) => {
                     if (agent.net_status === 'unreachable' || isDeploying) return;
-                    e.currentTarget.style.background = '#dbeafe';
-                    e.currentTarget.style.borderColor = '#60a5fa';
+                    e.currentTarget.style.background = '#eff8ff';
                   }}
                   onMouseLeave={(e) => {
                     if (agent.net_status === 'unreachable') return;
-                    e.currentTarget.style.background = '#eff6ff';
-                    e.currentTarget.style.borderColor = '#bfdbfe';
+                    e.currentTarget.style.background = '';
                   }}
                 >
-                  {isDeploying ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <CloudUpload size={13} />
-                  )}
+                  {isDeploying ? <Loader2 size={13} className="animate-spin" /> : <CloudUpload size={14} />}
                 </span>
               </Popconfirm>
             </Tooltip>
           )}
         </div>
       </div>
-
-      {/* 信息行：IP / Agent Version / System / Arch */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: 12 }}>
-        <Tooltip title="IP 地址">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
-            <Globe size={12} color="#9ca3af" />
-            <span style={{ fontFamily: 'monospace' }}>{displayIp}</span>
-          </div>
-        </Tooltip>
-        <Tooltip title="Agent 版本">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
-            <Hash size={12} color="#9ca3af" />
-            <span style={{ fontFamily: 'monospace' }}>{versionDisplay}</span>
-          </div>
-        </Tooltip>
-        <Tooltip title="操作系统">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
-            <img src={osIcon} alt="" style={{ width: 12, height: 12, opacity: 0.7 }} />
-            <span>{systemLabel}</span>
-          </div>
-        </Tooltip>
-        <Tooltip title="CPU 架构">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: online ? '#4b5563' : '#9ca3af' }}>
-            <Cpu size={12} color="#9ca3af" />
-            <span style={{ fontFamily: 'monospace' }}>{archDisplay}</span>
-          </div>
-        </Tooltip>
-      </div>
-
-      {/* 底部：运行命令数 / 连接时间 */}
-      <div
-        style={{
-          marginTop: 12,
-          paddingTop: 10,
-          borderTop: '1px dashed #e5e7eb',
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: 11,
-          color: '#9ca3af',
-        }}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Activity size={11} />
-          运行中 {agent.running_commands}
-        </span>
-        <span>{online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}</span>
-      </div>
     </div>
   );
 }
 
-// 用 React.memo 包裹：props 不变时跳过 re-render（react-query 5s refetch 时只更新变化项）
-// 自定义比较：agent 引用相同 + detected* 字符串相同 + onShowDetail 引用相同才跳过
 export default memo(ServerCard, (prev, next) => {
   return (
     prev.agent === next.agent &&
