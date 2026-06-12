@@ -43,7 +43,7 @@ export default function EnvEditor({ value, onChange }: EnvEditorProps) {
 
   useEffect(() => {
     const prev = valueRef.current;
-    if (value !== prev) {
+    if (JSON.stringify(value) !== JSON.stringify(prev)) {
       valueRef.current = value;
       syncingRef.current = true;
       setEntries(buildEntries(value));
