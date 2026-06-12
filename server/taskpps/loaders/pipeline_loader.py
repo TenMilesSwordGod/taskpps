@@ -88,7 +88,13 @@ def _resolve_variable_match(match, env: dict[str, str]) -> str:
 
 def substitute_env_vars(value: Any, env: dict[str, str]) -> Any:
     if isinstance(value, str):
-        return _VAR_PATTERN.sub(lambda m: _resolve_variable_match(m, env), value)
+        result = value
+        for _ in range(10):
+            new_result = _VAR_PATTERN.sub(lambda m: _resolve_variable_match(m, env), result)
+            if new_result == result:
+                break
+            result = new_result
+        return result
     if isinstance(value, dict):
         return {k: substitute_env_vars(v, env) for k, v in value.items()}
     if isinstance(value, list):

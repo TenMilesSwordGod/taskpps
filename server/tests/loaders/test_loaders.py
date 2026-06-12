@@ -271,6 +271,11 @@ class TestSubstituteEnvVars:
         result = substitute_env_vars("echo ${env.MISSING}", {})
         assert result == "echo ${env.MISSING}"
 
+    def test_nested_variable_substitution(self):
+        env = {"DUT_IP": "10.239.1.2", "EXEC_CMD": "uv run run.py -v ip:${DUT_IP}"}
+        result = substitute_env_vars("${EXEC_CMD} -v extra:1", env)
+        assert result == "uv run run.py -v ip:10.239.1.2 -v extra:1"
+
     def test_load_with_env_prefix_and_no_env_param(self, tmp_path, monkeypatch):
         # 测试没有显式传入 env 参数时,仍然可以通过 settings.env 和 os.environ 替换
         monkeypatch.setenv("SYS_ENV", "sys_value")
