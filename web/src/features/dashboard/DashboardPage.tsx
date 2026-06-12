@@ -16,9 +16,11 @@ function formatDuration(run: RunResponse, nowTs?: number): string {
   const end = run.finished_at ? dayjs(run.finished_at.endsWith('Z') || run.finished_at.includes('+') ? run.finished_at : run.finished_at + 'Z') : dayjs(nowTs || undefined);
   const sec = end.diff(s, 'second');
   if (sec < 60) return `${sec}秒`;
-  const min = Math.floor(sec / 60);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
   const remainSec = sec % 60;
-  return `${min}分${remainSec}秒`;
+  if (h > 0) return `${h}时${m}分${remainSec}秒`;
+  return `${m}分${remainSec}秒`;
 }
 
 export default function DashboardPage() {
