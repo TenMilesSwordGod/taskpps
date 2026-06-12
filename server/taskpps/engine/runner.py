@@ -153,7 +153,19 @@ class PipelineRunner:
 
     async def run(self) -> None:
         if not self.pipeline.subpipelines:
-            logger.info("PipelineRunner: no subpipelines, returning immediately")
+            logger.info("PipelineRunner: no subpipelines, marking run as SUCCESS (nothing to execute)")
+            _active_runs[self.run_id] = self
+            self._start_time = datetime.now(timezone.utc)
+            try:
+                async with get_session_factory()() as session:
+                    run_repo = RunRepository(session)
+                    end_time = datetime.now(timezone.utc)
+                    await run_repo.update_run_status(
+                        self.run_id, RunStatus.SUCCESS,
+                        started_at=self._start_time, finished_at=end_time,
+                    )
+            finally:
+                _active_runs.pop(self.run_id, None)
             return
 
         _active_runs[self.run_id] = self
