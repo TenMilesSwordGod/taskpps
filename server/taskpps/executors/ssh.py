@@ -151,7 +151,22 @@ class SSHExecutor(BaseExecutor):
 
         try:
             loop = asyncio.get_event_loop()
-            exit_code, output, error = await loop.run_in_executor(None, _run_ssh)
+            if timeout and timeout > 0:
+                try:
+                    exit_code, output, error = await asyncio.wait_for(
+                        loop.run_in_executor(None, _run_ssh),
+                        timeout=timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("SSHExecutor: command timed out on %s after %ds", self.host, timeout)
+                    await self.cancel()
+                    return ExecutorResult(
+                        exit_code=-1,
+                        stdout="",
+                        stderr=t("SSH command timed out after {timeout}s", timeout=timeout),
+                    )
+            else:
+                exit_code, output, error = await loop.run_in_executor(None, _run_ssh)
         except asyncio.CancelledError:
             logger.info("SSHExecutor: task cancelled on %s", self.host)
             self._channel = None

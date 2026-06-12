@@ -54,7 +54,7 @@ class GitExecutor(BaseExecutor):
                             dest=self.dest,
                         )
                     )
-                return _git_pull(self.dest, self.ref, log_path, merged_env, self.credential)
+                return _git_pull(self.dest, self.ref, log_path, merged_env, self.credential, timeout)
 
             logger.info("GitExecutor: cloning %s branch=%s depth=%d", self.repo, self.ref, self.depth)
             dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,7 +68,7 @@ class GitExecutor(BaseExecutor):
             repo_url = _apply_credential_to_url(self.repo, self.credential, merged_env)
             clone_args.extend([repo_url, str(dest_path)])
 
-            return _run_subprocess(clone_args, log_path, merged_env, cwd=str(dest_path.parent))
+            return _run_subprocess(clone_args, log_path, merged_env, cwd=str(dest_path.parent), timeout=timeout)
 
         try:
             loop = asyncio.get_event_loop()
@@ -97,25 +97,26 @@ def _apply_credential_to_url(repo_url: str, credential: str | None, env: dict[st
     return repo_url
 
 
-def _git_pull(dest: str, ref: str, log_path: Path, env: dict[str, str], credential: str | None) -> ExecutorResult:
+def _git_pull(dest: str, ref: str, log_path: Path, env: dict[str, str], credential: str | None, timeout: int | None = None) -> ExecutorResult:
     logger.info("GitExecutor._git_pull: dest=%s ref=%s", dest, ref)
-    fetch_result = _run_subprocess(["git", "fetch", "origin", ref], log_path, env, cwd=dest)
+    fetch_result = _run_subprocess(["git", "fetch", "origin", ref], log_path, env, cwd=dest, timeout=timeout)
     if not fetch_result.success:
         logger.warning("GitExecutor._git_pull: fetch failed exit_code=%d", fetch_result.exit_code)
         return fetch_result
 
-    checkout_result = _run_subprocess(["git", "checkout", ref], log_path, env, cwd=dest)
+    checkout_result = _run_subprocess(["git", "checkout", ref], log_path, env, cwd=dest, timeout=timeout)
     if not checkout_result.success:
         logger.warning("GitExecutor._git_pull: checkout failed exit_code=%d", checkout_result.exit_code)
         return checkout_result
 
-    return _run_subprocess(["git", "pull", "origin", ref], log_path, env, cwd=dest)
+    return _run_subprocess(["git", "pull", "origin", ref], log_path, env, cwd=dest, timeout=timeout)
 
 
-def _run_subprocess(args: list, log_path: Path, env: dict[str, str], cwd: str | None = None) -> ExecutorResult:
+def _run_subprocess(args: list, log_path: Path, env: dict[str, str], cwd: str | None = None, timeout: int | None = None) -> ExecutorResult:
     import subprocess
 
-    logger.info("GitExecutor._run_subprocess: %s cwd=%s", shlex.join(args), cwd or ".")
+    effective_timeout = timeout if timeout and timeout > 0 else 600
+    logger.info("GitExecutor._run_subprocess: %s cwd=%s timeout=%ds", shlex.join(args), cwd or ".", effective_timeout)
 
     with open(log_path, "a") as f:
         f.write(f"+ {shlex.join(args)}\n")
@@ -127,7 +128,7 @@ def _run_subprocess(args: list, log_path: Path, env: dict[str, str], cwd: str | 
             text=True,
             env=env,
             cwd=cwd,
-            timeout=600,
+            timeout=effective_timeout,
         )
         logger.info("GitExecutor._run_subprocess: completed exit_code=%d", proc.returncode)
         with open(log_path, "a") as f:
