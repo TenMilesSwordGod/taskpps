@@ -109,6 +109,67 @@ def tmp_project(tmp_path_factory):
         "name: invoke_test\noptions: {}\ntasks:\n  - name: hello\n    invoke:\n      task: sample_tasks.hello\n"
     )
 
+    diamond_yaml = pipelines_dir / "diamond.yaml"
+    diamond_yaml.write_text(
+        "name: diamond\n"
+        "options:\n"
+        "  on_failure: fail\n"
+        "tasks:\n"
+        "  - name: a\n"
+        "    command: echo a\n"
+        "  - name: b\n"
+        "    command: echo b\n"
+        "    depends_on: [a]\n"
+        "  - name: c\n"
+        "    command: echo c\n"
+        "    depends_on: [a]\n"
+        "  - name: d\n"
+        "    command: echo d\n"
+        "    depends_on: [b, c]\n"
+    )
+
+    multi_sub_yaml = pipelines_dir / "multi_sub.yaml"
+    multi_sub_yaml.write_text(
+        "name: multi_sub\n"
+        "options:\n"
+        "  on_failure: fail\n"
+        "pipelines:\n"
+        "  - name: build\n"
+        "    tasks:\n"
+        "      - name: compile\n"
+        "        command: echo compile\n"
+        "      - name: test\n"
+        "        command: echo test\n"
+        "        depends_on: [compile]\n"
+        "  - name: deploy\n"
+        "    depends_on: [build]\n"
+        "    tasks:\n"
+        "      - name: upload\n"
+        "        command: echo upload\n"
+        "      - name: restart\n"
+        "        command: echo restart\n"
+        "        depends_on: [upload]\n"
+    )
+
+    continue_diamond_yaml = pipelines_dir / "continue_diamond.yaml"
+    continue_diamond_yaml.write_text(
+        "name: continue_diamond\n"
+        "options:\n"
+        "  on_failure: continue\n"
+        "tasks:\n"
+        "  - name: a\n"
+        "    command: echo a\n"
+        "  - name: b\n"
+        "    command: exit 1\n"
+        "    depends_on: [a]\n"
+        "  - name: c\n"
+        "    command: echo c\n"
+        "    depends_on: [a]\n"
+        "  - name: d\n"
+        "    command: echo d\n"
+        "    depends_on: [b, c]\n"
+    )
+
     sample_tasks = tasks_dir / "sample_tasks.py"
     sample_tasks.write_text("def hello():\n    print('hello from invoke')\n    return 'hello'\n")
 

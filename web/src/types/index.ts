@@ -298,3 +298,68 @@ export interface ProjectResponse {
   last_used_at: string | null;
   active: boolean;
 }
+
+/** 重试记录响应 */
+export interface RetryRecordResponse {
+  id: string;
+  run_id: string;
+  task_run_id: string;
+  task_name: string;
+  subpipeline_name: string;
+  retry_version: number;
+  status: TaskStatus;
+  command: string;
+  original_command: string;
+  log_path: string;
+  exit_code: number | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+/** 重试版本响应 */
+export interface RetryVersionsResponse {
+  task_retries: Record<string, RetryRecordResponse[]>;
+  selected: Record<string, string | null>;
+}
+
+/** 重试命令响应 */
+export interface RetryCommandResponse {
+  retry_id: string;
+  task_name: string;
+  original_command: string;
+  resolved_command: string;
+  variables: Record<string, string>;
+  editable: boolean;
+  status: TaskStatus;
+}
+
+/** 依赖树节点 */
+export interface DependencyNode {
+  name: string;
+  depends_on: string[];
+  level: number;
+  upstream_of_target: boolean;
+  mandatory_if_upstream: boolean;
+}
+
+/** 依赖树响应 */
+export interface DependencyTreeResponse {
+  target: string;
+  subpipeline: string;
+  tree: DependencyNode[];
+}
+
+/** 重试触发响应 */
+export interface RetryRunResponse {
+  run_id: string;
+  retry_records: {
+    id: string;
+    task_name: string;
+    retry_version: number;
+    status: TaskStatus;
+    command: string;
+    log_path: string;
+  }[];
+}

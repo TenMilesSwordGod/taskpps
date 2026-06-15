@@ -22,7 +22,7 @@ from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext, apply_overrides
 from taskpps.domain.dag import DAG, DAGCycleError
-from taskpps.domain.pipeline import ResolvedPipeline
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.engine.retry_runner import RetryRunner
 from taskpps.engine.runner import PipelineRunner
 from taskpps.i18n import t
@@ -31,6 +31,7 @@ from taskpps.loaders.pipeline_loader import PipelineLoader
 logger = logging.getLogger("taskpps.services.pipeline_service")
 from taskpps.models.run import RunStatus, TaskStatus
 from taskpps.schemas.pipeline import PipelineYAML
+from taskpps.schemas.run import DependencyNode
 
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -472,7 +473,8 @@ class PipelineService:
                 raise ValueError("Must specify either tasks or subpipeline")
 
             if include_upstream:
-                dag = DAG(resolved.tasks)
+                qualified_tasks = self._build_qualified_tasks_with_subpipeline_deps(resolved)
+                dag = DAG(qualified_tasks, implicit_sequential=False)
                 upstream_set: set[str] = set()
                 for t_name in task_targets:
                     upstream_set |= dag.get_dependencies(t_name)
@@ -547,12 +549,15 @@ class PipelineService:
 
         await runner.retry_tasks(task_plan)
 
+        refreshed: dict[str, Any] = {}
         async with get_session_factory()() as session:
             retry_repo = RetryRecordRepository(session)
             for r in retry_records:
                 record = await retry_repo.get_retry_record(r.id)
-                if record and record.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
-                    await self._auto_select_latest_retry(session, run_id, r.task_name)
+                if record:
+                    refreshed[r.id] = record
+                    if record.status == TaskStatus.SUCCESS:
+                        await self._auto_select_latest_retry(session, run_id, r.task_name)
 
         return {
             "run_id": run_id,
@@ -561,7 +566,9 @@ class PipelineService:
                     "id": r.id,
                     "task_name": r.task_name,
                     "retry_version": r.retry_version,
-                    "status": r.status.value if hasattr(r.status, "value") else r.status,
+                    "status": (refreshed[r.id].status.value
+                               if r.id in refreshed
+                               else r.status.value if hasattr(r.status, "value") else r.status),
                     "command": r.command,
                     "log_path": r.log_path,
                 }
@@ -580,6 +587,8 @@ class PipelineService:
             return
 
         latest = max(records, key=lambda r: r.retry_version)
+        if latest.status != TaskStatus.SUCCESS:
+            return
         await self._select_retry_report_internal(session, run_id, task_name, latest.id)
 
     async def _select_retry_report_internal(
@@ -736,7 +745,8 @@ class PipelineService:
         sub_name = parts[0] if len(parts) > 1 else ""
         task_short = parts[1] if len(parts) > 1 else parts[0]
 
-        dag = DAG(resolved.tasks)
+        qualified_tasks = self._build_qualified_tasks_with_subpipeline_deps(resolved)
+        dag = DAG(qualified_tasks, implicit_sequential=False)
         deps = dag.get_dependencies(task_name)
         levels = dag.get_execution_levels()
 
@@ -770,6 +780,35 @@ class PipelineService:
             import traceback
             logger.warning("Failed to reload pipeline for retry: %s", traceback.format_exc())
             return None
+
+    @staticmethod
+    def _build_qualified_tasks_with_subpipeline_deps(resolved: ResolvedPipeline) -> list[ResolvedTask]:
+        qualified_tasks: list[ResolvedTask] = []
+        sub_task_map: dict[str, list[str]] = {}
+        for sub in resolved.subpipelines:
+            sub_task_names = []
+            for _task in sub.tasks:
+                qname = f"{sub.name}.{_task.name}"
+                sub_task_names.append(qname)
+                qt = ResolvedTask(
+                    name=qname,
+                    task_type=_task.task_type,
+                    command=_task.command,
+                    commands=_task.commands,
+                    depends_on=[f"{sub.name}.{d}" for d in (_task.depends_on or [])],
+                )
+                qualified_tasks.append(qt)
+            sub_task_map[sub.name] = sub_task_names
+
+        for sub in resolved.subpipelines:
+            if sub.depends_on:
+                for dep_sub_name in sub.depends_on:
+                    dep_tasks = sub_task_map.get(dep_sub_name, [])
+                    for qt in qualified_tasks:
+                        if qt.name.startswith(f"{sub.name}."):
+                            qt.depends_on = list(qt.depends_on) + dep_tasks
+
+        return qualified_tasks
 
     @staticmethod
     def _resolve_template(command: str, env: dict[str, str]) -> str:

@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from './client';
-import type { RunListResponse, RunResponse } from '@/types';
+import type {
+  RunListResponse,
+  RunResponse,
+  RetryRunResponse,
+  RetryVersionsResponse,
+  RetryCommandResponse,
+  DependencyTreeResponse,
+} from '@/types';
 
 /** 历史日志响应（REST 模式） */
 export interface RunLogsResponse {
@@ -129,5 +136,156 @@ export function useRunConsole(runId: string | undefined, tail?: number) {
       return res.data;
     },
     enabled: !!runId,
+  });
+}
+
+/** 触发重试 */
+export function useRetryRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      runId: string;
+      tasks?: string[];
+      subpipeline?: string;
+      include_upstream?: boolean;
+      command_overrides?: Record<string, string>;
+    }) => {
+      const res = await apiClient.post<RetryRunResponse>(
+        `/api/runs/${params.runId}/retry`,
+        {
+          tasks: params.tasks,
+          subpipeline: params.subpipeline,
+          include_upstream: params.include_upstream ?? false,
+          command_overrides: params.command_overrides,
+        },
+      );
+      return res.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['run', variables.runId] });
+      queryClient.invalidateQueries({ queryKey: ['retryVersions', variables.runId] });
+    },
+  });
+}
+
+/** 获取重试版本列表 */
+export function useRetryVersions(runId: string | undefined) {
+  return useQuery<RetryVersionsResponse>({
+    queryKey: ['retryVersions', runId],
+    queryFn: async () => {
+      const res = await apiClient.get<RetryVersionsResponse>(`/api/runs/${runId}/retry/versions`);
+      return res.data;
+    },
+    enabled: !!runId,
+  });
+}
+
+/** 获取重试命令 */
+export function useRetryCommand(runId: string | undefined, retryId: string | undefined) {
+  return useQuery<RetryCommandResponse>({
+    queryKey: ['retryCommand', runId, retryId],
+    queryFn: async () => {
+      const res = await apiClient.get<RetryCommandResponse>(
+        `/api/runs/${runId}/retry/${retryId}/command`,
+      );
+      return res.data;
+    },
+    enabled: !!runId && !!retryId,
+  });
+}
+
+/** 更新重试命令 */
+export function useUpdateRetryCommand() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: { runId: string; retryId: string; command: string }) => {
+      const res = await apiClient.put<{ retry_id: string; command: string }>(
+        `/api/runs/${params.runId}/retry/${params.retryId}/command`,
+        { command: params.command },
+      );
+      return res.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['retryCommand', variables.runId, variables.retryId] });
+    },
+  });
+}
+
+/** 获取依赖树 */
+export function useDependencyTree(runId: string | undefined, task: string | undefined) {
+  return useQuery<DependencyTreeResponse>({
+    queryKey: ['dependencyTree', runId, task],
+    queryFn: async () => {
+      const res = await apiClient.get<DependencyTreeResponse>(
+        `/api/runs/${runId}/retry/dependency-tree`,
+        { params: { task } },
+      );
+      return res.data;
+    },
+    enabled: !!runId && !!task,
+  });
+}
+
+/** 选择重试报告 */
+export function useSelectRetryReport() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      runId: string;
+      retryId: string;
+      taskName: string;
+      selectedRetryId: string;
+    }) => {
+      const res = await apiClient.post(
+        `/api/runs/${params.runId}/retry/${params.retryId}/select-report`,
+        {
+          task_name: params.taskName,
+          selected_retry_id: params.selectedRetryId,
+        },
+      );
+      return res.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['retryVersions', variables.runId] });
+      queryClient.invalidateQueries({ queryKey: ['run', variables.runId] });
+    },
+  });
+}
+
+/** 批量选择重试报告 */
+export function useBatchSelectRetryReport() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      runId: string;
+      selections: Record<string, string>;
+    }) => {
+      const res = await apiClient.post(
+        `/api/runs/${params.runId}/retry/select-report`,
+        { selections: params.selections },
+      );
+      return res.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['retryVersions', variables.runId] });
+      queryClient.invalidateQueries({ queryKey: ['run', variables.runId] });
+    },
+  });
+}
+
+/** 获取重试日志 */
+export function useRetryLogs(runId: string | undefined, retryId: string | undefined, tail?: number) {
+  return useQuery<{ log_path: string; content: string; exists: boolean }>({
+    queryKey: ['retryLogs', runId, retryId, tail],
+    queryFn: async () => {
+      const params = tail ? `?tail=${tail}` : '';
+      const res = await apiClient.get(`/api/runs/${runId}/retry/${retryId}/logs${params}`);
+      return res.data;
+    },
+    enabled: !!runId && !!retryId,
   });
 }

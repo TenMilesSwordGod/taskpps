@@ -68,11 +68,19 @@ class RetryRunner:
         return results
 
     def _build_qualified_levels(self, task_names: list[str]) -> list[list[str]]:
+        qualified_tasks = self._build_qualified_tasks_with_subpipeline_deps()
+        dag = DAG(qualified_tasks, implicit_sequential=False)
+        all_levels = dag.get_execution_levels()
+        return [[n for n in level if n in task_names] for level in all_levels if any(n in task_names for n in level)]
+
+    def _build_qualified_tasks_with_subpipeline_deps(self) -> list[ResolvedTask]:
         qualified_tasks: list[ResolvedTask] = []
-        name_map: dict[str, ResolvedTask] = {}
+        sub_task_map: dict[str, list[str]] = {}
         for sub in self.pipeline.subpipelines:
+            sub_task_names = []
             for t in sub.tasks:
                 qname = f"{sub.name}.{t.name}"
+                sub_task_names.append(qname)
                 qt = ResolvedTask(
                     name=qname,
                     task_type=t.task_type,
@@ -81,11 +89,17 @@ class RetryRunner:
                     depends_on=[f"{sub.name}.{d}" for d in (t.depends_on or [])],
                 )
                 qualified_tasks.append(qt)
-                name_map[qname] = qt
+            sub_task_map[sub.name] = sub_task_names
 
-        dag = DAG(qualified_tasks, implicit_sequential=False)
-        all_levels = dag.get_execution_levels()
-        return [[n for n in level if n in task_names] for level in all_levels if any(n in task_names for n in level)]
+        for sub in self.pipeline.subpipelines:
+            if sub.depends_on:
+                for dep_sub_name in sub.depends_on:
+                    dep_tasks = sub_task_map.get(dep_sub_name, [])
+                    for qt in qualified_tasks:
+                        if qt.name.startswith(f"{sub.name}."):
+                            qt.depends_on = list(qt.depends_on) + dep_tasks
+
+        return qualified_tasks
 
     async def _execute_retry_task(self, tp: dict) -> ExecutorResult:
         task_name = tp["name"]
@@ -95,6 +109,7 @@ class RetryRunner:
 
         task = self._find_task(task_name)
         if task is None:
+            await self._update_record(record_id, TaskStatus.FAILED, exit_code=1, error=f"Task '{task_name}' not found in resolved pipeline", finished_at=datetime.now(timezone.utc))
             return ExecutorResult(exit_code=1, stderr=f"Task '{task_name}' not found in resolved pipeline")
 
         if self._cancelled:
