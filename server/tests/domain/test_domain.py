@@ -12,6 +12,7 @@ from taskpps.domain.context import (
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineYAML, TaskYAML
+from taskpps.services.pipeline_service import _extract_env_overrides
 
 
 class TestResolvedTask:
@@ -404,6 +405,27 @@ class TestExecutionContext:
         finally:
             cfg._settings = old_settings
             cfg._project_root = old_root
+
+    def test_env_from_dotpath_params_is_flat(self):
+        """#54 regression: context.env 必须是扁平 dict，不能含 config.env 等嵌套键"""
+        pipeline = ResolvedPipeline(
+            name="test",
+            tasks=[ResolvedTask(name="t1", task_type="command", command="echo", env={"TK": "tv"})],
+            options=OptionsYAML(env={"PK": "pv"}),
+        )
+        raw_params = {"config.env": {"KEY": "val"}, 'tasks["t1"].env': {"T1": "v1"}, "options.timeout": 120}
+        flat_env = _extract_env_overrides(raw_params)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="r1", env=flat_env)
+        task = pipeline.tasks[0]
+        task_env = ctx.get_task_env(task)
+        assert task_env.get("PK") == "pv"
+        assert task_env.get("TK") == "tv"
+        assert task_env.get("KEY") == "val"
+        assert task_env.get("T1") == "v1"
+        # 关键断言：env dict 中不应包含 config.env 等嵌套键
+        assert "config.env" not in task_env
+        assert 'tasks["t1"].env' not in task_env
+        assert "options.timeout" not in task_env
 
 
 class TestDomainExports:

@@ -234,7 +234,7 @@ class PipelineService:
 
         self._save_pipeline_snapshot(pipeline_file, pipeline_id, pipeline_version, run.id)
 
-        context = ExecutionContext(pipeline=resolved, run_id=run.id, env=params, project_workdir=project_workdir)
+        context = ExecutionContext(pipeline=resolved, run_id=run.id, env=_extract_env_overrides(params) if params else {}, project_workdir=project_workdir)
 
         runner = PipelineRunner(run_id=run.id, pipeline=resolved, context=context)
         runner._task_run_ids = task_run_ids
@@ -551,10 +551,11 @@ class PipelineService:
                 if pending:
                     raise ValueError(t("Task has a retry already in progress"))
 
+            run_params = json.loads(run.params) if isinstance(run.params, str) else (run.params or {})
             context = ExecutionContext(
                 pipeline=resolved,
                 run_id=run_id,
-                env=json.loads(run.params) if isinstance(run.params, str) else (run.params or {}),
+                env=_extract_env_overrides(run_params),
                 project_workdir=getattr(run, "project_workdir", None),
             )
 
