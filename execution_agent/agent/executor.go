@@ -11,6 +11,54 @@ import (
 	"github.com/taskpps/execution-agent/logger"
 )
 
+/** Shell 探测的备选列表。优先级：bash > dash > sh。 */
+var shellFallbacks = []string{
+	"/bin/bash",
+	"/usr/bin/bash",
+	"/bin/dash",
+	"/usr/bin/dash",
+	"/bin/sh",
+	"/usr/bin/sh",
+}
+
+/**
+ * resolveShell 在配置的 shell 不可用时按 fallback 列表自动降级。
+ *
+ * 直接以 -c 调用未知的 shell 会得到 "fork/exec ...: no such file or directory"
+ * (issue #56) 或 "fork/exec ...: permission denied" 这种非常笼统的错误，
+ * 用户很难定位是环境缺少 bash 还是路径写错。
+ * 降级到存在的 shell 后再启动命令，至少能让流水线继续跑起来。
+ */
+func resolveShell(configured string) string {
+	if configured == "" || isExecutable(configured) {
+		return configured
+	}
+	logger.Warn("Shell %q 不可用，按 fallback 列表自动选择", configured)
+	for _, candidate := range shellFallbacks {
+		if candidate == configured {
+			continue
+		}
+		if isExecutable(candidate) {
+			logger.Warn("使用 fallback shell: %s", candidate)
+			return candidate
+		}
+	}
+	logger.Warn("所有 fallback shell 都不存在，将保留原配置 %q 让其失败以便定位", configured)
+	return configured
+}
+
+/** isExecutable 使用 LookPath 解析，并要求是普通文件且可执行。 */
+func isExecutable(path string) bool {
+	if path == "" {
+		return false
+	}
+	resolved, err := exec.LookPath(path)
+	if err != nil {
+		return false
+	}
+	return resolved != ""
+}
+
 type runningCmd struct {
 	Cmd       *exec.Cmd
 	CommandID string
@@ -38,7 +86,7 @@ func NewExecutor(shell string, defaultDir string, onStdout, onStderr func(string
 	}
 	return &Executor{
 		runningCmds: make(map[string]*runningCmd),
-		shell:       shell,
+		shell:       resolveShell(shell),
 		defaultDir:  defaultDir,
 		onStdout:    onStdout,
 		onStderr:    onStderr,

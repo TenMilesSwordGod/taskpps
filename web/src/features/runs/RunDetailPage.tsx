@@ -4,7 +4,6 @@ import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip
 import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot } from '@/api/runs';
-import { usePipeline } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
@@ -42,10 +41,10 @@ function parseUTC(s: string): number {
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: run, isLoading: runLoading } = useRun(id);
-  const { data: snapshotPipeline } = usePipelineSnapshot(id);
-  const { data: currentPipeline } = usePipeline(run?.pipeline_file);
-  // 优先使用历史快照，快照不存在时回退到当前 pipeline
-  const pipeline = snapshotPipeline ?? currentPipeline;
+  // 历史运行必须用执行时的快照，禁止回退到当前 pipeline 文件
+  // （否则更新 pipeline 文件会影响历史数据的结构树展示 — Issue #57）
+  const { data: snapshotPipeline, isLoading: snapshotLoading, error: snapshotError } = usePipelineSnapshot(id);
+  const pipeline = snapshotPipeline;
   const cancelRun = useCancelRun();
   const queryClient = useQueryClient();
 
@@ -280,8 +279,12 @@ export default function RunDetailPage() {
                   debugVisible={debugVisible}
                   runId={id}
                 />
+              ) : snapshotLoading ? (
+                <div className="p-3 text-gray-400 text-sm">加载历史快照中…</div>
+              ) : snapshotError ? (
+                <div className="p-3 text-orange-500 text-sm">历史快照加载失败</div>
               ) : (
-                <div className="p-3 text-gray-400 text-sm">加载中…</div>
+                <div className="p-3 text-gray-400 text-sm">暂无快照</div>
               )}
             </Splitter.Panel>
             <Splitter.Panel className="min-w-0">

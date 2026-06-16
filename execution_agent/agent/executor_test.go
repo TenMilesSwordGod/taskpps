@@ -259,6 +259,11 @@ func contains(s, substr string) bool {
 func TestExecutorStartError(t *testing.T) {
 	resultCh := make(chan ExecResult, 1)
 
+	// 暂时把所有 fallback 都标记为不可用，确保原始行为得到验证
+	originalFallbacks := shellFallbacks
+	shellFallbacks = []string{}
+	defer func() { shellFallbacks = originalFallbacks }()
+
 	executor := NewExecutor("/nonexistent/shell", "",
 		func(cid, data string) {},
 		func(cid, data string) {},
@@ -283,6 +288,61 @@ func TestExecutorStartError(t *testing.T) {
 	if result.ExitCode == 0 {
 		t.Errorf("expected non-zero exit_code for nonexistent shell")
 	}
+}
+
+func TestExecutorShellFallback(t *testing.T) {
+	// 验证配置的 shell 不存在时，能自动降级到 fallback 列表里的可用 shell
+	resultCh := make(chan ExecResult, 1)
+	executor := NewExecutor("/this/shell/does/not/exist", "/tmp",
+		func(cid, data string) {},
+		func(cid, data string) {},
+		func(result ExecResult) { resultCh <- result },
+	)
+	executor.Execute(ExecCommand{
+		CommandID: "test-fallback",
+		Command:   "echo fallback-ok",
+	})
+	var result ExecResult
+	select {
+	case result = <-resultCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for result")
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("expected fallback to succeed, got exit=%d err=%q", result.ExitCode, result.Error)
+	}
+}
+
+func TestResolveShell(t *testing.T) {
+	t.Run("空字符串返回空字符串（让 NewExecutor 走默认值）", func(t *testing.T) {
+		if got := resolveShell(""); got != "" {
+			t.Errorf("expected empty, got %q", got)
+		}
+	})
+	t.Run("已存在的 shell 保持原样", func(t *testing.T) {
+		if got := resolveShell("/bin/sh"); got != "/bin/sh" {
+			t.Errorf("expected /bin/sh, got %q", got)
+		}
+	})
+	t.Run("不存在的 shell 走 fallback", func(t *testing.T) {
+		got := resolveShell("/no/such/shell")
+		if got == "/no/such/shell" {
+			// 极端环境下所有 fallback 都不存在时，会保留原值
+			t.Logf("所有 fallback 都不存在，保留原值 %q（环境受限）", got)
+			return
+		}
+		// 应当落到某个 fallback shell
+		found := false
+		for _, f := range shellFallbacks {
+			if got == f {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("fallback %q 不在 shellFallbacks 列表中", got)
+		}
+	})
 }
 
 func TestSignalToString(t *testing.T) {

@@ -120,8 +120,9 @@ export default function RunListPage() {
     if (!deleteTargetId) return;
     try {
       await deleteRun.mutateAsync(deleteTargetId);
-      message.success('已删除');
+      // 先关闭弹窗，避免 message.success 偶发失败导致弹窗残留
       setDeleteTargetId(null);
+      message.success('已删除');
     } catch {
       message.error('删除失败');
     }
@@ -183,7 +184,7 @@ export default function RunListPage() {
           <Button type="link" size="small" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.id)}>
             查看
           </Button>
-          <Button type="link" size="small" danger icon={<Trash2 size={14} />} onClick={() => handleDeleteSingle(record.id)}>
+          <Button data-testid="row-delete-btn" type="link" size="small" danger icon={<Trash2 size={14} />} onClick={() => handleDeleteSingle(record.id)}>
             删除
           </Button>
         </Space>
