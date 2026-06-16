@@ -202,6 +202,7 @@ export default function RunListPage() {
         dataSource={filtered}
         loading={isLoading}
         pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+        scroll={{ y: 'calc(100vh - 280px)' }}
       />
 
       <TriggerRunModal open={triggerOpen} onClose={() => setTriggerOpen(false)} />

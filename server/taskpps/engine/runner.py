@@ -76,8 +76,29 @@ class PipelineRunner:
         self._pipeline_id: str = ""
         self._pipeline_version: str = ""
         self._pipeline_log_path: Path | None = None
+        self._cancel_signal_path: Path | None = None
         self._start_time: datetime | None = None
         self._error_messages: list[str] = []
+
+    def _init_cancel_signal_path(self) -> None:
+        if self._pipeline_id:
+            logs_dir = get_logs_dir()
+            v = self._pipeline_version or "unknown"
+            self._cancel_signal_path = logs_dir / self._pipeline_id / f"v_{v}" / "builds" / self.run_id / ".cancel-requested"
+
+    def _check_cancel_signal(self) -> bool:
+        if self._cancelled:
+            return True
+        if self._cancel_signal_path and self._cancel_signal_path.exists():
+            self._cancelled = True
+            self._write_pipeline_log("WARN", "Cross-worker cancel signal detected")
+            return True
+        return False
+
+    def _cleanup_cancel_signal(self) -> None:
+        if self._cancel_signal_path and self._cancel_signal_path.exists():
+            with contextlib.suppress(OSError):
+                self._cancel_signal_path.unlink()
 
     def _init_pipeline_log(self) -> None:
         """Initialize pipeline-level console.log for runtime logging."""
@@ -171,6 +192,7 @@ class PipelineRunner:
         _active_runs[self.run_id] = self
         self._start_time = datetime.now(timezone.utc)
         self._init_pipeline_log()
+        self._init_cancel_signal_path()
 
         logger.info("PipelineRunner: starting pipeline '%s' run_id=%s", self.pipeline.name, self.run_id)
 
@@ -205,8 +227,8 @@ class PipelineRunner:
 
             try:
                 for level_idx, level in enumerate(sub_levels):
-                    if self._cancelled:
-                        self._write_pipeline_log("WARN", "Pipeline execution cancelled by user")
+                    if self._check_cancel_signal():
+                        self._write_pipeline_log("WARN", "Pipeline execution cancelled")
                         break
 
                     self._write_pipeline_log("INFO", f"Executing level {level_idx + 1}/{len(sub_levels)}: {level}")
@@ -228,7 +250,7 @@ class PipelineRunner:
                     # per subpipeline, instead of being interleaved across
                     # them. See issue #13.
                     for sub_name in subs_to_run:
-                        if self._cancelled:
+                        if self._check_cancel_signal():
                             break
                         try:
                             result = await self._execute_subpipeline(sub_name)
@@ -320,6 +342,7 @@ class PipelineRunner:
 
             event_bus.emit(SIGNAL_RUN_COMPLETED, sender=self, run_id=self.run_id, status=final_status)
         finally:
+            self._cleanup_cancel_signal()
             _active_runs.pop(self.run_id, None)
 
     def _build_subpipeline_levels(self) -> list[list[str]]:
@@ -406,7 +429,7 @@ class PipelineRunner:
         self._write_pipeline_log("INFO", f"Execution strategy: {strategy}")
 
         for level_idx, level in enumerate(levels):
-            if self._cancelled:
+            if self._check_cancel_signal():
                 self._write_pipeline_log("WARN", f"SubPipeline '{sub_name}' cancelled at level {level_idx + 1}")
                 break
 
@@ -452,7 +475,7 @@ class PipelineRunner:
                     self._write_pipeline_log("DEBUG", f"Executing {len(tasks_to_run)} tasks sequentially")
                     results = []
                     for task in tasks_to_run:
-                        if self._cancelled:
+                        if self._check_cancel_signal():
                             break
                         result = await self._execute_task(task, sub_name)
                         results.append(result)
@@ -540,7 +563,7 @@ class PipelineRunner:
             self._write_pipeline_log("SKIP", f"Task '{qualified_name}' skipped (when condition not met)")
             return ExecutorResult(exit_code=0, stdout="Task skipped (when condition not met)")
 
-        if self._cancelled:
+        if self._check_cancel_signal():
             logger.info("PipelineRunner: task '%s' cancelled before execution", qualified_name)
             async with get_session_factory()() as session:
                 task_repo = TaskRunRepository(session)

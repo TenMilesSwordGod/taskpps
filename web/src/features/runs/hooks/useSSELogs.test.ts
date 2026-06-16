@@ -109,12 +109,12 @@ describe('useSSELogs()', () => {
   it('超过 MAX_LOG_LINES 上限：裁剪为 75%', async () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     const es = MockEventSource.instances[0]
-    // 单次事件推 5001 行：触发上限保护
+    // 单次事件推 50001 行：触发上限保护 (MAX_LOG_LINES=50000)
     const lines: string[] = []
-    for (let i = 0; i < 5001; i++) lines.push(`build: line${i}`)
+    for (let i = 0; i < 50001; i++) lines.push(`build: line${i}`)
     act(() => es.emit('log', lines.join('\n')))
-    // 裁剪后应不超过 5000 * 0.75 = 3750
-    expect(result.current.logs.length).toBeLessThanOrEqual(3750)
+    // 裁剪后应不超过 50000 * 0.75 = 37500
+    expect(result.current.logs.length).toBeLessThanOrEqual(37500)
     expect(result.current.logs.length).toBeGreaterThan(0)
   })
 
@@ -239,10 +239,12 @@ describe('useSSELogs()', () => {
     expect(result.current.logs.map((l) => l.content)).toEqual(['a', 'build: b', 'build: c'])
   })
 
-  it('\\r 换行符正确拆分', () => {
+  it('\\r 不作为独立换行符拆分（保留进度条等覆盖输出）', () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     act(() => MockEventSource.instances[0].emit('log', 'build: a\rbuild: b'))
-    expect(result.current.logs).toHaveLength(2)
+    // 不再按 \r 拆分，保留为一行（用于进度条等场景）
+    expect(result.current.logs).toHaveLength(1)
+    expect(result.current.logs[0].content).toBe('a\rbuild: b')
   })
 
   it('全空白行：仅过滤空字符串，纯空格/制表符行保留', () => {

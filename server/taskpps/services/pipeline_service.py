@@ -252,6 +252,14 @@ class PipelineService:
         shutil.copy2(src, dst)
 
     @staticmethod
+    def _write_cancel_signal(pipeline_id: str, pipeline_version: str, run_id: str) -> None:
+        logs_dir = get_logs_dir()
+        v = pipeline_version or "unknown"
+        signal_dir = logs_dir / pipeline_id / f"v_{v}" / "builds" / run_id
+        signal_dir.mkdir(parents=True, exist_ok=True)
+        (signal_dir / ".cancel-requested").touch()
+
+    @staticmethod
     def _handle_run_error(task: asyncio.Task):
         try:
             task.result()
@@ -376,7 +384,11 @@ class PipelineService:
                 return False
 
             if run.status in ("pending", "running"):
-                await run_repo.update_run_status(run_id, "cancelled", finished_at=datetime.now(timezone.utc))
+                # 写入跨 Worker 取消信号文件，让其他 Worker 上的 runner 能检测到
+                self._write_cancel_signal(run.pipeline_id, run.pipeline_version, run_id)
+
+                # 不设置 finished_at — 让 runner 在实际终止时设置真实结束时间
+                await run_repo.update_run_status(run_id, "cancelled")
                 await task_repo.cancel_pending_tasks(run_id)
                 return True
 

@@ -3,14 +3,17 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import yaml
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from taskpps.config import build_pipeline_log_path, build_retry_log_path
+from taskpps.config import build_pipeline_log_path, build_retry_log_path, get_logs_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.i18n import t
+from taskpps.loaders.pipeline_loader import substitute_env_vars
+from taskpps.schemas.pipeline import PipelineYAML
 from taskpps.schemas.run import (
     BatchSelectReportRequest,
     CleanResponse,
@@ -137,7 +140,7 @@ async def get_run_logs(
                     if new_content:
                         had_output = True
                         positions[task_name] = f.tell()
-                        for line in new_content.splitlines():
+                        for line in new_content.split('\n'):
                             if line:
                                 yield {"event": "log", "data": f"{task_name}: {line}"}
 
@@ -155,7 +158,7 @@ async def get_run_logs(
                             more = f.read()  # pragma: no cover
                             if more:  # pragma: no cover
                                 positions[task_name] = f.tell()  # pragma: no cover
-                                for line in more.splitlines():  # pragma: no cover
+                                for line in more.split('\n'):  # pragma: no cover
                                     if line:  # pragma: no cover
                                         yield {"event": "log", "data": f"{task_name}: {line}"}  # pragma: no cover
 
@@ -208,7 +211,7 @@ async def get_run_console(
             block = min(size, tail * 512)
             f.seek(max(0, size - block))
             raw = f.read().decode("utf-8", errors="replace")
-            lines = raw.splitlines()
+            lines = raw.split('\n')
             if size > block:
                 lines = lines[1:]
             return JSONResponse(
@@ -356,7 +359,7 @@ async def get_retry_logs(
                 new_content = f.read()
                 if new_content:
                     position = f.tell()
-                    for line in new_content.splitlines():
+                    for line in new_content.split('\n'):
                         if line:
                             yield {"event": "retry_log", "data": line}
             async with get_session_factory()() as session:
@@ -401,3 +404,37 @@ async def select_retry_report(run_id: str, retry_id: str, body: SelectReportRequ
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/{run_id}/pipeline-snapshot")
+async def get_pipeline_snapshot(run_id: str):
+    """获取历史运行时的流水线快照 YAML（执行时的版本）"""
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        run = await run_repo.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=t("Run not found"))
+
+        if not run.pipeline_id:
+            raise HTTPException(status_code=404, detail=t("Pipeline snapshot not available"))
+
+        v = run.pipeline_version or "unknown"
+        logs_dir = get_logs_dir()
+        snapshot_path = logs_dir / run.pipeline_id / f"v_{v}" / "builds" / run_id / "pipeline-snapshot.yaml"
+
+        if not snapshot_path.exists():
+            raise HTTPException(status_code=404, detail=t("Pipeline snapshot not found"))
+
+        with open(snapshot_path) as f:
+            data = yaml.safe_load(f)
+
+        if data is None:
+            raise HTTPException(status_code=404, detail=t("Pipeline snapshot is empty"))
+
+        # 用运行时参数进行变量替换
+        import json
+        params = json.loads(run.params) if run.params else {}
+        data = substitute_env_vars(data, params)
+
+        spec = PipelineYAML(**data)
+        return spec.model_dump()

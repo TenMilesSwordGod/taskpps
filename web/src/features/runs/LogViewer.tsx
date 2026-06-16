@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Select, Input, Switch, Button, Empty, Tag, Tooltip } from 'antd';
 import { Trash2, Filter, Layers, Download, AlertCircle, AlertTriangle, Info, Bug, Terminal } from 'lucide-react';
-import { FixedSizeList as List } from 'react-window';
+import { VariableSizeList as List } from 'react-window';
 import type { LogEntry } from './hooks/useSSELogs';
 
 interface LogViewerProps {
@@ -78,7 +78,9 @@ export default function LogViewer({
   const [showTaskNames, setShowTaskNames] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<List>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(400);
+  const [containerWidth, setContainerWidth] = useState(800);
   const stickyToBottomRef = useRef(true);
   const prevSelectedTaskIdRef = useRef<string | null | undefined>(undefined);
   const taskNames = useMemo(
@@ -130,16 +132,42 @@ export default function LogViewer({
     const obs = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setContainerHeight(entry.contentRect.height);
+        setContainerWidth(entry.contentRect.width);
       }
     });
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
 
+  const CHARS_PER_LINE = useMemo(() => {
+    // 13px monospace ≈ 7.8px per char, subtract ~100px for level badge + task name
+    return Math.max(40, Math.floor((containerWidth - 100) / 7.8));
+  }, [containerWidth]);
+
+  const getItemSize = useCallback(
+    (index: number) => {
+      const content = filtered[index]?.content || '';
+      const lines = content.split('\n');
+      let totalLines = lines.length;
+      for (const line of lines) {
+        if (line.length > CHARS_PER_LINE) {
+          totalLines += Math.ceil(line.length / CHARS_PER_LINE) - 1;
+        }
+      }
+      return Math.max(ROW_HEIGHT, totalLines * ROW_HEIGHT);
+    },
+    [filtered, CHARS_PER_LINE],
+  );
+
+  // 重置大小缓存当过滤条件变化
+  useEffect(() => {
+    listRef.current?.resetAfterIndex(0);
+  }, [filtered]);
+
   useEffect(() => {
     if (!autoScroll || filtered.length === 0 || !stickyToBottomRef.current) return;
     listRef.current?.scrollToItem(filtered.length - 1, 'end');
-  }, [filtered.length, filtered, autoScroll]);
+  }, [filtered.length, autoScroll]);
 
   useEffect(() => {
     const prev = prevSelectedTaskIdRef.current;
@@ -354,9 +382,10 @@ export default function LogViewer({
         ) : (
           <List
             ref={listRef}
+            outerRef={outerRef}
             height={containerHeight}
             itemCount={filtered.length}
-            itemSize={ROW_HEIGHT}
+            itemSize={getItemSize}
             width="100%"
             onItemsRendered={handleItemsRendered}
           >

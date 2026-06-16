@@ -7,6 +7,7 @@ import type {
   RetryVersionsResponse,
   RetryCommandResponse,
   DependencyTreeResponse,
+  PipelineDetail,
 } from '@/types';
 
 /** 历史日志响应（REST 模式） */
@@ -166,6 +167,19 @@ export function useRetryRun() {
       queryClient.invalidateQueries({ queryKey: ['run', variables.runId] });
       queryClient.invalidateQueries({ queryKey: ['retryVersions', variables.runId] });
     },
+  });
+}
+
+/** 获取历史运行时的流水线快照（执行时的版本） */
+export function usePipelineSnapshot(runId: string | undefined) {
+  return useQuery<PipelineDetail>({
+    queryKey: ['pipelineSnapshot', runId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/api/runs/${runId}/pipeline-snapshot`);
+      return res.data;
+    },
+    enabled: !!runId,
+    staleTime: Infinity,
   });
 }
 

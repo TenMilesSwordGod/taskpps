@@ -35,8 +35,8 @@ export function useSSELogs(runId: string | undefined) {
       const taskName = colonIndex > 0 ? data.substring(0, colonIndex) : '';
       const raw = colonIndex > 0 ? data.substring(colonIndex + 2) : data;
 
-      // 单条 SSE 事件可能含多行（批量推送），按行拆分并过滤空行
-      const lines = raw.split(/\r\n|\r|\n/).filter((l) => l.length > 0);
+      // 按换行拆分，但保留 \r（用于进度条等覆盖显示）
+      const lines = raw.split(/\r?\n/).filter((l) => l.length > 0);
       if (lines.length === 0) return;
 
       setLogs((prev) => {

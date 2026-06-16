@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
 import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRun, useCancelRun, useRunConsole } from '@/api/runs';
+import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot } from '@/api/runs';
 import { usePipeline } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
@@ -42,7 +42,10 @@ function parseUTC(s: string): number {
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: run, isLoading: runLoading } = useRun(id);
-  const { data: pipeline } = usePipeline(run?.pipeline_file);
+  const { data: snapshotPipeline } = usePipelineSnapshot(id);
+  const { data: currentPipeline } = usePipeline(run?.pipeline_file);
+  // 优先使用历史快照，快照不存在时回退到当前 pipeline
+  const pipeline = snapshotPipeline ?? currentPipeline;
   const cancelRun = useCancelRun();
   const queryClient = useQueryClient();
 
