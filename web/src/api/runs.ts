@@ -119,6 +119,21 @@ export function useCleanRuns() {
   });
 }
 
+/** 删除单个运行 */
+export function useDeleteRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (runId: string) => {
+      const res = await apiClient.delete(`/api/runs/${runId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['runs'] });
+    },
+  });
+}
+
 /** Pipeline console 日志（engine 写入的结构化 ERROR/WARN 日志） */
 export interface RunConsoleResponse {
   log_path: string;

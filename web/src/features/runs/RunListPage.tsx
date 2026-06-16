@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, Play, Trash2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
-import { useRuns, useCleanRuns } from '@/api/runs';
+import { useRuns, useCleanRuns, useDeleteRun } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import type { RunResponse, RunStatus } from '@/types';
@@ -39,11 +39,13 @@ export default function RunListPage() {
   const { message } = App.useApp();
   const [statusFilter, setStatusFilter] = useState<RunStatus | undefined>();
   const [pipelineFilter, setPipelineFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [cleanOpen, setCleanOpen] = useState(false);
   const [cleanForm] = Form.useForm();
   const cleanRuns = useCleanRuns();
+  const deleteRun = useDeleteRun();
 
   const { data, isLoading } = useRuns();
 
@@ -62,18 +64,20 @@ export default function RunListPage() {
   // 前端过滤
   const filtered = useMemo(() => {
     const all = data?.items ?? [];
-    if (!statusFilter && !pipelineFilter && !dateRange) return all;
+    if (!statusFilter && !pipelineFilter && !projectFilter && !dateRange) return all;
     const kw = pipelineFilter.toLowerCase();
+    const pkw = projectFilter.toLowerCase();
     return all.filter((run) => {
       if (statusFilter && run.status !== statusFilter) return false;
       if (kw && !run.pipeline_name.toLowerCase().includes(kw)) return false;
+      if (pkw && !(run.project_id || '').toLowerCase().includes(pkw)) return false;
       if (dateRange) {
         const created = dayjs(run.created_at);
         if (created.isBefore(dateRange[0]) || created.isAfter(dateRange[1])) return false;
       }
       return true;
     });
-  }, [data?.items, statusFilter, pipelineFilter, dateRange]);
+  }, [data?.items, statusFilter, pipelineFilter, projectFilter, dateRange]);
 
   // 打开清理弹窗时重置表单
   const handleOpenClean = useCallback(() => {
@@ -102,6 +106,27 @@ export default function RunListPage() {
   const handleOpenDetail = useCallback(
     (id: string) => navigate(`/runs/${id}`),
     [navigate],
+  );
+
+  const handleDeleteSingle = useCallback(
+    (id: string) => {
+      Modal.confirm({
+        title: '确认删除',
+        content: '删除后不可恢复，确认删除该运行记录？',
+        okText: '删除',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: async () => {
+          try {
+            await deleteRun.mutateAsync(id);
+            message.success('已删除');
+          } catch {
+            message.error('删除失败');
+          }
+        },
+      });
+    },
+    [deleteRun, message],
   );
 
   const columns = useMemo(() => [
@@ -154,17 +179,22 @@ export default function RunListPage() {
     {
       title: '操作',
       key: 'action',
-      width: 80,
+      width: 140,
       render: (_: unknown, record: RunResponse) => (
-        <Button type="link" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.id)}>
-          查看
-        </Button>
+        <Space size={4}>
+          <Button type="link" size="small" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.id)}>
+            查看
+          </Button>
+          <Button type="link" size="small" danger icon={<Trash2 size={14} />} onClick={() => handleDeleteSingle(record.id)}>
+            删除
+          </Button>
+        </Space>
       ),
     },
-  ], [handleOpenDetail, now]);
+  ], [handleOpenDetail, handleDeleteSingle, now]);
 
   return (
-    <div className="p-4">
+    <div className="flex flex-col h-full p-4 overflow-hidden">
       {/* 过滤栏 */}
       <Space style={{ marginBottom: 16 }} wrap>
         <Select
@@ -182,6 +212,13 @@ export default function RunListPage() {
           style={{ width: 200 }}
           allowClear
         />
+        <Input
+          placeholder="项目"
+          value={projectFilter}
+          onChange={(e) => setProjectFilter(e.target.value)}
+          style={{ width: 120 }}
+          allowClear
+        />
         <DatePicker.RangePicker
           value={dateRange}
           onChange={(v) => setDateRange(v as [dayjs.Dayjs, dayjs.Dayjs] | null)}
@@ -196,14 +233,17 @@ export default function RunListPage() {
       </Space>
 
       {/* 表格 */}
-      <Table<RunResponse>
-        rowKey="id"
-        columns={columns}
-        dataSource={filtered}
-        loading={isLoading}
-        pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-        scroll={{ y: 'calc(100vh - 280px)' }}
-      />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <Table<RunResponse>
+          rowKey="id"
+          columns={columns}
+          dataSource={filtered}
+          loading={isLoading}
+          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条`, size: 'small' }}
+          size="small"
+          scroll={{ y: 'calc(100vh - 320px)' }}
+        />
+      </div>
 
       <TriggerRunModal open={triggerOpen} onClose={() => setTriggerOpen(false)} />
 

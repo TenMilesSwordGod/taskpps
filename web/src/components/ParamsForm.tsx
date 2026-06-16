@@ -112,9 +112,9 @@ export function buildOverrideParams(
     params[field.path] = parsed;
   }
 
-  const envVal = formValues['config_env'] as Record<string, string> | undefined;
+  const envVal = (formValues['config_env'] || {}) as Record<string, string>;
   const currentEnv = (config['env'] || {}) as Record<string, string>;
-  if (envVal && Object.keys(envVal).length > 0 && JSON.stringify(envVal) !== JSON.stringify(currentEnv)) {
+  if (JSON.stringify(envVal) !== JSON.stringify(currentEnv)) {
     params['config.env'] = envVal;
   }
 
@@ -132,9 +132,9 @@ export function buildOverrideParams(
       params[`tasks["${task.name}"].${field.label}`] = parsed;
     }
 
-    const taskEnvVal = formValues[`task_${task.name}_env`] as Record<string, string> | undefined;
+    const taskEnvVal = (formValues[`task_${task.name}_env`] || {}) as Record<string, string>;
     const taskCurrentEnv = (task['env'] || {}) as Record<string, string>;
-    if (taskEnvVal && Object.keys(taskEnvVal).length > 0 && JSON.stringify(taskEnvVal) !== JSON.stringify(taskCurrentEnv)) {
+    if (JSON.stringify(taskEnvVal) !== JSON.stringify(taskCurrentEnv)) {
       params[`tasks["${task.name}"].env`] = taskEnvVal;
     }
   }

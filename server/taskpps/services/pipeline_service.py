@@ -394,6 +394,26 @@ class PipelineService:
 
             return False
 
+    async def delete_run(self, run_id: str) -> bool:
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+
+            runs = await run_repo.list_runs(limit=10000)
+            target = None
+            for run in runs:
+                if run.id == run_id:
+                    target = run
+                    break
+
+            if not target:
+                return False
+
+            self._delete_run_logs(target)
+            await task_repo.delete_tasks_for_run(run_id)
+            deleted = await run_repo.delete_run_by_id(run_id)
+            return deleted > 0
+
     async def clean_runs(self, older_than: int | None = None, keep: int | None = None, force: bool = False) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)

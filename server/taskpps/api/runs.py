@@ -140,9 +140,9 @@ async def get_run_logs(
                     if new_content:
                         had_output = True
                         positions[task_name] = f.tell()
-                        for line in new_content.split('\n'):
-                            if line:
-                                yield {"event": "log", "data": f"{task_name}: {line}"}
+                        raw_lines = new_content.split('\n')
+                        for line in raw_lines[:-1] if raw_lines[-1] == '' else raw_lines:
+                            yield {"event": "log", "data": f"{task_name}: {line}"}
 
                 task_status = statuses.get(task_name)
                 is_active = task_status and task_status not in (
@@ -158,9 +158,8 @@ async def get_run_logs(
                             more = f.read()  # pragma: no cover
                             if more:  # pragma: no cover
                                 positions[task_name] = f.tell()  # pragma: no cover
-                                for line in more.split('\n'):  # pragma: no cover
-                                    if line:  # pragma: no cover
-                                        yield {"event": "log", "data": f"{task_name}: {line}"}  # pragma: no cover
+                                for line in more.split('\n')[:-1] if more.endswith('\n') else more.split('\n'):  # pragma: no cover
+                                    yield {"event": "log", "data": f"{task_name}: {line}"}  # pragma: no cover
 
             if active:  # pragma: no cover
                 await asyncio.sleep(0.3)  # pragma: no cover
@@ -235,6 +234,21 @@ async def get_run_console(
         },
         headers=headers,
     )
+
+
+@router.delete("/{run_id}")
+async def delete_run(run_id: str):
+    try:
+        result = await _pipeline_service.delete_run(run_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Run not found")
+        return {"status": "deleted", "run_id": run_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.delete("/", response_model=CleanResponse)
@@ -359,9 +373,9 @@ async def get_retry_logs(
                 new_content = f.read()
                 if new_content:
                     position = f.tell()
-                    for line in new_content.split('\n'):
-                        if line:
-                            yield {"event": "retry_log", "data": line}
+                    raw_lines = new_content.split('\n')
+                    for line in raw_lines[:-1] if raw_lines[-1] == '' else raw_lines:
+                        yield {"event": "retry_log", "data": line}
             async with get_session_factory()() as session:
                 retry_repo = RetryRecordRepository(session)
                 record = await retry_repo.get_retry_record(retry_id)

@@ -161,6 +161,12 @@ class RunRepository:
         await self.session.commit()
         return result.rowcount
 
+    async def delete_run_by_id(self, run_id: str) -> int:
+        stmt = delete(PipelineRun).where(PipelineRun.id == run_id)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
+
 
 class TaskRunRepository:
     def __init__(self, session: AsyncSession):
