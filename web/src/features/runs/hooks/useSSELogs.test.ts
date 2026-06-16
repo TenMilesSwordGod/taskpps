@@ -83,11 +83,11 @@ describe('useSSELogs()', () => {
     expect(result.current.logs[0].content).toBe('orphan line')
   })
 
-  it('单事件多行：按换行拆分并跳过空行', () => {
+  it('单事件多行：按换行拆分并保留空行', () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     act(() => MockEventSource.instances[0].emit('log', 'build: line1\nline2\n\nline3'))
-    expect(result.current.logs).toHaveLength(3)
-    expect(result.current.logs.map((l) => l.content)).toEqual(['line1', 'line2', 'line3'])
+    expect(result.current.logs).toHaveLength(4)
+    expect(result.current.logs.map((l) => l.content)).toEqual(['line1', 'line2', '', 'line3'])
     expect(result.current.logs.every((l) => l.taskName === 'build')).toBe(true)
   })
 
@@ -231,26 +231,23 @@ describe('useSSELogs()', () => {
     expect(result.current.logs[0].content).toHaveLength(10_000)
   })
 
-  it('\\r\\n 换行符正确拆分', () => {
+  it('\r\n 换行符正确拆分，同时剥离 \r', () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     act(() => MockEventSource.instances[0].emit('log', 'build: a\r\nbuild: b\r\n\r\nbuild: c'))
-    expect(result.current.logs).toHaveLength(3)
-    // 注意：仅首个 ": " 被解析为 taskName，后续行保留完整文本
-    expect(result.current.logs.map((l) => l.content)).toEqual(['a', 'build: b', 'build: c'])
+    expect(result.current.logs).toHaveLength(4)
+    expect(result.current.logs.map((l) => l.content)).toEqual(['a', 'build: b', '', 'build: c'])
   })
 
-  it('\\r 不作为独立换行符拆分（保留进度条等覆盖输出）', () => {
+  it('\r 字符全局剥离（清理 \\r\\n 残留）', () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     act(() => MockEventSource.instances[0].emit('log', 'build: a\rbuild: b'))
-    // 不再按 \r 拆分，保留为一行（用于进度条等场景）
     expect(result.current.logs).toHaveLength(1)
-    expect(result.current.logs[0].content).toBe('a\rbuild: b')
+    expect(result.current.logs[0].content).toBe('abuild: b')
   })
 
-  it('全空白行：仅过滤空字符串，纯空格/制表符行保留', () => {
+  it('空行保留：仅过滤末尾空元素，中间空白行保留', () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     act(() => MockEventSource.instances[0].emit('log', 'build: a\n   \n\t\nbuild: b'))
-    // 空白行（空格、制表符）length > 0 不会被过滤；仅空字符串被过滤
     expect(result.current.logs).toHaveLength(4)
     expect(result.current.logs.map((l) => l.content)).toEqual(['a', '   ', '\t', 'build: b'])
   })

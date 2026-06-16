@@ -231,7 +231,7 @@ export default function RunListPage() {
       </Space>
 
       {/* 表格 */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0">
         <Table<RunResponse>
           rowKey="id"
           columns={columns}
@@ -239,7 +239,7 @@ export default function RunListPage() {
           loading={isLoading}
           pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条`, size: 'small' }}
           size="small"
-          scroll={{ y: 'calc(100vh - 320px)' }}
+          scroll={{ y: 'calc(100vh - 360px)' }}
         />
       </div>
 

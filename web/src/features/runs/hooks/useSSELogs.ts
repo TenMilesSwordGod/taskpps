@@ -31,12 +31,18 @@ export function useSSELogs(runId: string | undefined) {
 
     es.addEventListener('log', (e) => {
       const data = e.data as string;
+      if (!data) return;
       const colonIndex = data.indexOf(': ');
       const taskName = colonIndex > 0 ? data.substring(0, colonIndex) : '';
       const raw = colonIndex > 0 ? data.substring(colonIndex + 2) : data;
 
-      // 按换行拆分，但保留 \r（用于进度条等覆盖显示）
-      const lines = raw.split(/\r?\n/).filter((l) => l.length > 0);
+      // 按换行拆分，保留空行（日志空行有意义），去掉 \r
+      const cleanRaw = raw.replace(/\r/g, '');
+      const lines = cleanRaw.split('\n');
+      // 仅去除 split 产生的末尾空元素，保留中间空行
+      while (lines.length > 1 && lines[lines.length - 1] === '') {
+        lines.pop();
+      }
       if (lines.length === 0) return;
 
       setLogs((prev) => {

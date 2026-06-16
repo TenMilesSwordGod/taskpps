@@ -35,6 +35,27 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 _pipeline_service = PipelineService()
 
 
+def _yield_complete_lines(new_content: str):
+    u"""将文本按换行分割，只返回完整行（以 \\n 结尾），剥离 \\r。
+
+    返回 (lines, advance)：
+    - lines: 完整行列表（不含换行符，\\r 已剥离）
+    - advance: 应从文件读取位置前进的字节数
+    """
+    lines: list[str] = []
+    advance = 0
+    if not new_content:
+        return lines, advance
+    last_nl = new_content.rfind('\n')
+    if last_nl < 0:
+        return lines, advance
+    advance = last_nl + 1
+    complete = new_content[:advance]
+    for line in complete.split('\n')[:-1]:
+        lines.append(line.rstrip('\r'))
+    return lines, advance
+
+
 @router.post("/", status_code=201)
 async def create_run(body: CreateRunRequest):
     try:
@@ -139,9 +160,9 @@ async def get_run_logs(
                     new_content = f.read()
                     if new_content:
                         had_output = True
-                        positions[task_name] = f.tell()
-                        raw_lines = new_content.split('\n')
-                        for line in raw_lines[:-1] if raw_lines[-1] == '' else raw_lines:
+                        lines, advance = _yield_complete_lines(new_content)
+                        positions[task_name] += advance
+                        for line in lines:
                             yield {"event": "log", "data": f"{task_name}: {line}"}
 
                 task_status = statuses.get(task_name)
@@ -157,8 +178,9 @@ async def get_run_logs(
                             f.seek(positions[task_name])  # pragma: no cover
                             more = f.read()  # pragma: no cover
                             if more:  # pragma: no cover
-                                positions[task_name] = f.tell()  # pragma: no cover
-                                for line in more.split('\n')[:-1] if more.endswith('\n') else more.split('\n'):  # pragma: no cover
+                                lines, advance = _yield_complete_lines(more)  # pragma: no cover
+                                positions[task_name] += advance  # pragma: no cover
+                                for line in lines:  # pragma: no cover
                                     yield {"event": "log", "data": f"{task_name}: {line}"}  # pragma: no cover
 
             if active:  # pragma: no cover
@@ -372,9 +394,9 @@ async def get_retry_logs(
                 f.seek(position)
                 new_content = f.read()
                 if new_content:
-                    position = f.tell()
-                    raw_lines = new_content.split('\n')
-                    for line in raw_lines[:-1] if raw_lines[-1] == '' else raw_lines:
+                    lines, advance = _yield_complete_lines(new_content)
+                    position += advance
+                    for line in lines:
                         yield {"event": "retry_log", "data": line}
             async with get_session_factory()() as session:
                 retry_repo = RetryRecordRepository(session)
