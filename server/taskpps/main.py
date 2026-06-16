@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
@@ -28,6 +29,66 @@ def mark_external_engine():
     _external_engine = True
 
 
+async def _recover_stale_runs() -> None:
+    """启动时将崩溃后卡在 RUNNING/PENDING 状态的 run 恢复为 FAILED。
+
+    服务器崩溃时 PipelineRunner.run() 的 finally 块无法执行，
+    数据库中的 run 状态会永远停留在 RUNNING。此函数在启动时扫描
+    这些残留记录并重置为终态，防止幽灵运行阻塞任务槽。
+    """
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
+    from taskpps.models.run import RunStatus, TaskStatus
+
+    now = datetime.now(timezone.utc)
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        task_repo = TaskRunRepository(session)
+        retry_repo = RetryRecordRepository(session)
+
+        # 查找所有非终态的 run
+        runs = await run_repo.list_runs(limit=10000)
+        stale_runs = [r for r in runs if r.status in (RunStatus.RUNNING, RunStatus.PENDING)]
+
+        if not stale_runs:
+            return
+
+        logger.warning("发现 %d 个停滞运行（状态为 RUNNING/PENDING），正在恢复为 FAILED", len(stale_runs))
+
+        for run in stale_runs:
+            # 将 run 状态重置为 FAILED
+            await run_repo.update_run_status(
+                run.id,
+                RunStatus.FAILED,
+                finished_at=now,
+                error="服务器重启恢复：运行状态从 RUNNING/PENDING 重置为 FAILED",
+            )
+
+            # 将该 run 下 RUNNING/PENDING 的 task_runs 重置为 FAILED
+            tasks = await task_repo.list_task_runs(run.id)
+            for t in tasks:
+                if t.status in (TaskStatus.RUNNING, TaskStatus.PENDING):
+                    await task_repo.update_task_status(
+                        t.id,
+                        TaskStatus.FAILED,
+                        error="服务器重启恢复：任务状态重置为 FAILED",
+                        finished_at=now,
+                    )
+
+            # 将该 run 下 RUNNING/PENDING 的 retry_records 重置为 FAILED
+            retries = await retry_repo.list_retries_by_run(run.id)
+            for r in retries:
+                if r.status in (TaskStatus.RUNNING, TaskStatus.PENDING):
+                    await retry_repo.update_retry_status(
+                        r.id,
+                        TaskStatus.FAILED,
+                        error="服务器重启恢复：重试记录状态重置为 FAILED",
+                        finished_at=now,
+                    )
+
+        logger.info("已恢复 %d 个停滞运行", len(stale_runs))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _plugin_manager
@@ -51,6 +112,7 @@ async def lifespan(app: FastAPI):
     if settings.server.api_key is None:
         logger.warning("No API key configured — all API endpoints are accessible without authentication")
     await init_db()
+    await _recover_stale_runs()
 
     _plugin_manager = PluginManager()
     _plugin_manager.discover_plugins()

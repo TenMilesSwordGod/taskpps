@@ -53,7 +53,7 @@ class TaskRun(SQLModel, table=True):
     __tablename__ = "task_runs"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12], primary_key=True)
-    run_id: str = Field(foreign_key="runs.id")
+    run_id: str = Field(foreign_key="runs.id", ondelete="CASCADE")
     task_name: str
     subpipeline_name: str = ""
     task_type: TaskType = TaskType.COMMAND
@@ -71,8 +71,8 @@ class TaskRetryRecord(SQLModel, table=True):
     __tablename__ = "task_retry_records"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12], primary_key=True)
-    run_id: str = Field(foreign_key="runs.id")
-    task_run_id: str = Field(foreign_key="task_runs.id")
+    run_id: str = Field(foreign_key="runs.id", ondelete="CASCADE")
+    task_run_id: str = Field(foreign_key="task_runs.id", ondelete="CASCADE")
     task_name: str
     subpipeline_name: str = ""
     retry_version: int

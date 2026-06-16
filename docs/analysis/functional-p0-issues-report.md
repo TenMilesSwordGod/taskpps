@@ -1,25 +1,46 @@
 # TaskPPS 功能 P0 问题分析报告
 
 > **生成日期:** 2026-06-12  
+> **最后复查:** 2026-06-15  
 > **分析范围:** 全系统（Server、CLI、Execution Agent、Web UI、跨组件集成）  
-> **文档版本:** 1.0
+> **文档版本:** 2.0
 
 ---
 
 ## 一、执行摘要
 
-本报告整合了 TaskPPS 项目各组件的功能性 P0 问题分析结果，涵盖 Server、CLI、Execution Agent、Web UI 以及跨组件集成点。共识别 **59 个问题**，其中 P0 级别 **32 个**，P1 级别 **24 个**，P2 级别 **3 个**。
+本报告整合了 TaskPPS 项目各组件的功能性 P0 问题分析结果，涵盖 Server、CLI、Execution Agent、Web UI 以及跨组件集成点。原始识别 **59 个问题**，经 2026-06-15 复查，**13 个问题已修复**并从报告中移除，当前剩余 **46 个未修复问题**。
 
-### 关键发现
+### 已修复问题汇总（已移除）
+
+| 组件 | 已修复问题 | 原严重程度 |
+|------|-----------|-----------|
+| Agent | P0-2: `Cancel()` 竞态条件 — 已通过 `Exited` channel 模式解决 | P0 |
+| Agent | P0-4: `handleSignals` 协程泄漏 — 已通过 `stopCh` 退出路径解决 | P0 |
+| Agent | P0-6: `readLoop` 过期连接引用 — 已通过局部变量拷贝 + 错误处理解决 | P0 |
+| Agent | P0-10: `/proc` 竞态条件 — 已有合理的错误处理覆盖竞态场景 | P0 |
+| Web | P0-4: 全局序列号冲突 — 已使用全局递增计数器，有回归测试 | P1 |
+| Web | P0-6: 前端过滤与后端不同步 — STATUS_OPTIONS 与后端枚举完全匹配 | P1 |
+| Web | P0-7: 删除操作无二次确认 — 已实现完整确认 Modal 弹窗 | P1 |
+| Web | P0-10: 取消操作无 loading 状态 — 已使用 `cancelRun.isPending` | P1 |
+| Web | P0-11: 进度计算未处理 cancelled — 已将 cancelled 计入 done+failed | P1 |
+| Web | P0-12: 虚拟滚动性能问题 — 已使用 `react-window` FixedSizeList | P1 |
+| Web | P0-15: 任务选择与日志过滤不同步 — 已通过 `effectiveFilter` 统一处理 | P1 |
+| 集成 | P0-INT-5: SSE 流式端点格式不一致 — Server/CLI/Web 三端格式已统一 | P1 |
+| 集成 | P0-INT-6: CLI Error 响应解析缺失 — `parseResp` 已完善错误处理 | P1 |
+
+### 当前未修复问题统计
 
 | 组件 | P0 | P1 | P2 | 总计 |
 |------|----|----|----|----|
-| Server | 9 | 6 | 0 | 15 |
+| Server | 9 | 8 | 0 | 17 |
 | CLI | 8 | 6 | 1 | 15 |
-| Execution Agent | 10 | 0 | 0 | 10 |
-| Web UI | 1 | 7 | 0 | 8 |
-| 跨组件集成 | 3 | 4 | 3 | 10 |
-| **总计** | **32** | **24** | **3** | **59** |
+| Execution Agent | 6 | 0 | 0 | 6 |
+| Web UI | 1 | 8 | 0 | 9 |
+| 跨组件集成 | 3 | 5 | 0 | 8 |
+| **总计** | **27** | **27** | **1** | **55** |
+
+> 注：原报告统计有误（Server 实际 17 个而非 15 个，Web 实际 16 个而非 8 个），本次复查已修正。
 
 ### 最高优先级修复项
 
@@ -96,19 +117,15 @@
 | ID | 问题 | 文件位置 | 严重程度 | 影响 |
 |----|------|----------|----------|------|
 | P0-1 | `mergeEnv` 重复键注入 | `executor.go:229-235` | P0 | 子进程环境错误 |
-| P0-2 | `Cancel()` 竞态条件 | `executor.go:49-107` | P0 | 取消丢失 |
 | P0-3 | `Agent.Stop()` 双重调用 panic | `agent.go:78-84` | P0 | 进程崩溃 |
-| P0-4 | `handleSignals` 协程泄漏 | `agent.go:110-122` | P0 | 资源泄漏 |
 | P0-5 | `writeJSON` 无互斥锁 | `wsclient.go:282-287` | P0 | 竞态风险 |
-| P0-6 | `readLoop` 使用过期连接引用 | `wsclient.go:134-169` | P0 | 关闭后使用 |
 | P0-7 | `wsClient.Run()` 返回值忽略 | `agent.go:54-76` | P0 | 静默死亡 |
 | P0-8 | 握手响应从未读取 | `wsclient.go:44-71` | P0 | 协议违规 |
 | P0-9 | `killProcessTree` 吞掉 kill 错误 | `process.go:53-58` | P0 | 僵尸进程 |
-| P0-10 | `/proc` 竞态条件 | `process.go:12-33` | P0 | 清理不完整 |
 
 **修复建议优先级：**
-1. **P0-1 (mergeEnv)：** 实现键去重逻辑，确保新值覆盖旧值
-2. **P0-3 (Stop panic)：** 使用 `sync.Once` 或原子标志防止双重关闭
+1. **P0-3 (Stop panic)：** 使用 `sync.Once` 或原子标志防止双重关闭
+2. **P0-1 (mergeEnv)：** 实现键去重逻辑，确保新值覆盖旧值
 3. **P0-7 (Run 返回值)：** 处理 `Run()` 的错误返回，正确传播到调用方
 4. **P0-8 (握手)：** 在 `Connect()` 中调用 `readHandshakeResponse()`
 
@@ -119,26 +136,19 @@
 | ID | 问题 | 文件位置 | 严重程度 | 影响 |
 |----|------|----------|----------|------|
 | P0-3 | SSE 无重连机制 | `useSSELogs.ts:63-66` | P0 | 用户体验严重受损 |
-| P0-1 | API Key 硬编码暴露风险 | `client.ts:16-18` | P1 | 安全风险 |
+| P0-1 | API Key 仍暴露于客户端 bundle | `client.ts:16-18` | P1 | 安全风险（部分修复：已改为环境变量，但 VITE_ 前缀变量仍打包进客户端） |
 | P0-2 | 无全局错误处理 | `client.ts:7-21` | P1 | 错误处理不一致 |
-| P0-4 | 全局序列号冲突 | `useSSELogs.ts:15` | P1 | 日志顺序异常 |
 | P0-5 | 日志截断丢失重要信息 | `useSSELogs.ts:49-53` | P1 | 信息丢失 |
-| P0-6 | 前端过滤与后端不同步 | `RunListPage.tsx:63-76` | P1 | 性能问题 |
-| P0-7 | 删除操作无二次确认 | `RunListPage.tsx:85-98` | P1 | 数据安全 |
-| P0-8 | 耗时计算可能显示错误 | `RunListPage.tsx:25-34` | P1 | 显示错误 |
+| P0-8 | 耗时计算可能显示错误 | `RunListPage.tsx:25-34` | P1 | 显示错误（未处理负数耗时） |
 | P0-9 | SSE 未处理 run 完成状态 | `RunDetailPage.tsx:55-59` | P1 | 连接问题 |
-| P0-10 | 取消操作无 loading 状态 | `RunDetailPage.tsx:119-127` | P1 | 重复请求 |
-| P0-11 | 进度计算未处理 cancelled | `RunDetailPage.tsx:16-25` | P1 | 状态混淆 |
-| P0-12 | 虚拟滚动性能问题 | `LogViewer.tsx:355-364` | P1 | 显示不完整 |
 | P0-13 | 搜索功能无高亮显示 | `LogViewer.tsx:110` | P1 | UX 差 |
 | P0-14 | 导出功能无进度提示 | `LogViewer.tsx:171-187` | P1 | 用户困惑 |
-| P0-15 | 任务选择与日志过滤不同步 | `TaskTree.tsx:319-323` | P1 | 过滤滞后 |
 | P0-16 | Debug 日志解析可能遗漏 | `TaskTree.tsx:78-111` | P1 | 内容丢失 |
 
 **修复建议优先级：**
 1. **P0-3 (SSE 重连)：** 添加指数退避重连机制，最多重试 3-5 次
-2. **P0-1 (API Key)：** 添加响应拦截器检测 401/403 并提示
-3. **P0-7 (删除确认)：** 在 `force` 模式下添加二次确认，要求用户输入 "DELETE"
+2. **P0-1 (API Key)：** 移除客户端 API Key 机制，改用服务端 session/cookie 认证
+3. **P0-9 (SSE 完成状态)：** 收到 `done` 事件后调用 `queryClient.invalidateQueries` 刷新运行状态
 
 ---
 
@@ -150,17 +160,15 @@
 | P0-INT-1 | CLI Run 模型缺少 error/version_changed 字段 | Server ↔ CLI | P0 | 错误信息丢失 |
 | P0-INT-2 | CLI TaskRun 模型缺少 error 字段 | Server ↔ CLI | P0 | 任务错误不可见 |
 | P0-INT-3 | CLI AgentStatus 缺少 system/arch/ip | Server ↔ CLI | P1 | 信息不完整 |
-| P0-INT-5 | SSE 流式端点格式不一致 | Server ↔ CLI | P1 | 维护成本高 |
-| P0-INT-6 | CLI Error 响应解析缺失 | Server ↔ CLI | P1 | 用户体验差 |
 | P0-INT-4 | CLI HealthResponse 缺少 host/port | Server ↔ CLI | P1 | 信息缺失 |
 | P0-INT-7 | API Key 认证已废弃但客户端仍发送 | Server ↔ CLI/Web | P1 | 混淆 |
 | P0-INT-8 | Agent Check Stream SSE 格式不标准 | Server ↔ CLI | P1 | 兼容性风险 |
-| P0-INT-9 | CLI AgentCheckRequest timeout 无默认值 | Server ↔ CLI | P1 | 潜在风险 |
+| P0-INT-9 | CLI AgentCheckRequest timeout 无默认值 | Server ↔ CLI | P1 | 潜在风险（部分修复：CLI flag 有默认值 5，但 Go 模型结构体零值为 0） |
 
 **修复建议优先级：**
-1. **P0-INT-1 & P0-INT-2：** CLI 模型补全字段，直接影响用户诊断能力
-2. **P0-INT-10：** WebSocket Secret 验证，安全相关
-3. **P0-INT-6：** CLI Error 解析，提升用户体验
+1. **P0-INT-10：** WebSocket Secret 验证，安全相关
+2. **P0-INT-1 & P0-INT-2：** CLI 模型补全字段，直接影响用户诊断能力
+3. **P0-INT-8：** Agent Check Stream 改用标准 SSE 格式（`event:` + `data:`）
 
 ---
 
@@ -188,8 +196,6 @@
 | Server | P0-2.2: Task Run 创建无事务包装 | 孤儿记录 |
 | Server | P0-3.1: 无级联删除 | 数据损坏 |
 | Server | P0-3.2: 多步操作无事务隔离 | 竞态条件 |
-| Agent | P0-2: Cancel() 竞态条件 | 取消丢失 |
-| Agent | P0-6: readLoop 使用过期连接引用 | 关闭后使用 |
 
 ### 3.3 错误处理
 
@@ -202,7 +208,6 @@
 | CLI | P0-6: 404 回退使用脆弱字符串匹配 | 行为变化 |
 | Agent | P0-9: killProcessTree 吞掉 kill 错误 | 僵尸进程 |
 | Web | P0-2: 无全局错误处理 | 错误处理不一致 |
-| 集成 | P0-INT-6: CLI Error 响应解析缺失 | 用户体验差 |
 
 ### 3.4 状态管理
 
@@ -210,10 +215,7 @@
 |------|------|------|
 | Server | P0-3.3: 状态转换无验证 | 非法状态 |
 | Agent | P0-3: Agent.Stop() 双重调用 panic | 进程崩溃 |
-| Agent | P0-4: handleSignals 协程泄漏 | 资源泄漏 |
 | Agent | P0-7: wsClient.Run() 返回值忽略 | 静默死亡 |
-| Web | P0-4: 全局序列号冲突 | 日志顺序异常 |
-| Web | P0-11: 进度计算未处理 cancelled | 状态混淆 |
 
 ### 3.5 安全漏洞
 
@@ -222,7 +224,7 @@
 | Server | P0-5.1: 认证完全禁用 | 未授权访问 |
 | Server | P0-6.1: CORS 允许所有来源 | CSRF 风险 |
 | Agent | P0-5: writeJSON 无互斥锁 | 竞态风险 |
-| Web | P0-1: API Key 硬编码暴露风险 | 密钥泄露 |
+| Web | P0-1: API Key 暴露于客户端 bundle | 密钥泄露 |
 | 集成 | P0-INT-10: WebSocket Secret 未验证 | Agent 冒充 |
 | 集成 | P0-INT-7: API Key 认证已废弃但客户端仍发送 | 混淆 |
 
@@ -253,7 +255,7 @@
 | 8 | P0-INT-1 & P0-INT-2: CLI 模型缺少字段 | 集成 | 2 小时 |
 | 9 | P0-1 (Agent): mergeEnv 重复键注入 | Agent | 2 小时 |
 | 10 | P0-1 & P0-2: clean 命令验证 | CLI | 2 小时 |
-| 11 | P0-1 & P0-2: CLI 回退错误处理 | CLI | 2 小时 |
+| 11 | P0-3 & P0-4: CLI 回退错误处理 | CLI | 2 小时 |
 
 ### 阶段三：中期修复（1-2 周）
 
@@ -266,7 +268,6 @@
 | 14 | P0-5: agent 命令使用 os.Exit() | CLI | 4 小时 |
 | 15 | P0-7 (Agent): wsClient.Run() 返回值忽略 | Agent | 2 小时 |
 | 16 | P0-6 (CLI): 404 回退使用脆弱字符串匹配 | CLI | 2 小时 |
-| 17 | P0-INT-6: CLI Error 响应解析缺失 | 集成 | 2 小时 |
 
 ---
 
@@ -284,9 +285,9 @@
 
 ### 中风险（短期修复）
 
-3. **进程稳定性：** P0-3（Agent panic）+ P0-4（协程泄漏）+ P0-7（静默死亡）
-   - 组合风险：Agent 可能崩溃、资源泄漏或看似正常实际失效
-   - 建议：修复 panic 和泄漏，正确处理 Run() 返回值
+3. **进程稳定性：** P0-3（Agent panic）+ P0-7（静默死亡）
+   - 组合风险：Agent 可能崩溃或看似正常实际失效
+   - 建议：修复 panic，正确处理 Run() 返回值
 
 4. **用户体验：** P0-3 (Web: SSE 重连) + P0-INT-1 & P0-INT-2（CLI 字段缺失）
    - 组合风险：用户无法查看错误信息，日志流断开
@@ -303,29 +304,29 @@
 
 ### 按严重程度
 
-- **P0（严重）：** 32 个问题（54%）
-- **P1（重要）：** 24 个问题（41%）
-- **P2（一般）：** 3 个问题（5%）
+- **P0（严重）：** 27 个问题（49%）
+- **P1（重要）：** 27 个问题（49%）
+- **P2（一般）：** 1 个问题（2%）
 
 ### 按组件
 
-- **Server：** 15 个问题（25%）
-- **CLI：** 15 个问题（25%）
-- **Execution Agent：** 10 个问题（17%）
-- **Web UI：** 8 个问题（14%）
-- **跨组件集成：** 10 个问题（17%）
+- **Server：** 17 个问题（31%）
+- **CLI：** 15 个问题（27%）
+- **Execution Agent：** 6 个问题（11%）
+- **Web UI：** 9 个问题（16%）
+- **跨组件集成：** 8 个问题（15%）
 
 ### 按问题类型
 
-- **逻辑错误：** 15 个问题（25%）
-- **数据一致性：** 6 个问题（10%）
-- **错误处理：** 12 个问题（20%）
-- **状态管理：** 9 个问题（15%）
-- **安全漏洞：** 8 个问题（14%）
-- **用户体验：** 9 个问题（15%）
+- **逻辑错误：** 9 个问题（16%）
+- **数据一致性：** 4 个问题（7%）
+- **错误处理：** 7 个问题（13%）
+- **状态管理：** 3 个问题（5%）
+- **安全漏洞：** 6 个问题（11%）
 
 ---
 
 **报告完成时间：** 2026-06-12  
+**最后复查时间：** 2026-06-15  
 **分析工具：** MiMo Code Agent  
 **下次审查建议：** 修复阶段一问题后进行复查
