@@ -43,6 +43,7 @@ export default function RunListPage() {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [cleanOpen, setCleanOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [cleanForm] = Form.useForm();
   const cleanRuns = useCleanRuns();
   const deleteRun = useDeleteRun();
@@ -110,24 +111,21 @@ export default function RunListPage() {
 
   const handleDeleteSingle = useCallback(
     (id: string) => {
-      Modal.confirm({
-        title: '确认删除',
-        content: '删除后不可恢复，确认删除该运行记录？',
-        okText: '删除',
-        okButtonProps: { danger: true },
-        cancelText: '取消',
-        onOk: async () => {
-          try {
-            await deleteRun.mutateAsync(id);
-            message.success('已删除');
-          } catch {
-            message.error('删除失败');
-          }
-        },
-      });
+      setDeleteTargetId(id);
     },
-    [deleteRun, message],
+    [],
   );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteRun.mutateAsync(deleteTargetId);
+      message.success('已删除');
+      setDeleteTargetId(null);
+    } catch {
+      message.error('删除失败');
+    }
+  }, [deleteTargetId, deleteRun, message]);
 
   const columns = useMemo(() => [
     {
@@ -191,7 +189,7 @@ export default function RunListPage() {
         </Space>
       ),
     },
-  ], [handleOpenDetail, handleDeleteSingle, now]);
+  ], [handleOpenDetail, now]);
 
   return (
     <div className="flex flex-col h-full p-4 overflow-hidden">
@@ -310,6 +308,21 @@ export default function RunListPage() {
             注意：删除操作会同时清理对应的任务日志文件，且不可恢复。
           </div>
         </Form>
+      </Modal>
+
+      {/* 删除单条确认弹窗 */}
+      <Modal
+        title="确认删除"
+        open={deleteTargetId !== null}
+        onOk={handleDeleteConfirm}
+        onCancel={() => setDeleteTargetId(null)}
+        confirmLoading={deleteRun.isPending}
+        okText="删除"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+        destroyOnClose
+      >
+        删除后不可恢复，确认删除该运行记录？
       </Modal>
     </div>
   );

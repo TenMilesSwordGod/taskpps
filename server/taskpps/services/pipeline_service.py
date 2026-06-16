@@ -40,6 +40,26 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+def _extract_env_overrides(params: dict[str, Any]) -> dict[str, str]:
+    """从 override params 中提取所有环境变量（支持 nested 和 dot-path 两种格式）"""
+    result: dict[str, str] = {}
+    # 1) nested: params["config"]["env"]
+    nested_config = params.get("config")
+    if isinstance(nested_config, dict):
+        env = nested_config.get("env")
+        if isinstance(env, dict):
+            result.update(env)
+    # 2) dot-path: params["config.env"]
+    dotpath_env = params.get("config.env")
+    if isinstance(dotpath_env, dict):
+        result.update(dotpath_env)
+    # 3) task-level env: params['tasks["name"].env']
+    for key, val in params.items():
+        if isinstance(val, dict) and key.startswith('tasks["') and key.endswith('"].env'):
+            result.update(val)
+    return result
+
+
 class PipelineService:
     # Per-pipeline asyncio.Lock to make the max_parallel check and run
     # creation atomic within a single event loop. The dict is class-level
@@ -74,8 +94,8 @@ class PipelineService:
 
             # 如果有 params, 提取其中的 config.env
             if params:
-                config_env = params.get("config", {}).get("env", {})
-                if isinstance(config_env, dict):
+                config_env = _extract_env_overrides(params)
+                if config_env:
                     loader_env.update(config_env)
 
             project_workdir = None

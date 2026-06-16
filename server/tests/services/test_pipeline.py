@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from taskpps.services.pipeline_service import PipelineService
+from taskpps.services.pipeline_service import PipelineService, _extract_env_overrides
 
 
 def _setup_config(tmp_project):
@@ -457,6 +457,59 @@ class TestPipelineServiceMore:
         clean_result = await svc.clean_runs(force=True)
         assert clean_result == {"deleted_runs": 0, "deleted_logs": 0}
 
+    @pytest.mark.asyncio
+    async def test_create_run_with_dotpath_config_env(self, setup_project, tmp_project, db_engine):
+        """#54: dot-path格式 params={"config.env":{...}} 应正确提取env用于YAML加载"""
+        pipelines_dir = tmp_project / "pipelines"
+        (pipelines_dir / "dotpath_env_test.yaml").write_text(
+            "name: dotpath_env_test\n"
+            "config:\n"
+            "  env:\n"
+            "    DEFAULT_KEY: default_val\n"
+            "tasks:\n"
+            "  - name: step1\n"
+            "    command: echo ${env.OVERRIDE_KEY}\n"
+        )
+        _setup_config(tmp_project)
+        svc = PipelineService()
+        result = await svc.create_run(
+            "dotpath_env_test.yaml",
+            params={"config.env": {"OVERRIDE_KEY": "new_value"}},
+        )
+        assert "id" in result
+        run_id = result["id"]
+        fetched = await svc.get_run(run_id)
+        assert isinstance(fetched["params"], dict)
+        # params中应包含dot-path格式的env
+        assert "config.env" in fetched["params"]
+        assert fetched["params"]["config.env"]["OVERRIDE_KEY"] == "new_value"
+
+    @pytest.mark.asyncio
+    async def test_create_run_with_dotpath_task_env(self, setup_project, tmp_project, db_engine):
+        """#54: dot-path格式 task env 应正确提取"""
+        pipelines_dir = tmp_project / "pipelines"
+        (pipelines_dir / "dotpath_task_env_test.yaml").write_text(
+            "name: dotpath_task_env_test\n"
+            "tasks:\n"
+            "  - name: step1\n"
+            "    command: echo ${env.TASK_KEY}\n"
+            "    env:\n"
+            "      TASK_KEY: default_task\n"
+        )
+        _setup_config(tmp_project)
+        svc = PipelineService()
+        result = await svc.create_run(
+            "dotpath_task_env_test.yaml",
+            params={
+                'tasks["step1"].env': {"TASK_KEY": "overridden_task_val"},
+            },
+        )
+        assert "id" in result
+        run_id = result["id"]
+        fetched = await svc.get_run(run_id)
+        assert isinstance(fetched["params"], dict)
+        assert 'tasks["step1"].env' in fetched["params"]
+
 
 class TestEnsureUTC:
     def test_naive_datetime_becomes_utc_aware(self):
@@ -483,3 +536,67 @@ class TestEnsureUTC:
         from taskpps.services.pipeline_service import _ensure_utc
 
         assert _ensure_utc(None) is None
+
+
+class TestExtractEnvOverrides:
+    def test_empty_params(self):
+        assert _extract_env_overrides({}) == {}
+
+    def test_none_params(self):
+        with pytest.raises(AttributeError):
+            _extract_env_overrides(None)
+
+    def test_nested_config_env(self):
+        result = _extract_env_overrides({"config": {"env": {"K": "V"}}})
+        assert result == {"K": "V"}
+
+    def test_dotpath_config_env(self):
+        """#54: dot-path格式必须正确提取"""
+        result = _extract_env_overrides({"config.env": {"K": "V"}})
+        assert result == {"K": "V"}
+
+    def test_dotpath_overrides_nested(self):
+        """dot-path 优先级高于 nested（后 update 覆盖）"""
+        result = _extract_env_overrides({
+            "config": {"env": {"K": "old"}},
+            "config.env": {"K": "new"},
+        })
+        assert result == {"K": "new"}
+
+    def test_task_env_dotpath(self):
+        """task 级别 env override"""
+        result = _extract_env_overrides({
+            'tasks["step1"].env': {"TASK_KEY": "val"},
+        })
+        assert result == {"TASK_KEY": "val"}
+
+    def test_config_and_task_env_merged(self):
+        """config env + task env 合并"""
+        result = _extract_env_overrides({
+            "config.env": {"GLOBAL": "g"},
+            'tasks["step1"].env': {"TASK": "t"},
+        })
+        assert result == {"GLOBAL": "g", "TASK": "t"}
+
+    def test_task_env_overrides_config(self):
+        """task env 覆盖同名 config env"""
+        result = _extract_env_overrides({
+            "config.env": {"K": "config_val"},
+            'tasks["step1"].env': {"K": "task_val"},
+        })
+        assert result == {"K": "task_val"}
+
+    def test_nested_config_not_dict(self):
+        result = _extract_env_overrides({"config": "not_dict"})
+        assert result == {}
+
+    def test_config_env_not_dict_in_dotpath(self):
+        result = _extract_env_overrides({"config.env": "not_dict"})
+        assert result == {}
+
+    def test_ignores_non_env_dotpath_keys(self):
+        result = _extract_env_overrides({
+            "options.timeout": 120,
+            "config.retry": 3,
+        })
+        assert result == {}
