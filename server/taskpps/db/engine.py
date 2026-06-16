@@ -128,6 +128,7 @@ _MIGRATIONS = {
     "task_runs": [
         ("subpipeline_name", "TEXT NOT NULL DEFAULT ''"),
         ("error", "TEXT"),
+        ("selected_retry_id", "TEXT"),
     ],
     "triggers": [
         ("project_id", "TEXT"),
