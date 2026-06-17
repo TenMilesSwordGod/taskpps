@@ -232,7 +232,7 @@ class PipelineService:
                     )
                     task_run_ids[qualified_name] = task_run.id
 
-        self._save_pipeline_snapshot(pipeline_file, pipeline_id, pipeline_version, run.id)
+        self._save_pipeline_snapshot(pipeline_file, pipeline_id, pipeline_version, run.id, project_workdir)
 
         context = ExecutionContext(pipeline=resolved, run_id=run.id, env=_extract_env_overrides(params) if params else {}, project_workdir=project_workdir)
 
@@ -258,8 +258,8 @@ class PipelineService:
         }
 
     @staticmethod
-    def _save_pipeline_snapshot(pipeline_file: str, pipeline_id: str, pipeline_version: str, run_id: str) -> None:
-        pipelines_dir = get_pipelines_dir()
+    def _save_pipeline_snapshot(pipeline_file: str, pipeline_id: str, pipeline_version: str, run_id: str, project_workdir: str | None = None) -> None:
+        pipelines_dir = get_pipelines_dir(Path(project_workdir) if project_workdir else None)
         p = Path(pipeline_file)
         if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:
             p = Path(*p.parts[1:])

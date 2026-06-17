@@ -366,6 +366,44 @@ class TestPipelineServiceMore:
         assert "id" in result
 
     @pytest.mark.asyncio
+    async def test_save_pipeline_snapshot_multi_project(self, tmp_project, db_engine):
+        """Issue #58: 非默认项目的 pipeline 快照应能正确保存"""
+        import taskpps.config as cfg
+        from pathlib import Path
+        from taskpps.config import get_logs_dir
+        from taskpps.db.engine import get_session_factory
+        from taskpps.db.repository import ProjectRepository
+
+        _setup_config(tmp_project)
+
+        other_project = tmp_project.parent / "other_project"
+        other_pipelines = other_project / "pipelines"
+        other_pipelines.mkdir(parents=True, exist_ok=True)
+        other_project_yaml = other_pipelines / "other_deploy.yaml"
+        other_project_yaml.write_text(
+            "name: other_deploy\n"
+            "tasks:\n"
+            "  - name: step1\n"
+            "    command: echo other\n"
+        )
+        other_config = other_project / "taskpps.yaml"
+        other_config.write_text("server:\n  host: 127.0.0.1\n  port: 26521\n")
+
+        async with get_session_factory()() as session:
+            repo = ProjectRepository(session)
+            project = await repo.create_project(workdir=str(other_project), name="other_project")
+            project_id = project.id
+
+        svc = PipelineService()
+        result = await svc.create_run("other_deploy.yaml", project_id=project_id)
+
+        snapshot_dir = (
+            get_logs_dir() / result["pipeline_id"] / f"v_{result['pipeline_version']}" / "builds" / result["id"]
+        )
+        snapshot = snapshot_dir / "pipeline-snapshot.yaml"
+        assert snapshot.exists(), f"快照文件不存在: {snapshot}"
+
+    @pytest.mark.asyncio
     async def test_version_changed_detection(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
 
