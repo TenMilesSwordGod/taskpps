@@ -454,7 +454,7 @@ async def get_pipeline_snapshot(run_id: str):
         if not run.pipeline_id:
             raise HTTPException(status_code=404, detail=t("Pipeline snapshot not available"))
 
-        v = run.pipeline_version or "unknown"
+        v = run.pipeline_version if run.pipeline_version else ""
         logs_dir = get_logs_dir()
         snapshot_path = logs_dir / run.pipeline_id / f"v_{v}" / "builds" / run_id / "pipeline-snapshot.yaml"
 
