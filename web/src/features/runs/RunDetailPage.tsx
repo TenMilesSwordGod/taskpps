@@ -60,6 +60,22 @@ export default function RunDetailPage() {
   // 日志：SSE 直接提供，无 SSE/REST 切换
   const baseLogs = sseResult.logs;
 
+  // SSE 状态更新：实时更新 queryClient 缓存中的任务状态
+  useEffect(() => {
+    const updates = sseResult.taskStatusUpdates;
+    if (!updates?.length || !id) return;
+    const lastUpdate = updates[updates.length - 1];
+    queryClient.setQueryData(['run', id], (old: RunResponse | undefined) => {
+      if (!old) return old;
+      return {
+        ...old,
+        tasks: old.tasks.map((t) =>
+          t.task_name === lastUpdate.task_name ? { ...t, status: lastUpdate.status } : t,
+        ),
+      };
+    });
+  }, [sseResult.taskStatusUpdates, id, queryClient]);
+
   // Debug 模式：拉取 console.log 并合并 phase 日志
   const { data: consoleData } = useRunConsole(debugVisible ? id : undefined, 500);
 
@@ -172,13 +188,6 @@ export default function RunDetailPage() {
           <Space size={12} wrap>
             <span style={{ fontSize: 18, fontWeight: 600 }}>{run.pipeline_name}</span>
             <StatusTag status={run.status} error={run.error} />
-            {run.started_at && (
-              <Tooltip title={`开始: ${new Date(run.started_at).toLocaleString('zh-CN')}${run.finished_at ? `\n结束: ${new Date(run.finished_at).toLocaleString('zh-CN')}` : ''}`}>
-                <Tag icon={<Clock size={12} />} color="default" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
-                  {formatDuration(durationMs ?? 0)}
-                </Tag>
-              </Tooltip>
-            )}
             <ProgressBadge
               done={progress.done}
               total={progress.total}
@@ -190,6 +199,13 @@ export default function RunDetailPage() {
             )}
           </Space>
           <Space>
+            {run.started_at && (
+              <Tooltip title={`开始: ${new Date(run.started_at).toLocaleString('zh-CN')}${run.finished_at ? `\n结束: ${new Date(run.finished_at).toLocaleString('zh-CN')}` : ''}`}>
+                <Tag icon={<Clock size={12} />} color="default" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
+                  {formatDuration(durationMs ?? 0)}
+                </Tag>
+              </Tooltip>
+            )}
             <Tooltip title="手动刷新运行状态">
               <Button
                 size="small"
@@ -278,6 +294,8 @@ export default function RunDetailPage() {
                   onSelect={setSelectedTaskId}
                   debugVisible={debugVisible}
                   runId={id}
+                  isLive={isLive}
+                  taskStatusUpdates={sseResult.taskStatusUpdates}
                 />
               ) : snapshotLoading ? (
                 <div className="p-3 text-gray-400 text-sm">加载历史快照中…</div>

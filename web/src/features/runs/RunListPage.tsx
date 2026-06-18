@@ -146,6 +146,15 @@ export default function RunListPage() {
       key: 'pipeline_name',
     },
     {
+      title: '文件',
+      dataIndex: 'pipeline_file',
+      key: 'pipeline_file',
+      width: 180,
+      render: (file: string) => (
+        <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{file}</span>
+      ),
+    },
+    {
       title: '项目',
       dataIndex: 'project_id',
       key: 'project_id',

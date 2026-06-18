@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 
@@ -152,6 +154,38 @@ class TestRunLogs:
         # SSE response should be 200 with text/event-stream
         assert response.status_code == 200
         assert "text/event-stream" in response.headers.get("content-type", "")
+
+    @pytest.mark.asyncio
+    async def test_logs_follow_emits_status_events(self, client, db_engine):
+        """SSE follow 模式应在任务状态变更时推送 status 事件"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        svc = PipelineService()
+        result = await svc.create_run("deploy.yaml")
+        run_id = result["id"]
+
+        response = await client.get(f"/api/runs/{run_id}/logs?follow=true")
+        assert response.status_code == 200
+
+        # 解析 SSE 事件，查找 status 事件
+        text = response.text
+        status_events = []
+        for line in text.split("\n"):
+            if line.startswith("data:") and '"task_name"' in line and '"status"' in line:
+                payload_str = line[len("data:"):].strip()
+                try:
+                    payload = json.loads(payload_str)
+                    if "task_name" in payload and "status" in payload:
+                        status_events.append(payload)
+                except json.JSONDecodeError:
+                    pass
+
+        # 至少应该有一个 status 事件（任务初始为 pending）
+        assert len(status_events) > 0, f"Expected status events in SSE stream, got: {text[:500]}"
+        # 验证 status 事件格式
+        for evt in status_events:
+            assert "task_name" in evt
+            assert "status" in evt
 
 
 class TestCleanRunsAPI:

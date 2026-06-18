@@ -262,22 +262,23 @@ export default function PipelineListPage() {
   return (
     <div className="p-4">
       <Card>
-        <div className="flex justify-between mb-4">
-          <Input.Search
-            placeholder="搜索流水线名称或文件"
-            allowClear
-            style={{ width: 300 }}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            prefix={<Search size={14} />}
-          />
-          <Space>
-            <Button icon={<RefreshCw size={14} />} onClick={() => refetch()}>刷新</Button>
-            <Button type="primary" icon={<Play size={14} />} onClick={() => handleOpenTrigger(undefined)}>触发运行</Button>
-          </Space>
-        </div>
-
         <Table
+          title={() => (
+            <div className="flex justify-between items-center">
+              <Input.Search
+                placeholder="搜索流水线名称或文件"
+                allowClear
+                style={{ width: 300 }}
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                prefix={<Search size={14} />}
+              />
+              <Space>
+                <Button icon={<RefreshCw size={14} />} onClick={() => refetch()}>刷新</Button>
+                <Button type="primary" icon={<Play size={14} />} onClick={() => handleOpenTrigger(undefined)}>触发运行</Button>
+              </Space>
+            </div>
+          )}
           rowKey={(record: Row) =>
             record.kind === 'project' ? `__proj__${record.name}`
               : record.kind === 'folder' ? `__folder__${record.name}`

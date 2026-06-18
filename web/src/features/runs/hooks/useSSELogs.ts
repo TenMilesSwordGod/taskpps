@@ -1,11 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+import type { TaskStatus } from '@/types';
+
 export interface LogEntry {
   /** 全局自增序列号，保证同毫秒内多条日志 key 唯一 */
   seq: number;
   taskName: string;
   content: string;
   timestamp: number;
+}
+
+/** 任务状态变更事件 */
+export interface TaskStatusUpdate {
+  task_name: string;
+  status: TaskStatus;
 }
 
 /** 日志最大行数（DOM 性能保护） */
@@ -19,6 +27,7 @@ export function useSSELogs(runId: string | undefined) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [connected, setConnected] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [taskStatusUpdates, setTaskStatusUpdates] = useState<TaskStatusUpdate[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -61,6 +70,17 @@ export function useSSELogs(runId: string | undefined) {
       });
     });
 
+    es.addEventListener('status', (e) => {
+      const data = e.data as string;
+      if (!data) return;
+      try {
+        const update: TaskStatusUpdate = JSON.parse(data);
+        setTaskStatusUpdates((prev) => [...prev, update]);
+      } catch {
+        // ignore malformed status events
+      }
+    });
+
     es.addEventListener('done', () => {
       setConnected(false);
       es.close();
@@ -79,5 +99,5 @@ export function useSSELogs(runId: string | undefined) {
 
   const clearLogs = useCallback(() => setLogs([]), []);
 
-  return { logs, connected, autoScroll, setAutoScroll, clearLogs };
+  return { logs, connected, autoScroll, setAutoScroll, clearLogs, taskStatusUpdates };
 }

@@ -2,9 +2,11 @@ import { useMemo, useState, useEffect } from 'react';
 import { Tree, Tooltip } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { PartitionOutlined, AppstoreOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Loader2 } from 'lucide-react';
 
 import { useRunConsole } from '@/api/runs';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
+import type { TaskStatusUpdate } from './hooks/useSSELogs';
 
 interface TaskRunInfo {
   task_name: string;
@@ -24,6 +26,10 @@ interface TaskTreeProps {
   debugVisible?: boolean;
   /** run ID（用于拉取 console.log） */
   runId?: string;
+  /** 是否为运行中状态（启用实时计时器） */
+  isLive?: boolean;
+  /** SSE 推送的任务状态变更 */
+  taskStatusUpdates?: TaskStatusUpdate[];
 }
 
 /** 推断任务类型 */
@@ -116,13 +122,41 @@ const PHASE_BADGE: Record<'setup' | 'teardown', { bg: string; color: string; lab
 };
 
 /** 紧凑层级任务树 + 可选 system debug log */
-export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId }: TaskTreeProps) {
+export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusUpdates }: TaskTreeProps) {
+  // SSE 状态更新：合并到 taskRuns 中
+  const liveTaskRuns = useMemo(() => {
+    if (!taskStatusUpdates?.length || !taskRuns) return taskRuns;
+    const statusMap = new Map<string, TaskStatus>();
+    for (const u of taskStatusUpdates) statusMap.set(u.task_name, u.status);
+    return taskRuns.map((r) => {
+      const newStatus = statusMap.get(r.task_name);
+      return newStatus && newStatus !== r.status ? { ...r, status: newStatus } : r;
+    });
+  }, [taskRuns, taskStatusUpdates]);
+
   const runMap = useMemo(() => {
-    if (!taskRuns) return new Map<string, TaskRunInfo>();
+    const runs = liveTaskRuns ?? taskRuns;
+    if (!runs) return new Map<string, TaskRunInfo>();
     const m = new Map<string, TaskRunInfo>();
-    for (const r of taskRuns) m.set(r.task_name, r);
+    for (const r of runs) m.set(r.task_name, r);
     return m;
-  }, [taskRuns]);
+  }, [liveTaskRuns, taskRuns]);
+
+  // 实时计时器：运行中有 started_at 的任务需要实时更新耗时
+  const [now, setNow] = useState(Date.now());
+  const hasRunning = useMemo(() => {
+    if (!isLive) return false;
+    for (const r of runMap.values()) {
+      if (r.status === 'running' && r.started_at && !r.finished_at) return true;
+    }
+    return false;
+  }, [isLive, runMap]);
+
+  useEffect(() => {
+    if (!hasRunning) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [hasRunning]);
 
   // 拉取 console.log（仅 debugVisible 且 runId 存在时）
   const { data: consoleData } = useRunConsole(
@@ -209,13 +243,19 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         const taskId = `${sub.name}.${task.name}`;
         const run = runMap.get(taskId);
         const type = inferTaskType(task);
+        const isRunning = run?.status === 'running';
 
         let durStr: string | null = null;
         if (run?.started_at && run?.finished_at) {
           const dur = new Date(run.finished_at).getTime() - new Date(run.started_at).getTime();
           durStr = fmtDur(Math.max(0, dur));
         } else if (run?.started_at && !run?.finished_at) {
-          durStr = '…';
+          if (isRunning && isLive) {
+            const dur = now - new Date(run.started_at).getTime();
+            durStr = fmtDur(Math.max(0, dur));
+          } else {
+            durStr = '…';
+          }
         }
 
         const isSelected = selectedTaskId === taskId;
@@ -224,8 +264,9 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         const exitOk = exitCode === 0;
         const exitBad = hasExit && exitCode !== 0;
 
-        const badgeBg = exitOk ? 'rgba(16,185,129,0.12)' : exitBad ? 'rgba(239,68,68,0.12)' : TYPE_COLOR[type] + '18';
-        const badgeColor = exitOk ? '#10b981' : exitBad ? '#ef4444' : TYPE_COLOR[type];
+        // 运行中任务用蓝色，已完成用绿/红，其余用类型颜色
+        const badgeBg = isRunning ? 'rgba(59,130,246,0.12)' : exitOk ? 'rgba(16,185,129,0.12)' : exitBad ? 'rgba(239,68,68,0.12)' : TYPE_COLOR[type] + '18';
+        const badgeColor = isRunning ? '#3b82f6' : exitOk ? '#10b981' : exitBad ? '#ef4444' : TYPE_COLOR[type];
 
         // Task-level phase groups
         const taskSetup = taskPhaseMap.get(taskId)?.filter((g) => g.phase === 'setup') || [];
@@ -236,14 +277,17 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
           key: taskId,
           title: (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', minWidth: 0, whiteSpace: 'nowrap' }}>
-              <Tooltip title={hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
+              <Tooltip title={isRunning ? '运行中' : hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 18, fontSize: 10, fontWeight: 600, borderRadius: 4, background: badgeBg, color: badgeColor, flexShrink: 0 }}>
                   {TYPE_LABEL[type]}
                 </span>
               </Tooltip>
-              <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1d4ed8' : exitBad ? '#b91c1c' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : isRunning ? 500 : 400, color: isSelected ? '#1d4ed8' : isRunning ? '#1d4ed8' : exitBad ? '#b91c1c' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {task.name}
               </span>
+              {isRunning && (
+                <Loader2 size={12} color="#3b82f6" className="animate-spin" style={{ flexShrink: 0 }} />
+              )}
               {run?.error && (
                 <Tooltip title={run.error} placement="topRight" overlayStyle={{ maxWidth: 420 }}>
                   <ExclamationCircleOutlined style={{ color: '#ef4444', fontSize: 12, flexShrink: 0 }} />
@@ -252,7 +296,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
               <span style={{ flex: 1, minWidth: 4 }} />
               {durStr && (
                 <Tooltip title={run?.started_at ? `开始: ${new Date(run.started_at).toLocaleString('zh-CN')}` : ''}>
-                  <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{durStr}</span>
+                  <span style={{ fontSize: 11, color: isRunning ? '#3b82f6' : '#9ca3af', flexShrink: 0 }}>{durStr}</span>
                 </Tooltip>
               )}
             </div>
@@ -297,7 +341,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
     const pipelineTeardown = pipelinePhases.filter((g) => g.phase === 'teardown').map(buildPhaseNode);
 
     return [...pipelineSetup, ...nodes, ...pipelineTeardown];
-  }, [pipeline, runMap, selectedTaskId, phaseGroups]);
+  }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, now]);
 
   const selectedKeys = selectedTaskId ? [selectedTaskId] : [];
 

@@ -135,6 +135,7 @@ async def get_run_logs(
 
         positions = {name: 0 for name in log_paths}
         task_ids = {tr.task_name: tr.id for tr in task_runs}
+        prev_statuses: dict[str, str | None] = {name: None for name in log_paths}
         active = True
 
         from taskpps.models.run import TaskStatus as TS
@@ -148,6 +149,15 @@ async def get_run_logs(
                 for task_name, tid in task_ids.items():
                     tr = await task_repo.get_task_run(tid)
                     statuses[task_name] = tr.status if tr else None
+
+            # 推送任务状态变更事件
+            import json
+            for task_name, status in statuses.items():
+                status_str = status.value if status else None
+                if status_str and status_str != prev_statuses.get(task_name):
+                    payload = {"task_name": task_name, "status": status_str}
+                    yield {"event": "status", "data": json.dumps(payload, ensure_ascii=False)}
+                    prev_statuses[task_name] = status_str
 
             for task_name, log_path in log_paths.items():
                 if not log_path.exists():  # pragma: no cover
