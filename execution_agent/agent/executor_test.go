@@ -313,6 +313,31 @@ func TestExecutorShellFallback(t *testing.T) {
 	}
 }
 
+func TestExecutorCwdPassed(t *testing.T) {
+	// Issue #56: 验证 Cwd 参数正确传递到命令执行环境
+	tmpDir := t.TempDir()
+	resultCh := make(chan ExecResult, 1)
+	var stdout string
+	executor := NewExecutor("/bin/sh", "/nonexistent",
+		func(cid, data string) { stdout += data },
+		func(cid, data string) {},
+		func(result ExecResult) { resultCh <- result },
+	)
+	executor.Execute(ExecCommand{
+		CommandID: "test-cwd",
+		Command:   "pwd",
+		Cwd:       tmpDir,
+	})
+	select {
+	case <-resultCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for result")
+	}
+	if !strings.Contains(stdout, tmpDir) {
+		t.Errorf("expected CWD %q in stdout, got %q", tmpDir, stdout)
+	}
+}
+
 func TestResolveShell(t *testing.T) {
 	t.Run("空字符串返回空字符串（让 NewExecutor 走默认值）", func(t *testing.T) {
 		if got := resolveShell(""); got != "" {

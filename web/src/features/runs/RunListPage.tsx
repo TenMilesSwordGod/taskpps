@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Table, Select, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Play, Trash2 } from 'lucide-react';
@@ -37,6 +37,8 @@ function formatDuration(start: string | null, end: string | null, nowTs?: number
 export default function RunListPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<RunStatus | undefined>();
   const [pipelineFilter, setPipelineFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
@@ -49,6 +51,21 @@ export default function RunListPage() {
   const deleteRun = useDeleteRun();
 
   const { data, isLoading } = useRuns();
+
+  // 动态计算表格滚动高度，避免页面出现滚动条
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // 表格容器高度 - 表格头(约39px) - 分页(约56px) - 边距
+        const h = Math.floor(entry.contentRect.height) - 100;
+        setTableScrollY(Math.max(h, 200));
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   // 实时刷新运行中任务的耗时
   const [now, setNow] = useState(Date.now());
@@ -204,7 +221,7 @@ export default function RunListPage() {
   return (
     <div className="flex flex-col h-full p-4 overflow-hidden">
       {/* 过滤栏 */}
-      <Space style={{ marginBottom: 16 }} wrap>
+      <Space style={{ marginBottom: 16, flexShrink: 0 }} wrap>
         <Select
           allowClear
           placeholder="状态筛选"
@@ -241,7 +258,7 @@ export default function RunListPage() {
       </Space>
 
       {/* 表格 */}
-      <div className="flex-1 min-h-0">
+      <div ref={tableContainerRef} className="runs-table-container flex-1 min-h-0 overflow-hidden">
         <Table<RunResponse>
           rowKey="id"
           columns={columns}
@@ -249,7 +266,7 @@ export default function RunListPage() {
           loading={isLoading}
           pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条`, size: 'small' }}
           size="small"
-          scroll={{ y: 'calc(100vh - 360px)' }}
+          scroll={tableScrollY ? { y: tableScrollY } : undefined}
         />
       </div>
 

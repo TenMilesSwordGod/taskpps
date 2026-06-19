@@ -37,3 +37,12 @@ html, body, #root {
   width: 100%;
   height: 100%;
 }
+
+/*
+ * Issue #60: 运行历史表格进入时不显示滚动条
+ * antd Table 设置 scroll.y 后会对 .ant-table-body 设置 overflow-y: scroll，
+ * 导致即使内容不足也会一直显示滚动条轨道。改为 auto，仅在内容溢出时显示。
+ */
+.runs-table-container .ant-table-body {
+  overflow-y: auto !important;
+}

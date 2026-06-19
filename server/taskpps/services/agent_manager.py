@@ -5,6 +5,7 @@ import contextlib
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from fastapi import WebSocket
 
@@ -16,6 +17,20 @@ HEARTBEAT_INTERVAL = 15
 HEARTBEAT_TIMEOUT = 45
 HANDSHAKE_TIMEOUT = 10
 DISPLAY_GRACE_PERIOD = 300
+
+
+@dataclass
+class PendingCommandInfo:
+    """正在执行的命令元数据"""
+    command_id: str
+    command: str = ""
+    env: dict[str, str] = field(default_factory=dict)
+    cwd: str = ""
+    timeout: int = 0
+    run_id: str = ""
+    task_name: str = ""
+    started_at: float = 0.0
+    future: asyncio.Future[dict] = field(default_factory=lambda: asyncio.get_event_loop().create_future())
 
 
 class AgentConnection:
@@ -31,7 +46,7 @@ class AgentConnection:
         self.agent_pid = 0
         self.connected_at = 0.0
         self.last_heartbeat = 0.0
-        self._pending_commands: dict[str, asyncio.Future[dict]] = {}
+        self._pending_commands: dict[str, PendingCommandInfo] = {}
         self._output_callbacks: dict[str, Callable] = {}
         self._send_lock = asyncio.Lock()
 
@@ -54,16 +69,35 @@ class AgentConnection:
     async def send_cancel(self, command_id: str) -> None:
         await self.send_msg("cancel_command", {"command_id": command_id})
 
-    def register_pending(self, command_id: str) -> asyncio.Future[dict]:
+    def register_pending(
+        self,
+        command_id: str,
+        command: str = "",
+        env: dict[str, str] | None = None,
+        cwd: str = "",
+        timeout: int = 0,
+        run_id: str = "",
+        task_name: str = "",
+    ) -> asyncio.Future[dict]:
         fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()
-        self._pending_commands[command_id] = fut
+        self._pending_commands[command_id] = PendingCommandInfo(
+            command_id=command_id,
+            command=command,
+            env=env or {},
+            cwd=cwd,
+            timeout=timeout,
+            run_id=run_id,
+            task_name=task_name,
+            started_at=time.time(),
+            future=fut,
+        )
         return fut
 
     def resolve_pending(self, command_id: str, result: dict) -> None:
-        fut = self._pending_commands.pop(command_id, None)
+        info = self._pending_commands.pop(command_id, None)
         self._output_callbacks.pop(command_id, None)
-        if fut and not fut.done():
-            fut.set_result(result)
+        if info and not info.future.done():
+            info.future.set_result(result)
 
     def register_output_callback(self, command_id: str, callback: Callable) -> None:
         self._output_callbacks[command_id] = callback
@@ -74,10 +108,10 @@ class AgentConnection:
             cb(data)
 
     def cleanup_command(self, command_id: str) -> None:
-        fut = self._pending_commands.pop(command_id, None)
+        info = self._pending_commands.pop(command_id, None)
         self._output_callbacks.pop(command_id, None)
-        if fut and not fut.done():
-            fut.set_result({"exit_code": -1, "signal_name": "", "error": "connection lost"})
+        if info and not info.future.done():
+            info.future.set_result({"exit_code": -1, "signal_name": "", "error": "connection lost"})
 
 
 class AgentManager:
@@ -212,13 +246,23 @@ class AgentManager:
             return
         await conn.send_cancel(command_id)
 
-    def create_pending(self, agent_id: str, command_id: str) -> asyncio.Future[dict]:
+    def create_pending(
+        self,
+        agent_id: str,
+        command_id: str,
+        command: str = "",
+        env: dict[str, str] | None = None,
+        cwd: str = "",
+        timeout: int = 0,
+        run_id: str = "",
+        task_name: str = "",
+    ) -> asyncio.Future[dict]:
         conn = self._connections.get(agent_id)
         if conn is None:
             fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()
             fut.set_result({"exit_code": -1, "signal_name": "", "error": "agent not connected"})
             return fut
-        return conn.register_pending(command_id)
+        return conn.register_pending(command_id, command, env, cwd, timeout, run_id, task_name)
 
     def register_output_callback(self, agent_id: str, command_id: str, callback: Callable) -> None:
         conn = self._connections.get(agent_id)

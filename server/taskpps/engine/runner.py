@@ -31,6 +31,7 @@ from taskpps.events.bus import (
     get_event_bus,
 )
 from taskpps.executors import create_executor
+from taskpps.executors.agent_executor import AgentExecutor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
@@ -617,6 +618,11 @@ class PipelineRunner:
             try:
                 executor = create_executor(task, self.context.project_workdir)
                 self._running_executors[task.name] = executor
+
+                # 为 AgentExecutor 设置运行上下文，用于服务器面板显示运行中命令
+                if isinstance(executor, AgentExecutor):
+                    executor.run_id = self.run_id
+                    executor.task_name = qualified_name
 
                 logger.debug(
                     f"[DEBUG-EXEC] _execute_task '{qualified_name}': attempt={attempt}, executor={type(executor).__name__}, effective_cwd={effective_cwd}"

@@ -6,7 +6,6 @@ import { Loader2 } from 'lucide-react';
 
 import { useRunConsole } from '@/api/runs';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
-import type { TaskStatusUpdate } from './hooks/useSSELogs';
 
 interface TaskRunInfo {
   task_name: string;
@@ -28,8 +27,8 @@ interface TaskTreeProps {
   runId?: string;
   /** 是否为运行中状态（启用实时计时器） */
   isLive?: boolean;
-  /** SSE 推送的任务状态变更 */
-  taskStatusUpdates?: TaskStatusUpdate[];
+  /** SSE 推送的任务状态映射（task_name -> latest status） */
+  taskStatusMap?: Record<string, TaskStatus>;
 }
 
 /** 推断任务类型 */
@@ -122,17 +121,21 @@ const PHASE_BADGE: Record<'setup' | 'teardown', { bg: string; color: string; lab
 };
 
 /** 紧凑层级任务树 + 可选 system debug log */
-export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusUpdates }: TaskTreeProps) {
+export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap }: TaskTreeProps) {
   // SSE 状态更新：合并到 taskRuns 中
+  // Issue #61: 防止陈旧的 SSE 状态覆盖服务端更新的终态状态
+  // （SSE 断连重连期间 taskStatusMap 可能停留在旧的 running，而服务端已 failed）
   const liveTaskRuns = useMemo(() => {
-    if (!taskStatusUpdates?.length || !taskRuns) return taskRuns;
-    const statusMap = new Map<string, TaskStatus>();
-    for (const u of taskStatusUpdates) statusMap.set(u.task_name, u.status);
+    if (!taskStatusMap || !Object.keys(taskStatusMap).length || !taskRuns) return taskRuns;
     return taskRuns.map((r) => {
-      const newStatus = statusMap.get(r.task_name);
-      return newStatus && newStatus !== r.status ? { ...r, status: newStatus } : r;
+      const newStatus = taskStatusMap[r.task_name];
+      if (!newStatus || newStatus === r.status) return r;
+      // 服务端已是终态时，不回退到非终态的 SSE 状态
+      const terminal: Record<string, boolean> = { success: true, failed: true, skipped: true, cancelled: true };
+      if (terminal[r.status] && !terminal[newStatus]) return r;
+      return { ...r, status: newStatus };
     });
-  }, [taskRuns, taskStatusUpdates]);
+  }, [taskRuns, taskStatusMap]);
 
   const runMap = useMemo(() => {
     const runs = liveTaskRuns ?? taskRuns;

@@ -1,11 +1,12 @@
-import { memo } from 'react';
-import { Tooltip, Popconfirm, Tag } from 'antd';
-import type { AgentWithConfig } from '@/types';
+import { memo, useState } from 'react';
+import { Tooltip, Popconfirm, Tag, Popover } from 'antd';
+import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, FolderOpen,
+  CloudUpload, Loader2, Info, FolderOpen, ExternalLink,
 } from 'lucide-react';
-import { useDeployAgent } from '@/api/agents';
+import { useDeployAgent, usePendingCommands } from '@/api/agents';
+import { useNavigate } from 'react-router-dom';
 
 interface ServerCardProps {
   agent: AgentWithConfig;
@@ -100,10 +101,63 @@ function osArchLabel(systemLabel: string, archLabel: string): string {
   return parts.length > 0 ? parts.join(' · ') : '—';
 }
 
+function formatDuration(s: number): string {
+  if (s < 60) return `${Math.round(s)}s`;
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m ${sec}s`;
+}
+
+function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCommandItem[]; onRunClick: (runId: string) => void }) {
+  if (!commands?.length) {
+    return <div style={{ padding: '8px 12px', color: '#98a2b3', fontSize: 12 }}>暂无运行中命令</div>;
+  }
+  return (
+    <div>
+      {commands.map((cmd) => (
+        <div
+          key={cmd.command_id}
+          style={{ padding: '6px 12px', borderBottom: '1px solid #f2f4f7', fontSize: 12 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+            <span style={{ fontWeight: 600, color: '#1d2939' }}>
+              {cmd.task_name || <span style={{ color: '#98a2b3' }}>未知任务</span>}
+            </span>
+            <span style={{ color: '#2e90fa', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+              <Loader2 size={10} className="animate-spin" />
+              {formatDuration(cmd.duration_s)}
+            </span>
+          </div>
+          <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#475467', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={cmd.command}>
+            {cmd.command || '—'}
+          </div>
+          {cmd.run_id && (
+            <div style={{ marginTop: 3 }}>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={() => onRunClick(cmd.run_id)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onRunClick(cmd.run_id); }}
+                style={{ fontSize: 11, color: '#2e90fa', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+              >
+                <ExternalLink size={10} />
+                {cmd.run_id.slice(0, 8)}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: ServerCardProps) {
   const online = agent.connected;
   const deploy = useDeployAgent();
+  const navigate = useNavigate();
   const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const { data: pendingCommands } = usePendingCommands(agent.agent_id, popoverOpen && agent.running_commands > 0);
 
   const effectiveSystem = detectedSystem || agent.system || fallbackSystem(agent.type);
   const effectiveArch = detectedArch || agent.arch || fallbackArch();
@@ -234,8 +288,30 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
       {/* 底部：运行命令数 / 连接时间 + 操作按钮 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#98a2b3' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Activity size={11} />
-          运行中 {agent.running_commands}
+          <Popover
+            open={popoverOpen}
+            onOpenChange={(open) => setPopoverOpen(open && agent.running_commands > 0)}
+            trigger="click"
+            placement="topLeft"
+            title={null}
+            content={<PendingCommandsContent commands={pendingCommands} onRunClick={(runId) => { setPopoverOpen(false); navigate(`/runs/${runId}`); }} />}
+            styles={{ body: { padding: '8px 0', minWidth: 320, maxWidth: 480 } }}
+          >
+            <span
+              role="button"
+              tabIndex={agent.running_commands > 0 ? 0 : -1}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                cursor: agent.running_commands > 0 ? 'pointer' : 'default',
+                color: agent.running_commands > 0 ? '#2e90fa' : '#98a2b3',
+              }}
+            >
+              <Activity size={11} />
+              运行中 {agent.running_commands}
+            </span>
+          </Popover>
           <span style={{ marginLeft: 8, color: '#d0d5dd' }}>|</span>
           <span style={{ marginLeft: 4 }}>{online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}</span>
         </span>

@@ -249,6 +249,18 @@ export interface AgentWithConfig {
   net_status: 'unknown' | 'reachable' | 'unreachable';
 }
 
+/** Agent 正在执行的命令 */
+export interface PendingCommandItem {
+  command_id: string;
+  command: string;
+  cwd: string;
+  timeout: number;
+  run_id: string;
+  task_name: string;
+  started_at: number;
+  duration_s: number;
+}
+
 /** Agent check 探测单项结果 */
 export interface AgentCheckResult {
   agent_id: string;

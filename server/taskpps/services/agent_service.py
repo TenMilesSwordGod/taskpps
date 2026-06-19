@@ -475,13 +475,22 @@ class AgentService:
                 except Exception:
                     pass
 
-        # 磁盘：df -h
+        # 磁盘: df -h, 按设备去重(同一设备多挂载点只展示一次, 取最短挂载路径)
+        # issue #64: docker overlay2 会在同一设备上产生大量挂载点, 但 usage 相同
         df_out = _run("df -h -x tmpfs -x devtmpfs 2>/dev/null") or _run("df -h")
+        # {device: (line_parts, mount_len)} 保留最短挂载路径
+        best_per_device: dict[str, tuple[list[str], int]] = {}
         for line in df_out.splitlines()[1:]:
             parts = line.split()
             if len(parts) < 6:
                 continue
-            fs, size, used, avail, percent, mount = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+            fs, mount = parts[0], parts[5]
+            mount_len = len(mount)
+            prev = best_per_device.get(fs)
+            if prev is None or mount_len < prev[1]:
+                best_per_device[fs] = (parts, mount_len)
+        for fs, (parts, _) in best_per_device.items():
+            size, used, avail, percent, mount = parts[1], parts[2], parts[3], parts[4], parts[5]
             pct = -1
             try:
                 pct = int(percent.rstrip("%"))

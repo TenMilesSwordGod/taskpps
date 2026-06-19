@@ -14,6 +14,7 @@ from taskpps.domain.dag import DAG
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.events.bus import SIGNAL_RETRY_FINISHED, SIGNAL_RETRY_STARTED, get_event_bus
 from taskpps.executors import create_executor
+from taskpps.executors.agent_executor import AgentExecutor
 from taskpps.executors.base import ExecutorResult
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.local import LocalExecutor
@@ -129,6 +130,9 @@ class RetryRunner:
 
         try:
             executor = create_executor(task, self.context.project_workdir)
+            if isinstance(executor, AgentExecutor):
+                executor.run_id = self.run_id
+                executor.task_name = task_name
             last_result = await self._dispatch_execution(executor, task, command, env, log_path, timeout, effective_cwd)
         except Exception as e:
             logger.exception("Retry task '%s' unexpected error", task_name)

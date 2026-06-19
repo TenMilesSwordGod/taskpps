@@ -226,6 +226,85 @@ async def test_clean_runs_older_than(app, setup_project, tmp_project, db_engine)
 
 
 @pytest.mark.asyncio
+async def test_pipeline_snapshot(app, setup_project, tmp_project, db_engine):
+    """Issue #58: 获取运行的流水线快照"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/runs/",
+            json={"pipeline": "deploy.yaml", "params": {}},
+        )
+        run_id = create_resp.json()["id"]
+
+        response = await client.get(f"/api/runs/{run_id}/pipeline-snapshot")
+        assert response.status_code == 200
+        data = response.json()
+        assert "name" in data
+
+
+@pytest.mark.asyncio
+async def test_pipeline_snapshot_not_found(app, setup_project, tmp_project, db_engine):
+    """Issue #58: 不存在的运行返回 404"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/runs/nonexistent/pipeline-snapshot")
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_single_run(app, setup_project, tmp_project, db_engine):
+    """Issue #55: 删除单条运行记录"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/runs/",
+            json={"pipeline": "deploy.yaml", "params": {}},
+        )
+        run_id = create_resp.json()["id"]
+
+        response = await client.delete(f"/api/runs/{run_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "deleted"
+
+        get_resp = await client.get(f"/api/runs/{run_id}")
+        assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_run_not_found(app, setup_project, tmp_project, db_engine):
+    """Issue #55: 删除不存在的运行返回 404"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.delete("/api/runs/nonexistent")
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_no_auth_header(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 

@@ -8,7 +8,7 @@ import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
 import { useSSELogs } from './hooks/useSSELogs';
-import type { RunResponse } from '@/types';
+import type { RunResponse, TaskStatus } from '@/types';
 import type { LogEntry } from './hooks/useSSELogs';
 
 /** 计算任务进度 */
@@ -21,6 +21,30 @@ function calcProgress(run: RunResponse | undefined) {
     else if (t.status === 'running') running++;
   }
   return { done, total: run.tasks.length, failed, running };
+}
+
+/** 终态任务状态集合 */
+const TERMINAL_TASK_STATUS: Record<string, boolean> = {
+  success: true, failed: true, skipped: true, cancelled: true,
+};
+
+/**
+ * 将 SSE 推送的任务状态合并到 run 数据中。
+ * Issue #61: useRun 每 3s refetch 会覆盖 queryClient 缓存中的 SSE 更新，
+ * 因此在组件层用 useMemo 重新合并，确保 UI 始终反映最新状态。
+ * 防护：服务端已是终态时不回退到非终态的 SSE 状态（SSE 断连重连期间可能过期）。
+ */
+function mergeTaskStatuses(run: RunResponse | undefined, statusMap: Record<string, TaskStatus>): RunResponse | undefined {
+  if (!run || !statusMap || !Object.keys(statusMap).length) return run;
+  let changed = false;
+  const tasks = run.tasks.map((t) => {
+    const newStatus = statusMap[t.task_name];
+    if (!newStatus || newStatus === t.status) return t;
+    if (TERMINAL_TASK_STATUS[t.status] && !TERMINAL_TASK_STATUS[newStatus]) return t;
+    changed = true;
+    return { ...t, status: newStatus };
+  });
+  return changed ? { ...run, tasks } : run;
 }
 
 /** 把毫秒格式化为 mm:ss / hh:mm:ss */
@@ -40,7 +64,7 @@ function parseUTC(s: string): number {
 /** 运行详情页面 */
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: run, isLoading: runLoading } = useRun(id);
+  const { data: rawRun, isLoading: runLoading } = useRun(id);
   // 历史运行必须用执行时的快照，禁止回退到当前 pipeline 文件
   // （否则更新 pipeline 文件会影响历史数据的结构树展示 — Issue #57）
   const { data: snapshotPipeline, isLoading: snapshotLoading, error: snapshotError } = usePipelineSnapshot(id);
@@ -52,29 +76,20 @@ export default function RunDetailPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
 
-  const isLive = run?.status === 'running' || run?.status === 'pending';
-
   // SSE 日志（始终连接 — running 时实时推送，completed 时一次全推完 done）
   const sseResult = useSSELogs(id);
 
   // 日志：SSE 直接提供，无 SSE/REST 切换
   const baseLogs = sseResult.logs;
 
-  // SSE 状态更新：实时更新 queryClient 缓存中的任务状态
-  useEffect(() => {
-    const updates = sseResult.taskStatusUpdates;
-    if (!updates?.length || !id) return;
-    const lastUpdate = updates[updates.length - 1];
-    queryClient.setQueryData(['run', id], (old: RunResponse | undefined) => {
-      if (!old) return old;
-      return {
-        ...old,
-        tasks: old.tasks.map((t) =>
-          t.task_name === lastUpdate.task_name ? { ...t, status: lastUpdate.status } : t,
-        ),
-      };
-    });
-  }, [sseResult.taskStatusUpdates, id, queryClient]);
+  // Issue #61: 在组件层合并 SSE 状态，避免 useRun 3s refetch 覆盖 SSE 实时更新
+  // （原先的 useEffect 写 queryClient 缓存会被下一次 refetch 覆盖，导致状态不更新）
+  const run = useMemo(
+    () => mergeTaskStatuses(rawRun, sseResult.taskStatusMap ?? {}),
+    [rawRun, sseResult.taskStatusMap],
+  );
+
+  const isLive = run?.status === 'running' || run?.status === 'pending';
 
   // Debug 模式：拉取 console.log 并合并 phase 日志
   const { data: consoleData } = useRunConsole(debugVisible ? id : undefined, 500);
@@ -295,7 +310,7 @@ export default function RunDetailPage() {
                   debugVisible={debugVisible}
                   runId={id}
                   isLive={isLive}
-                  taskStatusUpdates={sseResult.taskStatusUpdates}
+                  taskStatusMap={sseResult.taskStatusMap}
                 />
               ) : snapshotLoading ? (
                 <div className="p-3 text-gray-400 text-sm">加载历史快照中…</div>

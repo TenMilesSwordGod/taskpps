@@ -21,6 +21,7 @@ from taskpps.schemas.agent import (
     AgentHostInfo,
     AgentStatus,
     AgentWithConfig,
+    PendingCommandItem,
 )
 from taskpps.services.agent_manager import AgentManager
 from taskpps.services.agent_service import AgentService
@@ -128,6 +129,29 @@ async def agent_status(agent_id: str):
         last_heartbeat=conn.last_heartbeat if conn else 0,
         running_commands=pending_count,
     )
+
+
+@router.get("/{agent_id}/pending-commands", response_model=list[PendingCommandItem])
+async def agent_pending_commands(agent_id: str):
+    """获取 agent 当前正在执行的命令列表"""
+    manager = AgentManager.instance()
+    conn = manager.get_connection(agent_id)
+    if conn is None:
+        return []
+    now = time.time()
+    return [
+        PendingCommandItem(
+            command_id=info.command_id,
+            command=info.command[:500],
+            cwd=info.cwd,
+            timeout=info.timeout,
+            run_id=info.run_id,
+            task_name=info.task_name,
+            started_at=info.started_at,
+            duration_s=round(now - info.started_at, 1) if info.started_at else 0,
+        )
+        for info in conn._pending_commands.values()
+    ]
 
 
 @router.get("/list", response_model=list[AgentStatus])

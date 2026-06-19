@@ -244,7 +244,6 @@ class TestProbeRemoteHostInfo:
         client = MagicMock()
 
         def exec_command(cmd, timeout=None):
-            mock = MagicMock()
             # 找第一个匹配的 substring
             matched = ""
             for k, v in outputs.items():
@@ -253,8 +252,7 @@ class TestProbeRemoteHostInfo:
                     break
             mock_stdout = MagicMock()
             mock_stdout.read.return_value = matched.encode("utf-8")
-            mock.exec_command.return_value = (None, mock_stdout, None)
-            return mock
+            return (None, mock_stdout, None)
 
         client.exec_command.side_effect = lambda cmd, timeout=None: exec_command(cmd, timeout)
         return client
@@ -326,3 +324,33 @@ class TestProbeRemoteHostInfo:
         # 不抛异常 + threads/cores 兜底走 nproc
         assert isinstance(data["cpu"]["threads"], int)
         assert isinstance(data["cpu"]["cores"], int)
+
+    def test_disk_dedupes_by_device_shows_disk_usage(self):
+        """issue #64: 按设备去重, 展示磁盘 usage 而非每个挂载点(分区)"""
+        svc = AgentService()
+        # 模拟 issue #64: 同一设备 /dev/sda2 有 1 个真实挂载点 + 2 个 docker overlay
+        client = self._make_ssh_client(
+            {
+                "df -h": "Filesystem      Size  Used Avail Use% Mounted on\n"
+                "/dev/sda1        49G   12G   35G  42% /\n"
+                "/dev/sda1        49G   12G   35G  42% /fs\n"  # 同设备, 挂载路径更长
+                "/dev/sda2       175G   81G   93G  47% /vol1\n"
+                "/dev/sda2       175G   81G   93G  47% /vol1/docker/overlay2/abc/merged\n"  # 同设备, overlay
+                "/dev/sda2       175G   81G   93G  47% /vol1/docker/overlay2/def/merged\n"  # 同设备, overlay
+                "/dev/sda3       866G  472G  394G  55% /vol02/1000-0-50fff9e9\n"
+                "/dev/sda4       1.0P    0  1.0P   0% /vol02/1000-1-d7502eb3\n",
+            }
+        )
+        data = svc._probe_remote_host_info(client, timeout=5)
+        mounts = [d["mount"] for d in data["disks"]]
+        # 每个设备只出现一次: 4 个设备 = 4 条
+        assert len(data["disks"]) == 4
+        # /dev/sda1 取最短挂载路径 /, 而非 /fs
+        assert "/" in mounts
+        assert "/fs" not in mounts
+        # /dev/sda2 取最短挂载路径 /vol1, 而非 docker overlay
+        assert "/vol1" in mounts
+        assert not any("/docker/overlay2/" in m for m in mounts)
+        # 其余设备正常展示
+        assert "/vol02/1000-0-50fff9e9" in mounts
+        assert "/vol02/1000-1-d7502eb3" in mounts

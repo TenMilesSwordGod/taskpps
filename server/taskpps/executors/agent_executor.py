@@ -36,6 +36,8 @@ class AgentExecutor(BaseExecutor):
         self._command_id: str | None = None
         self._cancelled = False
         self._bootstrapped = False
+        self.run_id: str = ""
+        self.task_name: str = ""
 
     async def _ensure_connected(self, log_path: Path) -> bool:
         if self._manager.is_connected(self._agent_id):
@@ -107,7 +109,11 @@ class AgentExecutor(BaseExecutor):
 
         self._manager.register_output_callback(self._agent_id, command_id, on_output)
 
-        fut = self._manager.create_pending(self._agent_id, command_id)
+        fut = self._manager.create_pending(
+            self._agent_id, command_id,
+            command=command, env=env, cwd=effective_cwd, timeout=effective_timeout,
+            run_id=self.run_id, task_name=self.task_name,
+        )
 
         try:
             await self._manager.send_command(self._agent_id, command_id, command, env, effective_cwd, effective_timeout)

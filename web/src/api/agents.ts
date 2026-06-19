@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import apiClient from './client';
-import type { AgentStatus, AgentWithConfig, AgentHostInfo } from '@/types';
+import type { AgentStatus, AgentWithConfig, AgentHostInfo, PendingCommandItem } from '@/types';
 
 /** 部署/引导 agent（未连接时） */
 export function useDeployAgent() {
@@ -85,5 +85,18 @@ export function useAgentStatus(agentId: string | undefined) {
     },
     enabled: !!agentId,
     refetchInterval: 5000,
+  });
+}
+
+/** 获取 agent 正在执行的命令列表 */
+export function usePendingCommands(agentId: string | undefined, enabled = false) {
+  return useQuery<PendingCommandItem[]>({
+    queryKey: ['agents', 'pending', agentId],
+    queryFn: async () => {
+      const res = await apiClient.get<PendingCommandItem[]>(`/api/agents/${agentId}/pending-commands`);
+      return res.data;
+    },
+    enabled: !!agentId && enabled,
+    refetchInterval: 3000,
   });
 }

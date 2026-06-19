@@ -138,3 +138,15 @@ class AgentHostInfo(BaseModel):
     disks: list[DiskInfo] = []
     error: str | None = None
     source: str = ""  # "ssh" / "agent" / "none"
+
+
+class PendingCommandItem(BaseModel):
+    """正在执行的命令信息"""
+    command_id: str
+    command: str = ""
+    cwd: str = ""
+    timeout: int = 0
+    run_id: str = ""
+    task_name: str = ""
+    started_at: float = 0
+    duration_s: float = 0

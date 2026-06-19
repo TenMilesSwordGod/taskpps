@@ -11,6 +11,7 @@ vi.mock('@/api/agents', () => ({
   useAgentsWithConfig: () => mockUseAgentsWithConfig(),
   useAgentHostInfo: () => ({ data: null, isLoading: false, isError: false, error: null, refetch: vi.fn(), isRefetching: false }),
   useDeployAgent: () => ({ mutate: vi.fn(), isPending: false, variables: null }),
+  usePendingCommands: () => ({ data: [] }),
 }))
 
 /** Mock api/client */
