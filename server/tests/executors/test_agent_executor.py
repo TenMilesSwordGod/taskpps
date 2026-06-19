@@ -14,6 +14,7 @@ def mock_manager():
     mgr.is_connected = MagicMock(return_value=True)
     mgr.send_command = AsyncMock()
     mgr.cancel_command = AsyncMock()
+    mgr.cleanup_command = MagicMock()
     mgr.create_pending = MagicMock()
     mgr.register_output_callback = MagicMock()
     return mgr
@@ -98,6 +99,8 @@ class TestAgentExecutorExecute:
 
         assert result.exit_code == -1
         mock_manager.cancel_command.assert_called_once()
+        # Issue #66: 超时后必须清理 pending command，否则 agent 永远显示 running
+        mock_manager.cleanup_command.assert_called_once_with("agent-1", executor._command_id)
 
     @pytest.mark.asyncio
     async def test_execute_cancelled_error(self, tmp_path, mock_manager, agent_data):
@@ -112,6 +115,8 @@ class TestAgentExecutorExecute:
 
         assert result.exit_code == -1
         mock_manager.cancel_command.assert_called_once()
+        # Issue #66: 取消后必须清理 pending command，否则 agent 永远显示 running
+        mock_manager.cleanup_command.assert_called_once_with("agent-1", executor._command_id)
 
     @pytest.mark.asyncio
     async def test_execute_send_command_exception(self, tmp_path, mock_manager, agent_data):
@@ -123,6 +128,8 @@ class TestAgentExecutorExecute:
 
         assert result.exit_code == -1
         assert "connection lost" in result.stderr
+        # Issue #66: send_command 失败后必须清理已注册的 pending command
+        mock_manager.cleanup_command.assert_called_once_with("agent-1", executor._command_id)
 
     @pytest.mark.asyncio
     async def test_execute_with_signal(self, tmp_path, mock_manager, agent_data):
@@ -207,6 +214,8 @@ class TestAgentExecutorCancel:
 
         assert executor._cancelled is True
         mock_manager.cancel_command.assert_called_once_with("agent-1", "cmd-123")
+        # Issue #66: cancel 后必须清理 pending command，否则 agent 永远显示 running
+        mock_manager.cleanup_command.assert_called_once_with("agent-1", "cmd-123")
 
     @pytest.mark.asyncio
     async def test_cancel_without_command_id(self, mock_manager, agent_data):
@@ -217,6 +226,7 @@ class TestAgentExecutorCancel:
 
         assert executor._cancelled is True
         mock_manager.cancel_command.assert_not_called()
+        mock_manager.cleanup_command.assert_not_called()
 
 
 class TestAgentExecutorEnsureConnected:

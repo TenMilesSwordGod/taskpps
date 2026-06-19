@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import yaml
@@ -11,6 +12,11 @@ from sse_starlette.sse import EventSourceResponse
 from taskpps.config import build_pipeline_log_path, build_retry_log_path, get_logs_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
+from taskpps.events.bus import (
+    SIGNAL_TASK_FINISHED,
+    SIGNAL_TASK_STARTED,
+    get_event_bus,
+)
 from taskpps.i18n import t
 from taskpps.loaders.pipeline_loader import substitute_env_vars
 from taskpps.schemas.pipeline import PipelineYAML
@@ -54,6 +60,54 @@ def _yield_complete_lines(new_content: str):
     for line in complete.split('\n')[:-1]:
         lines.append(line.rstrip('\r'))
     return lines, advance
+
+
+def _decode_log_bytes(raw: bytes) -> str:
+    u"""解码日志字节，先尝试 UTF-8 再回退 GBK。
+
+    日志文件可能由不同工具写入（如 Windows 下的 Robot Framework），
+    编码可能是 UTF-8 或 GBK。先尝试 UTF-8 严格解码，失败则使用 GBK。
+    """
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("gbk", errors="replace")
+
+
+def _read_log_lines(
+    log_path: Path, position: int = 0, include_partial: bool = False
+) -> tuple[list[str], int]:
+    u"""从日志文件的字节位置读取行。
+
+    处理 UTF-8 和 GBK 编码。include_partial=False 时只返回完整行（以 \\n 结尾），
+    避免截断多字节字符；include_partial=True 时返回所有剩余内容（用于任务结束后的最终刷新）。
+
+    返回 (lines, new_byte_position)。
+    """
+    with open(log_path, "rb") as f:
+        f.seek(position)
+        raw = f.read()
+    if not raw:
+        return [], position
+
+    if include_partial:
+        cut = len(raw)
+    else:
+        last_nl = raw.rfind(b"\n")
+        if last_nl < 0:
+            return [], position
+        cut = last_nl + 1
+
+    chunk = raw[:cut]
+    text = _decode_log_bytes(chunk)
+
+    if chunk.endswith(b"\n"):
+        lines = text.split("\n")[:-1]
+    else:
+        lines = text.split("\n")
+    lines = [line.rstrip("\r") for line in lines]
+
+    return lines, position + cut
 
 
 @router.post("/", status_code=201)
@@ -116,14 +170,15 @@ async def get_run_logs(
                         file_size = f.tell()
                         chunk_size = min(file_size, tail * 256)
                         f.seek(max(0, file_size - chunk_size))
-                        raw = f.read().decode("utf-8", errors="replace")
-                        lines = raw.split("\n")
+                        raw = f.read()
+                        text = _decode_log_bytes(raw)
+                        lines = text.split("\n")
                         if file_size > chunk_size:
                             lines = lines[1:]
                         result[tr.task_name] = "\n".join(lines[-tail:])
                 else:
-                    with open(log_path) as f:
-                        result[tr.task_name] = f.read()
+                    lines, _ = _read_log_lines(log_path, 0, include_partial=True)
+                    result[tr.task_name] = "\n".join(lines)
             else:
                 result[tr.task_name] = ""
         return {"logs": result}
@@ -136,67 +191,120 @@ async def get_run_logs(
         positions = {name: 0 for name in log_paths}
         task_ids = {tr.task_name: tr.id for tr in task_runs}
         prev_statuses: dict[str, str | None] = {name: None for name in log_paths}
+        flushed: set[str] = set()
         active = True
 
         from taskpps.models.run import TaskStatus as TS
 
-        while active:
-            active = False
+        # Issue #65: 订阅事件总线以即时推送状态变更，而非仅靠 300ms 轮询。
+        # 快速任务在 300ms 内完成 PENDING→RUNNING→SUCCESS，轮询会跳过 RUNNING。
+        # 事件总线在 DB commit 后同步 emit，通过 asyncio.Queue 桥接到异步生成器。
+        status_queue: asyncio.Queue[dict] = asyncio.Queue()
 
-            async with get_session_factory()() as session:
-                task_repo = TaskRunRepository(session)
-                statuses: dict[str, TS | None] = {}
-                for task_name, tid in task_ids.items():
-                    tr = await task_repo.get_task_run(tid)
-                    statuses[task_name] = tr.status if tr else None
+        def _on_task_started(sender, **kwargs):
+            if kwargs.get("run_id") == run_id:
+                task_name = kwargs.get("task")
+                if task_name:
+                    status_queue.put_nowait({"task_name": task_name, "status": "running"})
 
-            # 推送任务状态变更事件
-            import json
-            for task_name, status in statuses.items():
-                status_str = status.value if status else None
-                if status_str and status_str != prev_statuses.get(task_name):
-                    payload = {"task_name": task_name, "status": status_str}
-                    yield {"event": "status", "data": json.dumps(payload, ensure_ascii=False)}
-                    prev_statuses[task_name] = status_str
+        def _on_task_finished(sender, **kwargs):
+            if kwargs.get("run_id") == run_id:
+                task_name = kwargs.get("task")
+                status = kwargs.get("status")
+                if task_name and status:
+                    status_str = status.value if hasattr(status, "value") else str(status)
+                    status_queue.put_nowait({"task_name": task_name, "status": status_str})
 
-            for task_name, log_path in log_paths.items():
-                if not log_path.exists():  # pragma: no cover
-                    active = True  # pragma: no cover
-                    continue  # pragma: no cover
+        event_bus = get_event_bus()
+        event_bus.on(SIGNAL_TASK_STARTED, _on_task_started)
+        event_bus.on(SIGNAL_TASK_FINISHED, _on_task_finished)
 
-                had_output = False
-                with open(log_path) as f:
-                    f.seek(positions[task_name])
-                    new_content = f.read()
-                    if new_content:
+        try:
+            while active:
+                active = False
+
+                async with get_session_factory()() as session:
+                    task_repo = TaskRunRepository(session)
+                    statuses: dict[str, TS | None] = {}
+                    for task_name, tid in task_ids.items():
+                        tr = await task_repo.get_task_run(tid)
+                        statuses[task_name] = tr.status if tr else None
+
+                # 推送任务状态变更事件
+                for task_name, status in statuses.items():
+                    status_str = status.value if status else None
+                    if status_str and status_str != prev_statuses.get(task_name):
+                        payload = {"task_name": task_name, "status": status_str}
+                        yield {"event": "status", "data": json.dumps(payload, ensure_ascii=False)}
+                        prev_statuses[task_name] = status_str
+
+                for task_name, log_path in log_paths.items():
+                    if not log_path.exists():  # pragma: no cover
+                        active = True  # pragma: no cover
+                        continue  # pragma: no cover
+
+                    had_output = False
+                    lines, new_pos = _read_log_lines(log_path, positions[task_name])
+                    if lines:
                         had_output = True
-                        lines, advance = _yield_complete_lines(new_content)
-                        positions[task_name] += advance
+                        positions[task_name] = new_pos
                         for line in lines:
                             yield {"event": "log", "data": f"{task_name}: {line}"}
 
-                task_status = statuses.get(task_name)
-                is_active = task_status and task_status not in (
-                    TS.SUCCESS, TS.FAILED, TS.CANCELLED, TS.SKIPPED,
-                )
+                    task_status = statuses.get(task_name)
+                    is_active = task_status and task_status not in (
+                        TS.SUCCESS, TS.FAILED, TS.CANCELLED, TS.SKIPPED,
+                    )
 
-                if is_active:  # pragma: no cover
-                    active = True  # pragma: no cover
-                    if had_output:  # pragma: no cover
-                        await asyncio.sleep(0.05)  # pragma: no cover
-                        with open(log_path) as f:  # pragma: no cover
-                            f.seek(positions[task_name])  # pragma: no cover
-                            more = f.read()  # pragma: no cover
-                            if more:  # pragma: no cover
-                                lines, advance = _yield_complete_lines(more)  # pragma: no cover
-                                positions[task_name] += advance  # pragma: no cover
+                    if is_active:  # pragma: no cover
+                        active = True  # pragma: no cover
+                        if had_output:  # pragma: no cover
+                            await asyncio.sleep(0.05)  # pragma: no cover
+                            lines, new_pos = _read_log_lines(log_path, positions[task_name])  # pragma: no cover
+                            if lines:  # pragma: no cover
+                                positions[task_name] = new_pos  # pragma: no cover
                                 for line in lines:  # pragma: no cover
                                     yield {"event": "log", "data": f"{task_name}: {line}"}  # pragma: no cover
+                    elif (
+                        task_name not in flushed
+                        and task_status
+                        and task_status in (TS.SUCCESS, TS.FAILED, TS.CANCELLED, TS.SKIPPED)
+                    ):
+                        # Issue #68: 任务结束后刷新剩余日志（含不完整行），避免丢失尾部输出
+                        flushed.add(task_name)
+                        lines, new_pos = _read_log_lines(
+                            log_path, positions[task_name], include_partial=True
+                        )
+                        if lines:
+                            positions[task_name] = new_pos
+                            for line in lines:
+                                yield {"event": "log", "data": f"{task_name}: {line}"}
 
-            if active:  # pragma: no cover
-                await asyncio.sleep(0.3)  # pragma: no cover
+                # 排空事件总线积压的状态变更
+                while not status_queue.empty():
+                    event = status_queue.get_nowait()
+                    task_name = event["task_name"]
+                    status_str = event["status"]
+                    if status_str != prev_statuses.get(task_name):
+                        yield {"event": "status", "data": json.dumps(event, ensure_ascii=False)}
+                        prev_statuses[task_name] = status_str
 
-        yield {"event": "done", "data": ""}
+                if active:  # pragma: no cover
+                    # 等待事件总线推送（即时）或超时后轮询（兜底）
+                    try:  # pragma: no cover
+                        event = await asyncio.wait_for(status_queue.get(), timeout=0.3)
+                        task_name = event["task_name"]
+                        status_str = event["status"]
+                        if status_str != prev_statuses.get(task_name):
+                            yield {"event": "status", "data": json.dumps(event, ensure_ascii=False)}
+                            prev_statuses[task_name] = status_str
+                    except asyncio.TimeoutError:  # pragma: no cover
+                        pass  # pragma: no cover
+
+            yield {"event": "done", "data": ""}
+        finally:
+            event_bus.off(SIGNAL_TASK_STARTED, _on_task_started)
+            event_bus.off(SIGNAL_TASK_FINISHED, _on_task_finished)
 
     return EventSourceResponse(_log_stream())
 
@@ -241,8 +349,9 @@ async def get_run_console(
             size = f.tell()
             block = min(size, tail * 512)
             f.seek(max(0, size - block))
-            raw = f.read().decode("utf-8", errors="replace")
-            lines = raw.split('\n')
+            raw = f.read()
+            text = _decode_log_bytes(raw)
+            lines = text.split('\n')
             if size > block:
                 lines = lines[1:]
             return JSONResponse(
@@ -255,8 +364,8 @@ async def get_run_console(
                 headers=headers,
             )
 
-    with open(log_path) as f:
-        content = f.read()
+    lines, _ = _read_log_lines(log_path, 0, include_partial=True)
+    content = "\n".join(lines)
     return JSONResponse(
         content={
             "log_path": str(log_path),
@@ -383,31 +492,30 @@ async def get_retry_logs(
                 file_size = f.tell()
                 chunk_size = min(file_size, tail * 256)
                 f.seek(max(0, file_size - chunk_size))
-                raw = f.read().decode("utf-8", errors="replace")
-                lines = raw.split("\n")
+                raw = f.read()
+                text = _decode_log_bytes(raw)
+                lines = text.split("\n")
                 if file_size > chunk_size:
                     lines = lines[1:]
                 content = "\n".join(lines[-tail:])
         else:
-            with open(log_path) as f:
-                content = f.read()
+            lines, _ = _read_log_lines(log_path, 0, include_partial=True)
+            content = "\n".join(lines)
         return {"log_path": str(log_path), "content": content, "exists": True}
 
     async def _retry_log_stream():
         position = 0
         active = True
+        flushed = False
         while active:
             if not log_path.exists():
                 await asyncio.sleep(0.3)
                 continue
-            with open(log_path) as f:
-                f.seek(position)
-                new_content = f.read()
-                if new_content:
-                    lines, advance = _yield_complete_lines(new_content)
-                    position += advance
-                    for line in lines:
-                        yield {"event": "retry_log", "data": line}
+            lines, new_pos = _read_log_lines(log_path, position)
+            if lines:
+                position = new_pos
+                for line in lines:
+                    yield {"event": "retry_log", "data": line}
             async with get_session_factory()() as session:
                 retry_repo = RetryRecordRepository(session)
                 record = await retry_repo.get_retry_record(retry_id)
@@ -416,6 +524,16 @@ async def get_retry_logs(
                 )
                 if not is_active:
                     active = False
+                    # Issue #68: 任务结束后刷新剩余日志（含不完整行）
+                    if not flushed:
+                        flushed = True
+                        lines, new_pos = _read_log_lines(
+                            log_path, position, include_partial=True
+                        )
+                        if lines:
+                            position = new_pos
+                            for line in lines:
+                                yield {"event": "retry_log", "data": line}
             if active:
                 await asyncio.sleep(0.3)
         yield {"event": "done", "data": ""}

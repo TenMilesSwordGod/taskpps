@@ -278,6 +278,16 @@ class AgentBootstrap:
         log_file = f"{log_dir}/agent.log"
         work_dir = agent_data.get("agent_work_dir", "")
 
+        # Issue #68: 先检查远程主机上是否已有 agent 在运行，避免重复部署多个实例
+        existing_pid = await self._check_existing_agent(client, pid_file)
+        if existing_pid:
+            logger.info(
+                "Agent '%s' already running on remote host with PID %d, skipping deploy",
+                agent_id,
+                existing_pid,
+            )
+            return existing_pid
+
         cmd = f"mkdir -p {log_dir} && {binary_path} run --server {server_url} --agent-id {agent_id}"
         if secret:
             cmd += f" --secret {secret}"
@@ -294,6 +304,45 @@ class AgentBootstrap:
         if exit_code != 0:
             raise AgentBootstrapError(t("Failed to read PID file"))
         return int(pid_str.strip())
+
+    async def _check_existing_agent(self, client, pid_file: str) -> int | None:
+        """检查远程主机上是否已有 agent 进程在运行。
+
+        通过 PID 文件和进程存活检查判断。如果 PID 文件存在且对应进程
+        仍在运行，返回该 PID；否则清理残留 PID 文件并返回 None。
+        """
+        # 1. 检查 PID 文件是否存在
+        exit_code, pid_str, _ = await self._ssh_exec(client, f"cat {pid_file} 2>/dev/null")
+        if exit_code != 0 or not pid_str.strip():
+            return None
+
+        try:
+            pid = int(pid_str.strip())
+        except ValueError:
+            # PID 文件内容无效，清理
+            await self._ssh_exec(client, f"rm -f {pid_file}")
+            return None
+
+        if pid <= 0:
+            return None
+
+        # 2. 检查该 PID 的进程是否仍在运行
+        exit_code, _, _ = await self._ssh_exec(client, f"kill -0 {pid} 2>/dev/null")
+        if exit_code == 0:
+            # 进程存活，进一步确认是 taskpps-agent 进程
+            exit_code, cmdline, _ = await self._ssh_exec(client, f"cat /proc/{pid}/cmdline 2>/dev/null")
+            if exit_code == 0 and "taskpps-agent" in cmdline:
+                return pid
+            # PID 被其他进程占用，不是我们的 agent
+            logger.warning(
+                "PID %d exists but is not taskpps-agent, cleaning stale pid file %s",
+                pid,
+                pid_file,
+            )
+
+        # 进程不存在或 PID 被复用，清理残留 PID 文件
+        await self._ssh_exec(client, f"rm -f {pid_file}")
+        return None
 
     def _get_server_host(self, agent_data: dict | None = None) -> str:
         if agent_data:

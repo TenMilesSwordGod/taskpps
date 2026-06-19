@@ -403,6 +403,29 @@ class TestPipelineRunnerRun:
         assert runner._unexpected_error is True
         assert run_repo.update_run_status.call_args[0][1] == "failed"
 
+    @pytest.mark.asyncio
+    async def test_cancelled_error_sets_terminal_status(self, mock_session_factory):
+        """Issue #66: asyncio.CancelledError (BaseException) 跳过最终状态更新，
+        导致 run 永远停在 RUNNING。修复后 finally 块应兜底设置终态。"""
+        run_repo, _task_repo = mock_session_factory
+        tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cancel_err")
+        runner = PipelineRunner(run_id="test_cancel_err", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"t1": "tr1"}
+
+        with (
+            patch.object(runner, "_build_subpipeline_levels", side_effect=asyncio.CancelledError()),
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_settings"),
+        ):
+            await runner.run()
+
+        # 最终状态必须是终态（failed/cancelled），不能停留在 running
+        final_status = run_repo.update_run_status.call_args[0][1]
+        assert final_status in ("failed", "cancelled"), f"Expected terminal status, got {final_status}"
+
 
 class TestPipelineRunnerCancel:
     @pytest.mark.asyncio

@@ -21,7 +21,7 @@ def _write_log_chunk(log_path: Path, data: str) -> None:
     """
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(log_path, "a") as f:
+        with open(log_path, "a", encoding="utf-8", errors="replace") as f:
             f.write(data)
             f.flush()
     except Exception:
@@ -119,6 +119,7 @@ class AgentExecutor(BaseExecutor):
             await self._manager.send_command(self._agent_id, command_id, command, env, effective_cwd, effective_timeout)
         except Exception as e:
             logger.exception("Failed to send command to agent '%s'", self._agent_id)
+            self._manager.cleanup_command(self._agent_id, command_id)
             return ExecutorResult(exit_code=-1, stderr=str(e))
 
         try:
@@ -126,10 +127,12 @@ class AgentExecutor(BaseExecutor):
         except asyncio.TimeoutError:
             self._log(log_path, f"[ERROR] Task exceeded timeout of {effective_timeout}s\n")
             await self._manager.cancel_command(self._agent_id, command_id)
+            self._manager.cleanup_command(self._agent_id, command_id)
             return ExecutorResult(exit_code=-1, stdout="".join(output_lines))
         except asyncio.CancelledError:
             self._log(log_path, "[WARN] Task was cancelled\n")
             await self._manager.cancel_command(self._agent_id, command_id)
+            self._manager.cleanup_command(self._agent_id, command_id)
             return ExecutorResult(exit_code=-1, stdout="".join(output_lines))
 
         exit_code = result.get("exit_code", -1)
@@ -152,11 +155,24 @@ class AgentExecutor(BaseExecutor):
         self._cancelled = True
         if self._command_id:
             await self._manager.cancel_command(self._agent_id, self._command_id)
+            self._manager.cleanup_command(self._agent_id, self._command_id)
+
+    def cleanup(self) -> None:
+        """清理 executor 注册的 output callback，防止内存泄漏。
+
+        当 executor 被外部取消（如 CancelledError 传播）时，execute() 的
+        try/except 不会执行，on_output callback 残留在 AgentConnection 中。
+        调用方应在 finally 块中调用此方法。
+        """
+        if self._command_id:
+            conn = self._manager.get_connection(self._agent_id)
+            if conn:
+                conn._output_callbacks.pop(self._command_id, None)
 
     def _log(self, log_path: Path, message: str) -> None:
         try:
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(log_path, "a") as f:
+            with open(log_path, "a", encoding="utf-8", errors="replace") as f:
                 f.write(message)
                 f.flush()
         except Exception:

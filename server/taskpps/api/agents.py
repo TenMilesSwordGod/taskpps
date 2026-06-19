@@ -256,6 +256,19 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not connected")
     conn = manager.get_connection(agent_id)
 
+    # Issue #68: 检查 agent 是否正在执行 pipeline 任务，避免手动 exec 中断正在运行的任务
+    pipeline_commands = [
+        info for info in conn._pending_commands.values()
+        if info.run_id  # run_id 非空说明是 pipeline 任务
+    ]
+    if pipeline_commands:
+        task_names = ", ".join(info.task_name or info.command_id for info in pipeline_commands)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Agent '{agent_id}' is executing pipeline task(s): {task_names}. "
+                   f"Please wait for completion or cancel the run first.",
+        )
+
     cwd = body.cwd or ""
     if not cwd:
         agent_items, _ = await _load_agents_from_projects()
@@ -292,6 +305,7 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
         result = await asyncio.wait_for(fut, timeout=body.timeout + 10)
     except asyncio.TimeoutError:
         await manager.cancel_command(agent_id, command_id)
+        manager.cleanup_command(agent_id, command_id)
         return AgentExecResult(
             agent_id=agent_id,
             exit_code=-1,
@@ -301,12 +315,16 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
         )
     except asyncio.CancelledError:
         await manager.cancel_command(agent_id, command_id)
+        manager.cleanup_command(agent_id, command_id)
         raise
 
     exit_code = result.get("exit_code", -1)
     signal_name = result.get("signal_name", "")
     error = result.get("error", "")
     duration_ms = int((time.monotonic() - start_time) * 1000)
+
+    # 清理 output callback（resolve_pending 已清理 pending command）
+    conn._output_callbacks.pop(command_id, None)
 
     error_msg = ""
     if signal_name:

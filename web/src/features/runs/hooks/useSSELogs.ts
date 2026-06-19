@@ -110,8 +110,10 @@ export function useSSELogs(runId: string | undefined) {
       es.close();
       eventSourceRef.current = null;
 
-      // 重连：清除可能过期的 taskStatusMap，避免陈旧状态覆盖服务端最新数据
-      // （Issue #61: SSE 断连后 taskStatusMap 停留在旧状态，导致 UI 状态不更新）
+      // Issue #66: 重连时清空已有日志和 taskStatusMap。
+      // 服务端 SSE 不支持断点续传，每次连接都从 position 0 重发全部日志。
+      // 若不清空，重连后旧日志 + 重发日志 = 全部重复。
+      setLogs([]);
       setTaskStatusMap({});
 
       // 指数退避重连

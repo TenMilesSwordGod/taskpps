@@ -645,3 +645,46 @@ class TestTaskRunRepositoryMore:
             updated = await task_repo.get_task_run(task.id)
             assert updated.started_at is not None
             assert updated.finished_at is not None
+
+    @pytest.mark.asyncio
+    async def test_update_stuck_tasks(self, db_engine, clean_db):
+        """Issue #68: update_stuck_tasks 应将 RUNNING/PENDING 的 task 批量更新为终态。"""
+        from datetime import datetime, timezone
+
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run("test")
+            t1 = await task_repo.create_task_run(run.id, "task-1")
+            t2 = await task_repo.create_task_run(run.id, "task-2")
+            t3 = await task_repo.create_task_run(run.id, "task-3")
+            # t1: RUNNING, t2: PENDING, t3: SUCCESS
+            await task_repo.update_task_status(t1.id, TaskStatus.RUNNING)
+            await task_repo.update_task_status(t3.id, TaskStatus.SUCCESS, exit_code=0)
+
+            now = datetime.now(timezone.utc)
+            count = await task_repo.update_stuck_tasks(run.id, TaskStatus.FAILED, finished_at=now)
+            assert count == 2
+
+            updated_t1 = await task_repo.get_task_run(t1.id)
+            updated_t2 = await task_repo.get_task_run(t2.id)
+            updated_t3 = await task_repo.get_task_run(t3.id)
+            assert updated_t1.status == TaskStatus.FAILED
+            assert updated_t2.status == TaskStatus.FAILED
+            assert updated_t3.status == TaskStatus.SUCCESS  # 未被修改
+
+    @pytest.mark.asyncio
+    async def test_update_stuck_tasks_no_stuck(self, db_engine, clean_db):
+        """没有卡住的 task 时，update_stuck_tasks 应返回 0。"""
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run("test")
+            t1 = await task_repo.create_task_run(run.id, "task-1")
+            await task_repo.update_task_status(t1.id, TaskStatus.SUCCESS, exit_code=0)
+
+            from datetime import datetime, timezone
+            count = await task_repo.update_stuck_tasks(
+                run.id, TaskStatus.FAILED, finished_at=datetime.now(timezone.utc)
+            )
+            assert count == 0

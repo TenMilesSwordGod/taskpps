@@ -135,6 +135,19 @@ describe('useSSELogs()', () => {
     expect(result.current.connected).toBe(false)
   })
 
+  it('重连时清空已有日志，避免重复（Issue #66）', () => {
+    const { result } = renderHook(() => useSSELogs('run-1'))
+    const es = MockEventSource.instances[0]
+    act(() => es.open())
+    // 先积累一些日志
+    act(() => es.emit('log', 'build: line1'))
+    act(() => es.emit('log', 'build: line2'))
+    expect(result.current.logs).toHaveLength(2)
+    // 网络错误触发重连：日志应被清空，避免重连后服务端从 position 0 重发导致重复
+    act(() => es.fail())
+    expect(result.current.logs).toHaveLength(0)
+  })
+
   it('clearLogs：清空已收集的日志', () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     act(() => MockEventSource.instances[0].emit('log', 'build: x'))

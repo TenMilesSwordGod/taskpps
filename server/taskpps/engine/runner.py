@@ -197,6 +197,7 @@ class PipelineRunner:
 
         logger.info("PipelineRunner: starting pipeline '%s' run_id=%s", self.pipeline.name, self.run_id)
 
+        _final_status_updated = False
         try:
             event_bus = get_event_bus()
             event_bus.emit(SIGNAL_PIPELINE_STARTED, sender=self, run_id=self.run_id, pipeline=self.pipeline.name)
@@ -335,6 +336,7 @@ class PipelineRunner:
 
                 run_error = "; ".join(self._error_messages) if self._error_messages else None
                 await run_repo.update_run_status(self.run_id, final_status, finished_at=end_time, error=run_error)
+                _final_status_updated = True
 
             self._write_pipeline_log("PIPELINE:TEARDOWN", "")
             self._write_pipeline_log("SYSTEM", f"End Time: {end_time.isoformat()}")
@@ -342,7 +344,49 @@ class PipelineRunner:
             self._write_pipeline_log("SYSTEM", "=" * 80)
 
             event_bus.emit(SIGNAL_RUN_COMPLETED, sender=self, run_id=self.run_id, status=final_status)
+        except asyncio.CancelledError:
+            # Issue #66: CancelledError (BaseException) 跳过正常终态更新，
+            # 由 finally 兜底设置终态。不重新抛出，避免 run() 抛异常给调用方。
+            self._cancelled = True
+            logger.warning("PipelineRunner: run_id=%s cancelled unexpectedly", self.run_id)
         finally:
+            # Issue #66: 兜底确保 run 总是到达终态。
+            # asyncio.CancelledError (BaseException) 不会被 except Exception 捕获，
+            # 会跳过上方的最终状态更新，导致 run 永远停在 RUNNING。
+            if not _final_status_updated:
+                fallback_status = RunStatus.CANCELLED if self._cancelled else RunStatus.FAILED
+                logger.warning(
+                    "PipelineRunner: run_id=%s ended without final status update, setting to %s",
+                    self.run_id,
+                    fallback_status.value,
+                )
+                try:
+                    async with get_session_factory()() as session:
+                        run_repo = RunRepository(session)
+                        await run_repo.update_run_status(
+                            self.run_id,
+                            fallback_status,
+                            finished_at=datetime.now(timezone.utc),
+                            error="; ".join(self._error_messages) if self._error_messages else None,
+                        )
+                except Exception:
+                    logger.exception("PipelineRunner: failed to set fallback terminal status for run %s", self.run_id)
+
+            # Issue #68: 兜底确保卡在 RUNNING/PENDING 的 task 也到达终态。
+            # 当 run 被 CancelledError 或其他异常中断时，部分 task 可能
+            # 已设为 RUNNING 但尚未收到终态更新，导致 UI 上永远显示"运行中"。
+            try:
+                async with get_session_factory()() as session:
+                    task_repo = TaskRunRepository(session)
+                    task_fallback = TaskStatus.CANCELLED if self._cancelled else TaskStatus.FAILED
+                    await task_repo.update_stuck_tasks(
+                        self.run_id,
+                        task_fallback,
+                        finished_at=datetime.now(timezone.utc),
+                    )
+            except Exception:
+                logger.exception("PipelineRunner: failed to set fallback terminal status for tasks in run %s", self.run_id)
+
             self._cleanup_cancel_signal()
             _active_runs.pop(self.run_id, None)
 
@@ -704,8 +748,13 @@ class PipelineRunner:
                 except Exception:
                     pass
                 result = ExecutorResult(exit_code=1, stderr=str(e))
-
-            self._running_executors.pop(task.name, None)
+            finally:
+                # CancelledError 是 BaseException，不会被 except Exception 捕获，
+                # 必须在 finally 中清理 _running_executors，避免 executor 引用泄漏
+                executor = self._running_executors.pop(task.name, None)
+                # 清理 executor 内部注册的 output callback，防止内存泄漏
+                if isinstance(executor, AgentExecutor):
+                    executor.cleanup()
             last_result = result
 
             logger.debug(

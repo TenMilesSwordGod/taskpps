@@ -65,6 +65,71 @@ class TestAgentExec:
         # cleanup
         manager._connections.pop("test-agent", None)
 
+    @pytest.mark.asyncio
+    async def test_agent_exec_rejected_when_pipeline_running(self, client):
+        """Issue #68: agent 正在执行 pipeline 任务时，手动 exec 应被拒绝。"""
+        from taskpps.services.agent_manager import AgentConnection, AgentManager, PendingCommandInfo
+
+        manager = AgentManager.instance()
+        ws = AsyncMock()
+        ws.send_json = AsyncMock()
+        conn = AgentConnection("busy-agent", ws)
+        # 模拟一个正在执行的 pipeline 任务
+        info = PendingCommandInfo(
+            command_id="cmd-1",
+            command="robot --test example",
+            run_id="run-123",
+            task_name="main.example",
+        )
+        conn._pending_commands["cmd-1"] = info
+        manager._connections["busy-agent"] = conn
+
+        response = await client.post(
+            "/api/agents/busy-agent/exec",
+            json={
+                "command": "echo hello",
+                "timeout": 5,
+            },
+        )
+        assert response.status_code == 409
+        assert "pipeline task" in response.json()["detail"].lower()
+
+        # cleanup
+        manager._connections.pop("busy-agent", None)
+
+    @pytest.mark.asyncio
+    async def test_agent_exec_allowed_when_no_pipeline_task(self, client):
+        """Issue #68: agent 只有非 pipeline 命令时，手动 exec 应被允许（不被 409 拒绝）。"""
+        from taskpps.services.agent_manager import AgentConnection, AgentManager, PendingCommandInfo
+
+        manager = AgentManager.instance()
+        ws = AsyncMock()
+        ws.send_json = AsyncMock()
+        conn = AgentConnection("free-agent", ws)
+        # 模拟一个非 pipeline 的 pending command（无 run_id）
+        info = PendingCommandInfo(
+            command_id="manual-cmd",
+            command="ls -la",
+            run_id="",  # 空 run_id 表示不是 pipeline 任务
+        )
+        conn._pending_commands["manual-cmd"] = info
+        manager._connections["free-agent"] = conn
+
+        # 只验证不被 409 拒绝，不实际发送命令（避免 future 泄漏）
+        # 验证不会因为 pipeline 检查被拒绝
+        # 由于 agent 是 mock 的，实际 exec 会失败，但不应是 409
+        try:
+            response = await client.post(
+                "/api/agents/free-agent/exec",
+                json={"command": "echo hello", "timeout": 5},
+            )
+            assert response.status_code != 409
+        finally:
+            # 清理：确保 pending commands 和 output callbacks 被清理
+            for cid in list(conn._pending_commands.keys()):
+                conn.cleanup_command(cid)
+            manager._connections.pop("free-agent", None)
+
 
 class TestAgentList:
     @pytest.mark.asyncio

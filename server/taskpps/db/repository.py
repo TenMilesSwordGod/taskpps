@@ -232,6 +232,32 @@ class TaskRunRepository:
         await self.session.commit()
         return count
 
+    async def update_stuck_tasks(
+        self,
+        run_id: str,
+        status: TaskStatus,
+        finished_at: datetime | None = None,
+    ) -> int:
+        """将指定 run 中仍处于 RUNNING 或 PENDING 的 task 批量更新为终态。
+
+        用于 PipelineRunner.run() 的 finally 兜底，确保异常中断时
+        不会有 task 永远卡在"运行中"状态。
+        """
+        stmt = select(TaskRun).where(
+            TaskRun.run_id == run_id,
+            TaskRun.status.in_([TaskStatus.RUNNING, TaskStatus.PENDING]),
+        )
+        result = await self.session.execute(stmt)
+        tasks = result.scalars().all()
+        count = 0
+        for t in tasks:
+            t.status = status
+            if finished_at is not None:
+                t.finished_at = finished_at
+            count += 1
+        await self.session.commit()
+        return count
+
     async def get_running_tasks(self, run_id: str) -> Sequence[TaskRun]:
         result = await self.session.execute(
             select(TaskRun).where(TaskRun.run_id == run_id, TaskRun.status == TaskStatus.RUNNING)

@@ -302,8 +302,12 @@ class TestAgentBootstrapSSHHelpers:
     async def test_start_agent_daemon_success(self):
         bootstrap = AgentBootstrap()
         client = MagicMock()
-        # exit_code, stdout, stderr → 0 (mkdir/run), then 0 (cat pid), "42"
+        # _check_existing_agent returns None, then mkdir/run + cat pid
         with patch.object(
+            bootstrap,
+            "_check_existing_agent",
+            new=AsyncMock(return_value=None),
+        ), patch.object(
             bootstrap,
             "_ssh_exec",
             side_effect=[(0, "", ""), (0, "42", "")],
@@ -318,7 +322,11 @@ class TestAgentBootstrapSSHHelpers:
     async def test_start_agent_daemon_failure(self):
         bootstrap = AgentBootstrap()
         client = MagicMock()
-        with patch.object(bootstrap, "_ssh_exec", return_value=(1, "", "boom")):
+        with patch.object(
+            bootstrap,
+            "_check_existing_agent",
+            new=AsyncMock(return_value=None),
+        ), patch.object(bootstrap, "_ssh_exec", return_value=(1, "", "boom")):
             with pytest.raises(AgentBootstrapError, match="Failed to start agent"):
                 await bootstrap._start_agent_daemon(
                     client, "/bin/agent", "/var/log", "/var/run.pid", "agent-id", "", "ws://srv", {},
@@ -329,6 +337,10 @@ class TestAgentBootstrapSSHHelpers:
         bootstrap = AgentBootstrap()
         client = MagicMock()
         with patch.object(
+            bootstrap,
+            "_check_existing_agent",
+            new=AsyncMock(return_value=None),
+        ), patch.object(
             bootstrap,
             "_ssh_exec",
             side_effect=[(0, "", ""), (1, "", "no such file")],
@@ -345,6 +357,10 @@ class TestAgentBootstrapSSHHelpers:
         client = MagicMock()
         # 验证 secret + work_dir 都被加进命令
         with patch.object(
+            bootstrap,
+            "_check_existing_agent",
+            new=AsyncMock(return_value=None),
+        ), patch.object(
             bootstrap,
             "_ssh_exec",
             side_effect=[(0, "", ""), (0, "7", "")],
@@ -363,6 +379,98 @@ class TestAgentBootstrapSSHHelpers:
         first_cmd = mock_exec.call_args_list[0][0][1]
         assert "--secret topsecret" in first_cmd
         assert "--work-dir /work" in first_cmd
+
+    @pytest.mark.asyncio
+    async def test_start_agent_daemon_skips_when_already_running(self):
+        """Issue #68: 远程主机已有 agent 运行时，应跳过启动，返回已有 PID。"""
+        bootstrap = AgentBootstrap()
+        client = MagicMock()
+        with patch.object(
+            bootstrap,
+            "_check_existing_agent",
+            new=AsyncMock(return_value=1234),
+        ):
+            pid = await bootstrap._start_agent_daemon(
+                client, "/bin/agent", "/var/log", "/var/run.pid", "agent-id", "", "ws://srv", {},
+            )
+        assert pid == 1234
+
+
+class TestCheckExistingAgent:
+    """Issue #68: _check_existing_agent 检查远程主机是否已有 agent 运行。"""
+
+    @pytest.mark.asyncio
+    async def test_no_pid_file(self):
+        """PID 文件不存在 → 返回 None。"""
+        bootstrap = AgentBootstrap()
+        with patch.object(bootstrap, "_ssh_exec", return_value=(1, "", "")):
+            result = await bootstrap._check_existing_agent(MagicMock(), "/var/run/agent.pid")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_pid_file_with_running_agent(self):
+        """PID 文件存在，进程存活且是 taskpps-agent → 返回 PID。"""
+        bootstrap = AgentBootstrap()
+        # cat pid_file → 1234, kill -0 → 0, cat /proc/1234/cmdline → taskpps-agent
+        with patch.object(
+            bootstrap,
+            "_ssh_exec",
+            side_effect=[
+                (0, "1234", ""),       # cat pid_file
+                (0, "", ""),           # kill -0
+                (0, "taskpps-agent\0run\0", ""),  # cat /proc/cmdline
+            ],
+        ):
+            result = await bootstrap._check_existing_agent(MagicMock(), "/var/run/agent.pid")
+        assert result == 1234
+
+    @pytest.mark.asyncio
+    async def test_pid_file_stale_process_dead(self):
+        """PID 文件存在但进程已死 → 清理 PID 文件，返回 None。"""
+        bootstrap = AgentBootstrap()
+        with patch.object(
+            bootstrap,
+            "_ssh_exec",
+            side_effect=[
+                (0, "1234", ""),  # cat pid_file
+                (1, "", ""),      # kill -0 (process dead)
+                (0, "", ""),      # rm -f pid_file
+            ],
+        ):
+            result = await bootstrap._check_existing_agent(MagicMock(), "/var/run/agent.pid")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_pid_file_pid_reused_by_other_process(self):
+        """PID 文件存在，进程存活但不是 taskpps-agent → 清理 PID 文件，返回 None。"""
+        bootstrap = AgentBootstrap()
+        with patch.object(
+            bootstrap,
+            "_ssh_exec",
+            side_effect=[
+                (0, "9999", ""),           # cat pid_file
+                (0, "", ""),               # kill -0 (alive)
+                (0, "some-other-program", ""),  # cat /proc/cmdline (not taskpps-agent)
+                (0, "", ""),               # rm -f pid_file
+            ],
+        ):
+            result = await bootstrap._check_existing_agent(MagicMock(), "/var/run/agent.pid")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_pid_file_invalid_content(self):
+        """PID 文件内容不是数字 → 清理 PID 文件，返回 None。"""
+        bootstrap = AgentBootstrap()
+        with patch.object(
+            bootstrap,
+            "_ssh_exec",
+            side_effect=[
+                (0, "not-a-pid", ""),  # cat pid_file
+                (0, "", ""),           # rm -f pid_file
+            ],
+        ):
+            result = await bootstrap._check_existing_agent(MagicMock(), "/var/run/agent.pid")
+        assert result is None
 
 
 class TestAgentBootstrapFlow:

@@ -229,6 +229,43 @@ class AgentManager:
         current.last_heartbeat = -1
         logger.info("Agent '%s' disconnected (pending commands preserved for reconnect)", agent_id)
 
+        # 启动延迟清理任务：如果 agent 在 DISPLAY_GRACE_PERIOD 内未重连，
+        # 清理残留的 pending commands 和 output callbacks，避免内存泄漏
+        self._schedule_disconnect_cleanup(agent_id)
+
+    def _schedule_disconnect_cleanup(self, agent_id: str) -> None:
+        """安排断连 agent 的延迟清理任务。"""
+        import asyncio
+
+        async def _cleanup_after_grace():
+            await asyncio.sleep(DISPLAY_GRACE_PERIOD)
+            conn = self._connections.get(agent_id)
+            # 如果 agent 已重连（last_heartbeat > 0），跳过清理
+            if conn and conn.last_heartbeat > 0:
+                return
+            # 清理残留的 pending commands 和 output callbacks
+            if conn:
+                stale_commands = list(conn._pending_commands.keys())
+                if stale_commands:
+                    logger.warning(
+                        "Agent '%s' did not reconnect within grace period, cleaning %d stale commands",
+                        agent_id,
+                        len(stale_commands),
+                    )
+                    for cid in stale_commands:
+                        try:
+                            conn.cleanup_command(cid)
+                        except Exception:
+                            logger.exception("Failed to cleanup command %s for agent '%s'", cid, agent_id)
+                # 从 _connections 中移除，释放 WebSocket 引用
+                self._connections.pop(agent_id, None)
+                logger.info("Agent '%s' removed from connections after grace period", agent_id)
+
+        try:
+            asyncio.create_task(_cleanup_after_grace())
+        except RuntimeError:
+            pass  # 事件循环已关闭（服务器关闭期间）
+
     def get_connection(self, agent_id: str) -> AgentConnection | None:
         return self._connections.get(agent_id)
 
@@ -245,6 +282,18 @@ class AgentManager:
         if conn is None:
             return
         await conn.send_cancel(command_id)
+
+    def cleanup_command(self, agent_id: str, command_id: str) -> None:
+        """Issue #66: 清理 pending command，避免 agent 永远显示 running。
+
+        cancel_command 只发取消消息，不清理 _pending_commands。如果 agent
+        断连/重启/结果丢失，pending command 永久残留，running_commands 计数
+        永不归零。超时/取消/发送失败路径必须调用此方法。
+        """
+        conn = self._connections.get(agent_id)
+        if conn is None:
+            return
+        conn.cleanup_command(command_id)
 
     def create_pending(
         self,
