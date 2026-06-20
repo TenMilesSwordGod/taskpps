@@ -47,6 +47,7 @@ class RunResponse(BaseModel):
     finished_at: datetime | None = None
     created_at: datetime
     tasks: list[TaskRunResponse] = []
+    task_summary: dict[str, int] = {}
 
     model_config = {"from_attributes": True}
 
@@ -72,6 +73,7 @@ class RunResponse(BaseModel):
             "finished_at": obj.finished_at,
             "created_at": obj.created_at,
             "tasks": obj.tasks if hasattr(obj, "_tasks_loaded") else [],
+            "task_summary": getattr(obj, "task_summary", {}),
         }
         return cls(**data)
 
