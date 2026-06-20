@@ -60,6 +60,10 @@ export default function PipelineProgressPopover({ tasks, taskSummary, children }
     return null;
   }, [tasks, taskSummary]);
 
+  // #region debug-point dp1 — 诊断悬浮窗不显示
+  console.log('[PipelineProgressPopover] stats:', stats, 'tasks:', tasks?.length, 'taskSummary:', taskSummary);
+  // #endregion
+
   // 无数据时不显示悬浮窗
   if (!stats) return <>{children}</>;
 
