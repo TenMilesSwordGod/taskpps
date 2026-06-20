@@ -18,13 +18,9 @@ interface LogViewerProps {
 const TASK_COLORS = [
   '#60a5fa', '#34d399', '#fbbf24', '#f87171',
   '#a78bfa', '#fb923c', '#2dd4bf', '#f472b6',
+  '#818cf8', '#4ade80', '#facc15', '#fb7185',
+  '#c084fc', '#22d3ee', '#a3e635', '#e879f9',
 ];
-
-function getTaskColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return TASK_COLORS[Math.abs(hash) % TASK_COLORS.length];
-}
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'unknown';
 
@@ -87,6 +83,15 @@ export default function LogViewer({
     () => [...new Set(logs.map((l) => l.taskName).filter(Boolean))],
     [logs],
   );
+
+  // Issue #71: 按任务首次出现顺序分配颜色，避免 hash 碰撞导致相邻任务同色
+  const taskColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    taskNames.forEach((name, i) => {
+      map.set(name, TASK_COLORS[i % TASK_COLORS.length]);
+    });
+    return map;
+  }, [taskNames]);
 
   const effectiveFilter = selectedTaskId ?? taskFilter;
 
@@ -242,7 +247,7 @@ export default function LogViewer({
           </Tooltip>
           {showTaskNames && (
             log.taskName ? (
-              <span style={{ color: getTaskColor(log.taskName), fontWeight: 500, minWidth: 0 }}>
+              <span style={{ color: taskColorMap.get(log.taskName) || '#d1d5db', fontWeight: 500, minWidth: 0 }}>
                 [{log.taskName}]
               </span>
             ) : (
@@ -255,7 +260,7 @@ export default function LogViewer({
         </div>
       );
     },
-    [filtered, showTaskNames],
+    [filtered, showTaskNames, taskColorMap],
   );
 
   return (

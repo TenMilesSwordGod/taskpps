@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Table, Select, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag } from 'antd';
+import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Play, Trash2 } from 'lucide-react';
+import { Eye, Play, Trash2, RefreshCw, History, CircleDot } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import { useRuns, useCleanRuns, useDeleteRun } from '@/api/runs';
@@ -11,9 +11,9 @@ import type { RunResponse, RunStatus } from '@/types';
 
 dayjs.extend(duration);
 
-/** 运行状态选项 */
-const STATUS_OPTIONS: { label: string; value: RunStatus }[] = [
-  { label: '等待中', value: 'pending' },
+/** 状态过滤选项（Segmented 用） */
+const STATUS_OPTIONS: { label: string; value: RunStatus | 'all' }[] = [
+  { label: '全部', value: 'all' },
   { label: '运行中', value: 'running' },
   { label: '成功', value: 'success' },
   { label: '失败', value: 'failed' },
@@ -33,13 +33,20 @@ function formatDuration(start: string | null, end: string | null, nowTs?: number
   return `${d.seconds()}s`;
 }
 
+/** 运行状态对应的行背景色（轻量提示） */
+function rowBackground(status: RunStatus): string | undefined {
+  if (status === 'running') return '#eff6ff'; // blue-50
+  if (status === 'failed') return '#fef2f2'; // red-50
+  return undefined;
+}
+
 /** 运行历史页面 */
 export default function RunListPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
-  const [statusFilter, setStatusFilter] = useState<RunStatus | undefined>();
+  const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all');
   const [pipelineFilter, setPipelineFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
@@ -50,7 +57,7 @@ export default function RunListPage() {
   const cleanRuns = useCleanRuns();
   const deleteRun = useDeleteRun();
 
-  const { data, isLoading } = useRuns();
+  const { data, isLoading, refetch, isFetching } = useRuns();
 
   // 动态计算表格滚动高度，避免页面出现滚动条
   useEffect(() => {
@@ -69,9 +76,10 @@ export default function RunListPage() {
 
   // 实时刷新运行中任务的耗时
   const [now, setNow] = useState(Date.now());
+  const allItems = useMemo(() => data?.items ?? [], [data?.items]);
   const hasRunning = useMemo(
-    () => (data?.items ?? []).some((r) => r.status === 'running'),
-    [data?.items],
+    () => allItems.some((r) => r.status === 'running'),
+    [allItems],
   );
   useEffect(() => {
     if (!hasRunning) return;
@@ -79,14 +87,24 @@ export default function RunListPage() {
     return () => clearInterval(t);
   }, [hasRunning]);
 
+  // 统计胶囊
+  const stats = useMemo(() => {
+    let running = 0, success = 0, failed = 0;
+    for (const r of allItems) {
+      if (r.status === 'running') running++;
+      else if (r.status === 'success') success++;
+      else if (r.status === 'failed') failed++;
+    }
+    return { total: allItems.length, running, success, failed };
+  }, [allItems]);
+
   // 前端过滤
   const filtered = useMemo(() => {
-    const all = data?.items ?? [];
-    if (!statusFilter && !pipelineFilter && !projectFilter && !dateRange) return all;
+    if (statusFilter === 'all' && !pipelineFilter && !projectFilter && !dateRange) return allItems;
     const kw = pipelineFilter.toLowerCase();
     const pkw = projectFilter.toLowerCase();
-    return all.filter((run) => {
-      if (statusFilter && run.status !== statusFilter) return false;
+    return allItems.filter((run) => {
+      if (statusFilter !== 'all' && run.status !== statusFilter) return false;
       if (kw && !run.pipeline_name.toLowerCase().includes(kw)) return false;
       if (pkw && !(run.project_id || '').toLowerCase().includes(pkw)) return false;
       if (dateRange) {
@@ -95,7 +113,7 @@ export default function RunListPage() {
       }
       return true;
     });
-  }, [data?.items, statusFilter, pipelineFilter, projectFilter, dateRange]);
+  }, [allItems, statusFilter, pipelineFilter, projectFilter, dateRange]);
 
   // 打开清理弹窗时重置表单
   const handleOpenClean = useCallback(() => {
@@ -161,6 +179,7 @@ export default function RunListPage() {
       title: '流水线名',
       dataIndex: 'pipeline_name',
       key: 'pipeline_name',
+      ellipsis: true,
     },
     {
       title: '文件',
@@ -216,46 +235,90 @@ export default function RunListPage() {
         </Space>
       ),
     },
-  ], [handleOpenDetail, now]);
+  ], [handleOpenDetail, now, handleDeleteSingle]);
 
   return (
-    <div className="flex flex-col h-full p-4 overflow-hidden">
+    <div className="flex flex-col h-full p-4 gap-3 bg-gray-50 overflow-hidden">
+      {/* 顶部工具栏 */}
+      <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <History size={18} className="text-gray-500" />
+            <span className="text-base font-semibold text-gray-800">运行历史</span>
+          </div>
+          {/* 统计胶囊 */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              总计 {stats.total}
+            </span>
+            {stats.running > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                <CircleDot size={10} className="text-blue-500 animate-pulse" />
+                运行中 {stats.running}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+              <CircleDot size={10} className="text-emerald-500" />
+              成功 {stats.success}
+            </span>
+            {stats.failed > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600">
+                <CircleDot size={10} className="text-red-500" />
+                失败 {stats.failed}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Tooltip title="手动刷新">
+            <Button
+              size="small"
+              icon={<RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />}
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              刷新
+            </Button>
+          </Tooltip>
+          <Button type="primary" size="small" icon={<Play size={14} />} onClick={() => setTriggerOpen(true)}>
+            触发运行
+          </Button>
+          <Button size="small" icon={<Trash2 size={14} />} danger onClick={handleOpenClean}>
+            删除历史
+          </Button>
+        </div>
+      </div>
+
       {/* 过滤栏 */}
-      <Space style={{ marginBottom: 16, flexShrink: 0 }} wrap>
-        <Select
-          allowClear
-          placeholder="状态筛选"
-          value={statusFilter}
-          onChange={setStatusFilter}
-          style={{ width: 140 }}
+      <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-4 py-2.5 shadow-sm flex items-center gap-2 flex-wrap">
+        <Segmented
+          size="small"
           options={STATUS_OPTIONS}
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as RunStatus | 'all')}
         />
+        <span className="text-gray-200">|</span>
         <Input
+          allowClear
           placeholder="流水线名"
           value={pipelineFilter}
           onChange={(e) => setPipelineFilter(e.target.value)}
-          style={{ width: 200 }}
-          allowClear
+          style={{ width: 180 }}
         />
         <Input
+          allowClear
           placeholder="项目"
           value={projectFilter}
           onChange={(e) => setProjectFilter(e.target.value)}
           style={{ width: 120 }}
-          allowClear
         />
         <DatePicker.RangePicker
+          size="small"
           value={dateRange}
           onChange={(v) => setDateRange(v as [dayjs.Dayjs, dayjs.Dayjs] | null)}
           showTime
         />
-        <Button type="primary" icon={<Play size={14} />} onClick={() => setTriggerOpen(true)}>
-          触发运行
-        </Button>
-        <Button icon={<Trash2 size={14} />} danger onClick={handleOpenClean}>
-          删除历史
-        </Button>
-      </Space>
+      </div>
 
       {/* 表格 */}
       <div ref={tableContainerRef} className="runs-table-container flex-1 min-h-0 overflow-hidden">
@@ -267,6 +330,9 @@ export default function RunListPage() {
           pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条`, size: 'small' }}
           size="small"
           scroll={tableScrollY ? { y: tableScrollY } : undefined}
+          onRow={(record) => ({
+            style: rowBackground(record.status) ? { background: rowBackground(record.status) } : undefined,
+          })}
         />
       </div>
 

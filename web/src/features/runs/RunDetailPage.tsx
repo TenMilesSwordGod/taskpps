@@ -3,12 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
 import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot } from '@/api/runs';
+import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot, useRetryVersions } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
+import RetryModal from './RetryModal';
+import RetryVersionsDrawer from './RetryVersionsDrawer';
 import { useSSELogs } from './hooks/useSSELogs';
-import type { RunResponse, TaskStatus } from '@/types';
+import type { RunResponse, TaskStatus, TaskYAML } from '@/types';
 import type { LogEntry } from './hooks/useSSELogs';
 
 /** 计算任务进度 */
@@ -75,6 +77,42 @@ export default function RunDetailPage() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
+
+  // Issue #72: 右键重试相关状态
+  const [retryTaskName, setRetryTaskName] = useState<string | null>(null);
+  const [versionsTaskName, setVersionsTaskName] = useState<string | null>(null);
+
+  // Issue #72: 拉取重试版本数据（用于显示重试数徽标 + 版本管理）
+  const { data: retryVersions } = useRetryVersions(id);
+
+  // Issue #72: 构建各任务的重试版本数映射（排除 v0 原始版本，只计重试次数）
+  const retryCounts = useMemo(() => {
+    if (!retryVersions?.task_retries) return {};
+    const map: Record<string, number> = {};
+    for (const [taskName, retries] of Object.entries(retryVersions.task_retries)) {
+      if (retries) {
+        const retryCount = retries.filter((r) => r.retry_version > 0).length;
+        if (retryCount > 0) map[taskName] = retryCount;
+      }
+    }
+    return map;
+  }, [retryVersions]);
+
+  // Issue #72: 从快照中查找任务定义（用于获取原始命令）
+  const findTaskDef = useMemo(() => {
+    return (taskId: string): TaskYAML | undefined => {
+      if (!pipeline) return undefined;
+      // taskId 格式为 "subpipeline.task"
+      const dotIdx = taskId.indexOf('.');
+      if (dotIdx < 0) {
+        return pipeline.tasks?.find((t) => t.name === taskId);
+      }
+      const subName = taskId.slice(0, dotIdx);
+      const taskName = taskId.slice(dotIdx + 1);
+      const sub = pipeline.pipelines?.find((s) => s.name === subName);
+      return sub?.tasks.find((t) => t.name === taskName);
+    };
+  }, [pipeline]);
 
   // SSE 日志（始终连接 — running 时实时推送，completed 时一次全推完 done）
   const sseResult = useSSELogs(id);
@@ -311,6 +349,9 @@ export default function RunDetailPage() {
                   runId={id}
                   isLive={isLive}
                   taskStatusMap={sseResult.taskStatusMap}
+                  onRetry={setRetryTaskName}
+                  onShowVersions={setVersionsTaskName}
+                  retryCounts={retryCounts}
                 />
               ) : snapshotLoading ? (
                 <div className="p-3 text-gray-400 text-sm">加载历史快照中…</div>
@@ -337,6 +378,28 @@ export default function RunDetailPage() {
           </Splitter>
         )}
       </div>
+
+      {/* Issue #72: 重试弹窗 */}
+      {retryTaskName && id && (
+        <RetryModal
+          open={retryTaskName !== null}
+          runId={id}
+          taskName={retryTaskName}
+          taskStatus={run.tasks.find((t) => t.task_name === retryTaskName)?.status}
+          taskCommand={findTaskDef(retryTaskName)?.command ?? findTaskDef(retryTaskName)?.commands?.join('\n') ?? undefined}
+          onClose={() => setRetryTaskName(null)}
+        />
+      )}
+
+      {/* Issue #72: 重试版本管理抽屉 */}
+      {versionsTaskName && id && (
+        <RetryVersionsDrawer
+          open={versionsTaskName !== null}
+          runId={id}
+          taskName={versionsTaskName}
+          onClose={() => setVersionsTaskName(null)}
+        />
+      )}
     </div>
   );
 }

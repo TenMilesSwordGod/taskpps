@@ -1,8 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Tree, Tooltip } from 'antd';
+import { Tree, Tooltip, Dropdown } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { PartitionOutlined, AppstoreOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RotateCcw, History } from 'lucide-react';
 
 import { useRunConsole } from '@/api/runs';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
@@ -29,6 +29,12 @@ interface TaskTreeProps {
   isLive?: boolean;
   /** SSE 推送的任务状态映射（task_name -> latest status） */
   taskStatusMap?: Record<string, TaskStatus>;
+  /** Issue #72: 右键重试回调 */
+  onRetry?: (taskName: string) => void;
+  /** Issue #72: 查看重试版本回调 */
+  onShowVersions?: (taskName: string) => void;
+  /** Issue #72: 各任务的重试版本数映射 */
+  retryCounts?: Record<string, number>;
 }
 
 /** 推断任务类型 */
@@ -121,7 +127,7 @@ const PHASE_BADGE: Record<'setup' | 'teardown', { bg: string; color: string; lab
 };
 
 /** 紧凑层级任务树 + 可选 system debug log */
-export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap }: TaskTreeProps) {
+export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap, onRetry, onShowVersions, retryCounts }: TaskTreeProps) {
   // SSE 状态更新：合并到 taskRuns 中
   // Issue #61: 防止陈旧的 SSE 状态覆盖服务端更新的终态状态
   // （SSE 断连重连期间 taskStatusMap 可能停留在旧的 running，而服务端已 failed）
@@ -276,34 +282,69 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         const taskTeardown = taskPhaseMap.get(taskId)?.filter((g) => g.phase === 'teardown') || [];
         const taskPhaseChildren = [...taskSetup.map(buildPhaseNode), ...taskTeardown.map(buildPhaseNode)];
 
-        return {
-          key: taskId,
-          title: (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', minWidth: 0, whiteSpace: 'nowrap' }}>
-              <Tooltip title={isRunning ? '运行中' : hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 18, fontSize: 10, fontWeight: 600, borderRadius: 4, background: badgeBg, color: badgeColor, flexShrink: 0 }}>
-                  {TYPE_LABEL[type]}
+        // Issue #72: 右键重试 — 终态任务均可重试（含 skipped：策略失败导致未运行的任务也需要重试）
+        const canRetry = !isLive && !!run;
+        const retryCount = retryCounts?.[taskId] ?? 0;
+
+        const menuItems: Array<{ key: string; label: React.ReactNode; icon?: React.ReactNode } | { type: 'divider' }> = [];
+        if (canRetry) {
+          menuItems.push({ key: 'retry', label: '重试此任务', icon: <RotateCcw size={14} /> });
+        }
+        if (retryCount > 0) {
+          menuItems.push({ type: 'divider' as const });
+          menuItems.push({ key: 'versions', label: `重试版本 (${retryCount})`, icon: <History size={14} /> });
+        }
+
+        const titleContent = (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', minWidth: 0, whiteSpace: 'nowrap' }}>
+            <Tooltip title={isRunning ? '运行中' : hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 18, fontSize: 10, fontWeight: 600, borderRadius: 4, background: badgeBg, color: badgeColor, flexShrink: 0 }}>
+                {TYPE_LABEL[type]}
+              </span>
+            </Tooltip>
+            <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : isRunning ? 500 : 400, color: isSelected ? '#1d4ed8' : isRunning ? '#1d4ed8' : exitBad ? '#b91c1c' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+              {task.name}
+            </span>
+            {retryCount > 0 && (
+              <Tooltip title={`${retryCount} 个重试版本`}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 16, height: 16, fontSize: 10, fontWeight: 600, borderRadius: 8, padding: '0 4px', background: 'rgba(139,92,246,0.14)', color: '#8b5cf6', flexShrink: 0 }}>
+                  {retryCount}
                 </span>
               </Tooltip>
-              <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : isRunning ? 500 : 400, color: isSelected ? '#1d4ed8' : isRunning ? '#1d4ed8' : exitBad ? '#b91c1c' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                {task.name}
-              </span>
-              {isRunning && (
-                <Loader2 size={12} color="#3b82f6" className="animate-spin" style={{ flexShrink: 0 }} />
-              )}
-              {run?.error && (
-                <Tooltip title={run.error} placement="topRight" overlayStyle={{ maxWidth: 420 }}>
-                  <ExclamationCircleOutlined style={{ color: '#ef4444', fontSize: 12, flexShrink: 0 }} />
-                </Tooltip>
-              )}
-              <span style={{ flex: 1, minWidth: 4 }} />
-              {durStr && (
-                <Tooltip title={run?.started_at ? `开始: ${new Date(run.started_at).toLocaleString('zh-CN')}` : ''}>
-                  <span style={{ fontSize: 11, color: isRunning ? '#3b82f6' : '#9ca3af', flexShrink: 0 }}>{durStr}</span>
-                </Tooltip>
-              )}
-            </div>
-          ),
+            )}
+            {isRunning && (
+              <Loader2 size={12} color="#3b82f6" className="animate-spin" style={{ flexShrink: 0 }} />
+            )}
+            {run?.error && (
+              <Tooltip title={run.error} placement="topRight" overlayStyle={{ maxWidth: 420 }}>
+                <ExclamationCircleOutlined style={{ color: '#ef4444', fontSize: 12, flexShrink: 0 }} />
+              </Tooltip>
+            )}
+            <span style={{ flex: 1, minWidth: 4 }} />
+            {durStr && (
+              <Tooltip title={run?.started_at ? `开始: ${new Date(run.started_at).toLocaleString('zh-CN')}` : ''}>
+                <span style={{ fontSize: 11, color: isRunning ? '#3b82f6' : '#9ca3af', flexShrink: 0 }}>{durStr}</span>
+              </Tooltip>
+            )}
+          </div>
+        );
+
+        return {
+          key: taskId,
+          title: menuItems.length > 0 ? (
+            <Dropdown
+              trigger={['contextMenu']}
+              menu={{
+                items: menuItems,
+                onClick: ({ key }) => {
+                  if (key === 'retry') onRetry?.(taskId);
+                  if (key === 'versions') onShowVersions?.(taskId);
+                },
+              }}
+            >
+              <div onContextMenu={(e) => e.preventDefault()}>{titleContent}</div>
+            </Dropdown>
+          ) : titleContent,
           ...(taskPhaseChildren.length > 0 ? { children: taskPhaseChildren } : {}),
         };
       });
@@ -344,7 +385,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
     const pipelineTeardown = pipelinePhases.filter((g) => g.phase === 'teardown').map(buildPhaseNode);
 
     return [...pipelineSetup, ...nodes, ...pipelineTeardown];
-  }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, now]);
+  }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, now, onRetry, onShowVersions, retryCounts]);
 
   const selectedKeys = selectedTaskId ? [selectedTaskId] : [];
 

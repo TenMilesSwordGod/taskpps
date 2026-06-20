@@ -1,16 +1,41 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Input, Empty, Tag, Spin, Badge, Tooltip, Alert } from 'antd';
-import { Search, Server, RefreshCw, AlertCircle, Radar } from 'lucide-react';
+import { Input, Empty, Tag, Tooltip, Alert, Button, Segmented } from 'antd';
+import {
+  Search, Server, RefreshCw, AlertCircle, Radar,
+  ChevronRight, FolderOpen, CircleDot,
+} from 'lucide-react';
 import { useAgentsWithConfig } from '@/api/agents';
 import ServerCard from './ServerCard';
 import HostInfoModal from './HostInfoModal';
 import apiClient from '@/api/client';
 import type { AgentCheckResult, AgentWithConfig } from '@/types';
 
+type StatusFilter = 'all' | 'online' | 'offline';
+
+/** 项目分组 */
+interface ProjectGroup {
+  projectId: string;
+  projectName: string;
+  items: AgentWithConfig[];
+}
+
+/** 默认项目 ID（project_id 为空时归入此组） */
+const DEFAULT_PROJECT_ID = '__default__';
+
+/** 状态过滤选项 */
+const STATUS_OPTIONS: { label: React.ReactNode; value: StatusFilter }[] = [
+  { label: '全部', value: 'all' },
+  { label: '在线', value: 'online' },
+  { label: '离线', value: 'offline' },
+];
+
 /** Servers 列表页 */
 export default function ServersPage() {
   const { data: agents, isLoading, refetch, isFetching, error } = useAgentsWithConfig();
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // 折叠的项目 ID 集合（默认全部展开，点击折叠后加入集合）
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   // 探测结果（agent_id → { system, arch }），用于按需覆盖 yaml 兜底
   const [detected, setDetected] = useState<Record<string, { system: string; arch: string }>>({});
   const [probing, setProbing] = useState(false);
@@ -43,7 +68,6 @@ export default function ServersPage() {
   const trackedIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!agents || agents.length === 0) return;
-    const currentIds = new Set(agents.map((a) => a.agent_id));
     // 找出需要探测且未触发过的 agent
     const needsProbe = agents.filter((a) => (!a.system || !a.arch) && !trackedIdsRef.current.has(a.agent_id));
     if (needsProbe.length === 0) return;
@@ -84,11 +108,16 @@ export default function ServersPage() {
     }
   };
 
+  // 搜索 + 状态过滤
   const filtered = useMemo(() => {
     const list = agents ?? [];
-    if (!search) return list;
+    let result = list;
+    if (statusFilter !== 'all') {
+      result = result.filter((a) => (statusFilter === 'online' ? a.connected : !a.connected));
+    }
+    if (!search) return result;
     const s = search.toLowerCase();
-    return list.filter(
+    return result.filter(
       (a) =>
         (a.agent_id ?? '').toLowerCase().includes(s) ||
         (a.hostname ?? '').toLowerCase().includes(s) ||
@@ -101,28 +130,38 @@ export default function ServersPage() {
         (a.project_id ?? '').toLowerCase().includes(s) ||
         (a.project_name ?? '').toLowerCase().includes(s),
     );
-  }, [agents, search]);
+  }, [agents, search, statusFilter]);
 
   const onlineCount = (agents ?? []).filter((a) => a.connected).length;
   const totalCount = (agents ?? []).length;
+  const offlineCount = totalCount - onlineCount;
 
-  // 按 yaml 文件分组（保持 yaml 内定义顺序）
-  const grouped = useMemo(() => {
-    const list = filtered;
-    const groups: { sourceFile: string; items: AgentWithConfig[] }[] = [];
+  // 按项目分组（保持 yaml 内定义顺序）
+  const grouped = useMemo<ProjectGroup[]>(() => {
+    const groups: ProjectGroup[] = [];
     const indexMap = new Map<string, number>();
-    for (const a of list) {
-      const sf = a.source_file || 'unknown';
-      let idx = indexMap.get(sf);
+    for (const a of filtered) {
+      const pid = a.project_id || DEFAULT_PROJECT_ID;
+      const pname = a.project_id ? (a.project_name || a.project_id) : '默认项目';
+      let idx = indexMap.get(pid);
       if (idx === undefined) {
         idx = groups.length;
-        indexMap.set(sf, idx);
-        groups.push({ sourceFile: sf, items: [] });
+        indexMap.set(pid, idx);
+        groups.push({ projectId: pid, projectName: pname, items: [] });
       }
       groups[idx].items.push(a);
     }
     return groups;
   }, [filtered]);
+
+  const toggleProject = useCallback((pid: string) => {
+    setCollapsedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      return next;
+    });
+  }, []);
 
   // host 详情 modal 状态
   const [detailAgent, setDetailAgent] = useState<AgentWithConfig | null>(null);
@@ -135,67 +174,62 @@ export default function ServersPage() {
     <div className="flex flex-col h-full p-4 gap-3 bg-gray-50">
       {/* 顶部工具栏 */}
       <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Server size={18} className="text-gray-500" />
-          <span style={{ fontSize: 18, fontWeight: 600 }}>服务器列表</span>
-          <Tag color="default">总计 {totalCount}</Tag>
-          {onlineCount > 0 && (
-            <Badge color="green" text={<span style={{ color: '#10b981' }}>在线 {onlineCount}</span>} />
-          )}
-          {totalCount - onlineCount > 0 && (
-            <Badge color="gray" text={<span style={{ color: '#6b7280' }}>离线 {totalCount - onlineCount}</span>} />
-          )}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Server size={18} className="text-gray-500" />
+            <span className="text-base font-semibold text-gray-800">服务器列表</span>
+          </div>
+          {/* 统计胶囊 */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              总计 {totalCount}
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+              <CircleDot size={10} className="text-emerald-500" />
+              在线 {onlineCount}
+            </span>
+            {offlineCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                <CircleDot size={10} className="text-gray-400" />
+                离线 {offlineCount}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Segmented
+            size="small"
+            options={STATUS_OPTIONS}
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v as StatusFilter)}
+          />
           <Input
             allowClear
             prefix={<Search size={14} className="text-gray-400" />}
             placeholder="搜索 ID / 名称 / IP / 系统 / 架构 / 类型"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 280 }}
+            style={{ width: 320 }}
           />
           <Tooltip title="手动刷新">
-            <button
+            <Button
+              size="small"
+              icon={<RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />}
               onClick={() => refetch()}
               disabled={isFetching}
-              style={{
-                border: '1px solid #d1d5db',
-                borderRadius: 6,
-                padding: '4px 10px',
-                background: '#fff',
-                cursor: isFetching ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                color: '#374151',
-                fontSize: 13,
-              }}
             >
-              <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
               刷新
-            </button>
+            </Button>
           </Tooltip>
           <Tooltip title="主动探测所有 agent 的 system / arch（通过 SSH uname）">
-            <button
+            <Button
+              size="small"
+              icon={<Radar size={14} className={probing ? 'animate-spin' : ''} />}
               onClick={runProbe}
               disabled={probing}
-              style={{
-                border: '1px solid #722ed1',
-                borderRadius: 6,
-                padding: '4px 10px',
-                background: '#fff',
-                cursor: probing ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                color: '#722ed1',
-                fontSize: 13,
-              }}
             >
-              <Radar size={14} className={probing ? 'animate-spin' : ''} />
               {probing ? '探测中…' : '探测 system/arch'}
-            </button>
+            </Button>
           </Tooltip>
         </div>
       </div>
@@ -203,7 +237,7 @@ export default function ServersPage() {
       {/* 卡片网格 */}
       <div className="flex-1 min-h-0 overflow-auto">
         {isLoading ? (
-          <div className="p-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
+          <div className="p-1 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
             {[1, 2, 3, 4].map((i) => <ServerCardSkeleton key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
@@ -255,73 +289,63 @@ export default function ServersPage() {
             />
           </div>
         ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-              gap: 12,
-              padding: 4,
-            }}
-          >
+          <div className="flex flex-col gap-4 p-1">
             {grouped.map((group) => {
               const onlineInGroup = group.items.filter((a) => a.connected).length;
+              const offlineInGroup = group.items.length - onlineInGroup;
+              const isCollapsed = collapsedProjects.has(group.projectId);
+              const isDefault = group.projectId === DEFAULT_PROJECT_ID;
               return (
-                <div key={group.sourceFile} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {/* group header — 粘性置顶 */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '6px 10px',
-                      background: '#f9fafb',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 6,
-                      position: 'sticky',
-                      top: 0,
-                      zIndex: 1,
-                    }}
+                <section key={group.projectId} className="flex flex-col gap-2">
+                  {/* 项目分组头 — 粘性置顶，可点击折叠 */}
+                  <button
+                    type="button"
+                    onClick={() => toggleProject(group.projectId)}
+                    className="group sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-white/95 backdrop-blur border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors cursor-pointer"
                   >
-                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#374151', fontWeight: 500 }}>
-                      {group.sourceFile}
+                    <ChevronRight
+                      size={14}
+                      className={`text-gray-400 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
+                    />
+                    <FolderOpen size={14} className={isDefault ? 'text-gray-400' : 'text-blue-500'} />
+                    <span className={`text-sm font-semibold ${isDefault ? 'text-gray-600' : 'text-gray-800'}`}>
+                      {group.projectName}
                     </span>
-                    <Tag style={{ marginLeft: 4 }}>
-                      {group.items.length} 个 agent
+                    <Tag className="!m-0 !text-xs" color="default">
+                      {group.items.length} 台
                     </Tag>
                     {onlineInGroup > 0 && (
-                      <Tag color="green">
+                      <Tag className="!m-0 !text-xs" color="success">
                         {onlineInGroup} 在线
                       </Tag>
                     )}
-                    {onlineInGroup < group.items.length && (
-                      <Tag color="default">
-                        {group.items.length - onlineInGroup} 离线
+                    {offlineInGroup > 0 && (
+                      <Tag className="!m-0 !text-xs" color="default">
+                        {offlineInGroup} 离线
                       </Tag>
                     )}
-                  </div>
+                  </button>
                   {/* 卡片网格 */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
-                      gap: 12,
-                      padding: 4,
-                    }}
-                  >
-                    {group.items.map((a) => {
-                      const det = detected[a.agent_id];
-                      return (
-                        <ServerCard
-                          key={a.agent_id}
-                          agent={a}
-                          detectedSystem={det?.system}
-                          detectedArch={det?.arch}
-                          onShowDetail={handleShowDetail}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
+                  {!isCollapsed && (
+                    <div
+                      className="grid gap-3 p-1"
+                      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}
+                    >
+                      {group.items.map((a) => {
+                        const det = detected[a.agent_id];
+                        return (
+                          <ServerCard
+                            key={a.agent_id}
+                            agent={a}
+                            detectedSystem={det?.system}
+                            detectedArch={det?.arch}
+                            onShowDetail={handleShowDetail}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
               );
             })}
           </div>

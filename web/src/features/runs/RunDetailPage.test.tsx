@@ -10,12 +10,14 @@ const mockUseCancelRun = vi.fn()
 const mockUseRunConsole = vi.fn()
 const mockUsePipelineSnapshot = vi.fn()
 const mockUsePipeline = vi.fn()
+const mockUseRetryVersions = vi.fn()
 
 vi.mock('@/api/runs', () => ({
   useRun: (id?: string) => mockUseRun(id),
   useCancelRun: () => mockUseCancelRun(),
   useRunConsole: () => mockUseRunConsole(),
   usePipelineSnapshot: (id?: string) => mockUsePipelineSnapshot(id),
+  useRetryVersions: (id?: string) => mockUseRetryVersions(id),
 }))
 
 // usePipeline 不应被调用：#57 修复后禁止回退到当前 pipeline 文件
@@ -105,6 +107,7 @@ describe('<RunDetailPage /> Issue #57 - 历史运行必须用快照', () => {
     vi.clearAllMocks()
     mockUseCancelRun.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
     mockUseRunConsole.mockReturnValue({ data: null })
+    mockUseRetryVersions.mockReturnValue({ data: undefined })
   })
 
   it('使用快照渲染 TaskTree，且不调用 usePipeline', async () => {

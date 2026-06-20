@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { App as AntdApp } from 'antd'
@@ -137,5 +137,91 @@ describe('<RunListPage /> Issue #55 - 删除弹窗自动关闭', () => {
 
     // 失败时弹窗应保持打开
     expect(screen.getByText('确认删除')).toBeInTheDocument()
+  })
+})
+
+describe('<RunListPage /> UI 优化 - 统计与过滤', () => {
+  beforeEach(() => {
+    mockUseRuns.mockReset()
+    mockUseDeleteRun.mockReset()
+    mockUseCleanRuns.mockReset()
+    mockMutateAsync.mockReset()
+    mockUseDeleteRun.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+    mockUseCleanRuns.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+  })
+
+  it('统计胶囊展示正确的计数', async () => {
+    mockUseRuns.mockReturnValue({
+      data: {
+        items: [
+          makeRun({ id: 'r1', status: 'success' }),
+          makeRun({ id: 'r2', status: 'success' }),
+          makeRun({ id: 'r3', status: 'failed' }),
+          makeRun({ id: 'r4', status: 'running' }),
+        ],
+      },
+      isLoading: false,
+    })
+    render(<RunListPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('运行历史')).toBeInTheDocument())
+    expect(screen.getByText('总计 4')).toBeInTheDocument()
+    expect(screen.getByText('成功 2')).toBeInTheDocument()
+    expect(screen.getByText('失败 1')).toBeInTheDocument()
+    expect(screen.getByText('运行中 1')).toBeInTheDocument()
+  })
+
+  it('Segmented 状态过滤：选择"失败"仅展示失败记录', async () => {
+    mockUseRuns.mockReturnValue({
+      data: {
+        items: [
+          makeRun({ id: 'ok-1', pipeline_name: 'SuccessPipeline', status: 'success' }),
+          makeRun({ id: 'fail-1', pipeline_name: 'FailPipeline', status: 'failed' }),
+        ],
+      },
+      isLoading: false,
+    })
+    render(<RunListPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('运行历史')).toBeInTheDocument())
+    // 初始两条都可见
+    expect(screen.getByText('SuccessPipeline')).toBeInTheDocument()
+    expect(screen.getByText('FailPipeline')).toBeInTheDocument()
+    // 点击"失败"
+    fireEvent.click(screen.getByText('失败', { selector: '.ant-segmented-item-label' }))
+    await waitFor(() => {
+      expect(screen.queryByText('SuccessPipeline')).not.toBeInTheDocument()
+      expect(screen.getByText('FailPipeline')).toBeInTheDocument()
+    })
+  })
+
+  it('Segmented 状态过滤：选择"成功"仅展示成功记录', async () => {
+    mockUseRuns.mockReturnValue({
+      data: {
+        items: [
+          makeRun({ id: 'ok-2', pipeline_name: 'OkPipe', status: 'success' }),
+          makeRun({ id: 'run-2', pipeline_name: 'RunPipe', status: 'running' }),
+        ],
+      },
+      isLoading: false,
+    })
+    render(<RunListPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('运行历史')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('成功', { selector: '.ant-segmented-item-label' }))
+    await waitFor(() => {
+      expect(screen.getByText('OkPipe')).toBeInTheDocument()
+      expect(screen.queryByText('RunPipe')).not.toBeInTheDocument()
+    })
+  })
+
+  it('运行中行有蓝色背景提示', async () => {
+    mockUseRuns.mockReturnValue({
+      data: { items: [makeRun({ id: 'running-row', status: 'running' })] },
+      isLoading: false,
+    })
+    render(<RunListPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('运行历史')).toBeInTheDocument())
+    // 表格行应带有蓝色背景
+    const row = document.querySelector('.ant-table-row')
+    expect(row).toBeTruthy()
+    expect(row?.getAttribute('style') || '').toContain('background')
   })
 })

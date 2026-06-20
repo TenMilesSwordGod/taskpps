@@ -314,4 +314,104 @@ describe('<ServersPage />', () => {
       expect(screen.getByText('无匹配的服务器')).toBeInTheDocument()
     })
   })
+
+  // ─── 新功能：项目分组 ───
+
+  it('按项目分组：默认项目 + 命名项目分别展示', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [
+        makeAgent({ agent_id: 'a-default', project_id: '', project_name: '' }),
+        makeAgent({ agent_id: 'a-prod', project_id: 'prod', project_name: '生产环境' }),
+        makeAgent({ agent_id: 'a-prod-2', project_id: 'prod', project_name: '生产环境' }),
+      ],
+      isLoading: false, refetch: vi.fn(), isFetching: false, error: null,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('服务器列表')).toBeInTheDocument())
+    // 默认项目组
+    expect(screen.getByText('默认项目')).toBeInTheDocument()
+    // 命名项目组
+    expect(screen.getByText('生产环境')).toBeInTheDocument()
+  })
+
+  it('项目分组头显示该组在线/离线计数', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [
+        makeAgent({ agent_id: 'online-1', project_id: 'prod', project_name: '生产', connected: true }),
+        makeAgent({ agent_id: 'offline-1', project_id: 'prod', project_name: '生产', connected: false }),
+      ],
+      isLoading: false, refetch: vi.fn(), isFetching: false, error: null,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('生产')).toBeInTheDocument())
+    // 2 台 + 1 在线 + 1 离线
+    expect(screen.getByText('2 台')).toBeInTheDocument()
+    expect(screen.getByText('1 在线')).toBeInTheDocument()
+    expect(screen.getByText('1 离线')).toBeInTheDocument()
+  })
+
+  // ─── 新功能：状态过滤 ───
+
+  it('状态过滤：选择"在线"仅展示在线 agent', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [
+        makeAgent({ agent_id: 'online-x', name: 'OnlineNode', connected: true }),
+        makeAgent({ agent_id: 'offline-x', name: 'OfflineNode', connected: false }),
+      ],
+      isLoading: false, refetch: vi.fn(), isFetching: false, error: null,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('服务器列表')).toBeInTheDocument())
+    // 初始两个都可见
+    expect(screen.getByText('OnlineNode')).toBeInTheDocument()
+    expect(screen.getByText('OfflineNode')).toBeInTheDocument()
+    // 点击"在线"
+    fireEvent.click(screen.getByText('在线', { selector: '.ant-segmented-item-label' }))
+    await waitFor(() => {
+      expect(screen.getByText('OnlineNode')).toBeInTheDocument()
+      expect(screen.queryByText('OfflineNode')).not.toBeInTheDocument()
+    })
+  })
+
+  it('状态过滤：选择"离线"仅展示离线 agent', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [
+        makeAgent({ agent_id: 'online-y', name: 'OnlineY', connected: true }),
+        makeAgent({ agent_id: 'offline-y', name: 'OfflineY', connected: false }),
+      ],
+      isLoading: false, refetch: vi.fn(), isFetching: false, error: null,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('服务器列表')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('离线', { selector: '.ant-segmented-item-label' }))
+    await waitFor(() => {
+      expect(screen.queryByText('OnlineY')).not.toBeInTheDocument()
+      expect(screen.getByText('OfflineY')).toBeInTheDocument()
+    })
+  })
+
+  // ─── 新功能：项目折叠 ───
+
+  it('点击项目分组头可折叠/展开卡片', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [
+        makeAgent({ agent_id: 'fold-1', name: 'FoldableNode', project_id: 'prod', project_name: '生产' }),
+      ],
+      isLoading: false, refetch: vi.fn(), isFetching: false, error: null,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('生产')).toBeInTheDocument())
+    // 初始展开
+    expect(screen.getByText('FoldableNode')).toBeInTheDocument()
+    // 点击分组头折叠
+    fireEvent.click(screen.getByText('生产'))
+    await waitFor(() => {
+      expect(screen.queryByText('FoldableNode')).not.toBeInTheDocument()
+    })
+    // 再次点击展开
+    fireEvent.click(screen.getByText('生产'))
+    await waitFor(() => {
+      expect(screen.getByText('FoldableNode')).toBeInTheDocument()
+    })
+  })
 })

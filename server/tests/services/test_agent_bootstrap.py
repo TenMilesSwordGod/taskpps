@@ -237,6 +237,16 @@ class TestAgentBootstrapSSHHelpers:
             assert await bootstrap._check_binary(client, "/path/bin") is False
 
     @pytest.mark.asyncio
+    async def test_check_binary_uses_execution_not_test_x(self):
+        """Issue #69: _check_binary 应通过执行二进制验证架构，而非仅 test -x。"""
+        bootstrap = AgentBootstrap()
+        with patch.object(bootstrap, "_ssh_exec", return_value=(0, "", "")) as mock_exec:
+            await bootstrap._check_binary(MagicMock(), "/path/agent")
+        cmd = mock_exec.call_args[0][1]
+        assert "--help" in cmd
+        assert "test -x" not in cmd
+
+    @pytest.mark.asyncio
     async def test_get_remote_user_info_default_home(self):
         bootstrap = AgentBootstrap()
         with patch.object(bootstrap, "_ssh_exec", side_effect=[(1, "", ""), (0, "1000", "")]):
@@ -302,7 +312,7 @@ class TestAgentBootstrapSSHHelpers:
     async def test_start_agent_daemon_success(self):
         bootstrap = AgentBootstrap()
         client = MagicMock()
-        # _check_existing_agent returns None, then mkdir/run + cat pid
+        # _check_existing_agent returns None, then mkdir/run + cat pid + kill -0
         with patch.object(
             bootstrap,
             "_check_existing_agent",
@@ -310,7 +320,7 @@ class TestAgentBootstrapSSHHelpers:
         ), patch.object(
             bootstrap,
             "_ssh_exec",
-            side_effect=[(0, "", ""), (0, "42", "")],
+            side_effect=[(0, "", ""), (0, "42", ""), (0, "", "")],
         ):
             with patch("asyncio.sleep", new=AsyncMock()):
                 pid = await bootstrap._start_agent_daemon(
@@ -363,7 +373,7 @@ class TestAgentBootstrapSSHHelpers:
         ), patch.object(
             bootstrap,
             "_ssh_exec",
-            side_effect=[(0, "", ""), (0, "7", "")],
+            side_effect=[(0, "", ""), (0, "7", ""), (0, "", "")],
         ) as mock_exec:
             with patch("asyncio.sleep", new=AsyncMock()):
                 await bootstrap._start_agent_daemon(
@@ -394,6 +404,32 @@ class TestAgentBootstrapSSHHelpers:
                 client, "/bin/agent", "/var/log", "/var/run.pid", "agent-id", "", "ws://srv", {},
             )
         assert pid == 1234
+
+    @pytest.mark.asyncio
+    async def test_start_agent_daemon_process_died_immediately(self):
+        """Issue #70: 子进程启动后立即崩溃（kill -0 失败）→ 抛错并附 log tail。"""
+        bootstrap = AgentBootstrap()
+        client = MagicMock()
+        # mkdir/run exit 0, cat pid → 55, kill -0 → 非 0（进程已死）, tail log
+        with patch.object(
+            bootstrap,
+            "_check_existing_agent",
+            new=AsyncMock(return_value=None),
+        ), patch.object(
+            bootstrap,
+            "_ssh_exec",
+            side_effect=[
+                (0, "", ""),           # daemon start
+                (0, "55", ""),         # cat pid_file
+                (1, "", ""),           # kill -0 (dead)
+                (0, "crash log\n", ""),  # tail log
+            ],
+        ):
+            with patch("asyncio.sleep", new=AsyncMock()):
+                with pytest.raises(AgentBootstrapError, match="died immediately"):
+                    await bootstrap._start_agent_daemon(
+                        client, "/bin/agent", "/var/log", "/var/run.pid", "agent-id", "", "ws://srv", {},
+                    )
 
 
 class TestCheckExistingAgent:
@@ -494,21 +530,22 @@ class TestAgentBootstrapFlow:
         # 顺序匹配 _ssh_exec 内部调用（_start_agent_daemon 已被 mock,不会触发 _ssh_exec）：
         # 1. echo $HOME
         # 2. id -u
-        # 3. test -x {path}
+        # 3. _check_binary (--help)
         ssh_results = [
             (0, "/home/admin\n", ""),  # echo $HOME
             (0, "1000", ""),  # id -u
-            (0, "", ""),  # test -x binary
+            (0, "", ""),  # _check_binary (--help)
         ]
 
         with (
             patch.object(bootstrap, "_ssh_connect", return_value=client),
             patch.object(bootstrap, "_ssh_close", new=AsyncMock()),
             patch.object(bootstrap, "_ssh_exec", side_effect=ssh_results),
-            patch("asyncio.sleep", new=AsyncMock()),
-            patch.object(AgentManager, "is_connected", return_value=True),
+            patch.object(AgentManager, "disconnect", new=AsyncMock()),
             patch.object(bootstrap, "_check_server_reachability"),
             patch.object(bootstrap, "_start_agent_daemon", new=AsyncMock(return_value=99)),
+            # 直接 mock _wait_for_handshake，避免 while True 循环导致内存泄漏
+            patch.object(bootstrap, "_wait_for_handshake", new=AsyncMock()),
         ):
             result = await bootstrap.bootstrap("remote-1", agent_loader=loader)
 
@@ -516,7 +553,7 @@ class TestAgentBootstrapFlow:
 
     @pytest.mark.asyncio
     async def test_handshake_timeout_raises(self):
-        """handshake 一直不成功 → 抛 AgentBootstrapError，附 log tail 信息。"""
+        """handshake 超时 → 抛 AgentBootstrapError，附 log tail 信息。"""
         bootstrap = AgentBootstrap()
         loader = MagicMock()
         loader.get.return_value = {
@@ -531,32 +568,23 @@ class TestAgentBootstrapFlow:
 
         client = _make_paramiko_client()
 
-        async def fake_wait_for(awaitable, timeout):  # noqa: ARG001
-            # 模拟握手超时
-            await awaitable
-            raise asyncio.TimeoutError()
-
-        # 重新连接尝试获取 log tail 时的 ssh_exec 结果
-        # 第一次 ssh_exec: echo $HOME
-        # 第二次 ssh_exec: id -u
-        # 第三次 ssh_exec: test -x binary
-        # log fetch 时的 ssh_exec: tail log
+        # _check_binary (--help) + log fetch (tail log)
         ssh_results = [
-            (0, "/home/user", ""),
-            (0, "1000", ""),
-            (0, "", ""),
-            (0, "log content here", ""),
+            (0, "/home/user", ""),    # echo $HOME
+            (0, "1000", ""),          # id -u
+            (0, "", ""),              # _check_binary (--help)
+            (0, "log content here", ""),  # tail log (for error message)
         ]
 
         with (
             patch.object(AgentBootstrap, "_ssh_connect", return_value=client),
             patch.object(AgentBootstrap, "_ssh_close", new=AsyncMock()),
             patch.object(AgentBootstrap, "_ssh_exec", side_effect=ssh_results),
-            patch("asyncio.sleep", new=AsyncMock()),
-            patch.object(AgentManager, "is_connected", return_value=False),
+            patch.object(AgentManager, "disconnect", new=AsyncMock()),
             patch.object(AgentBootstrap, "_check_server_reachability"),
             patch.object(AgentBootstrap, "_start_agent_daemon", new=AsyncMock(return_value=1)),
-            patch("asyncio.wait_for", new=fake_wait_for),
+            # 直接 mock _wait_for_handshake 抛 TimeoutError，避免无限循环
+            patch.object(AgentBootstrap, "_wait_for_handshake", new=AsyncMock(side_effect=asyncio.TimeoutError())),
         ):
             with pytest.raises(AgentBootstrapError, match="failed to connect"):
                 await bootstrap.bootstrap("remote-2", agent_loader=loader)
@@ -580,19 +608,18 @@ class TestAgentBootstrapFlow:
 
         client = _make_paramiko_client()
 
-        # 顺序：echo $HOME, id -u, test -x (non-zero), mkdir parent x 2, chmod, cat pid
-        # 把 _check_binary 桩成 False，_deploy_binary 桩成 None
         with (
             patch.object(AgentBootstrap, "_ssh_connect", return_value=client),
             patch.object(AgentBootstrap, "_ssh_close", new=AsyncMock()),
             patch.object(AgentBootstrap, "_ssh_exec", return_value=(0, "/home/u", "")),
-            patch("asyncio.sleep", new=AsyncMock()),
-            patch.object(AgentManager, "is_connected", return_value=True),
+            patch.object(AgentManager, "disconnect", new=AsyncMock()),
             patch.object(AgentBootstrap, "_check_server_reachability"),
             patch.object(AgentBootstrap, "_check_binary", new=AsyncMock(return_value=False)),
             patch.object(AgentBootstrap, "_ensure_remote_dir", new=AsyncMock()),
             patch.object(AgentBootstrap, "_deploy_binary", new=AsyncMock()),
             patch.object(AgentBootstrap, "_start_agent_daemon", new=AsyncMock(return_value=11)),
+            # 直接 mock _wait_for_handshake，避免 while True 循环导致内存泄漏
+            patch.object(AgentBootstrap, "_wait_for_handshake", new=AsyncMock()),
         ):
             result = await bootstrap.bootstrap("remote-3", agent_loader=loader)
         assert result["success"] is True

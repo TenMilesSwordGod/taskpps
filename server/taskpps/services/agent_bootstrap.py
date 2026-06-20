@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import time
 
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
@@ -102,6 +103,10 @@ class AgentBootstrap:
 
             logger.info("Agent will connect to: %s", server_url)
 
+            # Issue #70: 部署前清除残留连接，避免 _wait_for_handshake 误判旧连接为成功
+            manager = AgentManager.instance()
+            await manager.disconnect(agent_id)
+
             pid = await self._start_agent_daemon(
                 ssh, agent_binary_path, agent_log_dir, agent_pid_file, agent_id, agent_secret, server_url, agent_data
             )
@@ -110,10 +115,10 @@ class AgentBootstrap:
         finally:
             await self._ssh_close(ssh)
 
-        manager = AgentManager.instance()
+        deploy_started_at = time.time()
         try:
             await asyncio.wait_for(
-                self._wait_for_handshake(manager, agent_id),
+                self._wait_for_handshake(manager, agent_id, deploy_started_at),
                 timeout=BOOTSTRAP_TIMEOUT,
             )
             logger.info("Agent '%s' handshake completed", agent_id)
@@ -206,7 +211,9 @@ class AgentBootstrap:
             await self._ssh_exec(client, f"mkdir -p {parent}")
 
     async def _check_binary(self, client, path: str) -> bool:
-        exit_code, _, _ = await self._ssh_exec(client, f"test -x {path}")
+        # Issue #69: 不仅检查文件存在，还要验证可执行（避免错误架构二进制残留）
+        # 错误架构的二进制 test -x 通过，但执行时报 "Exec format error"
+        exit_code, _, _ = await self._ssh_exec(client, f"{path} --help >/dev/null 2>&1")
         return exit_code == 0
 
     async def _deploy_binary(self, client, host: str, dest_path: str) -> None:
@@ -241,20 +248,12 @@ class AgentBootstrap:
             f"taskpps-agent-linux-{arch}",
         )
 
-        found = os.path.exists(local_binary)
-        if not found:
-            local_binary = os.path.join(
-                project_root,
-                "execution_agent",
-                "taskpps-agent",
-            )
-            found = os.path.exists(local_binary)
-
-        if not found:
+        # Issue #69: 不再 fallback 到本地默认二进制（通常是 x86），避免发送错误架构
+        if not os.path.exists(local_binary):
             raise AgentBootstrapError(
-                t("Agent binary for arch '{remote_arch}' not found. "
+                t("Agent binary for arch '{arch}' (uname={remote_arch}) not found at {path}. "
                   "Build it with: cd execution_agent && ./build/build.sh",
-                  remote_arch=remote_arch)
+                  arch=arch, remote_arch=remote_arch, path=local_binary)
             )
 
         logger.info("Deploying binary %s to %s:%s", local_binary, host, dest_path)
@@ -303,7 +302,18 @@ class AgentBootstrap:
         exit_code, pid_str, _ = await self._ssh_exec(client, f"cat {pid_file}")
         if exit_code != 0:
             raise AgentBootstrapError(t("Failed to read PID file"))
-        return int(pid_str.strip())
+        pid = int(pid_str.strip())
+
+        # Issue #70: 验证子进程确实存活（父进程 fork 后立即 exit 0，子进程可能已崩溃）
+        exit_code, _, _ = await self._ssh_exec(client, f"kill -0 {pid} 2>/dev/null")
+        if exit_code != 0:
+            # 进程已死，读取日志帮助诊断
+            _, log_tail, _ = await self._ssh_exec(client, f"tail -n 10 {log_file} 2>/dev/null || true")
+            raise AgentBootstrapError(
+                t("Agent process (PID {pid}) died immediately after start. Log tail:\n{log}",
+                  pid=pid, log=log_tail.strip() or "(no log)")
+            )
+        return pid
 
     async def _check_existing_agent(self, client, pid_file: str) -> int | None:
         """检查远程主机上是否已有 agent 进程在运行。
@@ -422,8 +432,11 @@ class AgentBootstrap:
         except Exception:
             return 26521
 
-    async def _wait_for_handshake(self, manager: AgentManager, agent_id: str) -> None:
+    async def _wait_for_handshake(self, manager: AgentManager, agent_id: str, since: float) -> None:
+        # Issue #70: 检查本次部署后的新连接，而非 is_connected()（有 5 分钟 grace period，
+        # 会把残留旧连接误判为成功）。只有 connected_at >= since 才是本次部署产生的新连接。
         while True:
-            if manager.is_connected(agent_id):
+            conn = manager.get_connection(agent_id)
+            if conn is not None and conn.connected_at >= since and conn.last_heartbeat > 0:
                 return
             await asyncio.sleep(0.5)

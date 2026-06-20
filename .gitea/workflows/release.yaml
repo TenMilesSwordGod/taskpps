@@ -102,7 +102,8 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        # Issue #69: 增加 arm (armv7l) 架构支持，GOARM 默认为 7
+        arch: [amd64, arm64, arm]
     defaults:
       run:
         working-directory: execution_agent

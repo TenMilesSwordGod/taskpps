@@ -511,7 +511,9 @@ class PipelineService:
 
             resolved = self._load_resolved_pipeline(run)
             if resolved is None:
-                raise ValueError("Cannot load pipeline definition for retry")
+                if not run.pipeline_id:
+                    raise ValueError(t("Run has no pipeline snapshot, retry is not available"))
+                raise ValueError(t("Pipeline snapshot not found, retry is not available. The snapshot may have been cleaned up."))
 
             task_targets: list[str] = []
             if tasks:
@@ -542,9 +544,6 @@ class PipelineService:
             for t_name in task_targets:
                 if t_name not in task_run_map:
                     raise ValueError(f"Task '{t_name}' not found in run")
-                tr = task_run_map[t_name]
-                if tr.status == TaskStatus.SKIPPED:
-                    raise ValueError(t("Task was skipped, cannot retry"))
 
                 existing = await retry_repo.list_retries_by_task(run_id, t_name)
                 pending = [r for r in existing if r.status == TaskStatus.PENDING or r.status == TaskStatus.RUNNING]
@@ -701,7 +700,32 @@ class PipelineService:
             records = await retry_repo.list_retries_by_run(run_id)
             task_runs = await task_repo.list_task_runs(run_id)
 
+            # 构建原始 TaskRun 的 v0 条目
+            task_run_map: dict[str, TaskRun] = {tr.task_name: tr for tr in task_runs}
+
             grouped: dict[str, list[dict]] = {}
+            for task_name, tr in task_run_map.items():
+                if task_name not in grouped:
+                    grouped[task_name] = []
+                # 原始执行作为 v0
+                grouped[task_name].append({
+                    "id": tr.id,
+                    "run_id": tr.run_id,
+                    "task_run_id": tr.id,
+                    "task_name": tr.task_name,
+                    "subpipeline_name": tr.subpipeline_name,
+                    "retry_version": 0,
+                    "status": tr.status.value if hasattr(tr.status, "value") else tr.status,
+                    "command": "",
+                    "original_command": "",
+                    "log_path": tr.log_path,
+                    "exit_code": tr.exit_code,
+                    "error": tr.error,
+                    "started_at": _ensure_utc(tr.started_at),
+                    "finished_at": _ensure_utc(tr.finished_at),
+                    "created_at": _ensure_utc(tr.created_at),
+                })
+
             for r in records:
                 task_name = r.task_name
                 if task_name not in grouped:
@@ -792,7 +816,9 @@ class PipelineService:
 
         resolved = self._load_resolved_pipeline(run)
         if resolved is None:
-            raise ValueError("Cannot load pipeline definition")
+            if not run.pipeline_id:
+                raise ValueError(t("Run has no pipeline snapshot, retry is not available"))
+            raise ValueError(t("Pipeline snapshot not found, retry is not available. The snapshot may have been cleaned up."))
 
         parts = task_name.split(".", 1)
         sub_name = parts[0] if len(parts) > 1 else ""
@@ -824,14 +850,31 @@ class PipelineService:
         }
 
     def _load_resolved_pipeline(self, run) -> ResolvedPipeline | None:
+        """加载 pipeline 定义用于重试。仅使用执行时保存的快照，禁止回退到当前磁盘文件。"""
+        import yaml
+
+        if not run.pipeline_id:
+            logger.error("Run %s has no pipeline_id, cannot locate snapshot", run.id)
+            return None
+
+        v = run.pipeline_version or ""
+        snapshot_path = get_logs_dir() / run.pipeline_id / f"v_{v}" / "builds" / run.id / "pipeline-snapshot.yaml"
+
+        if not snapshot_path.exists():
+            logger.error("Pipeline snapshot not found for run %s: %s", run.id, snapshot_path)
+            return None
+
         try:
-            from taskpps.config import get_pipelines_dir
-            base_dir = get_pipelines_dir()
-            spec = self.loader.load(run.pipeline_file)
+            with open(snapshot_path) as f:
+                data = yaml.safe_load(f)
+            if data is None:
+                logger.error("Pipeline snapshot is empty for run %s", run.id)
+                return None
+            spec = PipelineYAML(**data)
             return ResolvedPipeline.from_yaml(spec, pipeline_file=run.pipeline_file)
         except Exception:
             import traceback
-            logger.warning("Failed to reload pipeline for retry: %s", traceback.format_exc())
+            logger.error("Failed to parse pipeline snapshot for run %s: %s", run.id, traceback.format_exc())
             return None
 
     @staticmethod

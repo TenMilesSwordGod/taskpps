@@ -168,11 +168,17 @@ build_execution_agent() {
         go build -ldflags="-s -w" -o "$build_dir/taskpps-agent" .
     )
     # 跨平台矩阵(对齐 release.yaml 与 update.sh)
-    for arch in amd64 arm64; do
+    # Issue #69: 增加 arm (armv7l) 架构支持
+    for arch in amd64 arm64 arm; do
         (
             cd "$agent_dir"
-            GOOS=linux GOARCH="$arch" go build -ldflags="-s -w" \
-                -o "$build_dir/taskpps-agent-linux-$arch" .
+            if [ "$arch" = "arm" ]; then
+                GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w" \
+                    -o "$build_dir/taskpps-agent-linux-$arch" .
+            else
+                GOOS=linux GOARCH="$arch" go build -ldflags="-s -w" \
+                    -o "$build_dir/taskpps-agent-linux-$arch" .
+            fi
         )
     done
 
