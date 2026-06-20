@@ -160,9 +160,10 @@ export default function PipelineProgressPopover({ tasks, taskSummary, children }
     <Popover
       content={content}
       title="任务进度"
-      mouseEnterDelay={2}
+      mouseEnterDelay={0.3}
       mouseLeaveDelay={0.3}
       placement="right"
+      arrow
     >
       {children}
     </Popover>
