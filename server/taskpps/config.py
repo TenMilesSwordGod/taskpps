@@ -31,6 +31,10 @@ class ExecutorConfig(BaseModel):
     default_timeout: int = 3600
     max_workers: int = 10
     shell: str = "/bin/bash"
+    # Issue #78: agent 占用排队超时（秒），0 表示不等待直接失败
+    agent_queue_timeout: int = 300
+    # Issue #78: agent 断连等待重连超时（秒），0 表示不等待直接失败
+    agent_offline_timeout: int = 300
 
 
 class PluginsConfig(BaseModel):

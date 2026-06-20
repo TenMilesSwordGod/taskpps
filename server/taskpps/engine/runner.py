@@ -643,7 +643,7 @@ class PipelineRunner:
             task_repo = TaskRunRepository(session)
             await task_repo.update_task_status(task_run_id, TaskStatus.RUNNING, started_at=datetime.now(timezone.utc))
 
-        event_bus.emit(SIGNAL_TASK_STARTED, sender=self, run_id=self.run_id, task=task.name)
+        event_bus.emit(SIGNAL_TASK_STARTED, sender=self, run_id=self.run_id, task=qualified_name)
 
         timeout = task.timeout or get_settings().executor.default_timeout
         max_retries = task.retry
@@ -785,7 +785,7 @@ class PipelineRunner:
                 finished_at=datetime.now(timezone.utc),
             )
 
-        event_bus.emit(SIGNAL_TASK_FINISHED, sender=self, run_id=self.run_id, task=task.name, status=task_status)
+        event_bus.emit(SIGNAL_TASK_FINISHED, sender=self, run_id=self.run_id, task=qualified_name, status=task_status)
 
         if not last_result.success:
             self._write_pipeline_log("ERROR", f"Task '{qualified_name}' failed with exit code {last_result.exit_code}")

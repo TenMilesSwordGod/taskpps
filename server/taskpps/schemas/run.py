@@ -36,6 +36,8 @@ class RunResponse(BaseModel):
     pipeline_id: str = ""
     pipeline_version: str = ""
     project_id: str | None = None
+    project_name: str | None = None
+    display_name: str = ""
     version_changed: bool = False
     status: RunStatus
     error: str | None = None
@@ -59,6 +61,8 @@ class RunResponse(BaseModel):
             "pipeline_id": getattr(obj, "pipeline_id", ""),
             "pipeline_version": getattr(obj, "pipeline_version", ""),
             "project_id": getattr(obj, "project_id", None),
+            "project_name": getattr(obj, "project_name", None),
+            "display_name": getattr(obj, "display_name", ""),
             "version_changed": False,
             "status": obj.status,
             "error": getattr(obj, "error", None),

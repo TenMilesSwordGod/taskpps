@@ -26,6 +26,7 @@ class RunRepository:
         *,
         params: dict | None = None,
         project_id: str | None = None,
+        display_name: str = "",
     ) -> PipelineRun:
         logger.debug("Creating run: pipeline=%s project=%s", pipeline_name, project_id)
         run = PipelineRun(
@@ -34,6 +35,7 @@ class RunRepository:
             pipeline_id=pipeline_id,
             pipeline_version=pipeline_version,
             project_id=project_id,
+            display_name=display_name,
             params=json.dumps(params or {}),
             status=RunStatus.PENDING,
         )

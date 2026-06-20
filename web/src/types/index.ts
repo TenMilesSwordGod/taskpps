@@ -15,6 +15,8 @@ export interface RunResponse {
   pipeline_id: string;
   pipeline_version: string;
   project_id: string | null;
+  project_name: string | null;
+  display_name: string;
   version_changed: boolean;
   status: RunStatus;
   error: string | null;

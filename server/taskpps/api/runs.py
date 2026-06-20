@@ -223,6 +223,16 @@ async def get_run_logs(
             while active:
                 active = False
 
+                # Issue #65: 先排空事件总线积压的状态变更，确保即时通知。
+                # 事件总线在 DB commit 后同步 emit，比 DB 轮询更快。
+                while not status_queue.empty():
+                    event = status_queue.get_nowait()
+                    task_name = event["task_name"]
+                    status_str = event["status"]
+                    if status_str != prev_statuses.get(task_name):
+                        yield {"event": "status", "data": json.dumps(event, ensure_ascii=False)}
+                        prev_statuses[task_name] = status_str
+
                 async with get_session_factory()() as session:
                     task_repo = TaskRunRepository(session)
                     statuses: dict[str, TS | None] = {}
@@ -230,7 +240,7 @@ async def get_run_logs(
                         tr = await task_repo.get_task_run(tid)
                         statuses[task_name] = tr.status if tr else None
 
-                # 推送任务状态变更事件
+                # 推送任务状态变更事件（DB 轮询兜底，防止事件总线遗漏）
                 for task_name, status in statuses.items():
                     status_str = status.value if status else None
                     if status_str and status_str != prev_statuses.get(task_name):
@@ -279,15 +289,6 @@ async def get_run_logs(
                             positions[task_name] = new_pos
                             for line in lines:
                                 yield {"event": "log", "data": f"{task_name}: {line}"}
-
-                # 排空事件总线积压的状态变更
-                while not status_queue.empty():
-                    event = status_queue.get_nowait()
-                    task_name = event["task_name"]
-                    status_str = event["status"]
-                    if status_str != prev_statuses.get(task_name):
-                        yield {"event": "status", "data": json.dumps(event, ensure_ascii=False)}
-                        prev_statuses[task_name] = status_str
 
                 if active:  # pragma: no cover
                     # 等待事件总线推送（即时）或超时后轮询（兜底）

@@ -233,7 +233,7 @@ export default function RunDetailPage() {
         <Breadcrumb
           items={[
             { title: <Link to="/runs">运行历史</Link> },
-            { title: run.id.slice(0, 8) },
+            { title: <Tooltip title={run.id}>{run.display_name || run.id.slice(0, 8)}</Tooltip> },
           ]}
           style={{ marginBottom: 8 }}
         />

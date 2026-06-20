@@ -41,7 +41,7 @@ export function useRun(id: string | undefined) {
     enabled: !!id,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      if (status === 'running' || status === 'pending') return 3000;
+      if (status === 'running' || status === 'pending') return 1000;
       return false;
     },
   });

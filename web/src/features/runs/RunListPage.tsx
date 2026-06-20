@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented } from 'antd';
+import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, Select, Popconfirm } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Play, Trash2, RefreshCw, History, CircleDot } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import { useRuns, useCleanRuns, useDeleteRun } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
+import PipelineProgressPopover from '@/components/PipelineProgressPopover';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import type { RunResponse, RunStatus } from '@/types';
 
@@ -48,11 +49,11 @@ export default function RunListPage() {
   const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all');
   const [pipelineFilter, setPipelineFilter] = useState('');
-  const [projectFilter, setProjectFilter] = useState('');
+  const [projectSelectFilter, setProjectSelectFilter] = useState<string | null>(null);
+  const [pipelineSelectFilter, setPipelineSelectFilter] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [cleanOpen, setCleanOpen] = useState(false);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [cleanForm] = Form.useForm();
   const cleanRuns = useCleanRuns();
   const deleteRun = useDeleteRun();
@@ -98,22 +99,43 @@ export default function RunListPage() {
     return { total: allItems.length, running, success, failed };
   }, [allItems]);
 
+  // 提取唯一项目列表（用于下拉筛选）
+  const projectOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of allItems) {
+      if (r.project_id) {
+        map.set(r.project_id, r.project_name || r.project_id);
+      }
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ value: id, label: name }));
+  }, [allItems]);
+
+  // 根据选中项目过滤流水线列表
+  const pipelineOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allItems) {
+      if (projectSelectFilter && r.project_id !== projectSelectFilter) continue;
+      if (r.pipeline_name) set.add(r.pipeline_name);
+    }
+    return Array.from(set).map((name) => ({ value: name, label: name }));
+  }, [allItems, projectSelectFilter]);
+
   // 前端过滤
   const filtered = useMemo(() => {
-    if (statusFilter === 'all' && !pipelineFilter && !projectFilter && !dateRange) return allItems;
+    if (statusFilter === 'all' && !pipelineFilter && !projectSelectFilter && !pipelineSelectFilter && !dateRange) return allItems;
     const kw = pipelineFilter.toLowerCase();
-    const pkw = projectFilter.toLowerCase();
     return allItems.filter((run) => {
       if (statusFilter !== 'all' && run.status !== statusFilter) return false;
       if (kw && !run.pipeline_name.toLowerCase().includes(kw)) return false;
-      if (pkw && !(run.project_id || '').toLowerCase().includes(pkw)) return false;
+      if (projectSelectFilter && run.project_id !== projectSelectFilter) return false;
+      if (pipelineSelectFilter && run.pipeline_name !== pipelineSelectFilter) return false;
       if (dateRange) {
         const created = dayjs(run.created_at);
         if (created.isBefore(dateRange[0]) || created.isAfter(dateRange[1])) return false;
       }
       return true;
     });
-  }, [allItems, statusFilter, pipelineFilter, projectFilter, dateRange]);
+  }, [allItems, statusFilter, pipelineFilter, projectSelectFilter, pipelineSelectFilter, dateRange]);
 
   // 打开清理弹窗时重置表单
   const handleOpenClean = useCallback(() => {
@@ -144,35 +166,27 @@ export default function RunListPage() {
     [navigate],
   );
 
-  const handleDeleteSingle = useCallback(
-    (id: string) => {
-      setDeleteTargetId(id);
-    },
-    [],
-  );
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!deleteTargetId) return;
+  const handleDeleteConfirm = useCallback(async (id: string) => {
     try {
-      await deleteRun.mutateAsync(deleteTargetId);
-      // 先关闭弹窗，避免 message.success 偶发失败导致弹窗残留
-      setDeleteTargetId(null);
+      await deleteRun.mutateAsync(id);
       message.success('已删除');
     } catch {
       message.error('删除失败');
     }
-  }, [deleteTargetId, deleteRun, message]);
+  }, [deleteRun, message]);
 
   const columns = useMemo(() => [
     {
-      title: 'Run ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 100,
-      render: (id: string) => (
-        <a onClick={() => handleOpenDetail(id)} style={{ fontFamily: 'monospace' }}>
-          {id.slice(0, 8)}
-        </a>
+      title: '运行名',
+      dataIndex: 'display_name',
+      key: 'display_name',
+      width: 140,
+      render: (_: string, record: RunResponse) => (
+        <Tooltip title={record.id}>
+          <a onClick={() => handleOpenDetail(record.id)}>
+            {record.display_name || record.id.slice(0, 8)}
+          </a>
+        </Tooltip>
       ),
     },
     {
@@ -180,6 +194,11 @@ export default function RunListPage() {
       dataIndex: 'pipeline_name',
       key: 'pipeline_name',
       ellipsis: true,
+      render: (_: string, record: RunResponse) => (
+        <PipelineProgressPopover tasks={record.tasks}>
+          <span style={{ cursor: 'default' }}>{record.pipeline_name}</span>
+        </PipelineProgressPopover>
+      ),
     },
     {
       title: '文件',
@@ -195,8 +214,8 @@ export default function RunListPage() {
       dataIndex: 'project_id',
       key: 'project_id',
       width: 110,
-      render: (pid: string | null) =>
-        pid ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{pid}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
+      render: (_: string | null, record: RunResponse) =>
+        record.project_name ? <Tag>{record.project_name}</Tag> : record.project_id ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{record.project_id}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
     },
     {
       title: '状态',
@@ -229,13 +248,22 @@ export default function RunListPage() {
           <Button type="link" size="small" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.id)}>
             查看
           </Button>
-          <Button data-testid="row-delete-btn" type="link" size="small" danger icon={<Trash2 size={14} />} onClick={() => handleDeleteSingle(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确认删除"
+            description="删除后不可恢复，确认删除该运行记录？"
+            onConfirm={() => handleDeleteConfirm(record.id)}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button data-testid="row-delete-btn" type="link" size="small" danger icon={<Trash2 size={14} />}>
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
-  ], [handleOpenDetail, now, handleDeleteSingle]);
+  ], [handleOpenDetail, now, handleDeleteConfirm]);
 
   return (
     <div className="flex flex-col h-full p-4 gap-3 bg-gray-50 overflow-hidden">
@@ -305,12 +333,24 @@ export default function RunListPage() {
           onChange={(e) => setPipelineFilter(e.target.value)}
           style={{ width: 180 }}
         />
-        <Input
+        <Select
           allowClear
           placeholder="项目"
-          value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
-          style={{ width: 120 }}
+          value={projectSelectFilter}
+          onChange={(v) => {
+            setProjectSelectFilter(v ?? null);
+            setPipelineSelectFilter(null);
+          }}
+          options={projectOptions}
+          style={{ width: 160 }}
+        />
+        <Select
+          allowClear
+          placeholder="流水线"
+          value={pipelineSelectFilter}
+          onChange={(v) => setPipelineSelectFilter(v ?? null)}
+          options={pipelineOptions}
+          style={{ width: 180 }}
         />
         <DatePicker.RangePicker
           size="small"
@@ -401,21 +441,6 @@ export default function RunListPage() {
             注意：删除操作会同时清理对应的任务日志文件，且不可恢复。
           </div>
         </Form>
-      </Modal>
-
-      {/* 删除单条确认弹窗 */}
-      <Modal
-        title="确认删除"
-        open={deleteTargetId !== null}
-        onOk={handleDeleteConfirm}
-        onCancel={() => setDeleteTargetId(null)}
-        confirmLoading={deleteRun.isPending}
-        okText="删除"
-        cancelText="取消"
-        okButtonProps={{ danger: true }}
-        destroyOnClose
-      >
-        删除后不可恢复，确认删除该运行记录？
       </Modal>
     </div>
   );

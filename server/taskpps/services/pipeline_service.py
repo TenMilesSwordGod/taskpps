@@ -19,7 +19,7 @@ from taskpps.config import (
     get_pipelines_dir,
 )
 from taskpps.db.engine import get_session_factory
-from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
+from taskpps.db.repository import ProjectRepository, RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext, apply_overrides
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
@@ -27,6 +27,7 @@ from taskpps.engine.retry_runner import RetryRunner
 from taskpps.engine.runner import PipelineRunner
 from taskpps.i18n import t
 from taskpps.loaders.pipeline_loader import PipelineLoader
+from taskpps.naming import generate_display_name
 
 logger = logging.getLogger("taskpps.services.pipeline_service")
 from taskpps.models.run import RunStatus, TaskStatus
@@ -38,6 +39,20 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     if dt is not None and dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+async def _resolve_project_name(project_id: str | None) -> str | None:
+    """根据 project_id 查找项目名称，名称为空时用 workdir 最后一段路径作为回退。"""
+    if project_id is None:
+        return None
+    async with get_session_factory()() as session:
+        project = await ProjectRepository(session).get_project(project_id)
+    if project is None:
+        return None
+    if project.name:
+        return project.name
+    # 名称为空时用 workdir 最后一段路径
+    return Path(project.workdir).name or None
 
 
 def _extract_env_overrides(params: dict[str, Any]) -> dict[str, str]:
@@ -208,6 +223,8 @@ class PipelineService:
                 and last_run.pipeline_version != pipeline_version
             )
 
+            display_name = generate_display_name()
+
             run = await run_repo.create_run(
                 pipeline_name=resolved.name,
                 pipeline_file=pipeline_file,
@@ -215,6 +232,7 @@ class PipelineService:
                 pipeline_version=pipeline_version,
                 params=params,
                 project_id=project_id,
+                display_name=display_name,
             )
 
             task_run_ids = {}
@@ -255,6 +273,7 @@ class PipelineService:
             "pipeline_version": pipeline_version,
             "version_changed": version_changed,
             "status": run.status,
+            "display_name": display_name,
         }
 
     @staticmethod
@@ -314,6 +333,8 @@ class PipelineService:
             if run.pipeline_id and run.pipeline_version:
                 console_log_path = str(build_pipeline_log_path(run.pipeline_id, run.pipeline_version, run.id))
 
+            project_name = await _resolve_project_name(getattr(run, "project_id", None))
+
             return {
                 "id": run.id,
                 "pipeline_name": run.pipeline_name,
@@ -321,6 +342,8 @@ class PipelineService:
                 "pipeline_id": run.pipeline_id,
                 "pipeline_version": run.pipeline_version,
                 "project_id": getattr(run, "project_id", None),
+                "project_name": project_name,
+                "display_name": getattr(run, "display_name", ""),
                 "status": run.status,
                 "error": getattr(run, "error", None),
                 "params": params,
@@ -366,6 +389,8 @@ class PipelineService:
                 if run.pipeline_id and run.pipeline_version:
                     console_log_path = str(build_pipeline_log_path(run.pipeline_id, run.pipeline_version, run.id))
 
+                project_name = await _resolve_project_name(getattr(run, "project_id", None))
+
                 items.append(
                     {
                         "id": run.id,
@@ -374,6 +399,8 @@ class PipelineService:
                         "pipeline_id": run.pipeline_id,
                         "pipeline_version": run.pipeline_version,
                         "project_id": getattr(run, "project_id", None),
+                        "project_name": project_name,
+                        "display_name": getattr(run, "display_name", ""),
                         "status": run.status,
                         "error": getattr(run, "error", None),
                         "params": params,

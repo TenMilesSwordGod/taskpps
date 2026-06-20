@@ -1,12 +1,13 @@
-import { Card, Col, Row, Statistic, Table, Tag } from 'antd';
+import { Card, Col, Row, Statistic, Table, Tag, Tooltip, Button } from 'antd';
 import { useState, useEffect, useMemo } from 'react';
-import { GitBranch, Play, Loader, AlertCircle } from 'lucide-react';
+import { GitBranch, Play, Loader, AlertCircle, History } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { usePipelines } from '@/api/pipelines';
 import { useRuns } from '@/api/runs';
 import { useHealthCheck } from '@/api/health';
 import StatusTag from '@/components/StatusTag';
+import PipelineProgressPopover from '@/components/PipelineProgressPopover';
 import type { RunResponse, RunStatus } from '@/types';
 
 /** 计算耗时 */
@@ -21,6 +22,13 @@ function formatDuration(run: RunResponse, nowTs?: number): string {
   const remainSec = sec % 60;
   if (h > 0) return `${h}时${m}分${remainSec}秒`;
   return `${m}分${remainSec}秒`;
+}
+
+/** 运行状态对应的行背景色 */
+function rowBackground(status: RunStatus): string | undefined {
+  if (status === 'running') return '#eff6ff';
+  if (status === 'failed') return '#fef2f2';
+  return undefined;
 }
 
 export default function DashboardPage() {
@@ -50,19 +58,43 @@ export default function DashboardPage() {
   const recentRuns = runs.slice(0, 10);
 
   const columns = useMemo(() => [
-    { title: '流水线', dataIndex: 'pipeline_name', key: 'pipeline_name' },
+    {
+      title: '运行名',
+      dataIndex: 'display_name',
+      key: 'display_name',
+      width: 120,
+      render: (_: string, record: RunResponse) => (
+        <Tooltip title={record.id}>
+          <a onClick={() => navigate(`/runs/${record.id}`)}>
+            {record.display_name || record.id.slice(0, 8)}
+          </a>
+        </Tooltip>
+      ),
+    },
+    {
+      title: '流水线',
+      dataIndex: 'pipeline_name',
+      key: 'pipeline_name',
+      ellipsis: true,
+      render: (_: string, record: RunResponse) => (
+        <PipelineProgressPopover tasks={record.tasks}>
+          <span style={{ cursor: 'default' }}>{record.pipeline_name}</span>
+        </PipelineProgressPopover>
+      ),
+    },
     {
       title: '项目',
       dataIndex: 'project_id',
       key: 'project_id',
-      width: 110,
-      render: (pid: string | null) =>
-        pid ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{pid}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
+      width: 100,
+      render: (_: string | null, record: RunResponse) =>
+        record.project_name ? <Tag>{record.project_name}</Tag> : record.project_id ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{record.project_id}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
+      width: 110,
       render: (_status: RunStatus, record: RunResponse) => (
         <StatusTag status={record.status} error={record.error} />
       ),
@@ -71,19 +103,14 @@ export default function DashboardPage() {
       title: '开始时间',
       dataIndex: 'started_at',
       key: 'started_at',
+      width: 90,
       render: (v: string | null) => (v ? dayjs(v).format('HH:mm:ss') : '-'),
     },
     {
       title: '耗时',
       key: 'duration',
+      width: 90,
       render: (_: unknown, record: RunResponse) => formatDuration(record, now),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: RunResponse) => (
-        <a onClick={() => navigate(`/runs/${record.id}`)}>查看</a>
-      ),
     },
   ], [navigate, now]);
 
@@ -114,13 +141,24 @@ export default function DashboardPage() {
       </Row>
 
       {/* 最近运行 */}
-      <Card title="最近运行">
+      <Card
+        title="最近运行"
+        extra={
+          <Button type="link" size="small" icon={<History size={14} />} onClick={() => navigate('/runs')}>
+            查看全部
+          </Button>
+        }
+      >
         <Table
           rowKey="id"
           columns={columns}
           dataSource={recentRuns}
           pagination={false}
           size="small"
+          onRow={(record) => ({
+            style: rowBackground(record.status) ? { background: rowBackground(record.status), cursor: 'pointer' } : { cursor: 'pointer' },
+            onClick: () => navigate(`/runs/${record.id}`),
+          })}
         />
       </Card>
 

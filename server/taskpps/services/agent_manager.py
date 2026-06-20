@@ -120,6 +120,8 @@ class AgentManager:
     def __init__(self):
         self._connections: dict[str, AgentConnection] = {}
         self._active = True
+        # Issue #78: per-agent 信号量，限制并发命令数
+        self._agent_semaphores: dict[str, asyncio.Semaphore] = {}
 
     @classmethod
     def instance(cls) -> AgentManager:
@@ -268,6 +270,38 @@ class AgentManager:
 
     def get_connection(self, agent_id: str) -> AgentConnection | None:
         return self._connections.get(agent_id)
+
+    # Issue #78: per-agent 并发控制
+    async def acquire_agent(self, agent_id: str, max_parallel: int = 1, timeout: float = 300) -> None:
+        """获取 agent 的执行槽位。如果 agent 已满，等待直到有空位或超时。
+
+        Args:
+            agent_id: agent 标识
+            max_parallel: 最大并发命令数（来自 agent YAML 的 max_parallel）
+            timeout: 等待超时（秒），0 表示不等待
+
+        Raises:
+            TimeoutError: 等待超时
+        """
+        if agent_id not in self._agent_semaphores:
+            self._agent_semaphores[agent_id] = asyncio.Semaphore(max_parallel)
+        sem = self._agent_semaphores[agent_id]
+        if timeout <= 0:
+            if not sem.locked() and sem._value > 0:
+                # 快速路径：有可用槽位
+                await sem.acquire()
+                return
+            raise TimeoutError(t("Agent '{agent}' is busy (max_parallel={max})", agent=agent_id, max=max_parallel))
+        try:
+            await asyncio.wait_for(sem.acquire(), timeout=timeout)
+        except asyncio.TimeoutError:
+            raise TimeoutError(t("Agent '{agent}' queue timeout ({timeout}s)", agent=agent_id, timeout=timeout))
+
+    def release_agent(self, agent_id: str) -> None:
+        """释放 agent 的执行槽位。"""
+        sem = self._agent_semaphores.get(agent_id)
+        if sem:
+            sem.release()
 
     async def send_command(
         self, agent_id: str, command_id: str, command: str, env: dict[str, str], cwd: str, timeout: int

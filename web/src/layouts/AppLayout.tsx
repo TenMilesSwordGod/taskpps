@@ -66,7 +66,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <ProLayout
       title="TaskPPS"
-      logo={<CurrentTime />}
       layout="mix"
       collapsed={collapsed}
       onCollapse={setCollapsed}
@@ -75,6 +74,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       menuItemRender={(item, dom) => (
         <div onClick={() => item.path && navigate(item.path)}>{dom}</div>
       )}
+      actionsRender={() => [<CurrentTime key="clock" />]}
       contentStyle={{ padding: 0, height: '100%', overflow: 'hidden' }}
       style={{ height: '100vh' }}
     >

@@ -36,6 +36,7 @@ class AgentExecutor(BaseExecutor):
         self._command_id: str | None = None
         self._cancelled = False
         self._bootstrapped = False
+        self._slot_acquired = False
         self.run_id: str = ""
         self.task_name: str = ""
 
@@ -43,10 +44,40 @@ class AgentExecutor(BaseExecutor):
         if self._manager.is_connected(self._agent_id):
             return True
 
-        if not self._agent_data or not self._agent_data.get("agent_auto_bootstrap", True):
-            self._log(log_path, f"[ERROR] Agent '{self._agent_id}' not connected\n")
-            return False
+        # Issue #78: agent 断连时等待重连，而非直接失败
+        settings = get_settings()
+        offline_timeout = settings.executor.agent_offline_timeout
 
+        if offline_timeout <= 0:
+            if not self._agent_data or not self._agent_data.get("agent_auto_bootstrap", True):
+                self._log(log_path, f"[ERROR] Agent '{self._agent_id}' not connected\n")
+                return False
+            return await self._try_bootstrap(log_path)
+
+        self._log(log_path, f"[INFO] Agent '{self._agent_id}' not connected, waiting up to {offline_timeout}s for reconnect...\n")
+        deadline = asyncio.get_event_loop().time() + offline_timeout
+        poll_interval = 5
+
+        while asyncio.get_event_loop().time() < deadline:
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                break
+            wait = min(poll_interval, remaining)
+            await asyncio.sleep(wait)
+
+            if self._manager.is_connected(self._agent_id):
+                self._log(log_path, f"[INFO] Agent '{self._agent_id}' reconnected\n")
+                return True
+
+        # 等待超时后尝试 bootstrap
+        if self._agent_data and self._agent_data.get("agent_auto_bootstrap", True):
+            self._log(log_path, f"[INFO] Agent '{self._agent_id}' did not reconnect, attempting bootstrap...\n")
+            return await self._try_bootstrap(log_path)
+
+        self._log(log_path, f"[ERROR] Agent '{self._agent_id}' offline timeout ({offline_timeout}s)\n")
+        return False
+
+    async def _try_bootstrap(self, log_path: Path) -> bool:
         self._log(log_path, f"[INFO] Agent '{self._agent_id}' not connected, bootstrapping...\n")
         try:
             from taskpps.services.agent_bootstrap import AgentBootstrap
@@ -77,6 +108,32 @@ class AgentExecutor(BaseExecutor):
                 stderr=f"Agent '{self._agent_id}' is not connected",
             )
 
+        # Issue #78: 获取 agent 执行槽位，排队等待
+        max_parallel = (self._agent_data or {}).get("max_parallel", 1)
+        queue_timeout = get_settings().executor.agent_queue_timeout
+        try:
+            await self._manager.acquire_agent(self._agent_id, max_parallel, queue_timeout)
+            self._slot_acquired = True
+        except TimeoutError as e:
+            self._log(log_path, f"[ERROR] Agent slot acquisition failed: {e}\n")
+            return ExecutorResult(exit_code=-1, stderr=str(e))
+
+        try:
+            return await self._execute_command(command, env, log_path, timeout, cwd, command_id)
+        finally:
+            if self._slot_acquired:
+                self._manager.release_agent(self._agent_id)
+                self._slot_acquired = False
+
+    async def _execute_command(
+        self,
+        command: str,
+        env: dict[str, str],
+        log_path: Path,
+        timeout: int | None,
+        cwd: str | None,
+        command_id: str,
+    ) -> ExecutorResult:
         effective_timeout = timeout or get_settings().executor.default_timeout
         if cwd:
             effective_cwd = cwd
@@ -94,13 +151,6 @@ class AgentExecutor(BaseExecutor):
 
         def on_output(data: str):
             output_lines.append(data)
-            # 文件 I/O 必须在事件循环外执行。原因：readPipeBinary 读取子
-            # 进程 stdout/stderr 的管道后会通过 WebSocket 把每一行推上来；
-            # 如果 on_output 在事件循环里同步 open+write+flush+close，
-            # 单条卡顿就会让整个 WebSocket handler 不能继续读消息，agent
-            # 的 sendMsg 反压、streamOutput 回调卡住、channel 写满、管道
-            # 没法被排空 → 子进程 write 阻塞 → 任务看起来"卡住"，超时前
-            # exec_result 永远到不了 (issue #16)。
             try:
                 loop = asyncio.get_running_loop()
                 loop.run_in_executor(None, _write_log_chunk, log_path, data)
@@ -168,6 +218,10 @@ class AgentExecutor(BaseExecutor):
             conn = self._manager.get_connection(self._agent_id)
             if conn:
                 conn._output_callbacks.pop(self._command_id, None)
+        # Issue #78: 确保信号量被释放
+        if self._slot_acquired:
+            self._manager.release_agent(self._agent_id)
+            self._slot_acquired = False
 
     def _log(self, log_path: Path, message: str) -> None:
         try:
