@@ -117,6 +117,25 @@ class RunRepository:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def get_task_summaries(self, run_ids: list[str]) -> dict[str, dict[str, int]]:
+        """批量获取多个 run 的任务状态计数。
+
+        Returns:
+            {run_id: {"pending": N, "running": N, "success": N, ...}}
+        """
+        if not run_ids:
+            return {}
+        stmt = (
+            select(TaskRun.run_id, TaskRun.status, func.count())
+            .where(TaskRun.run_id.in_(run_ids))
+            .group_by(TaskRun.run_id, TaskRun.status)
+        )
+        result = await self.session.execute(stmt)
+        summaries: dict[str, dict[str, int]] = {rid: {} for rid in run_ids}
+        for run_id, status, count in result.fetchall():
+            summaries.setdefault(run_id, {})[status] = count
+        return summaries
+
     async def update_run_status(
         self,
         run_id: str,

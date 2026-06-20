@@ -77,7 +77,7 @@ export default function DashboardPage() {
       key: 'pipeline_name',
       ellipsis: true,
       render: (_: string, record: RunResponse) => (
-        <PipelineProgressPopover tasks={record.tasks}>
+        <PipelineProgressPopover tasks={record.tasks} taskSummary={record.task_summary}>
           <span style={{ cursor: 'default' }}>{record.pipeline_name}</span>
         </PipelineProgressPopover>
       ),

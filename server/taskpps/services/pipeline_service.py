@@ -376,6 +376,11 @@ class PipelineService:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             runs = await run_repo.list_runs(pipeline=pipeline, status=status, project_id=project_id, limit=limit)
+
+            # 批量获取任务状态摘要（一条聚合 SQL，避免 N+1 查询）
+            run_ids = [r.id for r in runs]
+            task_summaries = await run_repo.get_task_summaries(run_ids)
+
             items = []
             for run in runs:
                 params = {}
@@ -409,6 +414,7 @@ class PipelineService:
                         "finished_at": _ensure_utc(run.finished_at),
                         "created_at": _ensure_utc(run.created_at),
                         "tasks": [],
+                        "task_summary": task_summaries.get(run.id, {}),
                     }
                 )
             total = await run_repo.count_runs(pipeline=pipeline, status=status, project_id=project_id)

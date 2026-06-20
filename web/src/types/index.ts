@@ -25,6 +25,8 @@ export interface RunResponse {
   finished_at: string | null;
   created_at: string;
   tasks: TaskRunResponse[];
+  /** 任务状态计数摘要，列表 API 使用（避免加载完整 tasks） */
+  task_summary: Record<string, number>;
 }
 
 /** 任务运行响应 */

@@ -23,27 +23,53 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
   cancelled: '#f97316',
 };
 
+const ALL_STATUSES: TaskStatus[] = ['running', 'success', 'failed', 'skipped', 'cancelled', 'pending'];
+
 interface Props {
-  tasks: TaskRunResponse[];
+  /** 完整任务列表（详情页可用） */
+  tasks?: TaskRunResponse[];
+  /** 任务状态计数摘要（列表页可用，优先级低于 tasks） */
+  taskSummary?: Record<string, number>;
   children: React.ReactNode;
 }
 
-export default function PipelineProgressPopover({ tasks, children }: Props) {
+export default function PipelineProgressPopover({ tasks, taskSummary, children }: Props) {
   const stats = useMemo(() => {
     const counts: Record<TaskStatus, number> = {
       pending: 0, running: 0, success: 0, failed: 0, skipped: 0, cancelled: 0,
     };
-    for (const t of tasks) {
-      counts[t.status]++;
-    }
-    return counts;
-  }, [tasks]);
 
-  const total = tasks.length;
+    // 优先使用完整 tasks 数据
+    if (tasks && tasks.length > 0) {
+      for (const t of tasks) {
+        counts[t.status]++;
+      }
+      return counts;
+    }
+
+    // 回退到 task_summary
+    if (taskSummary && Object.keys(taskSummary).length > 0) {
+      for (const [status, count] of Object.entries(taskSummary)) {
+        if (status in counts) {
+          counts[status as TaskStatus] = count;
+        }
+      }
+      return counts;
+    }
+
+    return null;
+  }, [tasks, taskSummary]);
+
+  // 无数据时不显示悬浮窗
+  if (!stats) return <>{children}</>;
+
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  if (total === 0) return <>{children}</>;
+
   const done = stats.success + stats.skipped + stats.failed + stats.cancelled;
-  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+  const percent = Math.round((done / total) * 100);
   const isFailed = stats.failed > 0;
-  const isDone = total > 0 && done === total;
+  const isDone = done === total;
 
   const strokeColor = isFailed ? '#ef4444' : isDone ? '#10b981' : '#3b82f6';
 
@@ -93,38 +119,40 @@ export default function PipelineProgressPopover({ tasks, children }: Props) {
         )}
       </Space>
 
-      {/* 任务列表 */}
-      <div style={{ marginTop: 8, maxHeight: 160, overflowY: 'auto' }}>
-        {tasks.map((t) => (
-          <div
-            key={t.task_name}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '2px 0',
-              fontSize: 12,
-              color: STATUS_COLOR[t.status],
-            }}
-          >
-            <span
+      {/* 任务列表（仅 tasks 模式可用） */}
+      {tasks && tasks.length > 0 && (
+        <div style={{ marginTop: 8, maxHeight: 160, overflowY: 'auto' }}>
+          {tasks.map((t) => (
+            <div
+              key={t.task_name}
               style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: STATUS_COLOR[t.status],
-                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '2px 0',
+                fontSize: 12,
+                color: STATUS_COLOR[t.status],
               }}
-            />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {t.task_name}
-            </span>
-            <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 11, color: '#9ca3af' }}>
-              {STATUS_LABEL[t.status]}
-            </span>
-          </div>
-        ))}
-      </div>
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: STATUS_COLOR[t.status],
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {t.task_name}
+              </span>
+              <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 11, color: '#9ca3af' }}>
+                {STATUS_LABEL[t.status]}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
