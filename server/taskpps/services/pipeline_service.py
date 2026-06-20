@@ -368,6 +368,7 @@ class PipelineService:
                     }
                     for t in tasks
                 ],
+                "task_summary": {},
             }
 
     async def list_runs(

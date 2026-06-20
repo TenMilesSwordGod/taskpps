@@ -1,4 +1,4 @@
-import { Card, Col, Row, Statistic, Table, Tag, Tooltip, Button } from 'antd';
+import { Card, Col, Row, Statistic, Table, Tag, Button } from 'antd';
 import { useState, useEffect, useMemo } from 'react';
 import { GitBranch, Play, Loader, AlertCircle, History } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -64,11 +64,11 @@ export default function DashboardPage() {
       key: 'display_name',
       width: 120,
       render: (_: string, record: RunResponse) => (
-        <Tooltip title={record.id}>
+        <PipelineProgressPopover tasks={record.tasks} taskSummary={record.task_summary}>
           <a onClick={() => navigate(`/runs/${record.id}`)}>
             {record.display_name || record.id.slice(0, 8)}
           </a>
-        </Tooltip>
+        </PipelineProgressPopover>
       ),
     },
     {
@@ -76,11 +76,6 @@ export default function DashboardPage() {
       dataIndex: 'pipeline_name',
       key: 'pipeline_name',
       ellipsis: true,
-      render: (_: string, record: RunResponse) => (
-        <PipelineProgressPopover tasks={record.tasks} taskSummary={record.task_summary}>
-          <span style={{ cursor: 'default' }}>{record.pipeline_name}</span>
-        </PipelineProgressPopover>
-      ),
     },
     {
       title: '项目',
