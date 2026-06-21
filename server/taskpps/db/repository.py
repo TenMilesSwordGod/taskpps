@@ -136,6 +136,26 @@ class RunRepository:
             summaries.setdefault(run_id, {})[status] = count
         return summaries
 
+    async def count_runs_by_status(
+        self,
+        pipeline: str | None = None,
+        pipeline_id: str | None = None,
+        project_id: str | None = None,
+        pipeline_file: str | None = None,
+    ) -> dict[str, int]:
+        """按状态分组计数运行数量（一条 SQL 聚合）。"""
+        stmt = select(PipelineRun.status, func.count(PipelineRun.id)).group_by(PipelineRun.status)
+        if pipeline:
+            stmt = stmt.where(PipelineRun.pipeline_name == pipeline)
+        if pipeline_id:
+            stmt = stmt.where(PipelineRun.pipeline_id == pipeline_id)
+        if pipeline_file:
+            stmt = stmt.where(PipelineRun.pipeline_file == pipeline_file)
+        if project_id:
+            stmt = stmt.where(PipelineRun.project_id == project_id)
+        result = await self.session.execute(stmt)
+        return {status: count for status, count in result.fetchall()}
+
     async def update_run_status(
         self,
         run_id: str,

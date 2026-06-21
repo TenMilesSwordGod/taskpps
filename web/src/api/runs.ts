@@ -3,6 +3,7 @@ import apiClient from './client';
 import type {
   RunListResponse,
   RunResponse,
+  RunStatsResponse,
   RetryRunResponse,
   RetryVersionsResponse,
   RetryCommandResponse,
@@ -25,6 +26,20 @@ export function useRuns(params?: { pipeline?: string; status?: string; limit?: n
       if (params?.status) cleanParams.status = params.status;
       if (params?.limit) cleanParams.limit = params.limit;
       const res = await apiClient.get('/api/runs/', { params: cleanParams });
+      return res.data;
+    },
+  });
+}
+
+/** 获取运行状态统计 */
+export function useRunStats(params?: { pipeline?: string; project_id?: string }) {
+  return useQuery<RunStatsResponse>({
+    queryKey: ['runStats', params],
+    queryFn: async () => {
+      const cleanParams: Record<string, string> = {};
+      if (params?.pipeline) cleanParams.pipeline = params.pipeline;
+      if (params?.project_id) cleanParams.project_id = params.project_id;
+      const res = await apiClient.get('/api/runs/stats', { params: cleanParams });
       return res.data;
     },
   });

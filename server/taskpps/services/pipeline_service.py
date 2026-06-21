@@ -421,6 +421,22 @@ class PipelineService:
             total = await run_repo.count_runs(pipeline=pipeline, status=status, project_id=project_id)
             return {"items": items, "total": total}
 
+    async def get_run_stats(
+        self, pipeline: str | None = None, project_id: str | None = None
+    ) -> dict:
+        from taskpps.models.run import RunStatus
+
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            status_counts = await run_repo.count_runs_by_status(
+                pipeline=pipeline, project_id=project_id
+            )
+            total = sum(status_counts.values())
+            return {
+                "total": total,
+                **{s.value: status_counts.get(s.value, 0) for s in RunStatus},
+            }
+
     async def cancel_run(self, run_id: str) -> bool:
         from taskpps.engine.runner import get_active_runner
 

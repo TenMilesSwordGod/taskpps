@@ -31,6 +31,7 @@ from taskpps.schemas.run import (
     RetryVersionsResponse,
     RunListResponse,
     RunResponse,
+    RunStatsResponse,
     SelectReportRequest,
     UpdateRetryCommandRequest,
 )
@@ -117,6 +118,14 @@ async def create_run(body: CreateRunRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/stats", response_model=RunStatsResponse)
+async def get_run_stats(
+    pipeline: str | None = Query(None),
+    project_id: str | None = Query(None),
+):
+    return await _pipeline_service.get_run_stats(pipeline=pipeline, project_id=project_id)
 
 
 @router.get("/", response_model=RunListResponse)

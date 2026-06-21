@@ -78,6 +78,16 @@ class RunResponse(BaseModel):
         return cls(**data)
 
 
+class RunStatsResponse(BaseModel):
+    total: int
+    pending: int = 0
+    running: int = 0
+    success: int = 0
+    failed: int = 0
+    cancelled: int = 0
+    partial: int = 0
+
+
 class RunListResponse(BaseModel):
     items: list[RunResponse]
     total: int

@@ -51,6 +51,17 @@ export interface RunListResponse {
   total: number;
 }
 
+/** 运行状态统计响应 */
+export interface RunStatsResponse {
+  total: number;
+  pending: number;
+  running: number;
+  success: number;
+  failed: number;
+  cancelled: number;
+  partial: number;
+}
+
 /** 流水线摘要 */
 export interface PipelineSummary {
   name: string;

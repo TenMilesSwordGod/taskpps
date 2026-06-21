@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, Play, Trash2, RefreshCw, History, CircleDot, Search } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
-import { useRuns, useCleanRuns, useDeleteRun } from '@/api/runs';
+import { useRuns, useRunStats, useCleanRuns, useDeleteRun } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
 import PipelineProgressPopover from '@/components/PipelineProgressPopover';
 import TriggerRunModal from '@/components/TriggerRunModal';
@@ -58,6 +58,7 @@ export default function RunListPage() {
   const deleteRun = useDeleteRun();
 
   const { data, isLoading, refetch, isFetching } = useRuns();
+  const { data: statsData } = useRunStats();
 
   // 动态计算表格滚动高度，避免页面出现滚动条
   useEffect(() => {
@@ -87,16 +88,8 @@ export default function RunListPage() {
     return () => clearInterval(t);
   }, [hasRunning]);
 
-  // 统计胶囊
-  const stats = useMemo(() => {
-    let running = 0, success = 0, failed = 0;
-    for (const r of allItems) {
-      if (r.status === 'running') running++;
-      else if (r.status === 'success') success++;
-      else if (r.status === 'failed') failed++;
-    }
-    return { total: allItems.length, running, success, failed };
-  }, [allItems]);
+  // 统计胶囊（来自后端全量统计 API）
+  const stats = useMemo(() => statsData ?? { total: 0, pending: 0, running: 0, success: 0, failed: 0, cancelled: 0, partial: 0 }, [statsData]);
 
   // 构建项目>流水线树形数据（用于 TreeSelect）
   const treeData = useMemo(() => {
@@ -296,20 +289,40 @@ export default function RunListPage() {
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
               总计 {stats.total}
             </span>
+            {stats.pending > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-50 text-gray-500">
+                <CircleDot size={10} className="text-gray-400" />
+                等待中 {stats.pending}
+              </span>
+            )}
             {stats.running > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
                 <CircleDot size={10} className="text-blue-500 animate-pulse" />
                 运行中 {stats.running}
               </span>
             )}
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
-              <CircleDot size={10} className="text-emerald-500" />
-              成功 {stats.success}
-            </span>
+            {stats.success > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+                <CircleDot size={10} className="text-emerald-500" />
+                成功 {stats.success}
+              </span>
+            )}
             {stats.failed > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600">
                 <CircleDot size={10} className="text-red-500" />
                 失败 {stats.failed}
+              </span>
+            )}
+            {stats.cancelled > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
+                <CircleDot size={10} className="text-amber-500" />
+                已取消 {stats.cancelled}
+              </span>
+            )}
+            {stats.partial > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
+                <CircleDot size={10} className="text-purple-500" />
+                部分完成 {stats.partial}
               </span>
             )}
           </div>

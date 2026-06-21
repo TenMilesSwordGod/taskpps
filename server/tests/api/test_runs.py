@@ -316,3 +316,53 @@ async def test_no_auth_header(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/health")
         assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_run_stats(app, setup_project, tmp_project, db_engine):
+    """Issue #89: 运行历史状态统计接口"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 创建几条运行记录
+        await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        await client.post("/api/runs/", json={"pipeline": "simple.yaml", "params": {}})
+
+        response = await client.get("/api/runs/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert "total" in data
+        assert "pending" in data
+        assert "running" in data
+        assert "success" in data
+        assert "failed" in data
+        assert "cancelled" in data
+        assert "partial" in data
+        assert data["total"] >= 2
+        # 新创建的运行默认为 pending 状态
+        assert data["pending"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_run_stats_with_pipeline_filter(app, setup_project, tmp_project, db_engine):
+    """Issue #89: 运行历史状态统计支持 pipeline 过滤"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        await client.post("/api/runs/", json={"pipeline": "simple.yaml", "params": {}})
+
+        response = await client.get("/api/runs/stats?pipeline=deploy")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] >= 1
