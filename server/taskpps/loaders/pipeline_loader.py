@@ -41,6 +41,43 @@ def _get_agent_loader(project_workdir: Path | None = None):
     return _agent_loader
 
 
+# AgentConnection 字段名 → 属性名的映射（用于 WebSocket 连接 fallback）
+_AGENT_CONNECTION_FIELD_MAP = {
+    "host": ("hostname", "ip"),
+    "hostname": ("hostname",),
+    "ip": ("ip",),
+    "platform": ("platform",),
+    "system": ("system",),
+    "arch": ("arch",),
+    "agent_version": ("agent_version",),
+    "id": ("agent_id",),
+}
+
+
+def _resolve_agent_field_from_connection(agent_id: str, field: str) -> str | None:
+    """配置文件中找不到 agent 时，尝试从 AgentManager 的 WebSocket 连接解析字段。
+
+    与 create_executor 的 fallback 逻辑保持一致：execution-agent 可能没有
+    agents/ 配置文件，仅通过 WebSocket 连接注册。
+    """
+    try:
+        from taskpps.services.agent_manager import AgentManager
+
+        conn = AgentManager.instance().get_connection(agent_id)
+        if conn is None:
+            return None
+        attr_names = _AGENT_CONNECTION_FIELD_MAP.get(field)
+        if attr_names is None:
+            return None
+        for attr in attr_names:
+            value = getattr(conn, attr, "")
+            if value:
+                return str(value)
+        return ""
+    except Exception:
+        return None
+
+
 def _resolve_variable_match(match, env: dict[str, str], project_workdir: Path | None = None) -> str:
     ref = match.group(1)
 
@@ -63,7 +100,15 @@ def _resolve_variable_match(match, env: dict[str, str], project_workdir: Path | 
             rest = ref.split(":", 1)[1]
             agent_id, field = rest.split(".", 1)
             agent_loader = _get_agent_loader(project_workdir)
-            return str(agent_loader.get_field(agent_id, field))
+            try:
+                return str(agent_loader.get_field(agent_id, field))
+            except KeyError:
+                # 配置文件中未找到 agent，尝试从 WebSocket 连接解析
+                # 与 create_executor 的 fallback 逻辑保持一致（executors/__init__.py:72-80）
+                resolved = _resolve_agent_field_from_connection(agent_id, field)
+                if resolved is not None:
+                    return resolved
+                raise
         except (ValueError, KeyError) as e:
             import logging
 

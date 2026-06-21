@@ -473,3 +473,79 @@ tasks:
         loader = PipelineLoader(pipelines_dir)
         spec = loader.load("agent_test.yaml", project_workdir=project_dir)
         assert spec.tasks[0].command == "connect 10.0.0.1:3306"
+
+    def test_agent_variable_substitution_fallback_to_websocket_connection(self, tmp_path):
+        """Issue #87: ${agent:X.host} 在配置文件找不到时，应从 AgentManager WebSocket 连接解析。
+
+        场景：execution-agent 通过 WebSocket 连接，但没有 agents/ 配置文件。
+        create_executor 已支持此 fallback（executors/__init__.py:72-80），
+        变量替换也应一致地支持。
+        """
+        from unittest.mock import MagicMock, patch
+
+        from taskpps.services.agent_manager import AgentConnection
+
+        # 创建项目目录结构（不创建任何 agent 配置文件）
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        pipelines_dir = project_dir / "pipelines"
+        pipelines_dir.mkdir()
+        agents_dir = project_dir / "agents"
+        agents_dir.mkdir()
+
+        # 创建使用 agent 变量的 pipeline（引用未在配置文件中定义的 agent）
+        p = pipelines_dir / "ws_agent_test.yaml"
+        p.write_text(
+            "name: ws_agent_test\ntasks:\n  - name: show-host\n    command: echo host=${agent:ws-agent-01.host}\n"
+        )
+
+        # 构造 mock AgentConnection（模拟 WebSocket 连接上报的 hostname）
+        mock_conn = MagicMock(spec=AgentConnection)
+        mock_conn.agent_id = "ws-agent-01"
+        mock_conn.hostname = "ws-host-10.98.72.23"
+        mock_conn.ip = "10.98.72.23"
+        mock_conn.platform = "linux"
+        mock_conn.system = ""
+        mock_conn.arch = ""
+        mock_conn.agent_version = "1.0.0"
+        mock_conn.agent_pid = 12345
+
+        mock_manager = MagicMock()
+        mock_manager.get_connection.return_value = mock_conn
+        mock_manager.is_connected.return_value = True
+
+        with patch("taskpps.services.agent_manager.AgentManager.instance", return_value=mock_manager):
+            loader = PipelineLoader(pipelines_dir)
+            spec = loader.load("ws_agent_test.yaml", project_workdir=project_dir)
+            assert spec.tasks[0].command == "echo host=ws-host-10.98.72.23"
+
+    def test_agent_variable_substitution_no_config_no_connection_returns_original(self, tmp_path):
+        """Issue #87: agent 既不在配置文件中，也未通过 WebSocket 连接时，保留原文本。"""
+        from unittest.mock import MagicMock, patch
+
+        # 创建项目目录结构（不创建任何 agent 配置文件）
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        pipelines_dir = project_dir / "pipelines"
+        pipelines_dir.mkdir()
+        agents_dir = project_dir / "agents"
+        agents_dir.mkdir()
+
+        p = pipelines_dir / "missing_agent_test.yaml"
+        p.write_text(
+            "name: missing_agent_test\n"
+            "tasks:\n"
+            "  - name: show-host\n"
+            "    command: echo host=${agent:missing-agent.host}\n"
+        )
+
+        # AgentManager 无连接
+        with patch("taskpps.services.agent_manager.AgentManager.instance") as mock_instance:
+            mock_manager = MagicMock()
+            mock_manager.get_connection.return_value = None
+            mock_instance.return_value = mock_manager
+
+            loader = PipelineLoader(pipelines_dir)
+            spec = loader.load("missing_agent_test.yaml", project_workdir=project_dir)
+            # 未找到 agent，保留原文本
+            assert spec.tasks[0].command == "echo host=${agent:missing-agent.host}"
