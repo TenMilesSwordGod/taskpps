@@ -274,9 +274,9 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         const exitBad = hasExit && exitCode !== 0;
         const isSkipped = run?.status === 'skipped';
 
-        // 运行中任务用蓝色，跳过用灰色，已完成用绿/红，其余用类型颜色
-        const badgeBg = isRunning ? 'rgba(59,130,246,0.12)' : isSkipped ? 'rgba(156,163,175,0.12)' : exitOk ? 'rgba(16,185,129,0.12)' : exitBad ? 'rgba(239,68,68,0.12)' : TYPE_COLOR[type] + '18';
-        const badgeColor = isRunning ? '#3b82f6' : isSkipped ? '#9ca3af' : exitOk ? '#10b981' : exitBad ? '#ef4444' : TYPE_COLOR[type];
+        // 运行中任务用蓝色，跳过用金黄色，已完成用绿/红，其余用类型颜色
+        const badgeBg = isRunning ? 'rgba(59,130,246,0.12)' : isSkipped ? 'rgba(250,173,20,0.12)' : exitOk ? 'rgba(16,185,129,0.12)' : exitBad ? 'rgba(239,68,68,0.12)' : TYPE_COLOR[type] + '18';
+        const badgeColor = isRunning ? '#3b82f6' : isSkipped ? '#faad14' : exitOk ? '#10b981' : exitBad ? '#ef4444' : TYPE_COLOR[type];
 
         // Task-level phase groups
         const taskSetup = taskPhaseMap.get(taskId)?.filter((g) => g.phase === 'setup') || [];

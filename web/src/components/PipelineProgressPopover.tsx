@@ -9,7 +9,7 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
   failed: '#ef4444',
   running: '#3b82f6',
   pending: '#9ca3af',
-  skipped: '#9ca3af',
+  skipped: '#faad14',
   cancelled: '#f97316',
 };
 
