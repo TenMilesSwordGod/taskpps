@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Popover, Spin } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import type { TaskRunResponse, TaskStatus } from '@/types';
@@ -45,28 +45,21 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  // 懒加载：首次 hover 时从缓存或 API 获取任务详情
+  // 每次 hover 时从 API 获取最新任务详情
   const [loadedTasks, setLoadedTasks] = useState<TaskRunResponse[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const fetchingRef = useRef(false);
 
   const handleOpenChange = useCallback(async (visible: boolean) => {
     setOpen(visible);
     if (!visible || !runId) return;
 
-    // 如果已有 tasks prop 或已加载过，不重复请求
-    if (tasks && tasks.length > 0) return;
-    if (loadedTasks !== null) return;
+    // 防止重复请求（上一次请求尚未完成）
+    if (fetchingRef.current) return;
 
     setLoading(true);
+    fetchingRef.current = true;
     try {
-      // 先查 React Query 缓存
-      const cached = queryClient.getQueryData<{ tasks: TaskRunResponse[] }>(['run', runId]);
-      if (cached?.tasks?.length) {
-        setLoadedTasks(cached.tasks);
-        setLoading(false);
-        return;
-      }
-      // 缓存未命中，请求 API
       const res = await fetch(`/api/runs/${runId}`);
       if (res.ok) {
         const data = await res.json();
@@ -78,15 +71,16 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
       // 静默失败
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  }, [runId, tasks, loadedTasks, queryClient]);
+  }, [runId, queryClient]);
 
-  // 实际使用的任务列表
+  // 实际使用的任务列表：优先使用最新获取的数据，其次使用 tasks prop
   const effectiveTasks = useMemo(() => {
-    if (tasks && tasks.length > 0) return tasks;
     if (loadedTasks && loadedTasks.length > 0) return loadedTasks;
+    if (tasks && tasks.length > 0) return tasks;
     return null;
-  }, [tasks, loadedTasks]);
+  }, [loadedTasks, tasks]);
 
   // 按子流水线分组
   const groups = useMemo(() => {
