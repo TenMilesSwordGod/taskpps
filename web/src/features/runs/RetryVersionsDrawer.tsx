@@ -51,8 +51,9 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
         selectedRetryId: retryId,
       });
       message.success('已设为最终版本');
-    } catch {
-      message.error('设置失败');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '设置失败';
+      message.error(msg);
     }
   };
 

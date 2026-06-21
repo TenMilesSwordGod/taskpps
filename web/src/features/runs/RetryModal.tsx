@@ -53,8 +53,9 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
       });
       message.success(`已触发重试（${tasksToRerun.length} 个任务）`);
       onClose();
-    } catch {
-      message.error('重试触发失败');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '重试触发失败';
+      message.error(msg);
     }
   };
 

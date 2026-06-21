@@ -272,10 +272,11 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         const hasExit = exitCode != null;
         const exitOk = exitCode === 0;
         const exitBad = hasExit && exitCode !== 0;
+        const isSkipped = run?.status === 'skipped';
 
-        // 运行中任务用蓝色，已完成用绿/红，其余用类型颜色
-        const badgeBg = isRunning ? 'rgba(59,130,246,0.12)' : exitOk ? 'rgba(16,185,129,0.12)' : exitBad ? 'rgba(239,68,68,0.12)' : TYPE_COLOR[type] + '18';
-        const badgeColor = isRunning ? '#3b82f6' : exitOk ? '#10b981' : exitBad ? '#ef4444' : TYPE_COLOR[type];
+        // 运行中任务用蓝色，跳过用灰色，已完成用绿/红，其余用类型颜色
+        const badgeBg = isRunning ? 'rgba(59,130,246,0.12)' : isSkipped ? 'rgba(156,163,175,0.12)' : exitOk ? 'rgba(16,185,129,0.12)' : exitBad ? 'rgba(239,68,68,0.12)' : TYPE_COLOR[type] + '18';
+        const badgeColor = isRunning ? '#3b82f6' : isSkipped ? '#9ca3af' : exitOk ? '#10b981' : exitBad ? '#ef4444' : TYPE_COLOR[type];
 
         // Task-level phase groups
         const taskSetup = taskPhaseMap.get(taskId)?.filter((g) => g.phase === 'setup') || [];
@@ -297,7 +298,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
 
         const titleContent = (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', minWidth: 0, whiteSpace: 'nowrap' }}>
-            <Tooltip title={isRunning ? '运行中' : hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
+            <Tooltip title={isRunning ? '运行中' : isSkipped ? '已跳过' : hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
               <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 18, fontSize: 10, fontWeight: 600, borderRadius: 4, background: badgeBg, color: badgeColor, flexShrink: 0 }}>
                 {TYPE_LABEL[type]}
               </span>

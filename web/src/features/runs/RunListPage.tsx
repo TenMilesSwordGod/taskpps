@@ -170,8 +170,9 @@ export default function RunListPage() {
     try {
       await deleteRun.mutateAsync(id);
       message.success('已删除');
-    } catch {
-      message.error('删除失败');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '删除失败';
+      message.error(msg);
     }
   }, [deleteRun, message]);
 

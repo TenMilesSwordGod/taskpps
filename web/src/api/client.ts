@@ -18,4 +18,16 @@ if (apiKey) {
   apiClient.defaults.headers.common['X-API-Key'] = apiKey;
 }
 
+// 响应拦截器：将后端返回的 detail 信息注入到错误消息中
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === 'string' && detail.length > 0) {
+      error.message = detail;
+    }
+    return Promise.reject(error);
+  },
+);
+
 export default apiClient;

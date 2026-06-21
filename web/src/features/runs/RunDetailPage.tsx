@@ -192,8 +192,9 @@ export default function RunDetailPage() {
     try {
       await cancelRun.mutateAsync(id);
       message.success('已取消运行');
-    } catch {
-      message.error('取消失败');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '取消失败';
+      message.error(msg);
     }
   };
 
