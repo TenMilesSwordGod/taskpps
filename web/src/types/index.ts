@@ -70,6 +70,8 @@ export interface PipelineSummary {
   folder: string;
   /** 所属项目 ID */
   project_id: string | null;
+  /** 所属项目名称 */
+  project_name: string | null;
   task_count: number;
   subpipeline_count: number;
   last_run: {

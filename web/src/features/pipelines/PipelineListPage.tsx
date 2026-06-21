@@ -75,6 +75,7 @@ export default function PipelineListPage() {
             file: '',
             folder,
             project_id: pid === '__default__' ? null : pid,
+            project_name: null,
             task_count: folderPipelines.reduce((s, c) => s + c.task_count, 0),
             subpipeline_count: folderPipelines.reduce((s, c) => s + c.subpipeline_count, 0),
             last_run: null,
@@ -99,6 +100,7 @@ export default function PipelineListPage() {
           file: '',
           folder: '',
           project_id: pid === '__default__' ? null : pid,
+          project_name: null,
           task_count: projectPipelines.reduce((s, c) => s + c.task_count, 0),
           subpipeline_count: projectPipelines.reduce((s, c) => s + c.subpipeline_count, 0),
           last_run: null,
@@ -198,11 +200,9 @@ export default function PipelineListPage() {
       width: 110,
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>;
-        return record.project_id ? (
-          <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{record.project_id}</Tag>
-        ) : (
-          <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>
-        );
+        if (!record.project_id) return <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>;
+        const displayName = record.project_name || record.project_id;
+        return <Tag style={{ fontSize: 11 }}>{displayName}</Tag>;
       },
     },
     {

@@ -22,10 +22,20 @@ async def list_pipelines(project_id: str | None = Query(None)):
     """
     # 确定要加载的项目列表（(project_id, base_dir) pairs）
     project_dirs: list[tuple[str | None, Path | None]] = []
+    # 缓存 project_id -> project_name 映射
+    project_name_map: dict[str | None, str | None] = {}
     if project_id:
         project_workdir = get_project_workdir_by_id(project_id)
         if project_workdir:
             project_dirs.append((project_id, get_pipelines_dir(project_workdir)))
+            # 查询指定项目的名称
+            async with get_session_factory()() as session:
+                from taskpps.db.repository import ProjectRepository
+
+                proj = await ProjectRepository(session).get_project(project_id)
+                if proj:
+                    pname = proj.name if proj.name else Path(proj.workdir).name
+                    project_name_map[project_id] = pname or None
         else:
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     else:
@@ -37,6 +47,9 @@ async def list_pipelines(project_id: str | None = Query(None)):
             projects = await repo.list_projects()
             for proj in projects:
                 project_dirs.append((proj.id, get_pipelines_dir(proj.workdir)))
+                # 解析项目名称：优先 name，否则用 workdir 最后一段路径
+                pname = proj.name if proj.name else Path(proj.workdir).name
+                project_name_map[proj.id] = pname or None
         # 如果没有注册项目，回退到默认 loader
         if not project_dirs:
             project_dirs.append((None, None))
@@ -78,6 +91,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "file": file,
                         "folder": folder,
                         "project_id": pid,
+                        "project_name": project_name_map.get(pid),
                         "task_count": task_count,
                         "subpipeline_count": subpipeline_count,
                         "last_run": last_run,
