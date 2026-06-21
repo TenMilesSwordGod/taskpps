@@ -124,7 +124,7 @@ class PipelineService:
                     loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
                 else:
                     raise ValueError(f"Project not found: {project_id}")
-                spec = loader.load(pipeline_file, loader_env)
+                spec = loader.load(pipeline_file, loader_env, project_workdir=project_workdir)
             else:
                 # 未指定 project_id 时，遍历所有已注册项目查找 pipeline
                 from taskpps.db.repository import ProjectRepository
@@ -137,7 +137,7 @@ class PipelineService:
                 for proj in projects:
                     loader = PipelineLoader(base_dir=get_pipelines_dir(proj.workdir))
                     try:
-                        spec = loader.load(pipeline_file, loader_env)
+                        spec = loader.load(pipeline_file, loader_env, project_workdir=Path(proj.workdir))
                         project_id = proj.id
                         project_workdir = Path(proj.workdir)
                         break

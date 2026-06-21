@@ -599,7 +599,8 @@ async def get_pipeline_snapshot(run_id: str):
         # 用运行时参数进行变量替换
         import json
         params = json.loads(run.params) if run.params else {}
-        data = substitute_env_vars(data, params)
+        project_workdir = getattr(run, "project_workdir", None)
+        data = substitute_env_vars(data, params, Path(project_workdir) if project_workdir else None)
 
         spec = PipelineYAML(**data)
         return spec.model_dump()

@@ -118,7 +118,7 @@ class PipelineLoader:
     def base_dir(self) -> Path:
         return self._base_dir or get_pipelines_dir()
 
-    def load(self, pipeline_file: str, env: dict[str, str] | None = None) -> PipelineYAML:
+    def load(self, pipeline_file: str, env: dict[str, str] | None = None, project_workdir: Path | None = None) -> PipelineYAML:
         p = Path(pipeline_file)
         if len(p.parts) > 0 and p.parts[0] == self.base_dir.name:
             p = Path(*p.parts[1:])
@@ -151,8 +151,9 @@ class PipelineLoader:
 
         # 始终执行变量替换, 即使 env 为空也支持 settings.env 和 os.environ
         # 传递项目工作目录, 使 agent/credential 变量替换能找到项目目录下的配置
-        project_workdir = self.base_dir.parent if self._base_dir is not None else None
-        data = substitute_env_vars(data, env or {}, project_workdir)
+        # 优先使用显式传入的 project_workdir, 其次从 base_dir 推导
+        effective_workdir = project_workdir or (self.base_dir.parent if self._base_dir is not None else None)
+        data = substitute_env_vars(data, env or {}, effective_workdir)
 
         return PipelineYAML(**data)
 

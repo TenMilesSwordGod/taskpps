@@ -445,3 +445,31 @@ tasks:
         loader = PipelineLoader(pipelines_dir)
         spec = loader.load("agent_var_test.yaml")
         assert spec.tasks[0].command == "echo host=192.168.1.100 port=2222"
+
+    def test_agent_variable_substitution_with_explicit_project_workdir(self, tmp_path):
+        """Issue #87: PipelineLoader.load() 接受 project_workdir 参数"""
+        # 创建项目目录结构
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        pipelines_dir = project_dir / "pipelines"
+        pipelines_dir.mkdir()
+        agents_dir = project_dir / "agents"
+        agents_dir.mkdir()
+
+        # 创建 agent 配置
+        agent_yaml = agents_dir / "my-agent.yaml"
+        agent_yaml.write_text("host: 10.0.0.1\nport: 3306\n")
+
+        # 创建使用 agent 变量的 pipeline
+        p = pipelines_dir / "agent_test.yaml"
+        p.write_text(
+            "name: agent_test\n"
+            "tasks:\n"
+            "  - name: step1\n"
+            "    command: connect ${agent:my-agent.host}:${agent:my-agent.port}\n"
+        )
+
+        # 使用 PipelineLoader(base_dir=pipelines_dir), 显式传入 project_workdir
+        loader = PipelineLoader(pipelines_dir)
+        spec = loader.load("agent_test.yaml", project_workdir=project_dir)
+        assert spec.tasks[0].command == "connect 10.0.0.1:3306"
