@@ -78,7 +78,8 @@ describe('<PipelineProgressPopover /> Issue #82 - 悬浮窗动态加载', () => 
     fireEvent.mouseEnter(trigger)
     await waitFor(() => expect(fetchCallCount).toBe(1))
     await waitFor(() => expect(screen.getByText('step1-init')).toBeInTheDocument())
-    expect(screen.getByText('RUN')).toBeInTheDocument()
+    // 运行中任务显示 Loader2 转圈图标（不再显示 RUN 文字）
+    expect(document.querySelector('.animate-spin')).toBeInTheDocument()
 
     // 关闭 popover：直接触发 mouseLeave
     fireEvent.mouseLeave(trigger)
@@ -90,8 +91,8 @@ describe('<PipelineProgressPopover /> Issue #82 - 悬浮窗动态加载', () => 
 
     // 验证更新后的状态
     await waitFor(() => expect(screen.getByText('step2-prepare')).toBeInTheDocument())
-    const runLabels = screen.getAllByText('RUN')
-    expect(runLabels.length).toBe(1)
+    // 运行中任务显示 Loader2 转圈图标
+    expect(document.querySelector('.animate-spin')).toBeInTheDocument()
   })
 
   it('有 tasks prop 时，hover 也应重新获取最新状态', async () => {

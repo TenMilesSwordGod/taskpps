@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { Popover, Spin } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
+import { Check, X, Loader2 } from 'lucide-react';
+import dayjs from 'dayjs';
 import type { TaskRunResponse, TaskStatus } from '@/types';
 
 /** 状态颜色 — 绿=通过，灰=未执行，红=失败，蓝=运行中，黄=跳过，橙=取消 */
@@ -12,6 +14,17 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
   skipped: '#faad14',
   cancelled: '#f97316',
 };
+
+/** 呼吸灯动画 keyframes */
+const BREATHING_STYLE = `
+@keyframes breathing {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .breathing-dot { animation: none !important; }
+}
+`;
 
 /** 子流水线状态汇总颜色（优先级：failed > running > 其他） */
 function groupStatusColor(tasks: TaskRunResponse[]): string {
@@ -98,7 +111,10 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
   if (!hasData && !runId) return <>{children}</>;
 
   const content = (
-    <div style={{ minWidth: 220, maxWidth: 340, padding: '4px 0' }}>
+    <div style={{ minWidth: 220, maxWidth: 360, padding: '4px 0' }} onClick={(e) => e.stopPropagation()}>
+      {/* 呼吸灯动画样式 */}
+      <style>{BREATHING_STYLE}</style>
+
       {loading && (
         <div style={{ textAlign: 'center', padding: '16px 0' }}>
           <Spin size="small" />
@@ -152,27 +168,43 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
                     fontSize: 12,
                   }}
                 >
-                  <span style={{
-                    width: 5,
-                    height: 5,
-                    borderRadius: '50%',
-                    background: STATUS_COLOR[t.status],
-                    flexShrink: 0,
-                  }} />
+                  {/* 状态圆点：运行中用呼吸灯 */}
+                  <span
+                    className={t.status === 'running' ? 'breathing-dot' : undefined}
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      background: STATUS_COLOR[t.status],
+                      flexShrink: 0,
+                      ...(t.status === 'running' ? { animation: 'breathing 2s ease-in-out infinite' } : {}),
+                    }}
+                  />
                   <span style={{
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                     color: STATUS_COLOR[t.status],
                     flex: 1,
+                    userSelect: 'text',
                   }}>
                     {t.task_name.includes('.') ? t.task_name.split('.').pop() : t.task_name}
                   </span>
+                  {/* 完成时间 */}
+                  {t.finished_at && (
+                    <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      {dayjs(t.finished_at).format('HH:mm:ss')}
+                    </span>
+                  )}
+                  {/* 状态图标 */}
+                  {t.status === 'success' && (
+                    <Check size={12} color="#10b981" style={{ flexShrink: 0 }} />
+                  )}
                   {t.status === 'failed' && (
-                    <span style={{ fontSize: 10, color: '#ef4444', flexShrink: 0 }}>FAIL</span>
+                    <X size={12} color="#ef4444" style={{ flexShrink: 0 }} />
                   )}
                   {t.status === 'running' && (
-                    <span style={{ fontSize: 10, color: '#3b82f6', flexShrink: 0 }}>RUN</span>
+                    <Loader2 size={12} color="#3b82f6" className="animate-spin" style={{ flexShrink: 0 }} />
                   )}
                 </div>
               ))}

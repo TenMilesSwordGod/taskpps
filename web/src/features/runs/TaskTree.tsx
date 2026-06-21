@@ -7,6 +7,17 @@ import { Loader2, RotateCcw, History } from 'lucide-react';
 import { useRunConsole } from '@/api/runs';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
 
+/** 呼吸灯动画 keyframes */
+const BREATHING_STYLE = `
+@keyframes breathing {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50% { opacity: 0.85; box-shadow: 0 0 0 3px rgba(59,130,246,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .breathing-badge { animation: none !important; }
+}
+`;
+
 interface TaskRunInfo {
   task_name: string;
   status: TaskStatus;
@@ -298,8 +309,25 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
 
         const titleContent = (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', minWidth: 0, whiteSpace: 'nowrap' }}>
+            <style>{BREATHING_STYLE}</style>
             <Tooltip title={isRunning ? '运行中' : isSkipped ? '已跳过' : hasExit ? `Exit ${exitCode} — ${exitOk ? '成功' : '失败'}` : type}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 18, fontSize: 10, fontWeight: 600, borderRadius: 4, background: badgeBg, color: badgeColor, flexShrink: 0 }}>
+              <span
+                className={isRunning ? 'breathing-badge' : undefined}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 18,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  borderRadius: 4,
+                  background: badgeBg,
+                  color: badgeColor,
+                  flexShrink: 0,
+                  ...(isRunning ? { animation: 'breathing 2s ease-in-out infinite' } : {}),
+                }}
+              >
                 {TYPE_LABEL[type]}
               </span>
             </Tooltip>
