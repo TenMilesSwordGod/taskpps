@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, Select, Popconfirm } from 'antd';
+import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, TreeSelect, Popconfirm } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Play, Trash2, RefreshCw, History, CircleDot } from 'lucide-react';
+import { Eye, Play, Trash2, RefreshCw, History, CircleDot, Search } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import { useRuns, useCleanRuns, useDeleteRun } from '@/api/runs';
@@ -48,9 +48,8 @@ export default function RunListPage() {
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all');
-  const [pipelineFilter, setPipelineFilter] = useState('');
-  const [projectSelectFilter, setProjectSelectFilter] = useState<string | null>(null);
-  const [pipelineSelectFilter, setPipelineSelectFilter] = useState<string | null>(null);
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [treeSelectValue, setTreeSelectValue] = useState<string | undefined>(undefined);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [cleanOpen, setCleanOpen] = useState(false);
@@ -99,43 +98,65 @@ export default function RunListPage() {
     return { total: allItems.length, running, success, failed };
   }, [allItems]);
 
-  // 提取唯一项目列表（用于下拉筛选）
-  const projectOptions = useMemo(() => {
-    const map = new Map<string, string>();
+  // 构建项目>流水线树形数据（用于 TreeSelect）
+  const treeData = useMemo(() => {
+    const projectMap = new Map<string, { name: string; pipelines: Map<string, string> }>();
     for (const r of allItems) {
-      if (r.project_id) {
-        map.set(r.project_id, r.project_name || r.project_id);
+      const projKey = r.project_id || '__default__';
+      const projName = r.project_id ? (r.project_name || r.project_id) : '默认项目';
+      if (!projectMap.has(projKey)) {
+        projectMap.set(projKey, { name: projName, pipelines: new Map() });
+      }
+      if (r.pipeline_name) {
+        projectMap.get(projKey)!.pipelines.set(r.pipeline_name, r.pipeline_name);
       }
     }
-    return Array.from(map.entries()).map(([id, name]) => ({ value: id, label: name }));
+    return Array.from(projectMap.entries()).map(([projKey, { name, pipelines }]) => ({
+      title: name,
+      value: projKey,
+      key: projKey,
+      children: Array.from(pipelines.entries()).map(([pipeName, pipeLabel]) => ({
+        title: pipeLabel,
+        value: `${projKey}::${pipeName}`,
+        key: `${projKey}::${pipeName}`,
+      })),
+    }));
   }, [allItems]);
 
-  // 根据选中项目过滤流水线列表
-  const pipelineOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of allItems) {
-      if (projectSelectFilter && r.project_id !== projectSelectFilter) continue;
-      if (r.pipeline_name) set.add(r.pipeline_name);
+  // 从 treeSelectValue 解析出 projectFilter 和 pipelineFilter
+  const { projectFilter, pipelineFilter } = useMemo(() => {
+    if (!treeSelectValue) return { projectFilter: null, pipelineFilter: null };
+    if (treeSelectValue.includes('::')) {
+      const [proj, pipe] = treeSelectValue.split('::');
+      return { projectFilter: proj === '__default__' ? null : proj, pipelineFilter: pipe };
     }
-    return Array.from(set).map((name) => ({ value: name, label: name }));
-  }, [allItems, projectSelectFilter]);
+    return { projectFilter: treeSelectValue === '__default__' ? null : treeSelectValue, pipelineFilter: null };
+  }, [treeSelectValue]);
 
   // 前端过滤
   const filtered = useMemo(() => {
-    if (statusFilter === 'all' && !pipelineFilter && !projectSelectFilter && !pipelineSelectFilter && !dateRange) return allItems;
-    const kw = pipelineFilter.toLowerCase();
+    const kw = globalSearch.toLowerCase();
     return allItems.filter((run) => {
       if (statusFilter !== 'all' && run.status !== statusFilter) return false;
-      if (kw && !run.pipeline_name.toLowerCase().includes(kw)) return false;
-      if (projectSelectFilter && run.project_id !== projectSelectFilter) return false;
-      if (pipelineSelectFilter && run.pipeline_name !== pipelineSelectFilter) return false;
+      if (projectFilter && run.project_id !== projectFilter) return false;
+      if (pipelineFilter && run.pipeline_name !== pipelineFilter) return false;
       if (dateRange) {
         const created = dayjs(run.created_at);
         if (created.isBefore(dateRange[0]) || created.isAfter(dateRange[1])) return false;
       }
+      if (kw) {
+        const searchFields = [
+          run.display_name,
+          run.id,
+          run.pipeline_name,
+          run.project_name,
+          run.project_id,
+        ].filter(Boolean);
+        if (!searchFields.some(f => f!.toLowerCase().includes(kw))) return false;
+      }
       return true;
     });
-  }, [allItems, statusFilter, pipelineFilter, projectSelectFilter, pipelineSelectFilter, dateRange]);
+  }, [allItems, statusFilter, globalSearch, projectFilter, pipelineFilter, dateRange]);
 
   // 打开清理弹窗时重置表单
   const handleOpenClean = useCallback(() => {
@@ -322,37 +343,31 @@ export default function RunListPage() {
           onChange={(v) => setStatusFilter(v as RunStatus | 'all')}
         />
         <span className="text-gray-200">|</span>
-        <Input
+        <TreeSelect
           allowClear
-          placeholder="流水线名"
-          value={pipelineFilter}
-          onChange={(e) => setPipelineFilter(e.target.value)}
-          style={{ width: 180 }}
-        />
-        <Select
-          allowClear
-          placeholder="项目"
-          value={projectSelectFilter}
-          onChange={(v) => {
-            setProjectSelectFilter(v ?? null);
-            setPipelineSelectFilter(null);
-          }}
-          options={projectOptions}
-          style={{ width: 160 }}
-        />
-        <Select
-          allowClear
-          placeholder="流水线"
-          value={pipelineSelectFilter}
-          onChange={(v) => setPipelineSelectFilter(v ?? null)}
-          options={pipelineOptions}
-          style={{ width: 180 }}
+          showSearch
+          treeDefaultExpandAll={false}
+          placeholder="项目 / 流水线"
+          value={treeSelectValue}
+          onChange={(v: string) => setTreeSelectValue(v ?? undefined)}
+          treeData={treeData}
+          style={{ width: 220 }}
+          treeNodeFilterProp="title"
         />
         <DatePicker.RangePicker
           size="small"
           value={dateRange}
           onChange={(v) => setDateRange(v as [dayjs.Dayjs, dayjs.Dayjs] | null)}
           showTime
+        />
+        <div className="flex-1" />
+        <Input
+          allowClear
+          prefix={<Search size={14} className="text-gray-400" />}
+          placeholder="搜索运行名称 / UUID / 项目 / 流水线"
+          value={globalSearch}
+          onChange={(e) => setGlobalSearch(e.target.value)}
+          style={{ width: 280 }}
         />
       </div>
 
