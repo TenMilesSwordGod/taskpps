@@ -70,6 +70,8 @@ class DAG:
             level = [name for name in remaining if in_degree[name] == 0]
             if not level:
                 raise DAGCycleError(t("Cycle detected among tasks: {tasks}", tasks=remaining))
+            # 按 YAML 声明顺序排序, 确保同层级内执行顺序可预测
+            level.sort(key=lambda n: self.task_order.index(n))
             levels.append(level)
             for name in level:
                 remaining.remove(name)

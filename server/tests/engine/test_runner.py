@@ -927,6 +927,32 @@ class TestPipelineRunnerExitCodeCoverage:
         assert _evaluate_when("invalid expr", {}) is True
 
     @pytest.mark.asyncio
+    async def test_evaluate_when_without_env_prefix(self, mock_session_factory):
+        """Issue #85: when 条件支持 ${VAR} 格式(无 env. 前缀)"""
+        from taskpps.engine.runner import _evaluate_when
+
+        # ${VAR} == "value" 格式(无 env. 前缀)
+        assert _evaluate_when('${RUN_PERF} == "true"', {"RUN_PERF": "true"}) is True
+        assert _evaluate_when('${RUN_PERF} == "true"', {"RUN_PERF": "false"}) is False
+        # ${VAR} != "value" 格式
+        assert _evaluate_when('${RUN_PERF} != "true"', {"RUN_PERF": "false"}) is True
+
+    @pytest.mark.asyncio
+    async def test_evaluate_when_without_quotes(self, mock_session_factory):
+        """Issue #85: when 条件支持无引号值(如 ${VAR} == true)"""
+        from taskpps.engine.runner import _evaluate_when
+
+        # ${VAR} == true(无引号)
+        assert _evaluate_when("${RUN_PERF} == true", {"RUN_PERF": "true"}) is True
+        assert _evaluate_when("${RUN_PERF} == true", {"RUN_PERF": "false"}) is False
+        # ${VAR} == false(无引号)
+        assert _evaluate_when("${RUN_SMOKE} == false", {"RUN_SMOKE": "true"}) is False
+        assert _evaluate_when("${RUN_SMOKE} == false", {"RUN_SMOKE": "false"}) is True
+        # ${env.VAR} == true(有 env. 前缀 + 无引号)
+        assert _evaluate_when("${env.RUN_PERF} == true", {"RUN_PERF": "true"}) is True
+        assert _evaluate_when("${env.RUN_PERF} == true", {"RUN_PERF": "false"}) is False
+
+    @pytest.mark.asyncio
     async def test_when_condition_skips_task(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         tasks = [

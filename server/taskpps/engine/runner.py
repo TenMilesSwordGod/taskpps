@@ -43,7 +43,7 @@ from taskpps.models.run import RunStatus, TaskStatus
 logger = logging.getLogger(__name__)
 _active_runs: dict[str, PipelineRunner] = {}
 
-_WHEN_PATTERN = re.compile(r'\$\{env\.([^}]+)\}\s*(==|!=)\s*"([^"]*)"')
+_WHEN_PATTERN = re.compile(r'\$\{(?:env\.)?([^}]+)\}\s*(==|!=)\s*"?([^"]*)"?')
 
 
 def _evaluate_when(when_expr: str | None, env: dict[str, str]) -> bool:

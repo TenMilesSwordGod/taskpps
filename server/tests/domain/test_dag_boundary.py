@@ -194,3 +194,24 @@ class TestDAGBoundary:
     def test_get_dependents_nonexistent(self):
         dag = DAG([_make_task("a")])
         assert dag.get_dependents("nonexistent") == set()
+
+    def test_execution_levels_preserve_yaml_order(self):
+        """Issue #85: 同层级任务应按 YAML 声明顺序排列"""
+        dag = DAG(
+            [
+                _make_task("setup"),
+                _make_task("smoke-test", depends_on=["setup"]),
+                _make_task("perf-test", depends_on=["setup"]),
+                _make_task("final", depends_on=["smoke-test"]),
+            ],
+            implicit_sequential=False,
+        )
+        levels = dag.get_execution_levels()
+        # Level 0: [setup]
+        # Level 1: [smoke-test, perf-test] — 应按 YAML 声明顺序
+        # Level 2: [final]
+        assert len(levels) == 3
+        assert levels[0] == ["setup"]
+        # smoke-test 在 perf-test 之前声明, 应排在前面
+        assert levels[1] == ["smoke-test", "perf-test"]
+        assert levels[2] == ["final"]
