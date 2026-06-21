@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from taskpps.config import get_pipelines_dir, get_settings
+from taskpps.config import get_agents_dir, get_pipelines_dir, get_settings
 from taskpps.i18n import t
 from taskpps.schemas.pipeline import PipelineYAML
 
@@ -15,8 +15,12 @@ _credential_loader = None
 _agent_loader = None
 
 
-def _get_credential_loader():
+def _get_credential_loader(project_workdir: Path | None = None):
     global _credential_loader
+    if project_workdir is not None:
+        from taskpps.loaders.credential_loader import CredentialLoader
+
+        return CredentialLoader(project_workdir / "credentials")
     if _credential_loader is None:
         from taskpps.loaders.credential_loader import CredentialLoader
 
@@ -24,8 +28,12 @@ def _get_credential_loader():
     return _credential_loader
 
 
-def _get_agent_loader():
+def _get_agent_loader(project_workdir: Path | None = None):
     global _agent_loader
+    if project_workdir is not None:
+        from taskpps.loaders.agent_loader import AgentLoader
+
+        return AgentLoader(get_agents_dir(project_workdir))
     if _agent_loader is None:
         from taskpps.loaders.agent_loader import AgentLoader
 
@@ -33,14 +41,14 @@ def _get_agent_loader():
     return _agent_loader
 
 
-def _resolve_variable_match(match, env: dict[str, str]) -> str:
+def _resolve_variable_match(match, env: dict[str, str], project_workdir: Path | None = None) -> str:
     ref = match.group(1)
 
     if ref.startswith("credential:"):
         try:
             rest = ref.split(":", 1)[1]
             cred_id, field = rest.split(".", 1)
-            cred_loader = _get_credential_loader()
+            cred_loader = _get_credential_loader(project_workdir)
             return str(cred_loader.get_field(cred_id, field))
         except (ValueError, KeyError) as e:
             import logging
@@ -54,7 +62,7 @@ def _resolve_variable_match(match, env: dict[str, str]) -> str:
         try:
             rest = ref.split(":", 1)[1]
             agent_id, field = rest.split(".", 1)
-            agent_loader = _get_agent_loader()
+            agent_loader = _get_agent_loader(project_workdir)
             return str(agent_loader.get_field(agent_id, field))
         except (ValueError, KeyError) as e:
             import logging
@@ -86,19 +94,19 @@ def _resolve_variable_match(match, env: dict[str, str]) -> str:
         return match.group(0)
 
 
-def substitute_env_vars(value: Any, env: dict[str, str]) -> Any:
+def substitute_env_vars(value: Any, env: dict[str, str], project_workdir: Path | None = None) -> Any:
     if isinstance(value, str):
         result = value
         for _ in range(10):
-            new_result = _VAR_PATTERN.sub(lambda m: _resolve_variable_match(m, env), result)
+            new_result = _VAR_PATTERN.sub(lambda m: _resolve_variable_match(m, env, project_workdir), result)
             if new_result == result:
                 break
             result = new_result
         return result
     if isinstance(value, dict):
-        return {k: substitute_env_vars(v, env) for k, v in value.items()}
+        return {k: substitute_env_vars(v, env, project_workdir) for k, v in value.items()}
     if isinstance(value, list):
-        return [substitute_env_vars(item, env) for item in value]
+        return [substitute_env_vars(item, env, project_workdir) for item in value]
     return value
 
 
@@ -142,7 +150,9 @@ class PipelineLoader:
             env = merged
 
         # 始终执行变量替换, 即使 env 为空也支持 settings.env 和 os.environ
-        data = substitute_env_vars(data, env or {})
+        # 传递项目工作目录, 使 agent/credential 变量替换能找到项目目录下的配置
+        project_workdir = self.base_dir.parent if self._base_dir is not None else None
+        data = substitute_env_vars(data, env or {}, project_workdir)
 
         return PipelineYAML(**data)
 

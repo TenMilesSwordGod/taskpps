@@ -418,3 +418,30 @@ tasks:
         spec = loader.load("priority_test.yaml", env={"KEY": "param_val"})
         # params.env 应优先于 config.env
         assert spec.tasks[0].command == "echo param_val"
+
+    def test_agent_variable_substitution_with_project_dir(self, tmp_path):
+        """Issue #87: ${agent:X.host} 应使用项目目录下的 agents 配置"""
+        # 创建项目目录结构
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        pipelines_dir = project_dir / "pipelines"
+        pipelines_dir.mkdir()
+        agents_dir = project_dir / "agents"
+        agents_dir.mkdir()
+
+        # 创建 agent 配置
+        agent_yaml = agents_dir / "test-agent01.yaml"
+        agent_yaml.write_text("host: 192.168.1.100\nport: 2222\nusername: admin\n")
+
+        # 创建使用 agent 变量的 pipeline
+        p = pipelines_dir / "agent_var_test.yaml"
+        p.write_text(
+            "name: agent_var_test\n"
+            "tasks:\n"
+            "  - name: show-agent\n"
+            "    command: echo host=${agent:test-agent01.host} port=${agent:test-agent01.port}\n"
+        )
+
+        loader = PipelineLoader(pipelines_dir)
+        spec = loader.load("agent_var_test.yaml")
+        assert spec.tasks[0].command == "echo host=192.168.1.100 port=2222"
