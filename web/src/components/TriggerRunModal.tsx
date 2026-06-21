@@ -76,7 +76,7 @@ export default function TriggerRunModal({
       onOk={handleOk}
       onCancel={onClose}
       confirmLoading={createRun.isPending}
-      destroyOnClose
+      destroyOnHidden
       width={800}
     >
       <Form
@@ -94,7 +94,9 @@ export default function TriggerRunModal({
 
         {shouldFetch && isFetching ? (
           <div style={{ textAlign: 'center', padding: 24 }}>
-            <Spin tip="加载流水线参数..." />
+            <Spin tip="加载流水线参数...">
+              <div style={{ padding: 20 }} />
+            </Spin>
           </div>
         ) : effectivePipeline ? (
           <ParamsForm pipelineData={effectivePipeline} agents={agents} />

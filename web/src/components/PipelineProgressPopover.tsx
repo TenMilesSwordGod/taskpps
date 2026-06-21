@@ -1,158 +1,200 @@
-import { useMemo } from 'react';
-import { Popover, Progress, Tag, Space } from 'antd';
-import { CheckCircle2, AlertCircle, Loader2, CircleDot, MinusCircle } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { Popover, Spin } from 'antd';
+import { useQueryClient } from '@tanstack/react-query';
 import type { TaskRunResponse, TaskStatus } from '@/types';
 
-/** 状态中文标签 */
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  pending: '等待中',
-  running: '运行中',
-  success: '成功',
-  failed: '失败',
-  skipped: '已跳过',
-  cancelled: '已取消',
-};
-
-/** 状态颜色 */
+/** 状态颜色 — 绿=通过，灰=未执行，红=失败，蓝=运行中，黄=跳过，橙=取消 */
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  pending: '#9ca3af',
-  running: '#3b82f6',
   success: '#10b981',
   failed: '#ef4444',
-  skipped: '#f59e0b',
+  running: '#3b82f6',
+  pending: '#9ca3af',
+  skipped: '#9ca3af',
   cancelled: '#f97316',
 };
 
-const ALL_STATUSES: TaskStatus[] = ['running', 'success', 'failed', 'skipped', 'cancelled', 'pending'];
+/** 子流水线状态汇总颜色（优先级：failed > running > 其他） */
+function groupStatusColor(tasks: TaskRunResponse[]): string {
+  if (tasks.some((t) => t.status === 'failed')) return '#ef4444';
+  if (tasks.some((t) => t.status === 'running')) return '#3b82f6';
+  return '#10b981';
+}
+
+/** 按 subpipeline_name 分组，保持顺序 */
+function groupBySubpipeline(tasks: TaskRunResponse[]): Map<string, TaskRunResponse[]> {
+  const map = new Map<string, TaskRunResponse[]>();
+  for (const t of tasks) {
+    const key = t.subpipeline_name || '';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(t);
+  }
+  return map;
+}
 
 interface Props {
-  /** 完整任务列表（详情页可用） */
+  /** 运行 ID（列表页传入，用于懒加载任务详情） */
+  runId?: string;
+  /** 完整任务列表（详情页可用，跳过懒加载） */
   tasks?: TaskRunResponse[];
-  /** 任务状态计数摘要（列表页可用，优先级低于 tasks） */
+  /** 任务状态计数摘要（列表页可用，无 runId 时作为 fallback） */
   taskSummary?: Record<string, number>;
   children: React.ReactNode;
 }
 
-export default function PipelineProgressPopover({ tasks, taskSummary, children }: Props) {
-  const stats = useMemo(() => {
-    const counts: Record<TaskStatus, number> = {
-      pending: 0, running: 0, success: 0, failed: 0, skipped: 0, cancelled: 0,
-    };
+export default function PipelineProgressPopover({ runId, tasks, taskSummary, children }: Props) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
 
-    // 优先使用完整 tasks 数据
-    if (tasks && tasks.length > 0) {
-      for (const t of tasks) {
-        counts[t.status]++;
+  // 懒加载：首次 hover 时从缓存或 API 获取任务详情
+  const [loadedTasks, setLoadedTasks] = useState<TaskRunResponse[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleOpenChange = useCallback(async (visible: boolean) => {
+    setOpen(visible);
+    if (!visible || !runId) return;
+
+    // 如果已有 tasks prop 或已加载过，不重复请求
+    if (tasks && tasks.length > 0) return;
+    if (loadedTasks !== null) return;
+
+    setLoading(true);
+    try {
+      // 先查 React Query 缓存
+      const cached = queryClient.getQueryData<{ tasks: TaskRunResponse[] }>(['run', runId]);
+      if (cached?.tasks?.length) {
+        setLoadedTasks(cached.tasks);
+        setLoading(false);
+        return;
       }
-      return counts;
-    }
-
-    // 回退到 task_summary
-    if (taskSummary && Object.keys(taskSummary).length > 0) {
-      for (const [status, count] of Object.entries(taskSummary)) {
-        if (status in counts) {
-          counts[status as TaskStatus] = count;
-        }
+      // 缓存未命中，请求 API
+      const res = await fetch(`/api/runs/${runId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLoadedTasks(data.tasks ?? []);
+        // 顺便写入缓存
+        queryClient.setQueryData(['run', runId], data);
       }
-      return counts;
+    } catch {
+      // 静默失败
+    } finally {
+      setLoading(false);
     }
+  }, [runId, tasks, loadedTasks, queryClient]);
 
+  // 实际使用的任务列表
+  const effectiveTasks = useMemo(() => {
+    if (tasks && tasks.length > 0) return tasks;
+    if (loadedTasks && loadedTasks.length > 0) return loadedTasks;
     return null;
-  }, [tasks, taskSummary]);
+  }, [tasks, loadedTasks]);
 
-  // #region debug-point dp1 — 诊断悬浮窗不显示
-  console.log('[PipelineProgressPopover] stats:', stats, 'tasks:', tasks?.length, 'taskSummary:', taskSummary);
-  // #endregion
+  // 按子流水线分组
+  const groups = useMemo(() => {
+    if (!effectiveTasks) return null;
+    return groupBySubpipeline(effectiveTasks);
+  }, [effectiveTasks]);
 
-  // 无数据时不显示悬浮窗
-  if (!stats) return <>{children}</>;
+  // 无数据判断
+  const hasData = useMemo(() => {
+    if (effectiveTasks && effectiveTasks.length > 0) return true;
+    if (taskSummary && Object.keys(taskSummary).length > 0) return true;
+    return false;
+  }, [effectiveTasks, taskSummary]);
 
-  const total = Object.values(stats).reduce((a, b) => a + b, 0);
-  if (total === 0) return <>{children}</>;
-
-  const done = stats.success + stats.skipped + stats.failed + stats.cancelled;
-  const percent = Math.round((done / total) * 100);
-  const isFailed = stats.failed > 0;
-  const isDone = done === total;
-
-  const strokeColor = isFailed ? '#ef4444' : isDone ? '#10b981' : '#3b82f6';
+  if (!hasData && !runId) return <>{children}</>;
 
   const content = (
-    <div style={{ minWidth: 200 }}>
-      {/* 进度条 */}
-      <div style={{ marginBottom: 8 }}>
-        <Progress
-          percent={percent}
-          strokeColor={strokeColor}
-          size="small"
-          status={isFailed ? 'exception' : isDone ? 'success' : 'active'}
-        />
-      </div>
+    <div style={{ minWidth: 220, maxWidth: 340, padding: '4px 0' }}>
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '16px 0' }}>
+          <Spin size="small" />
+        </div>
+      )}
 
-      {/* 状态统计 */}
-      <Space size={4} wrap>
-        {stats.running > 0 && (
-          <Tag icon={<Loader2 size={10} className="animate-spin" />} color="processing" style={{ margin: 0, fontSize: 11 }}>
-            运行中 {stats.running}
-          </Tag>
-        )}
-        {stats.success > 0 && (
-          <Tag icon={<CheckCircle2 size={10} />} color="success" style={{ margin: 0, fontSize: 11 }}>
-            成功 {stats.success}
-          </Tag>
-        )}
-        {stats.failed > 0 && (
-          <Tag icon={<AlertCircle size={10} />} color="error" style={{ margin: 0, fontSize: 11 }}>
-            失败 {stats.failed}
-          </Tag>
-        )}
-        {stats.skipped > 0 && (
-          <Tag icon={<MinusCircle size={10} />} color="warning" style={{ margin: 0, fontSize: 11 }}>
-            跳过 {stats.skipped}
-          </Tag>
-        )}
-        {stats.cancelled > 0 && (
-          <Tag color="default" style={{ margin: 0, fontSize: 11 }}>
-            取消 {stats.cancelled}
-          </Tag>
-        )}
-        {stats.pending > 0 && (
-          <Tag icon={<CircleDot size={10} />} color="default" style={{ margin: 0, fontSize: 11 }}>
-            等待 {stats.pending}
-          </Tag>
-        )}
-      </Space>
-
-      {/* 任务列表（仅 tasks 模式可用） */}
-      {tasks && tasks.length > 0 && (
-        <div style={{ marginTop: 8, maxHeight: 160, overflowY: 'auto' }}>
-          {tasks.map((t) => (
-            <div
-              key={t.task_name}
-              style={{
+      {!loading && groups && groups.size > 0 && (
+        <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+          {[...groups.entries()].map(([subpipeline, subTasks]) => (
+            <div key={subpipeline} style={{ marginBottom: 8 }}>
+              {/* 子流水线标题 */}
+              <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '2px 0',
-                fontSize: 12,
-                color: STATUS_COLOR[t.status],
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: STATUS_COLOR[t.status],
+                marginBottom: 4,
+                paddingBottom: 3,
+                borderBottom: '1px solid #f0f0f0',
+              }}>
+                <span style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 2,
+                  background: groupStatusColor(subTasks),
                   flexShrink: 0,
-                }}
-              />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {t.task_name}
-              </span>
-              <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 11, color: '#9ca3af' }}>
-                {STATUS_LABEL[t.status]}
-              </span>
+                }} />
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#171717',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {subpipeline || '主流水线'}
+                </span>
+                <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto', flexShrink: 0 }}>
+                  {subTasks.filter((t) => t.status === 'success').length}/{subTasks.length}
+                </span>
+              </div>
+
+              {/* 任务列表 */}
+              {subTasks.map((t) => (
+                <div
+                  key={t.task_name}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '2px 0 2px 14px',
+                    fontSize: 12,
+                  }}
+                >
+                  <span style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: '50%',
+                    background: STATUS_COLOR[t.status],
+                    flexShrink: 0,
+                  }} />
+                  <span style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: STATUS_COLOR[t.status],
+                    flex: 1,
+                  }}>
+                    {t.task_name.includes('.') ? t.task_name.split('.').pop() : t.task_name}
+                  </span>
+                  {t.status === 'failed' && (
+                    <span style={{ fontSize: 10, color: '#ef4444', flexShrink: 0 }}>FAIL</span>
+                  )}
+                  {t.status === 'running' && (
+                    <span style={{ fontSize: 10, color: '#3b82f6', flexShrink: 0 }}>RUN</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* fallback：无 tasks 数据时显示 taskSummary 计数 */}
+      {!loading && !groups && taskSummary && Object.keys(taskSummary).length > 0 && (
+        <div style={{ padding: '4px 0' }}>
+          {Object.entries(taskSummary).map(([status, count]) => (
+            <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '2px 0' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[status as TaskStatus] || '#9ca3af', flexShrink: 0 }} />
+              <span style={{ color: '#404040', flex: 1 }}>{status}</span>
+              <span style={{ fontWeight: 600, color: STATUS_COLOR[status as TaskStatus] || '#9ca3af' }}>{count}</span>
             </div>
           ))}
         </div>
@@ -164,6 +206,9 @@ export default function PipelineProgressPopover({ tasks, taskSummary, children }
     <Popover
       content={content}
       title="任务进度"
+      trigger="hover"
+      open={open}
+      onOpenChange={handleOpenChange}
       mouseEnterDelay={0.3}
       mouseLeaveDelay={0.3}
       placement="right"

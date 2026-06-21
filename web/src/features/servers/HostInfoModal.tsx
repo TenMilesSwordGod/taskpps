@@ -132,7 +132,9 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
     >
       {isLoading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
-          <Spin tip="探测中…" size="large" />
+          <Spin size="large" tip="探测中…">
+            <div style={{ padding: 40 }} />
+          </Spin>
         </div>
       )}
 

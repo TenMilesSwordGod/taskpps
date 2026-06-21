@@ -69,7 +69,7 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
         open={open}
         onClose={onClose}
         width={480}
-        destroyOnClose
+        destroyOnHidden
       >
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -204,7 +204,7 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
         onCancel={() => setLogRetryId(null)}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         {logLoading ? (
           <div className="flex items-center justify-center py-8">

@@ -41,7 +41,7 @@ export default function StatusTag({ status, error }: StatusTagProps) {
 
   if (error) {
     return (
-      <Tooltip title={error} placement="top" overlayStyle={{ maxWidth: 420 }}>
+      <Tooltip title={error} placement="top" styles={{ root: { maxWidth: 420 } }}>
         {tag}
       </Tooltip>
     );

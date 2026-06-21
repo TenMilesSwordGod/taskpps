@@ -14,7 +14,7 @@ const ServersPage = lazy(() => import('@/features/servers/ServersPage'));
 function RouteFallback() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-      <Spin size="large" tip="加载中…" />
+      <Spin size="large" />
     </div>
   );
 }

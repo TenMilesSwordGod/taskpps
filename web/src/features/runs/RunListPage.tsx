@@ -182,7 +182,7 @@ export default function RunListPage() {
       key: 'display_name',
       width: 140,
       render: (_: string, record: RunResponse) => (
-        <PipelineProgressPopover tasks={record.tasks} taskSummary={record.task_summary}>
+        <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
           <a onClick={() => handleOpenDetail(record.id)}>
             {record.display_name || record.id.slice(0, 8)}
           </a>
@@ -383,7 +383,7 @@ export default function RunListPage() {
         okText="确认删除"
         cancelText="取消"
         okButtonProps={{ danger: true }}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={cleanForm}

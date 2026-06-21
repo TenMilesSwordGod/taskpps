@@ -78,7 +78,7 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
       cancelText="取消"
       confirmLoading={retryRun.isPending}
       okButtonProps={{ icon: <RotateCcw size={14} /> }}
-      destroyOnClose
+      destroyOnHidden
       width={560}
     >
       <div className="flex flex-col gap-4 py-2">

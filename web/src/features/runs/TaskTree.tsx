@@ -316,7 +316,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
               <Loader2 size={12} color="#3b82f6" className="animate-spin" style={{ flexShrink: 0 }} />
             )}
             {run?.error && (
-              <Tooltip title={run.error} placement="topRight" overlayStyle={{ maxWidth: 420 }}>
+              <Tooltip title={run.error} placement="topRight" styles={{ root: { maxWidth: 420 } }}>
                 <ExclamationCircleOutlined style={{ color: '#ef4444', fontSize: 12, flexShrink: 0 }} />
               </Tooltip>
             )}

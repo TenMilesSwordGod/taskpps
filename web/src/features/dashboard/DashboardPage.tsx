@@ -64,7 +64,7 @@ export default function DashboardPage() {
       key: 'display_name',
       width: 120,
       render: (_: string, record: RunResponse) => (
-        <PipelineProgressPopover tasks={record.tasks} taskSummary={record.task_summary}>
+        <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
           <a onClick={() => navigate(`/runs/${record.id}`)}>
             {record.display_name || record.id.slice(0, 8)}
           </a>
