@@ -72,6 +72,15 @@ async def _load_agents_from_projects() -> tuple[list[dict], list]:
     return items, projects
 
 
+async def _load_agent_max_parallel_map() -> dict[str, int]:
+    """加载所有 agent 的 max_parallel 配置，返回 agent_id -> max_parallel 映射。"""
+    try:
+        agent_items, _ = await _load_agents_from_projects()
+        return {str(cfg.get("id", "")): int(cfg.get("max_parallel", 1) or 1) for cfg in agent_items}
+    except Exception:
+        return {}
+
+
 @router.post("/try-connect", response_model=AgentCheckResult)
 async def try_connect(body: AgentCheckRequest):
     try:
@@ -110,8 +119,13 @@ async def check_stream(body: AgentCheckRequest):
 @router.get("/status/{agent_id}", response_model=AgentStatus)
 async def agent_status(agent_id: str):
     manager = AgentManager.instance()
+    max_parallel_map = await _load_agent_max_parallel_map()
     if not manager.is_connected(agent_id):
-        return AgentStatus(agent_id=agent_id, connected=False)
+        return AgentStatus(
+            agent_id=agent_id,
+            connected=False,
+            max_parallel=max_parallel_map.get(agent_id, 1),
+        )
     conn = manager.get_connection(agent_id)
 
     pending_count = len(conn._pending_commands) if conn else 0
@@ -128,17 +142,19 @@ async def agent_status(agent_id: str):
         connected_at=conn.connected_at if conn else 0,
         last_heartbeat=conn.last_heartbeat if conn else 0,
         running_commands=pending_count,
+        max_parallel=max_parallel_map.get(agent_id, 1),
     )
 
 
 @router.get("/{agent_id}/pending-commands", response_model=list[PendingCommandItem])
 async def agent_pending_commands(agent_id: str):
-    """获取 agent 当前正在执行的命令列表"""
+    """获取 agent 当前正在执行的命令列表（按启动时间排序，便于展示执行顺序）"""
     manager = AgentManager.instance()
     conn = manager.get_connection(agent_id)
     if conn is None:
         return []
     now = time.time()
+    sorted_commands = sorted(conn._pending_commands.values(), key=lambda info: info.started_at or 0)
     return [
         PendingCommandItem(
             command_id=info.command_id,
@@ -150,13 +166,14 @@ async def agent_pending_commands(agent_id: str):
             started_at=info.started_at,
             duration_s=round(now - info.started_at, 1) if info.started_at else 0,
         )
-        for info in conn._pending_commands.values()
+        for info in sorted_commands
     ]
 
 
 @router.get("/list", response_model=list[AgentStatus])
 async def agent_list():
     manager = AgentManager.instance()
+    max_parallel_map = await _load_agent_max_parallel_map()
     result = []
     for agent_id, conn in manager.connections.items():
         if not manager.is_connected(agent_id):
@@ -175,6 +192,7 @@ async def agent_list():
                 connected_at=conn.connected_at,
                 last_heartbeat=conn.last_heartbeat,
                 running_commands=len(conn._pending_commands),
+                max_parallel=max_parallel_map.get(agent_id, 1),
             )
         )
     return result
@@ -198,6 +216,7 @@ async def agent_all():
             source_file=str(cfg.get("_source_file", "") or ""),
             project_id=str(cfg.get("_project_id", "") or ""),
             project_name=str(cfg.get("_project_name", "") or ""),
+            max_parallel=int(cfg.get("max_parallel", 1) or 1),
         )
         if manager.is_connected(agent_id):
             conn = manager.get_connection(agent_id)

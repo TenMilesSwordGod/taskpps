@@ -427,6 +427,7 @@ async def retry_run(run_id: str, body: RetryRequest):
             subpipeline=body.subpipeline,
             include_upstream=body.include_upstream,
             command_overrides=body.command_overrides,
+            retry_execution_strategy=body.retry_execution_strategy,
         )
         return result
     except ValueError as e:

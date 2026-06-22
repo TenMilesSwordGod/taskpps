@@ -109,6 +109,7 @@ class RetryRequest(BaseModel):
     subpipeline: str | None = None
     include_upstream: bool = False
     command_overrides: dict[str, str] | None = None
+    retry_execution_strategy: str = "parallel"
 
 
 class RetryRecordResponse(BaseModel):

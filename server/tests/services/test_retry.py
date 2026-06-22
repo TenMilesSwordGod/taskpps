@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
@@ -329,6 +330,95 @@ class TestRetryRunner:
         assert "sub.t1" in results
         assert not results["sub.t1"].success
 
+    async def test_retry_sequential_strategy_runs_one_at_a_time(self):
+        tasks = [
+            ResolvedTask(name="t1", task_type="command", command="echo 1"),
+            ResolvedTask(name="t2", task_type="command", command="echo 2"),
+        ]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_retry")
+
+        runner = RetryRunner(run_id="retry_seq", pipeline=pipeline, context=ctx, execution_strategy="sequential")
+
+        events: list[tuple[str, str]] = []
+
+        def _fake_create_executor(task, *_args, **_kwargs):
+            mock_executor = AsyncMock()
+
+            async def _execute(*args, **kwargs):
+                events.append((task.name, "start"))
+                await asyncio.sleep(0.01)
+                events.append((task.name, "end"))
+                return ExecutorResult(exit_code=0, stdout="ok")
+
+            mock_executor.execute.side_effect = _execute
+            return mock_executor
+
+        task_plan = [
+            {"name": "sub.t1", "command": "echo 1", "retry_record_id": "rec_1", "log_path": "/tmp/r1.log"},
+            {"name": "sub.t2", "command": "echo 2", "retry_record_id": "rec_2", "log_path": "/tmp/r2.log"},
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", side_effect=_fake_create_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            results = await runner.retry_tasks(task_plan)
+
+        assert all(r.success for r in results.values())
+        # sequential: t1 start -> t1 end -> t2 start -> t2 end
+        assert events == [("t1", "start"), ("t1", "end"), ("t2", "start"), ("t2", "end")]
+
+    async def test_retry_parallel_strategy_runs_concurrently(self):
+        tasks = [
+            ResolvedTask(name="t1", task_type="command", command="echo 1"),
+            ResolvedTask(name="t2", task_type="command", command="echo 2"),
+        ]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_retry")
+
+        runner = RetryRunner(run_id="retry_par", pipeline=pipeline, context=ctx, execution_strategy="parallel")
+
+        events: list[tuple[str, str]] = []
+        t1_started = asyncio.Event()
+        t2_started = asyncio.Event()
+
+        def _fake_create_executor(task, *_args, **_kwargs):
+            mock_executor = AsyncMock()
+
+            async def _execute(*args, **kwargs):
+                events.append((task.name, "start"))
+                if task.name == "t1":
+                    t1_started.set()
+                    await asyncio.wait_for(t2_started.wait(), timeout=1)
+                else:
+                    t2_started.set()
+                    await asyncio.wait_for(t1_started.wait(), timeout=1)
+                events.append((task.name, "end"))
+                return ExecutorResult(exit_code=0, stdout="ok")
+
+            mock_executor.execute.side_effect = _execute
+            return mock_executor
+
+        task_plan = [
+            {"name": "sub.t1", "command": "echo 1", "retry_record_id": "rec_1", "log_path": "/tmp/r1.log"},
+            {"name": "sub.t2", "command": "echo 2", "retry_record_id": "rec_2", "log_path": "/tmp/r2.log"},
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", side_effect=_fake_create_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            results = await runner.retry_tasks(task_plan)
+
+        assert all(r.success for r in results.values())
+        # parallel: both start before either ends
+        assert events.index(("t2", "start")) < events.index(("t1", "end"))
+
 
 @pytest.mark.asyncio
 class TestPipelineServiceRetry:
@@ -386,6 +476,57 @@ class TestPipelineServiceRetry:
         assert result["run_id"] == run.id
         assert len(result["retry_records"]) == 1
         assert result["retry_records"][0]["task_name"] == "sub.step1"
+
+    async def test_retry_run_passes_execution_strategy(self, db_engine, clean_db):
+        from taskpps.services.pipeline_service import PipelineService
+
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+
+            run = await run_repo.create_run(
+                pipeline_name="deploy",
+                pipeline_file="deploy.yaml",
+            )
+            await task_repo.create_task_run(
+                run_id=run.id,
+                task_name="sub.step1",
+                task_type="command",
+                subpipeline_name="sub",
+            )
+
+        import taskpps.config as cfg
+
+        cfg._settings = None
+        cfg.load_settings(str(cfg.find_project_root() / "taskpps.yaml"))
+
+        service = PipelineService()
+        with patch.object(service, "_load_resolved_pipeline") as mock_load:
+            mock_pipeline = MagicMock()
+            mock_task1 = ResolvedTask(name="step1", task_type="command", command="echo hello")
+            from taskpps.domain.pipeline import ResolvedSubPipeline
+            from taskpps.schemas.pipeline import PipelineConfig
+
+            mock_sub = ResolvedSubPipeline(name="sub", tasks=[mock_task1], config=PipelineConfig())
+            mock_pipeline.subpipelines = [mock_sub]
+            mock_pipeline.top_config = PipelineConfig()
+            mock_pipeline.get_task_by_name.side_effect = lambda n: {"step1": mock_task1}.get(n)
+            mock_load.return_value = mock_pipeline
+
+            with patch("taskpps.services.pipeline_service.RetryRunner") as mock_runner_cls:
+                mock_runner = AsyncMock()
+                mock_runner_cls.return_value = mock_runner
+                with patch.object(service, "_auto_select_latest_retry"):
+                    await service.retry_run(
+                        run_id=run.id,
+                        tasks=["sub.step1"],
+                        retry_execution_strategy="sequential",
+                    )
+
+        mock_runner_cls.assert_called_once()
+        call_kwargs = mock_runner_cls.call_args[1]
+        assert call_kwargs["execution_strategy"] == "sequential"
+        mock_runner.retry_tasks.assert_awaited_once()
 
     async def test_retry_run_raises_on_running(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService

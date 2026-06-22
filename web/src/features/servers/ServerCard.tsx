@@ -114,14 +114,33 @@ function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCo
   }
   return (
     <div>
-      {commands.map((cmd) => (
+      {commands.map((cmd, index) => (
         <div
           key={cmd.command_id}
           style={{ padding: '6px 12px', borderBottom: '1px solid #f2f4f7', fontSize: 12 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-            <span style={{ fontWeight: 600, color: '#1d2939' }}>
-              {cmd.task_name || <span style={{ color: '#98a2b3' }}>未知任务</span>}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 4,
+                  background: '#eff8ff',
+                  color: '#2e90fa',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="执行顺序"
+              >
+                {index + 1}
+              </span>
+              <span style={{ fontWeight: 600, color: '#1d2939' }}>
+                {cmd.task_name || <span style={{ color: '#98a2b3' }}>未知任务</span>}
+              </span>
             </span>
             <span style={{ color: '#2e90fa', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
               <Loader2 size={10} className="animate-spin" />
@@ -170,6 +189,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
   const displayIp = agent.ip || (agent.host ? (agent.port ? `${agent.host}:${agent.port}` : agent.host) : '—');
   const versionDisplay = agent.agent_version ? `v${agent.agent_version}` : '—';
   const osArchText = osArchLabel(systemLabel, archLabel);
+  const maxParallel = agent.max_parallel ?? 1;
 
   return (
     <div
@@ -285,7 +305,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
         </div>
       </div>
 
-      {/* 底部：运行命令数 / 连接时间 + 操作按钮 */}
+      {/* 底部：运行命令数 / 最大并发 / 连接时间 + 操作按钮 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#98a2b3' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <Popover
@@ -293,7 +313,11 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
             onOpenChange={(open) => setPopoverOpen(open && agent.running_commands > 0)}
             trigger="click"
             placement="topLeft"
-            title={null}
+            title={
+              <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, color: '#1d2939', borderBottom: '1px solid #f2f4f7' }}>
+                执行队列（{agent.running_commands} / 最大并发 {maxParallel}）
+              </div>
+            }
             content={<PendingCommandsContent commands={pendingCommands} onRunClick={(runId) => { setPopoverOpen(false); navigate(`/runs/${runId}`); }} />}
             styles={{ body: { padding: '8px 0', minWidth: 320, maxWidth: 480 } }}
           >
@@ -309,7 +333,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
               }}
             >
               <Activity size={11} />
-              运行中 {agent.running_commands}
+              运行中 {agent.running_commands} / 并发 {maxParallel}
             </span>
           </Popover>
           <span style={{ marginLeft: 8, color: '#d0d5dd' }}>|</span>

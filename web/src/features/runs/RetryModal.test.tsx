@@ -210,6 +210,7 @@ describe('<RetryModal /> Issue #72 - 重试弹窗', () => {
         runId: 'run-1',
         tasks: ['sub.taskA'],
         include_upstream: false,
+        retry_execution_strategy: 'parallel',
       });
     });
     expect(onClose).toHaveBeenCalled();

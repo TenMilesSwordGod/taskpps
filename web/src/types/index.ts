@@ -7,6 +7,9 @@ export type TaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped
 /** 任务类型 */
 export type TaskType = 'command' | 'invoke' | 'steps' | 'git' | 'nexus' | 'ssh';
 
+/** 重试执行策略 */
+export type RetryExecutionStrategy = 'parallel' | 'sequential';
+
 /** 运行响应 */
 export interface RunResponse {
   id: string;
@@ -201,6 +204,7 @@ export interface AgentStatus {
   connected_at: number;
   last_heartbeat: number;
   running_commands: number;
+  max_parallel: number;
 }
 
 /** Agent yaml 配置 + 实时状态（用于"所有服务器"列表） */
@@ -262,6 +266,7 @@ export interface AgentWithConfig {
   connected_at: number;
   last_heartbeat: number;
   running_commands: number;
+  max_parallel: number;
   /** 网络可达性：unknown / reachable / unreachable */
   net_status: 'unknown' | 'reachable' | 'unreachable';
 }

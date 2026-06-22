@@ -545,6 +545,7 @@ class PipelineService:
         subpipeline: str | None = None,
         include_upstream: bool = False,
         command_overrides: dict[str, str] | None = None,
+        retry_execution_strategy: str = "parallel",
     ) -> dict:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -646,7 +647,13 @@ class PipelineService:
                 retry_records.append(record)
 
         max_parallel = resolved.top_config.max_parallel
-        runner = RetryRunner(run_id=run_id, pipeline=resolved, context=context, max_parallel=max_parallel)
+        runner = RetryRunner(
+            run_id=run_id,
+            pipeline=resolved,
+            context=context,
+            max_parallel=max_parallel,
+            execution_strategy=retry_execution_strategy,
+        )
 
         task_plan = [
             {

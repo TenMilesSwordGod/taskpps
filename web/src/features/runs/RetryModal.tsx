@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Modal, Spin, Switch, Tag, App, Empty } from 'antd';
+import { Modal, Spin, Switch, Tag, App, Empty, Radio } from 'antd';
 import { RotateCcw, ArrowDown, GitBranch, Terminal } from 'lucide-react';
 import { useDependencyTree, useRetryRun } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
-import type { TaskStatus } from '@/types';
+import type { TaskStatus, RetryExecutionStrategy } from '@/types';
 
 interface RetryModalProps {
   open: boolean;
@@ -23,6 +23,7 @@ interface RetryModalProps {
 export default function RetryModal({ open, runId, taskName, taskStatus, taskCommand, onClose }: RetryModalProps) {
   const { message } = App.useApp();
   const [includeUpstream, setIncludeUpstream] = useState(false);
+  const [executionStrategy, setExecutionStrategy] = useState<RetryExecutionStrategy>('parallel');
 
   const { data: depTree, isLoading: depLoading } = useDependencyTree(
     open ? runId : undefined,
@@ -50,6 +51,7 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
         runId,
         tasks: tasksToRerun,
         include_upstream: includeUpstream,
+        retry_execution_strategy: executionStrategy,
       });
       message.success(`已触发重试（${tasksToRerun.length} 个任务）`);
       onClose();
@@ -61,6 +63,7 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
 
   const handleClose = () => {
     setIncludeUpstream(false);
+    setExecutionStrategy('parallel');
     onClose();
   };
 
@@ -160,6 +163,29 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
               </span>
             </div>
             <Switch checked={includeUpstream} onChange={setIncludeUpstream} />
+          </div>
+        )}
+
+        {/* 执行策略选择 */}
+        {tasksToRerun.length > 1 && (
+          <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+            <div className="flex flex-col">
+              <span className="text-sm text-gray-700">执行策略</span>
+              <span className="text-xs text-gray-400">
+                多个任务时按依赖关系并行或顺序执行
+              </span>
+            </div>
+            <Radio.Group
+              value={executionStrategy}
+              onChange={(e) => setExecutionStrategy(e.target.value as RetryExecutionStrategy)}
+              optionType="button"
+              buttonStyle="solid"
+              size="small"
+              options={[
+                { label: '并行', value: 'parallel' },
+                { label: '顺序', value: 'sequential' },
+              ]}
+            />
           </div>
         )}
 

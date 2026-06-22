@@ -47,6 +47,7 @@ class AgentStatus(BaseModel):
     connected_at: float = 0
     last_heartbeat: float = 0
     running_commands: int = 0
+    max_parallel: int = 1
 
 
 class AgentWithConfig(BaseModel):
@@ -73,6 +74,7 @@ class AgentWithConfig(BaseModel):
     connected_at: float = 0
     last_heartbeat: float = 0
     running_commands: int = 0
+    max_parallel: int = 1
     # 网络可达性：unknown / reachable / unreachable
     net_status: str = "unknown"
 

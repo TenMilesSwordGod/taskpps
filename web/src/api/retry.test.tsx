@@ -64,6 +64,7 @@ describe('retry API hooks', () => {
         subpipeline: undefined,
         include_upstream: false,
         command_overrides: undefined,
+        retry_execution_strategy: 'parallel',
       });
     });
 
@@ -85,6 +86,7 @@ describe('retry API hooks', () => {
         subpipeline: undefined,
         include_upstream: true,
         command_overrides: { 'deploy.step2': 'echo fixed' },
+        retry_execution_strategy: 'parallel',
       });
     });
 
@@ -104,6 +106,28 @@ describe('retry API hooks', () => {
         subpipeline: 'deploy',
         include_upstream: false,
         command_overrides: undefined,
+        retry_execution_strategy: 'parallel',
+      });
+    });
+
+    it('sends custom retry_execution_strategy', async () => {
+      mockPost.mockResolvedValueOnce({ data: { run_id: 'run1', retry_records: [] } });
+
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useRetryRun(), { wrapper });
+
+      await result.current.mutateAsync({
+        runId: 'run1',
+        tasks: ['deploy.step3'],
+        retry_execution_strategy: 'sequential',
+      });
+
+      expect(mockPost).toHaveBeenCalledWith('/api/runs/run1/retry', {
+        tasks: ['deploy.step3'],
+        subpipeline: undefined,
+        include_upstream: false,
+        command_overrides: undefined,
+        retry_execution_strategy: 'sequential',
       });
     });
   });

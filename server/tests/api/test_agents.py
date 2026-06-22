@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -294,3 +296,95 @@ async def test_host_info_ssh_success(app, setup_project, tmp_project, db_engine)
     assert call_kwargs.get("key_filename") == "/tmp/key"
     assert call_kwargs.get("username") == "admin"
     assert "pkey" not in call_kwargs  # ← 回归测试：之前 bug 用 pkey 错字段名
+
+
+# ----------------------------------------------------------------------------
+# Agent 列表 / 状态 / pending commands 测试
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_agent_all_includes_max_parallel(app, setup_project, tmp_project):
+    """/api/agents/all 返回的 AgentWithConfig 应包含 max_parallel"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_items = [
+        {
+            "id": "agent-a",
+            "name": "Agent A",
+            "type": "execution-agent",
+            "host": "",
+            "port": 0,
+            "max_parallel": 3,
+            "_project_id": "proj-1",
+            "_project_name": "Project 1",
+        },
+        {
+            "id": "agent-b",
+            "name": "Agent B",
+            "type": "execution-agent",
+            "host": "",
+            "port": 0,
+            "_project_id": "proj-1",
+            "_project_name": "Project 1",
+        },
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents._load_agents_from_projects", return_value=(agent_items, [])):
+            response = await client.get("/api/agents/all")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list) and len(data) == 2
+    assert data[0]["agent_id"] == "agent-a"
+    assert data[0]["max_parallel"] == 3
+    assert data[1]["agent_id"] == "agent-b"
+    assert data[1]["max_parallel"] == 1
+
+
+@pytest.mark.asyncio
+async def test_agent_pending_commands_sorted_by_started_at(app, setup_project, tmp_project):
+    """/api/agents/{id}/pending-commands 应按 started_at 排序返回"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents.AgentManager.instance") as mock_instance:
+            conn = MagicMock()
+            conn._pending_commands = {
+                "cmd-2": MagicMock(
+                    command_id="cmd-2",
+                    command="echo 2",
+                    cwd="",
+                    timeout=0,
+                    run_id="run-1",
+                    task_name="task-2",
+                    started_at=200.0,
+                    future=MagicMock(),
+                ),
+                "cmd-1": MagicMock(
+                    command_id="cmd-1",
+                    command="echo 1",
+                    cwd="",
+                    timeout=0,
+                    run_id="run-1",
+                    task_name="task-1",
+                    started_at=100.0,
+                    future=MagicMock(),
+                ),
+            }
+            mock_instance.return_value.get_connection.return_value = conn
+            response = await client.get("/api/agents/test-agent/pending-commands")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [item["command_id"] for item in data] == ["cmd-1", "cmd-2"]

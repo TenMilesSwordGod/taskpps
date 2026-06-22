@@ -33,11 +33,13 @@ class RetryRunner:
         pipeline: ResolvedPipeline,
         context: ExecutionContext,
         max_parallel: int | None = None,
+        execution_strategy: str = "parallel",
     ):
         self.run_id = run_id
         self.pipeline = pipeline
         self.context = context
         self.max_parallel = max_parallel
+        self.execution_strategy = execution_strategy
         self._cancelled = False
 
     async def retry_tasks(self, task_plan: list[dict]) -> dict[str, ExecutorResult]:
@@ -53,18 +55,29 @@ class RetryRunner:
         results: dict[str, ExecutorResult] = {}
         planned: set[str] = set()
         for level in levels:
-            coros = []
-            for task_name in level:
-                tp = next(t for t in task_plan if t["name"] == task_name)
-                coros.append(_run_one(tp))
-                planned.add(task_name)
-            for name, result in await asyncio.gather(*coros):
-                results[name] = result
+            if self.execution_strategy == "sequential":
+                for task_name in level:
+                    tp = next(t for t in task_plan if t["name"] == task_name)
+                    name, result = await _run_one(tp)
+                    results[name] = result
+                    planned.add(name)
+            else:
+                coros = []
+                for task_name in level:
+                    tp = next(t for t in task_plan if t["name"] == task_name)
+                    coros.append(_run_one(tp))
+                    planned.add(task_name)
+                for name, result in await asyncio.gather(*coros):
+                    results[name] = result
 
         for tp in task_plan:
             if tp["name"] not in planned:
-                result = await self._execute_retry_task(tp)
-                results[tp["name"]] = result
+                if self.execution_strategy == "sequential":
+                    name, result = await _run_one(tp)
+                    results[name] = result
+                else:
+                    result = await self._execute_retry_task(tp)
+                    results[tp["name"]] = result
 
         return results
 

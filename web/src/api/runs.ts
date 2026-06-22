@@ -9,6 +9,7 @@ import type {
   RetryCommandResponse,
   DependencyTreeResponse,
   PipelineDetail,
+  RetryExecutionStrategy,
 } from '@/types';
 
 /** 历史日志响应（REST 模式） */
@@ -181,6 +182,7 @@ export function useRetryRun() {
       subpipeline?: string;
       include_upstream?: boolean;
       command_overrides?: Record<string, string>;
+      retry_execution_strategy?: RetryExecutionStrategy;
     }) => {
       const res = await apiClient.post<RetryRunResponse>(
         `/api/runs/${params.runId}/retry`,
@@ -189,6 +191,7 @@ export function useRetryRun() {
           subpipeline: params.subpipeline,
           include_upstream: params.include_upstream ?? false,
           command_overrides: params.command_overrides,
+          retry_execution_strategy: params.retry_execution_strategy ?? 'parallel',
         },
       );
       return res.data;
