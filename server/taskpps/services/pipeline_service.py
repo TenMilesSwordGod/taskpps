@@ -55,6 +55,26 @@ async def _resolve_project_name(project_id: str | None) -> str | None:
     return Path(project.workdir).name or None
 
 
+async def _batch_resolve_project_names(project_ids: set[str | None]) -> dict[str | None, str | None]:
+    """批量解析 project_id -> project_name 映射，避免 N+1 查询。"""
+    ids_to_query = {pid for pid in project_ids if pid is not None}
+    if not ids_to_query:
+        return {None: None}
+
+    result: dict[str | None, str | None] = {None: None}
+    async with get_session_factory()() as session:
+        repo = ProjectRepository(session)
+        for pid in ids_to_query:
+            project = await repo.get_project(pid)
+            if project is None:
+                result[pid] = None
+            elif project.name:
+                result[pid] = project.name
+            else:
+                result[pid] = Path(project.workdir).name or None
+    return result
+
+
 def _extract_env_overrides(params: dict[str, Any]) -> dict[str, str]:
     """从 override params 中提取所有环境变量（支持 nested 和 dot-path 两种格式）"""
     result: dict[str, str] = {}
@@ -389,6 +409,10 @@ class PipelineService:
             run_ids = [r.id for r in runs]
             task_summaries = await run_repo.get_task_summaries(run_ids)
 
+            # 批量解析 project_name（避免 N+1 查询）
+            project_ids = {getattr(r, "project_id", None) for r in runs}
+            project_name_map = await _batch_resolve_project_names(project_ids)
+
             items = []
             for run in runs:
                 params = {}
@@ -402,7 +426,7 @@ class PipelineService:
                 if run.pipeline_id and run.pipeline_version:
                     console_log_path = str(build_pipeline_log_path(run.pipeline_id, run.pipeline_version, run.id))
 
-                project_name = await _resolve_project_name(getattr(run, "project_id", None))
+                project_name = project_name_map.get(getattr(run, "project_id", None))
 
                 items.append(
                     {
@@ -486,13 +510,7 @@ class PipelineService:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
 
-            runs = await run_repo.list_runs(limit=10000)
-            target = None
-            for run in runs:
-                if run.id == run_id:
-                    target = run
-                    break
-
+            target = await run_repo.get_run(run_id)
             if not target:
                 return False
 

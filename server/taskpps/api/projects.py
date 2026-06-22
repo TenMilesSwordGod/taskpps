@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
+from taskpps.api.agents import invalidate_agents_cache
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import ProjectRepository
 from taskpps.schemas.project import CreateProjectRequest, ProjectResponse
@@ -22,6 +23,7 @@ async def register_project(body: CreateProjectRequest):
                 logger.warning("Project already registered: workdir=%s id=%s", body.workdir, existing.id)
                 raise HTTPException(status_code=409, detail=f"Project already registered with id={existing.id}")
             project = await repo.create_project(workdir=body.workdir, name=body.name)
+            invalidate_agents_cache()
             logger.info("Project registered: id=%s workdir=%s", project.id, project.workdir)
             return project
     except HTTPException:
@@ -75,6 +77,7 @@ async def unregister_project(project_id: str):
             if not success:
                 logger.debug("unregister_project: not found id=%s", project_id)
                 raise HTTPException(status_code=404, detail="Project not found")
+            invalidate_agents_cache()
             logger.info("Project unregistered: id=%s", project_id)
             return {"status": "unregistered"}
     except HTTPException:

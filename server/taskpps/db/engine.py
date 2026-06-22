@@ -9,7 +9,7 @@ from pathlib import Path
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlmodel import SQLModel
 
 from taskpps.config import get_data_dir, get_db_path
@@ -91,7 +91,11 @@ def get_engine() -> AsyncEngine:
             url,
             echo=False,
             connect_args={"check_same_thread": False, "timeout": 30},
-            poolclass=NullPool,
+            poolclass=AsyncAdaptedQueuePool,
+            pool_size=5,
+            max_overflow=10,
+            pool_timeout=30,
+            pool_recycle=1800,
         )
 
         @event.listens_for(_engine.sync_engine, "connect")
@@ -139,6 +143,19 @@ _MIGRATIONS = {
     ],
 }
 
+# 性能优化索引：为高频查询列添加索引
+# 仅在索引不存在时创建（IF NOT EXISTS），对已有数据库安全
+_INDEX_MIGRATIONS = [
+    "CREATE INDEX IF NOT EXISTS ix_runs_pipeline_id ON runs(pipeline_id)",
+    "CREATE INDEX IF NOT EXISTS ix_runs_pipeline_file ON runs(pipeline_file)",
+    "CREATE INDEX IF NOT EXISTS ix_runs_project_id ON runs(project_id)",
+    "CREATE INDEX IF NOT EXISTS ix_runs_created_at ON runs(created_at)",
+    "CREATE INDEX IF NOT EXISTS ix_task_runs_run_id ON task_runs(run_id)",
+    "CREATE INDEX IF NOT EXISTS ix_task_retry_records_run_id ON task_retry_records(run_id)",
+    "CREATE INDEX IF NOT EXISTS ix_task_retry_records_task_run_id ON task_retry_records(task_run_id)",
+    "CREATE INDEX IF NOT EXISTS ix_task_retry_records_task_name ON task_retry_records(task_name)",
+]
+
 
 async def _migrate_schema() -> None:
     engine = get_engine()
@@ -155,6 +172,11 @@ async def _migrate_schema() -> None:
                 if col_name not in existing:
                     logger.debug("Adding column %s.%s %s", table_name, col_name, col_def)
                     await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
+
+        # 创建性能优化索引
+        for idx_sql in _INDEX_MIGRATIONS:
+            logger.debug("Creating index: %s", idx_sql)
+            await conn.execute(text(idx_sql))
 
 
 async def init_db() -> None:

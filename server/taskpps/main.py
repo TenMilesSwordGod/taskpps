@@ -37,18 +37,15 @@ async def _recover_stale_runs() -> None:
     这些残留记录并重置为终态，防止幽灵运行阻塞任务槽。
     """
     from taskpps.db.engine import get_session_factory
-    from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
+    from taskpps.db.repository import RunRepository
     from taskpps.models.run import RunStatus, TaskStatus
 
     now = datetime.now(timezone.utc)
     async with get_session_factory()() as session:
         run_repo = RunRepository(session)
-        task_repo = TaskRunRepository(session)
-        retry_repo = RetryRecordRepository(session)
 
-        # 查找所有非终态的 run
-        runs = await run_repo.list_runs(limit=10000)
-        stale_runs = [r for r in runs if r.status in (RunStatus.RUNNING, RunStatus.PENDING)]
+        # 直接按状态查询非终态 run，避免全表扫描
+        stale_runs = await run_repo.list_runs_by_statuses([RunStatus.RUNNING, RunStatus.PENDING])
 
         if not stale_runs:
             return
@@ -64,28 +61,23 @@ async def _recover_stale_runs() -> None:
                 error="服务器重启恢复：运行状态从 RUNNING/PENDING 重置为 FAILED",
             )
 
-            # 将该 run 下 RUNNING/PENDING 的 task_runs 重置为 FAILED
-            tasks = await task_repo.list_task_runs(run.id)
-            for t in tasks:
-                if t.status in (TaskStatus.RUNNING, TaskStatus.PENDING):
-                    await task_repo.update_task_status(
-                        t.id,
-                        TaskStatus.FAILED,
-                        error="服务器重启恢复：任务状态重置为 FAILED",
-                        finished_at=now,
-                    )
+            # 批量将该 run 下 RUNNING/PENDING 的 task_runs 重置为 FAILED
+            await run_repo.batch_update_stale_tasks(
+                run.id, TaskStatus.FAILED,
+                [TaskStatus.RUNNING, TaskStatus.PENDING],
+                finished_at=now,
+                error="服务器重启恢复：任务状态重置为 FAILED",
+            )
 
-            # 将该 run 下 RUNNING/PENDING 的 retry_records 重置为 FAILED
-            retries = await retry_repo.list_retries_by_run(run.id)
-            for r in retries:
-                if r.status in (TaskStatus.RUNNING, TaskStatus.PENDING):
-                    await retry_repo.update_retry_status(
-                        r.id,
-                        TaskStatus.FAILED,
-                        error="服务器重启恢复：重试记录状态重置为 FAILED",
-                        finished_at=now,
-                    )
+            # 批量将该 run 下 RUNNING/PENDING 的 retry_records 重置为 FAILED
+            await run_repo.batch_update_stale_retries(
+                run.id, TaskStatus.FAILED,
+                [TaskStatus.RUNNING, TaskStatus.PENDING],
+                finished_at=now,
+                error="服务器重启恢复：重试记录状态重置为 FAILED",
+            )
 
+        await session.commit()
         logger.info("已恢复 %d 个停滞运行", len(stale_runs))
 
 

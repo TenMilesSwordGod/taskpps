@@ -10,6 +10,13 @@ from fastapi.responses import StreamingResponse
 
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.i18n import t
+
+# --- Agent 配置缓存 ---
+# 避免每次 /api/agents/all 请求都从磁盘读取 YAML 文件。
+# 前端每 5 秒轮询一次，10 秒 TTL 意味着大部分请求命中缓存。
+_agents_cache: tuple[list[dict], list] | None = None
+_agents_cache_ts: float = 0.0
+_AGENTS_CACHE_TTL: float = 10.0
 from taskpps.schemas.agent import (
     AgentCheckRequest,
     AgentCheckResponse,
@@ -46,7 +53,15 @@ async def _load_agents_from_projects() -> tuple[list[dict], list]:
 
     items 每项包含 agent cfg + _project_id/_project_name。
     DB 不可用时回退到默认 AgentLoader（仅返回当前 workdir 的 agent）。
+
+    使用 TTL 缓存避免每次请求都读磁盘 YAML 文件。
     """
+    global _agents_cache, _agents_cache_ts
+
+    now = time.monotonic()
+    if _agents_cache is not None and (now - _agents_cache_ts) < _AGENTS_CACHE_TTL:
+        return _agents_cache
+
     from taskpps.config import get_agents_dir
 
     projects = await _query_all_projects()
@@ -54,10 +69,16 @@ async def _load_agents_from_projects() -> tuple[list[dict], list]:
     if not projects:
         loader = AgentLoader()
         agents = loader.load_all()
-        return [
-            {**cfg, "id": agent_id, "_project_id": "", "_project_name": "", "_project_workdir": ""}
-            for agent_id, cfg in agents.items()
-        ], []
+        result = (
+            [
+                {**cfg, "id": agent_id, "_project_id": "", "_project_name": "", "_project_workdir": ""}
+                for agent_id, cfg in agents.items()
+            ],
+            [],
+        )
+        _agents_cache = result
+        _agents_cache_ts = now
+        return result
 
     items = []
     for project in projects:
@@ -69,7 +90,17 @@ async def _load_agents_from_projects() -> tuple[list[dict], list]:
             cfg["_project_name"] = project.name or project.id
             cfg["_project_workdir"] = str(project_workdir)
             items.append(cfg)
-    return items, projects
+    result = (items, projects)
+    _agents_cache = result
+    _agents_cache_ts = now
+    return result
+
+
+def invalidate_agents_cache() -> None:
+    """手动清除 agent 配置缓存（在项目注册/删除时调用）。"""
+    global _agents_cache, _agents_cache_ts
+    _agents_cache = None
+    _agents_cache_ts = 0.0
 
 
 async def _load_agent_max_parallel_map() -> dict[str, int]:

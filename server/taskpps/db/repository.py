@@ -117,6 +117,42 @@ class RunRepository:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def list_runs_by_statuses(self, statuses: list[RunStatus]) -> Sequence[PipelineRun]:
+        """按状态列表查询 runs（用于恢复停滞运行）。"""
+        stmt = select(PipelineRun).where(PipelineRun.status.in_(statuses))
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def batch_update_stale_tasks(self, run_id: str, target_status: TaskStatus, source_statuses: list[TaskStatus], finished_at: datetime | None = None, error: str | None = None) -> int:
+        """批量将指定 run 中处于 source_statuses 的 task 更新为 target_status。"""
+        stmt = select(TaskRun).where(TaskRun.run_id == run_id, TaskRun.status.in_(source_statuses))
+        result = await self.session.execute(stmt)
+        tasks = result.scalars().all()
+        count = 0
+        for t in tasks:
+            t.status = target_status
+            if finished_at is not None:
+                t.finished_at = finished_at
+            if error is not None:
+                t.error = error
+            count += 1
+        return count
+
+    async def batch_update_stale_retries(self, run_id: str, target_status: TaskStatus, source_statuses: list[TaskStatus], finished_at: datetime | None = None, error: str | None = None) -> int:
+        """批量将指定 run 中处于 source_statuses 的 retry_record 更新为 target_status。"""
+        stmt = select(TaskRetryRecord).where(TaskRetryRecord.run_id == run_id, TaskRetryRecord.status.in_(source_statuses))
+        result = await self.session.execute(stmt)
+        records = result.scalars().all()
+        count = 0
+        for r in records:
+            r.status = target_status
+            if finished_at is not None:
+                r.finished_at = finished_at
+            if error is not None:
+                r.error = error
+            count += 1
+        return count
+
     async def get_task_summaries(self, run_ids: list[str]) -> dict[str, dict[str, int]]:
         """批量获取多个 run 的任务状态计数。
 
@@ -232,6 +268,15 @@ class TaskRunRepository:
     async def get_task_run(self, task_run_id: str) -> TaskRun | None:
         result = await self.session.execute(select(TaskRun).where(TaskRun.id == task_run_id))
         return result.scalar_one_or_none()
+
+    async def get_task_statuses_by_ids(self, task_ids: list[str]) -> dict[str, TaskStatus]:
+        """批量查询多个 task_run 的状态，返回 {task_run_id: status}。"""
+        if not task_ids:
+            return {}
+        result = await self.session.execute(
+            select(TaskRun.id, TaskRun.status).where(TaskRun.id.in_(task_ids))
+        )
+        return {row[0]: row[1] for row in result.fetchall()}
 
     async def list_task_runs(self, run_id: str) -> Sequence[TaskRun]:
         result = await self.session.execute(

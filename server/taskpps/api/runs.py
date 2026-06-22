@@ -243,10 +243,11 @@ async def get_run_logs(
 
                 async with get_session_factory()() as session:
                     task_repo = TaskRunRepository(session)
+                    # 批量查询所有 task 状态（一条 SQL 替代 N 条）
+                    id_to_status = await task_repo.get_task_statuses_by_ids(list(task_ids.values()))
                     statuses: dict[str, TS | None] = {}
                     for task_name, tid in task_ids.items():
-                        tr = await task_repo.get_task_run(tid)
-                        statuses[task_name] = tr.status if tr else None
+                        statuses[task_name] = id_to_status.get(tid)
 
                 # 推送任务状态变更事件（DB 轮询兜底，防止事件总线遗漏）
                 for task_name, status in statuses.items():
