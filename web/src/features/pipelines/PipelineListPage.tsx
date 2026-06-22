@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Card, Table, Button, Input, Space, Progress, Tooltip, Tag } from 'antd';
-import { Search, RefreshCw, Play, Eye } from 'lucide-react';
+import { Search, RefreshCw, Play, Eye, ChevronRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { usePipelines } from '@/api/pipelines';
@@ -292,19 +292,46 @@ export default function PipelineListPage() {
           expandable={{
             childrenColumnName: 'children',
             expandedRowKeys: [...expandedRowKeys],
-            onExpand: (_expanded, record) => {
-              const key = record.kind === 'project' ? `__proj__${record.name}`
-                : `__folder__${record.name}`;
-              setExpandedRowKeys((prev) => {
-                const next = new Set(prev);
-                if (next.has(key)) next.delete(key); else next.add(key);
-                return next;
-              });
+            onExpandedRowsChange: (keys) => {
+              setExpandedRowKeys(new Set(keys as string[]));
             },
             defaultExpandAllRows: true,
             rowExpandable: isExpandable,
-            // 不渲染 chevron 按钮
-            expandIcon: () => null,
+            expandIcon: ({ expanded, record }) => {
+              if (!isExpandable(record as Row)) return <span style={{ display: 'inline-block', width: 18 }} />;
+              const key = (record as Row).kind === 'project' ? `__proj__${(record as Row).name}`
+                : `__folder__${(record as Row).name}`;
+              const handleToggle = () => {
+                setExpandedRowKeys((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key); else next.add(key);
+                  return next;
+                });
+              };
+              return (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="pipeline-expand-icon"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 18,
+                    height: 18,
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    transition: 'transform 200ms ease-out, background 150ms ease-out',
+                    transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    color: '#6b7280',
+                  }}
+                  onClick={(e) => { e.stopPropagation(); handleToggle(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggle(); } }}
+                >
+                  <ChevronRight size={14} />
+                </span>
+              );
+            },
             indentSize: 22,
           }}
           onRow={(record: Row) => {
@@ -331,6 +358,29 @@ export default function PipelineListPage() {
         defaultPipeline={triggerPipeline}
         defaultProjectId={triggerProjectId}
       />
+
+      {/* Issue #104: 展开/折叠动画样式 */}
+      <style>{`
+        .pipeline-expand-icon:hover {
+          background: rgba(59, 130, 246, 0.1);
+          color: #3b82f6;
+        }
+        .ant-table-expanded-row > td {
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+        }
+        .ant-table-expanded-row .ant-table-row {
+          animation: pipelineRowFadeIn 200ms ease-out;
+        }
+        @keyframes pipelineRowFadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .pipeline-expand-icon { transition: none !important; }
+          .ant-table-expanded-row .ant-table-row { animation: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
