@@ -419,6 +419,76 @@ class TestRetryRunner:
         # parallel: both start before either ends
         assert events.index(("t2", "start")) < events.index(("t1", "end"))
 
+    async def test_retry_parallel_max_parallel_queues_extra_tasks(self):
+        """
+        Issue #100: RetryRunner 的 max_parallel 限制总并发数。
+        当并行任务数超过 max_parallel 时，多余任务应排队等待。
+        """
+        tasks = [
+            ResolvedTask(name="t1", task_type="command", command="echo 1"),
+            ResolvedTask(name="t2", task_type="command", command="echo 2"),
+            ResolvedTask(name="t3", task_type="command", command="echo 3"),
+        ]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_retry")
+
+        # max_parallel=1，三个并行任务只能串行执行
+        runner = RetryRunner(
+            run_id="retry_par_1",
+            pipeline=pipeline,
+            context=ctx,
+            execution_strategy="parallel",
+            max_parallel=1,
+        )
+
+        events: list[str] = []
+        gate = asyncio.Event()
+
+        def _fake_create_executor(task, *_args, **_kwargs):
+            mock_executor = AsyncMock()
+
+            async def _execute(*args, **kwargs):
+                events.append(f"start:{task.name}")
+                await gate.wait()
+                events.append(f"end:{task.name}")
+                return ExecutorResult(exit_code=0, stdout="ok")
+
+            mock_executor.execute.side_effect = _execute
+            return mock_executor
+
+        task_plan = [
+            {"name": "sub.t1", "command": "echo 1", "retry_record_id": "rec_1", "log_path": "/tmp/r1.log"},
+            {"name": "sub.t2", "command": "echo 2", "retry_record_id": "rec_2", "log_path": "/tmp/r2.log"},
+            {"name": "sub.t3", "command": "echo 3", "retry_record_id": "rec_3", "log_path": "/tmp/r3.log"},
+        ]
+
+        runner._update_record = AsyncMock()
+
+        async def run_retry():
+            with (
+                patch("taskpps.engine.retry_runner.create_executor", side_effect=_fake_create_executor),
+                patch("taskpps.engine.retry_runner.get_event_bus"),
+            ):
+                return await runner.retry_tasks(task_plan)
+
+        retry_task = asyncio.create_task(run_retry())
+        # 等待第一个任务启动并占满信号量
+        for _ in range(50):
+            if events:
+                break
+            await asyncio.sleep(0.01)
+        assert len(events) == 1 and events[0].startswith("start:")
+
+        gate.set()
+        results = await retry_task
+
+        assert all(r.success for r in results.values())
+        # 由于 max_parallel=1，三个任务实际串行：start->end->start->end...
+        for i in range(0, len(events) - 1):
+            if events[i].startswith("start:"):
+                # 每个 start 后必须紧跟 end
+                assert events[i + 1] == f"end:{events[i].split(':')[1]}"
+
 
 @pytest.mark.asyncio
 class TestPipelineServiceRetry:
