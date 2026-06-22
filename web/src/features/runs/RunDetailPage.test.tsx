@@ -49,6 +49,7 @@ vi.mock('./hooks/useSSELogs', () => ({
     autoScroll: true,
     setAutoScroll: vi.fn(),
     clearLogs: vi.fn(),
+    reconnect: vi.fn(),
   }),
 }))
 

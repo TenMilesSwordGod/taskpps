@@ -740,8 +740,15 @@ class PipelineService:
             raise ValueError(f"Task run '{task_name}' not found")
 
         tr.selected_retry_id = selected_retry_id
-        if selected_retry_id is not None and selected.status == TaskStatus.SUCCESS and tr.status != TaskStatus.SUCCESS:
-            tr.status = TaskStatus.SUCCESS
+        if selected_retry_id is not None:
+            # Issue #99: 将选中重试版本的执行结果同步到 task run，
+            # 确保左侧任务树状态、退出码、错误和日志路径都反映最终版本。
+            tr.status = selected.status
+            tr.exit_code = selected.exit_code
+            tr.error = selected.error
+            tr.log_path = selected.log_path
+            tr.started_at = selected.started_at
+            tr.finished_at = selected.finished_at
         session.add(tr)
         await session.commit()
 

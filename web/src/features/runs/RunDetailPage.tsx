@@ -40,12 +40,14 @@ function mergeTaskStatuses(run: RunResponse | undefined, statusMap: Record<strin
   if (!run || !statusMap || !Object.keys(statusMap).length) return run;
   let changed = false;
   const tasks = run.tasks.map((t) => {
-    const newStatus = statusMap[t.task_name];
-    if (!newStatus || newStatus === t.status) return t;
-    if (TERMINAL_TASK_STATUS[t.status] && !TERMINAL_TASK_STATUS[newStatus]) return t;
-    changed = true;
-    return { ...t, status: newStatus };
-  });
+      const newStatus = statusMap[t.task_name];
+      if (!newStatus || newStatus === t.status) return t;
+      // Issue #99: 服务端已是终态时，不回退到任何 SSE 状态（含过期的终态），
+      // 避免手动切换最终版本后，陈旧 SSE 覆盖任务状态。
+      if (TERMINAL_TASK_STATUS[t.status]) return t;
+      changed = true;
+      return { ...t, status: newStatus };
+    });
   return changed ? { ...run, tasks } : run;
 }
 
@@ -399,6 +401,8 @@ export default function RunDetailPage() {
           runId={id}
           taskName={versionsTaskName}
           onClose={() => setVersionsTaskName(null)}
+          // Issue #99: 切换最终版本后重连 SSE，刷新日志到选中的版本
+          onVersionsChanged={sseResult.reconnect}
         />
       )}
     </div>

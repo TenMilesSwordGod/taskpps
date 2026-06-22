@@ -14,6 +14,8 @@ interface RetryVersionsDrawerProps {
   runId: string;
   taskName: string;
   onClose: () => void;
+  /** Issue #99: 版本选择变更后回调（用于触发日志重连等刷新） */
+  onVersionsChanged?: () => void;
 }
 
 function fmtDur(start: string | null, end: string | null): string {
@@ -30,7 +32,7 @@ function fmtDur(start: string | null, end: string | null): string {
  * - 可选择某个版本作为"最终报告"
  * - 可查看每个版本的日志
  */
-export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: RetryVersionsDrawerProps) {
+export default function RetryVersionsDrawer({ open, runId, taskName, onClose, onVersionsChanged }: RetryVersionsDrawerProps) {
   const { message } = App.useApp();
   const [logRetryId, setLogRetryId] = useState<string | null>(null);
   const [logRetryStatus, setLogRetryStatus] = useState<string | null>(null);
@@ -82,6 +84,8 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
         selectedRetryId: retryId,
       });
       message.success('已设为最终版本');
+      // Issue #99: 通知父组件刷新日志等依赖版本状态的资源
+      onVersionsChanged?.();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '设置失败';
       message.error(msg);

@@ -147,9 +147,10 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
     return taskRuns.map((r) => {
       const newStatus = taskStatusMap[r.task_name];
       if (!newStatus || newStatus === r.status) return r;
-      // 服务端已是终态时，不回退到非终态的 SSE 状态
+      // Issue #99: 服务端已是终态时，不回退到任何 SSE 状态（含过期的终态），
+      // 避免手动切换最终版本后，陈旧 SSE 仍覆盖任务树状态。
       const terminal: Record<string, boolean> = { success: true, failed: true, skipped: true, cancelled: true };
-      if (terminal[r.status] && !terminal[newStatus]) return r;
+      if (terminal[r.status]) return r;
       return { ...r, status: newStatus };
     });
   }, [taskRuns, taskStatusMap]);

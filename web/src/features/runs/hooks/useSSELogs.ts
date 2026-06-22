@@ -143,5 +143,22 @@ export function useSSELogs(runId: string | undefined) {
 
   const clearLogs = useCallback(() => setLogs([]), []);
 
-  return { logs, connected, autoScroll, setAutoScroll, clearLogs, taskStatusMap };
+  /** Issue #99: 主动重连 SSE，用于外部触发（如切换最终版本后刷新日志） */
+  const reconnect = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setConnected(false);
+    setLogs([]);
+    setTaskStatusMap({});
+    reconnectAttemptRef.current = 0;
+    connect();
+  }, [connect]);
+
+  return { logs, connected, autoScroll, setAutoScroll, clearLogs, taskStatusMap, reconnect };
 }

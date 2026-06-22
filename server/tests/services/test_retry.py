@@ -587,6 +587,12 @@ class TestPipelineServiceRetry:
             updated = await task_repo.get_task_run(tr.id)
             assert updated.selected_retry_id == record.id
             assert updated.status == TaskStatus.SUCCESS
+            # Issue #99: 设为最终版本应同步更新 task run 的退出码、错误、日志路径和时间
+            assert updated.exit_code == 0
+            assert updated.error == record.error
+            assert updated.log_path == record.log_path
+            assert updated.started_at == record.started_at
+            assert updated.finished_at == record.finished_at
 
     async def test_select_original_version_as_final(self, db_engine, clean_db):
         """Issue #92: 选择 v0（原始版本）作为最终版本应将 selected_retry_id 设为 null"""

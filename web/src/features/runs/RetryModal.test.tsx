@@ -327,6 +327,36 @@ describe('<RetryVersionsDrawer /> Issue #72 - 版本管理', () => {
     });
   });
 
+  it('Issue #99: 设置最终版本成功后触发 onVersionsChanged', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    mockUseSelectRetryReport.mockReturnValue({ mutateAsync, isPending: false });
+    const retries = [makeRetryRecord({ id: 'r1', retry_version: 1, status: 'success' })];
+    mockUseRetryVersions.mockReturnValue({
+      data: makeVersionsResponse('sub.taskA', retries, null),
+    });
+    const onVersionsChanged = vi.fn();
+
+    render(
+      <Wrapper>
+        <RetryVersionsDrawer
+          open={true}
+          runId="run-1"
+          taskName="sub.taskA"
+          onClose={vi.fn()}
+          onVersionsChanged={onVersionsChanged}
+        />
+      </Wrapper>,
+    );
+
+    const selectButton = screen.getByText('设为最终版本');
+    await fireEvent.click(selectButton);
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalled();
+      expect(onVersionsChanged).toHaveBeenCalled();
+    });
+  });
+
   it('点击"查看日志"打开日志 Modal', async () => {
     const retries = [makeRetryRecord({ id: 'r1', retry_version: 1, status: 'success' })];
     mockUseRetryVersions.mockReturnValue({

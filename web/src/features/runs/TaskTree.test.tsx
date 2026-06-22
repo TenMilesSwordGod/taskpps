@@ -169,4 +169,35 @@ describe('<TaskTree /> Issue #72 - 右键重试 + 重试版本徽标', () => {
     // 版本徽标仍显示（"2" 唯一，因为 subpipeline 任务数是 "1"）
     expect(screen.getByText('2')).toBeInTheDocument();
   });
+
+  it('Issue #99: 服务端终态不被陈旧 SSE 覆盖', () => {
+    const pipeline = makePipeline();
+    const taskRuns = [
+      {
+        task_name: 'sub1.taskA',
+        status: 'success' as const,
+        exit_code: 0,
+        error: null,
+        started_at: '2026-01-01T00:00:00Z',
+        finished_at: '2026-01-01T00:00:10Z',
+      },
+    ];
+
+    render(
+      <Wrapper>
+        <TaskTree
+          pipeline={pipeline}
+          taskRuns={taskRuns}
+          onSelect={vi.fn()}
+          isLive={false}
+          // 陈旧的 SSE 状态为 failed，但服务端已返回 success
+          taskStatusMap={{ 'sub1.taskA': 'failed' }}
+        />
+      </Wrapper>,
+    );
+
+    // 任务名文字不应使用失败红色
+    const taskName = screen.getByText('taskA');
+    expect(taskName).not.toHaveStyle({ color: '#b91c1c' });
+  });
 });

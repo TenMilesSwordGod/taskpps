@@ -163,6 +163,19 @@ describe('useSSELogs()', () => {
     expect(es.readyState).toBe(2)
   })
 
+  it('reconnect：关闭旧连接并建立新连接（Issue #99）', () => {
+    const { result } = renderHook(() => useSSELogs('run-1'))
+    const oldEs = MockEventSource.instances[0]
+    act(() => oldEs.open())
+
+    act(() => result.current.reconnect())
+
+    expect(oldEs.readyState).toBe(2)
+    expect(MockEventSource.instances).toHaveLength(2)
+    const newEs = MockEventSource.instances[1]
+    expect(newEs.url).toBe('/api/runs/run-1/logs?follow=true')
+  })
+
   // ─── P0-5 边界条件：seq 跨生命周期 ───
 
   it('seq 跨 hook re-mount 保持递增（模块级计数器不重置）', () => {
