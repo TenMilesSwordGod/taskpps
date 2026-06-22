@@ -368,6 +368,8 @@ async def test_agent_pending_commands_sorted_by_started_at(app, setup_project, t
                     timeout=0,
                     run_id="run-1",
                     task_name="task-2",
+                    status="running",
+                    queued_at=190.0,
                     started_at=200.0,
                     future=MagicMock(),
                 ),
@@ -378,6 +380,8 @@ async def test_agent_pending_commands_sorted_by_started_at(app, setup_project, t
                     timeout=0,
                     run_id="run-1",
                     task_name="task-1",
+                    status="running",
+                    queued_at=90.0,
                     started_at=100.0,
                     future=MagicMock(),
                 ),
@@ -388,3 +392,145 @@ async def test_agent_pending_commands_sorted_by_started_at(app, setup_project, t
     assert response.status_code == 200
     data = response.json()
     assert [item["command_id"] for item in data] == ["cmd-1", "cmd-2"]
+
+
+@pytest.mark.asyncio
+async def test_agent_pending_commands_includes_queued_status(app, setup_project, tmp_project):
+    """/api/agents/{id}/pending-commands 应返回 running/queued 状态"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents.AgentManager.instance") as mock_instance:
+            conn = MagicMock()
+            conn._pending_commands = {
+                "cmd-running": MagicMock(
+                    command_id="cmd-running",
+                    command="echo running",
+                    cwd="",
+                    timeout=0,
+                    run_id="run-1",
+                    task_name="task-running",
+                    status="running",
+                    queued_at=100.0,
+                    started_at=200.0,
+                    future=MagicMock(),
+                ),
+                "cmd-queued": MagicMock(
+                    command_id="cmd-queued",
+                    command="echo queued",
+                    cwd="",
+                    timeout=0,
+                    run_id="run-1",
+                    task_name="task-queued",
+                    status="queued",
+                    queued_at=150.0,
+                    started_at=0.0,
+                    future=MagicMock(),
+                ),
+            }
+            mock_instance.return_value.get_connection.return_value = conn
+            response = await client.get("/api/agents/test-agent/pending-commands")
+
+    assert response.status_code == 200
+    data = response.json()
+    statuses = {item["command_id"]: item["status"] for item in data}
+    assert statuses["cmd-running"] == "running"
+    assert statuses["cmd-queued"] == "queued"
+
+
+@pytest.mark.asyncio
+async def test_agent_status_counts_running_and_queued(app, setup_project, tmp_project):
+    """/api/agents/status/{id} 应分别统计 running 和 queued 命令数"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents.AgentManager.instance") as mock_instance:
+            manager = MagicMock()
+            manager.is_connected.return_value = True
+            conn = MagicMock()
+            conn.hostname = "host"
+            conn.platform = "linux/x86_64"
+            conn.system = "linux"
+            conn.arch = "x86_64"
+            conn.ip = "10.0.0.1"
+            conn.agent_version = "1.0"
+            conn.agent_pid = 1
+            conn.connected_at = 1000.0
+            conn.last_heartbeat = 1000.0
+            conn._pending_commands = {
+                "cmd-running": MagicMock(status="running"),
+                "cmd-queued-1": MagicMock(status="queued"),
+                "cmd-queued-2": MagicMock(status="queued"),
+            }
+            manager.get_connection.return_value = conn
+            mock_instance.return_value = manager
+            with patch("taskpps.api.agents._load_agent_max_parallel_map", return_value={"test-agent": 2}):
+                response = await client.get("/api/agents/status/test-agent")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["running_commands"] == 1
+    assert data["queued_commands"] == 2
+
+
+@pytest.mark.asyncio
+async def test_agent_all_counts_running_and_queued(app, setup_project, tmp_project):
+    """/api/agents/all 返回的 AgentWithConfig 应包含 queued_commands"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_items = [
+        {
+            "id": "agent-a",
+            "name": "Agent A",
+            "type": "execution-agent",
+            "host": "",
+            "port": 0,
+            "max_parallel": 2,
+            "_project_id": "proj-1",
+            "_project_name": "Project 1",
+        },
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents._load_agents_from_projects", return_value=(agent_items, [])):
+            with patch("taskpps.api.agents.AgentManager.instance") as mock_instance:
+                manager = MagicMock()
+                manager.is_connected.return_value = True
+                conn = MagicMock()
+                conn._pending_commands = {
+                    "cmd-running": MagicMock(status="running"),
+                    "cmd-queued": MagicMock(status="queued"),
+                }
+                conn.hostname = "host"
+                conn.platform = "linux/x86_64"
+                conn.system = "linux"
+                conn.arch = "x86_64"
+                conn.ip = "10.0.0.1"
+                conn.agent_version = "1.0"
+                conn.agent_pid = 1
+                conn.connected_at = 1000.0
+                conn.last_heartbeat = 1000.0
+                manager.get_connection.return_value = conn
+                mock_instance.return_value = manager
+                response = await client.get("/api/agents/all")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["running_commands"] == 1
+    assert data[0]["queued_commands"] == 1

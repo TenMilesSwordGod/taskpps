@@ -47,6 +47,7 @@ class AgentStatus(BaseModel):
     connected_at: float = 0
     last_heartbeat: float = 0
     running_commands: int = 0
+    queued_commands: int = 0
     max_parallel: int = 1
 
 
@@ -74,6 +75,7 @@ class AgentWithConfig(BaseModel):
     connected_at: float = 0
     last_heartbeat: float = 0
     running_commands: int = 0
+    queued_commands: int = 0
     max_parallel: int = 1
     # 网络可达性：unknown / reachable / unreachable
     net_status: str = "unknown"
@@ -143,7 +145,8 @@ class AgentHostInfo(BaseModel):
 
 
 class PendingCommandItem(BaseModel):
-    """正在执行的命令信息"""
+    """正在执行或等待执行的命令信息"""
+
     command_id: str
     command: str = ""
     cwd: str = ""
@@ -152,3 +155,4 @@ class PendingCommandItem(BaseModel):
     task_name: str = ""
     started_at: float = 0
     duration_s: float = 0
+    status: str = "queued"  # "queued" | "running"

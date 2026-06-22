@@ -128,7 +128,8 @@ async def agent_status(agent_id: str):
         )
     conn = manager.get_connection(agent_id)
 
-    pending_count = len(conn._pending_commands) if conn else 0
+    running_count = sum(1 for info in conn._pending_commands.values() if info.status == "running") if conn else 0
+    queued_count = sum(1 for info in conn._pending_commands.values() if info.status == "queued") if conn else 0
     return AgentStatus(
         agent_id=agent_id,
         connected=True,
@@ -141,20 +142,24 @@ async def agent_status(agent_id: str):
         agent_pid=conn.agent_pid if conn else 0,
         connected_at=conn.connected_at if conn else 0,
         last_heartbeat=conn.last_heartbeat if conn else 0,
-        running_commands=pending_count,
+        running_commands=running_count,
+        queued_commands=queued_count,
         max_parallel=max_parallel_map.get(agent_id, 1),
     )
 
 
 @router.get("/{agent_id}/pending-commands", response_model=list[PendingCommandItem])
 async def agent_pending_commands(agent_id: str):
-    """获取 agent 当前正在执行的命令列表（按启动时间排序，便于展示执行顺序）"""
+    """获取 agent 当前正在执行或等待执行的命令列表（按启动/入队时间排序）"""
     manager = AgentManager.instance()
     conn = manager.get_connection(agent_id)
     if conn is None:
         return []
     now = time.time()
-    sorted_commands = sorted(conn._pending_commands.values(), key=lambda info: info.started_at or 0)
+    sorted_commands = sorted(
+        conn._pending_commands.values(),
+        key=lambda info: info.started_at or info.queued_at or 0,
+    )
     return [
         PendingCommandItem(
             command_id=info.command_id,
@@ -164,7 +169,10 @@ async def agent_pending_commands(agent_id: str):
             run_id=info.run_id,
             task_name=info.task_name,
             started_at=info.started_at,
-            duration_s=round(now - info.started_at, 1) if info.started_at else 0,
+            duration_s=round(now - (info.started_at or info.queued_at), 1)
+            if (info.started_at or info.queued_at)
+            else 0,
+            status=info.status,
         )
         for info in sorted_commands
     ]
@@ -178,6 +186,8 @@ async def agent_list():
     for agent_id, conn in manager.connections.items():
         if not manager.is_connected(agent_id):
             continue
+        running_count = sum(1 for info in conn._pending_commands.values() if info.status == "running")
+        queued_count = sum(1 for info in conn._pending_commands.values() if info.status == "queued")
         result.append(
             AgentStatus(
                 agent_id=agent_id,
@@ -191,7 +201,8 @@ async def agent_list():
                 agent_pid=conn.agent_pid,
                 connected_at=conn.connected_at,
                 last_heartbeat=conn.last_heartbeat,
-                running_commands=len(conn._pending_commands),
+                running_commands=running_count,
+                queued_commands=queued_count,
                 max_parallel=max_parallel_map.get(agent_id, 1),
             )
         )
@@ -231,7 +242,8 @@ async def agent_all():
                 item.agent_pid = conn.agent_pid
                 item.connected_at = conn.connected_at
                 item.last_heartbeat = conn.last_heartbeat
-                item.running_commands = len(conn._pending_commands)
+                item.running_commands = sum(1 for info in conn._pending_commands.values() if info.status == "running")
+                item.queued_commands = sum(1 for info in conn._pending_commands.values() if info.status == "queued")
                 item.net_status = "reachable"
         result.append(item)
 
@@ -277,7 +289,8 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
 
     # Issue #68: 检查 agent 是否正在执行 pipeline 任务，避免手动 exec 中断正在运行的任务
     pipeline_commands = [
-        info for info in conn._pending_commands.values()
+        info
+        for info in conn._pending_commands.values()
         if info.run_id  # run_id 非空说明是 pipeline 任务
     ]
     if pipeline_commands:
@@ -285,7 +298,7 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
         raise HTTPException(
             status_code=409,
             detail=f"Agent '{agent_id}' is executing pipeline task(s): {task_names}. "
-                   f"Please wait for completion or cancel the run first.",
+            f"Please wait for completion or cancel the run first.",
         )
 
     cwd = body.cwd or ""
@@ -382,17 +395,9 @@ async def deploy_agent(body: AgentDeployRequest):
         if not agent_cfg:
             raise HTTPException(status_code=404, detail=t("Agent not found: {id}", id=body.agent_id))
 
-        loader = (
-            AgentLoader(base_dir=get_agents_dir(Path(project_workdir)))
-            if project_workdir
-            else AgentLoader()
-        )
+        loader = AgentLoader(base_dir=get_agents_dir(Path(project_workdir))) if project_workdir else AgentLoader()
 
-        cred_loader = (
-            CredentialLoader(base_dir=get_credentials_dir(Path(project_workdir)))
-            if project_workdir
-            else None
-        )
+        cred_loader = CredentialLoader(base_dir=get_credentials_dir(Path(project_workdir))) if project_workdir else None
 
         bootstrap = AgentBootstrap()
         await bootstrap.bootstrap(body.agent_id, agent_loader=loader, credential_loader=cred_loader)

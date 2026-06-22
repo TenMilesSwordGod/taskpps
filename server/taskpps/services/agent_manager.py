@@ -21,7 +21,8 @@ DISPLAY_GRACE_PERIOD = 300
 
 @dataclass
 class PendingCommandInfo:
-    """正在执行的命令元数据"""
+    """正在执行或等待执行的命令元数据"""
+
     command_id: str
     command: str = ""
     env: dict[str, str] = field(default_factory=dict)
@@ -29,6 +30,8 @@ class PendingCommandInfo:
     timeout: int = 0
     run_id: str = ""
     task_name: str = ""
+    status: str = "queued"  # "queued" | "running"
+    queued_at: float = 0.0
     started_at: float = 0.0
     future: asyncio.Future[dict] = field(default_factory=lambda: asyncio.get_event_loop().create_future())
 
@@ -78,8 +81,10 @@ class AgentConnection:
         timeout: int = 0,
         run_id: str = "",
         task_name: str = "",
+        status: str = "running",
     ) -> asyncio.Future[dict]:
         fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()
+        now = time.time()
         self._pending_commands[command_id] = PendingCommandInfo(
             command_id=command_id,
             command=command,
@@ -88,10 +93,21 @@ class AgentConnection:
             timeout=timeout,
             run_id=run_id,
             task_name=task_name,
-            started_at=time.time(),
+            status=status,
+            queued_at=now,
+            started_at=now if status == "running" else 0.0,
             future=fut,
         )
         return fut
+
+    def promote_to_running(self, command_id: str) -> bool:
+        """将处于 queued 状态的命令标记为 running。"""
+        info = self._pending_commands.get(command_id)
+        if info is None:
+            return False
+        info.status = "running"
+        info.started_at = time.time()
+        return True
 
     def resolve_pending(self, command_id: str, result: dict) -> None:
         info = self._pending_commands.pop(command_id, None)
@@ -339,13 +355,20 @@ class AgentManager:
         timeout: int = 0,
         run_id: str = "",
         task_name: str = "",
+        status: str = "running",
     ) -> asyncio.Future[dict]:
         conn = self._connections.get(agent_id)
         if conn is None:
             fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()
             fut.set_result({"exit_code": -1, "signal_name": "", "error": "agent not connected"})
             return fut
-        return conn.register_pending(command_id, command, env, cwd, timeout, run_id, task_name)
+        return conn.register_pending(command_id, command, env, cwd, timeout, run_id, task_name, status=status)
+
+    def promote_command_to_running(self, agent_id: str, command_id: str) -> bool:
+        conn = self._connections.get(agent_id)
+        if conn is None:
+            return False
+        return conn.promote_to_running(command_id)
 
     def register_output_callback(self, agent_id: str, command_id: str, callback: Callable) -> None:
         conn = self._connections.get(agent_id)

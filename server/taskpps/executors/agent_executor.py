@@ -54,7 +54,10 @@ class AgentExecutor(BaseExecutor):
                 return False
             return await self._try_bootstrap(log_path)
 
-        self._log(log_path, f"[INFO] Agent '{self._agent_id}' not connected, waiting up to {offline_timeout}s for reconnect...\n")
+        self._log(
+            log_path,
+            f"[INFO] Agent '{self._agent_id}' not connected, waiting up to {offline_timeout}s for reconnect...\n",
+        )
         deadline = asyncio.get_event_loop().time() + offline_timeout
         poll_interval = 5
 
@@ -108,6 +111,19 @@ class AgentExecutor(BaseExecutor):
                 stderr=f"Agent '{self._agent_id}' is not connected",
             )
 
+        # Issue #103: 在排队前先注册为 queued，便于 UI 展示等待中的任务
+        self._manager.create_pending(
+            self._agent_id,
+            command_id,
+            command=command,
+            env=env,
+            cwd=cwd or "",
+            timeout=timeout or 0,
+            run_id=self.run_id,
+            task_name=self.task_name,
+            status="queued",
+        )
+
         # Issue #78: 获取 agent 执行槽位，排队等待
         max_parallel = (self._agent_data or {}).get("max_parallel", 1)
         queue_timeout = get_settings().executor.agent_queue_timeout
@@ -116,7 +132,11 @@ class AgentExecutor(BaseExecutor):
             self._slot_acquired = True
         except TimeoutError as e:
             self._log(log_path, f"[ERROR] Agent slot acquisition failed: {e}\n")
+            self._manager.cleanup_command(self._agent_id, command_id)
             return ExecutorResult(exit_code=-1, stderr=str(e))
+
+        # 获得槽位后提升为 running
+        self._manager.promote_command_to_running(self._agent_id, command_id)
 
         try:
             return await self._execute_command(command, env, log_path, timeout, cwd, command_id)
@@ -159,11 +179,26 @@ class AgentExecutor(BaseExecutor):
 
         self._manager.register_output_callback(self._agent_id, command_id, on_output)
 
-        fut = self._manager.create_pending(
-            self._agent_id, command_id,
-            command=command, env=env, cwd=effective_cwd, timeout=effective_timeout,
-            run_id=self.run_id, task_name=self.task_name,
-        )
+        # Issue #103: 优先复用 execute() 中预先注册的 queued command，避免覆盖状态
+        conn = self._manager.get_connection(self._agent_id)
+        info = conn._pending_commands.get(command_id) if conn else None
+        if info is not None:
+            info.command = command
+            info.cwd = effective_cwd
+            info.timeout = effective_timeout
+            fut = info.future
+        else:
+            fut = self._manager.create_pending(
+                self._agent_id,
+                command_id,
+                command=command,
+                env=env,
+                cwd=effective_cwd,
+                timeout=effective_timeout,
+                run_id=self.run_id,
+                task_name=self.task_name,
+                status="running",
+            )
 
         try:
             await self._manager.send_command(self._agent_id, command_id, command, env, effective_cwd, effective_timeout)

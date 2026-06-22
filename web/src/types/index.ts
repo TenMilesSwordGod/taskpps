@@ -204,6 +204,7 @@ export interface AgentStatus {
   connected_at: number;
   last_heartbeat: number;
   running_commands: number;
+  queued_commands: number;
   max_parallel: number;
 }
 
@@ -266,12 +267,13 @@ export interface AgentWithConfig {
   connected_at: number;
   last_heartbeat: number;
   running_commands: number;
+  queued_commands: number;
   max_parallel: number;
   /** 网络可达性：unknown / reachable / unreachable */
   net_status: 'unknown' | 'reachable' | 'unreachable';
 }
 
-/** Agent 正在执行的命令 */
+/** Agent 正在执行或等待执行的命令 */
 export interface PendingCommandItem {
   command_id: string;
   command: string;
@@ -281,6 +283,7 @@ export interface PendingCommandItem {
   task_name: string;
   started_at: number;
   duration_s: number;
+  status: 'queued' | 'running';
 }
 
 /** Agent check 探测单项结果 */

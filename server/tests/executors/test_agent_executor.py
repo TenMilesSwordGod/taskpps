@@ -17,6 +17,10 @@ def mock_manager():
     mgr.cleanup_command = MagicMock()
     mgr.create_pending = MagicMock()
     mgr.register_output_callback = MagicMock()
+    mgr.acquire_agent = AsyncMock()
+    mgr.release_agent = MagicMock()
+    mgr.promote_command_to_running = MagicMock()
+    mgr.get_connection = MagicMock(return_value=None)
     return mgr
 
 

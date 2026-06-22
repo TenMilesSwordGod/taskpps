@@ -3,7 +3,7 @@ import { Tooltip, Popconfirm, Tag, Popover } from 'antd';
 import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, FolderOpen, ExternalLink,
+  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock,
 } from 'lucide-react';
 import { useDeployAgent, usePendingCommands } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
@@ -108,63 +108,113 @@ function formatDuration(s: number): string {
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m ${sec}s`;
 }
 
+function CommandRow({
+  cmd,
+  index,
+  status,
+  onRunClick,
+}: {
+  cmd: PendingCommandItem;
+  index: number;
+  status: 'running' | 'queued';
+  onRunClick: (runId: string) => void;
+}) {
+  const isRunning = status === 'running';
+  return (
+    <div
+      key={cmd.command_id}
+      style={{ padding: '6px 12px', borderBottom: '1px solid #f2f4f7', fontSize: 12 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 4,
+              background: isRunning ? '#eff8ff' : '#f2f4f7',
+              color: isRunning ? '#2e90fa' : '#667085',
+              fontSize: 10,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="执行顺序"
+          >
+            {index + 1}
+          </span>
+          <span style={{ fontWeight: 600, color: '#1d2939' }}>
+            {cmd.task_name || <span style={{ color: '#98a2b3' }}>未知任务</span>}
+          </span>
+        </span>
+        <span
+          style={{
+            color: isRunning ? '#2e90fa' : '#667085',
+            fontSize: 11,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 2,
+          }}
+        >
+          {isRunning ? <Loader2 size={10} className="animate-spin" /> : <Clock size={10} />}
+          {formatDuration(cmd.duration_s)}
+        </span>
+      </div>
+      <div
+        style={{
+          fontFamily: 'monospace',
+          fontSize: 11,
+          color: '#475467',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={cmd.command}
+      >
+        {cmd.command || '—'}
+      </div>
+      {cmd.run_id && (
+        <div style={{ marginTop: 3 }}>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={() => onRunClick(cmd.run_id)}
+            onKeyDown={(e) => { if (e.key === 'Enter') onRunClick(cmd.run_id); }}
+            style={{ fontSize: 11, color: '#2e90fa', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+          >
+            <ExternalLink size={10} />
+            {cmd.run_id.slice(0, 8)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCommandItem[]; onRunClick: (runId: string) => void }) {
   if (!commands?.length) {
-    return <div style={{ padding: '8px 12px', color: '#98a2b3', fontSize: 12 }}>暂无运行中命令</div>;
+    return <div style={{ padding: '8px 12px', color: '#98a2b3', fontSize: 12 }}>暂无运行中或等待中命令</div>;
   }
+  const running = commands.filter((c) => c.status === 'running');
+  const queued = commands.filter((c) => c.status === 'queued');
   return (
     <div>
-      {commands.map((cmd, index) => (
-        <div
-          key={cmd.command_id}
-          style={{ padding: '6px 12px', borderBottom: '1px solid #f2f4f7', fontSize: 12 }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span
-                style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: 4,
-                  background: '#eff8ff',
-                  color: '#2e90fa',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                title="执行顺序"
-              >
-                {index + 1}
-              </span>
-              <span style={{ fontWeight: 600, color: '#1d2939' }}>
-                {cmd.task_name || <span style={{ color: '#98a2b3' }}>未知任务</span>}
-              </span>
-            </span>
-            <span style={{ color: '#2e90fa', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-              <Loader2 size={10} className="animate-spin" />
-              {formatDuration(cmd.duration_s)}
-            </span>
-          </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#475467', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={cmd.command}>
-            {cmd.command || '—'}
-          </div>
-          {cmd.run_id && (
-            <div style={{ marginTop: 3 }}>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={() => onRunClick(cmd.run_id)}
-                onKeyDown={(e) => { if (e.key === 'Enter') onRunClick(cmd.run_id); }}
-                style={{ fontSize: 11, color: '#2e90fa', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
-              >
-                <ExternalLink size={10} />
-                {cmd.run_id.slice(0, 8)}
-              </span>
-            </div>
-          )}
+      {running.length > 0 && (
+        <div style={{ padding: '4px 12px', fontSize: 11, color: '#2e90fa', fontWeight: 600, background: '#f9fafb' }}>
+          运行中 ({running.length})
         </div>
+      )}
+      {running.map((cmd, index) => (
+        <CommandRow key={cmd.command_id} cmd={cmd} index={index} status="running" onRunClick={onRunClick} />
+      ))}
+      {queued.length > 0 && (
+        <div style={{ padding: '4px 12px', fontSize: 11, color: '#667085', fontWeight: 600, background: '#f9fafb' }}>
+          等待中 ({queued.length})
+        </div>
+      )}
+      {queued.map((cmd, index) => (
+        <CommandRow key={cmd.command_id} cmd={cmd} index={index} status="queued" onRunClick={onRunClick} />
       ))}
     </div>
   );
@@ -176,7 +226,8 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
   const navigate = useNavigate();
   const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const { data: pendingCommands } = usePendingCommands(agent.agent_id, popoverOpen && agent.running_commands > 0);
+  const hasQueue = agent.running_commands > 0 || agent.queued_commands > 0;
+  const { data: pendingCommands } = usePendingCommands(agent.agent_id, popoverOpen && hasQueue);
 
   const effectiveSystem = detectedSystem || agent.system || fallbackSystem(agent.type);
   const effectiveArch = detectedArch || agent.arch || fallbackArch();
@@ -310,12 +361,12 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <Popover
             open={popoverOpen}
-            onOpenChange={(open) => setPopoverOpen(open && agent.running_commands > 0)}
+            onOpenChange={(open) => setPopoverOpen(open && hasQueue)}
             trigger="click"
             placement="topLeft"
             title={
               <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, color: '#1d2939', borderBottom: '1px solid #f2f4f7' }}>
-                执行队列（{agent.running_commands} / 最大并发 {maxParallel}）
+                执行队列（运行中 {agent.running_commands} + 等待中 {agent.queued_commands} / 最大并发 {maxParallel}）
               </div>
             }
             content={<PendingCommandsContent commands={pendingCommands} onRunClick={(runId) => { setPopoverOpen(false); navigate(`/runs/${runId}`); }} />}
@@ -323,17 +374,17 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
           >
             <span
               role="button"
-              tabIndex={agent.running_commands > 0 ? 0 : -1}
+              tabIndex={hasQueue ? 0 : -1}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 4,
-                cursor: agent.running_commands > 0 ? 'pointer' : 'default',
-                color: agent.running_commands > 0 ? '#2e90fa' : '#98a2b3',
+                cursor: hasQueue ? 'pointer' : 'default',
+                color: hasQueue ? '#2e90fa' : '#98a2b3',
               }}
             >
               <Activity size={11} />
-              运行中 {agent.running_commands} / 并发 {maxParallel}
+              运行中 {agent.running_commands} / 等待中 {agent.queued_commands} / 并发 {maxParallel}
             </span>
           </Popover>
           <span style={{ marginLeft: 8, color: '#d0d5dd' }}>|</span>
