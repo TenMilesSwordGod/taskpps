@@ -215,7 +215,7 @@ class TestPipelineService:
         result = await svc.create_run("deploy.yaml")
         run_id = result["id"]
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.5)
 
         runner = get_active_runner(run_id)
         if runner:

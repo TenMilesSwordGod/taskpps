@@ -170,7 +170,7 @@ class TestInvokeExecutor:
         task_file.write_text("""
 def slow_func():
     import time
-    time.sleep(30)
+    time.sleep(3)
 """)
 
         with patch("taskpps.executors.invoke.get_tasks_dir", return_value=tasks_dir):

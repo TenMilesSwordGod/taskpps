@@ -201,7 +201,7 @@ class TestAgentManager:
 
         # Pending command and callback were moved to the new connection;
         # the original future identity is preserved (executors are awaiting it).
-        assert new_conn._pending_commands.get("cmd-keep") is old_fut
+        assert new_conn._pending_commands.get("cmd-keep").future is old_fut
         assert "cmd-keep" in new_conn._output_callbacks
 
     @pytest.mark.asyncio

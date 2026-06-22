@@ -32,6 +32,7 @@ def mock_repos():
     task_repo.cancel_pending_tasks = AsyncMock()
     task_repo.get_running_tasks = AsyncMock()
     task_repo.get_task_run = AsyncMock()
+    task_repo.update_stuck_tasks = AsyncMock()
     return run_repo, task_repo
 
 
@@ -244,6 +245,53 @@ class TestPipelineRunnerRun:
 
         # A must complete before B starts.
         assert execution_order == ["start:A", "end:A", "start:B", "end:B"]
+        assert run_repo.update_run_status.call_args[0][1] == "success"
+
+    @pytest.mark.asyncio
+    async def test_parallel_strategy_executes_tasks_concurrently(self, mock_session_factory):
+        # Issue #83: execution_strategy=parallel 时,同一 subpipeline 内无依赖的
+        # task 必须并发执行,而不是被 implicit_sequential 拆成多个 level 顺序执行。
+        run_repo, _task_repo = mock_session_factory
+
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel"),
+            tasks=[
+                ResolvedTask(name="task-a", task_type="command", command="echo a"),
+                ResolvedTask(name="task-b", task_type="command", command="echo b"),
+                ResolvedTask(name="task-c", task_type="command", command="echo c"),
+            ],
+        )
+        pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="par")
+        runner = PipelineRunner(run_id="par", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"sub.task-a": "ta", "sub.task-b": "tb", "sub.task-c": "tc"}
+
+        execution_order: list[str] = []
+
+        async def fake_execute_task(task, sub_name=""):
+            qualified = f"{sub_name}.{task.name}" if sub_name else task.name
+            execution_order.append(f"start:{qualified}")
+            # 让出事件循环,使并发执行的 task 在此交错;顺序执行时不会交错
+            await asyncio.sleep(0.01)
+            execution_order.append(f"end:{qualified}")
+            return ExecutorResult(exit_code=0)
+
+        with (
+            patch.object(runner, "_execute_task", side_effect=fake_execute_task),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        starts = [i for i, e in enumerate(execution_order) if e.startswith("start:")]
+        ends = [i for i, e in enumerate(execution_order) if e.startswith("end:")]
+        assert len(starts) == 3
+        assert len(ends) == 3
+        # 并发执行的标志:所有 start 都在第一个 end 之前
+        last_start = max(starts)
+        first_end = min(ends)
+        assert last_start < first_end, f"Tasks not concurrent: {execution_order}"
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
@@ -601,10 +649,10 @@ class TestPipelineRunnerBoundary:
     async def test_on_failure_continue_only_affects_own_deps(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         tasks = [
-            ResolvedTask(name="t1", task_type="command", command="exit 1", on_failure="continue"),
+            ResolvedTask(name="t1", task_type="command", command="exit 1"),
             ResolvedTask(name="t2", task_type="command", command="echo ok"),
         ]
-        pipeline = make_pipeline(tasks=tasks)
+        pipeline = make_pipeline(tasks=tasks, options=OptionsYAML(on_failure="continue"))
         ctx = ExecutionContext(pipeline=pipeline, run_id="test_cont2")
         runner = PipelineRunner(run_id="test_cont2", pipeline=pipeline, context=ctx)
         runner._task_run_ids = {"t1": "tr1", "t2": "tr2"}
@@ -887,7 +935,8 @@ class TestPipelineRunnerBoundary:
         with patch("taskpps.engine.runner.get_event_bus"):
             await runner.run()
 
-        run_repo.update_run_status.assert_not_called()
+        # 空 pipeline (无 subpipeline) 直接标记为 SUCCESS, 不执行任何任务
+        assert run_repo.update_run_status.call_args[0][1] == "success"
 
 
 class TestPipelineRunnerExitCodeCoverage:
@@ -1140,7 +1189,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
         with (
             patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
-            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
             patch("taskpps.engine.runner.get_workspaces_dir"),
             patch("taskpps.engine.runner.get_event_bus"),
             patch("taskpps.engine.runner.build_pipeline_log_path", return_value=tmp_path / "console.log"),
@@ -1170,7 +1219,7 @@ class TestPipelineRunnerExitCodeCoverage:
 
         with (
             patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
-            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
             patch("taskpps.engine.runner.get_workspaces_dir"),
             patch("taskpps.engine.runner.get_event_bus"),
             patch.object(runner, "_init_pipeline_log"),

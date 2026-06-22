@@ -456,7 +456,10 @@ class PipelineRunner:
         self._write_pipeline_log("INFO", f"Starting SubPipeline '{sub_name}' with {len(sub.tasks)} tasks")
 
         try:
-            dag = DAG(sub.tasks)
+            # parallel 策略下不添加隐式顺序依赖,使无 depends_on 的 task 落入同一
+            # level 由 asyncio.gather 并发执行;sequential 保持隐式链式依赖。
+            # See issue #83.
+            dag = DAG(sub.tasks, implicit_sequential=(sub.config.execution_strategy != "parallel"))
             levels = dag.get_execution_levels()
         except (DAGCycleError, ValueError) as e:
             error_msg = f"SubPipeline '{sub_name}' DAG error: {e}"
