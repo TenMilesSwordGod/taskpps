@@ -68,6 +68,7 @@ Rules:
     - write tests for new features or changes, and ensure they pass(just run influence domain, run full tests will cost so much time)
     - before start should use find skills to check all skills description for any situatuion    
     - use TDD to write code, ensure each change pass the test
+    - python should use uv to manage dependencies, not pip
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
