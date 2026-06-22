@@ -281,7 +281,7 @@ export function useSelectRetryReport() {
       runId: string;
       retryId: string;
       taskName: string;
-      selectedRetryId: string;
+      selectedRetryId: string | null;
     }) => {
       const res = await apiClient.post(
         `/api/runs/${params.runId}/retry/${params.retryId}/select-report`,

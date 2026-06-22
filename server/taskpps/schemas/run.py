@@ -152,7 +152,7 @@ class UpdateRetryCommandRequest(BaseModel):
 
 class SelectReportRequest(BaseModel):
     task_name: str
-    selected_retry_id: str
+    selected_retry_id: str | None = None
 
 
 class BatchSelectReportRequest(BaseModel):

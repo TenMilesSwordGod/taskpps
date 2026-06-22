@@ -42,11 +42,11 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
   const retryList = versionsData?.task_retries?.[taskName] ?? [];
   const selectedRetryId = versionsData?.selected?.[taskName] ?? null;
 
-  const handleSelect = async (retryId: string) => {
+  const handleSelect = async (retryId: string | null) => {
     try {
       await selectReport.mutateAsync({
         runId,
-        retryId,
+        retryId: retryId ?? '__original__',
         taskName,
         selectedRetryId: retryId,
       });
@@ -162,7 +162,7 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
                             size="small"
                             type="text"
                             icon={<Star size={13} />}
-                            onClick={() => handleSelect(retry.id)}
+                            onClick={() => handleSelect(isOriginal ? null : retry.id)}
                             loading={selectReport.isPending}
                           >
                             设为最终版本

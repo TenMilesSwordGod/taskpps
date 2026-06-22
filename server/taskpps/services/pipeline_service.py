@@ -252,7 +252,12 @@ class PipelineService:
 
         self._save_pipeline_snapshot(pipeline_file, pipeline_id, pipeline_version, run.id, project_workdir)
 
-        context = ExecutionContext(pipeline=resolved, run_id=run.id, env=_extract_env_overrides(params) if params else {}, project_workdir=project_workdir)
+        context = ExecutionContext(
+            pipeline=resolved,
+            run_id=run.id,
+            env=_extract_env_overrides(params) if params else {},
+            project_workdir=project_workdir,
+        )
 
         runner = PipelineRunner(run_id=run.id, pipeline=resolved, context=context)
         runner._task_run_ids = task_run_ids
@@ -277,7 +282,9 @@ class PipelineService:
         }
 
     @staticmethod
-    def _save_pipeline_snapshot(pipeline_file: str, pipeline_id: str, pipeline_version: str, run_id: str, project_workdir: str | None = None) -> None:
+    def _save_pipeline_snapshot(
+        pipeline_file: str, pipeline_id: str, pipeline_version: str, run_id: str, project_workdir: str | None = None
+    ) -> None:
         pipelines_dir = get_pipelines_dir(Path(project_workdir) if project_workdir else None)
         p = Path(pipeline_file)
         if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:
@@ -421,16 +428,12 @@ class PipelineService:
             total = await run_repo.count_runs(pipeline=pipeline, status=status, project_id=project_id)
             return {"items": items, "total": total}
 
-    async def get_run_stats(
-        self, pipeline: str | None = None, project_id: str | None = None
-    ) -> dict:
+    async def get_run_stats(self, pipeline: str | None = None, project_id: str | None = None) -> dict:
         from taskpps.models.run import RunStatus
 
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
-            status_counts = await run_repo.count_runs_by_status(
-                pipeline=pipeline, project_id=project_id
-            )
+            status_counts = await run_repo.count_runs_by_status(pipeline=pipeline, project_id=project_id)
             total = sum(status_counts.values())
             return {
                 "total": total,
@@ -563,7 +566,9 @@ class PipelineService:
             if resolved is None:
                 if not run.pipeline_id:
                     raise ValueError(t("Run has no pipeline snapshot, retry is not available"))
-                raise ValueError(t("Pipeline snapshot not found, retry is not available. The snapshot may have been cleaned up."))
+                raise ValueError(
+                    t("Pipeline snapshot not found, retry is not available. The snapshot may have been cleaned up.")
+                )
 
             task_targets: list[str] = []
             if tasks:
@@ -621,7 +626,11 @@ class PipelineService:
 
                 retry_version = await retry_repo.get_next_retry_version(run_id, t_name)
                 log_path = build_retry_log_path(
-                    run.pipeline_id, run.pipeline_version, run_id, t_name, retry_version,
+                    run.pipeline_id,
+                    run.pipeline_version,
+                    run_id,
+                    t_name,
+                    retry_version,
                 )
 
                 record = await retry_repo.create_retry_record(
@@ -668,9 +677,13 @@ class PipelineService:
                     "id": r.id,
                     "task_name": r.task_name,
                     "retry_version": r.retry_version,
-                    "status": (refreshed[r.id].status.value
-                               if r.id in refreshed
-                               else r.status.value if hasattr(r.status, "value") else r.status),
+                    "status": (
+                        refreshed[r.id].status.value
+                        if r.id in refreshed
+                        else r.status.value
+                        if hasattr(r.status, "value")
+                        else r.status
+                    ),
                     "command": r.command,
                     "log_path": r.log_path,
                 }
@@ -694,7 +707,11 @@ class PipelineService:
         await self._select_retry_report_internal(session, run_id, task_name, latest.id)
 
     async def _select_retry_report_internal(
-        self, session, run_id: str, task_name: str, selected_retry_id: str,
+        self,
+        session,
+        run_id: str,
+        task_name: str,
+        selected_retry_id: str | None,
     ) -> dict:
         from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 
@@ -702,11 +719,13 @@ class PipelineService:
         run_repo = RunRepository(session)
         task_repo = TaskRunRepository(session)
 
-        selected = await retry_repo.get_retry_record(selected_retry_id)
-        if selected is None:
-            raise ValueError(t("Retry record not found"))
-        if selected.task_name != task_name or selected.run_id != run_id:
-            raise ValueError("Retry record does not match task/run")
+        # selected_retry_id=None 表示选择 v0（原始版本）
+        if selected_retry_id is not None:
+            selected = await retry_repo.get_retry_record(selected_retry_id)
+            if selected is None:
+                raise ValueError(t("Retry record not found"))
+            if selected.task_name != task_name or selected.run_id != run_id:
+                raise ValueError("Retry record does not match task/run")
 
         task_runs = await task_repo.list_task_runs(run_id)
         tr = next((t for t in task_runs if t.task_name == task_name), None)
@@ -714,25 +733,23 @@ class PipelineService:
             raise ValueError(f"Task run '{task_name}' not found")
 
         tr.selected_retry_id = selected_retry_id
-        if selected.status == TaskStatus.SUCCESS and tr.status != TaskStatus.SUCCESS:
+        if selected_retry_id is not None and selected.status == TaskStatus.SUCCESS and tr.status != TaskStatus.SUCCESS:
             tr.status = TaskStatus.SUCCESS
         session.add(tr)
         await session.commit()
 
         all_tr = await task_repo.list_task_runs(run_id)
-        all_failed_or_cancelled = all(
-            t.status in (TaskStatus.SUCCESS, TaskStatus.SKIPPED) for t in all_tr
-        )
+        all_failed_or_cancelled = all(t.status in (TaskStatus.SUCCESS, TaskStatus.SKIPPED) for t in all_tr)
         if all_failed_or_cancelled:
             run = await run_repo.get_run(run_id)
             if run:
                 await run_repo.update_run_status(run_id, RunStatus.SUCCESS)
 
-        logger.info(t("Selected retry report for '{task}': version {ver}",
-                       task=task_name, ver=selected.retry_version))
+        ver_label = selected.retry_version if selected_retry_id and selected else 0
+        logger.info(t("Selected retry report for '{task}': version {ver}", task=task_name, ver=ver_label))
         return {"task_name": task_name, "selected_retry_id": selected_retry_id}
 
-    async def select_retry_report(self, run_id: str, task_name: str, selected_retry_id: str) -> dict:
+    async def select_retry_report(self, run_id: str, task_name: str, selected_retry_id: str | None) -> dict:
         async with get_session_factory()() as session:
             return await self._select_retry_report_internal(session, run_id, task_name, selected_retry_id)
 
@@ -758,45 +775,49 @@ class PipelineService:
                 if task_name not in grouped:
                     grouped[task_name] = []
                 # 原始执行作为 v0
-                grouped[task_name].append({
-                    "id": tr.id,
-                    "run_id": tr.run_id,
-                    "task_run_id": tr.id,
-                    "task_name": tr.task_name,
-                    "subpipeline_name": tr.subpipeline_name,
-                    "retry_version": 0,
-                    "status": tr.status.value if hasattr(tr.status, "value") else tr.status,
-                    "command": "",
-                    "original_command": "",
-                    "log_path": tr.log_path,
-                    "exit_code": tr.exit_code,
-                    "error": tr.error,
-                    "started_at": _ensure_utc(tr.started_at),
-                    "finished_at": _ensure_utc(tr.finished_at),
-                    "created_at": _ensure_utc(tr.created_at),
-                })
+                grouped[task_name].append(
+                    {
+                        "id": tr.id,
+                        "run_id": tr.run_id,
+                        "task_run_id": tr.id,
+                        "task_name": tr.task_name,
+                        "subpipeline_name": tr.subpipeline_name,
+                        "retry_version": 0,
+                        "status": tr.status.value if hasattr(tr.status, "value") else tr.status,
+                        "command": "",
+                        "original_command": "",
+                        "log_path": tr.log_path,
+                        "exit_code": tr.exit_code,
+                        "error": tr.error,
+                        "started_at": _ensure_utc(tr.started_at),
+                        "finished_at": _ensure_utc(tr.finished_at),
+                        "created_at": _ensure_utc(tr.created_at),
+                    }
+                )
 
             for r in records:
                 task_name = r.task_name
                 if task_name not in grouped:
                     grouped[task_name] = []
-                grouped[task_name].append({
-                    "id": r.id,
-                    "run_id": r.run_id,
-                    "task_run_id": r.task_run_id,
-                    "task_name": r.task_name,
-                    "subpipeline_name": r.subpipeline_name,
-                    "retry_version": r.retry_version,
-                    "status": r.status.value if hasattr(r.status, "value") else r.status,
-                    "command": r.command,
-                    "original_command": r.original_command,
-                    "log_path": r.log_path,
-                    "exit_code": r.exit_code,
-                    "error": r.error,
-                    "started_at": _ensure_utc(r.started_at),
-                    "finished_at": _ensure_utc(r.finished_at),
-                    "created_at": _ensure_utc(r.created_at),
-                })
+                grouped[task_name].append(
+                    {
+                        "id": r.id,
+                        "run_id": r.run_id,
+                        "task_run_id": r.task_run_id,
+                        "task_name": r.task_name,
+                        "subpipeline_name": r.subpipeline_name,
+                        "retry_version": r.retry_version,
+                        "status": r.status.value if hasattr(r.status, "value") else r.status,
+                        "command": r.command,
+                        "original_command": r.original_command,
+                        "log_path": r.log_path,
+                        "exit_code": r.exit_code,
+                        "error": r.error,
+                        "started_at": _ensure_utc(r.started_at),
+                        "finished_at": _ensure_utc(r.finished_at),
+                        "created_at": _ensure_utc(r.created_at),
+                    }
+                )
 
             selected: dict[str, str | None] = {}
             for tr in task_runs:
@@ -868,7 +889,9 @@ class PipelineService:
         if resolved is None:
             if not run.pipeline_id:
                 raise ValueError(t("Run has no pipeline snapshot, retry is not available"))
-            raise ValueError(t("Pipeline snapshot not found, retry is not available. The snapshot may have been cleaned up."))
+            raise ValueError(
+                t("Pipeline snapshot not found, retry is not available. The snapshot may have been cleaned up.")
+            )
 
         parts = task_name.split(".", 1)
         sub_name = parts[0] if len(parts) > 1 else ""
@@ -885,13 +908,15 @@ class PipelineService:
                 if t_name == task_name or t_name in deps:
                     task_obj = resolved.get_task_by_name(t_name.split(".", 1)[1])
                     is_upstream = t_name in deps
-                    tree.append(DependencyNode(
-                        name=t_name,
-                        depends_on=list(dag.reverse_adjacency.get(t_name, [])),
-                        level=level_idx,
-                        upstream_of_target=is_upstream,
-                        mandatory_if_upstream=is_upstream,
-                    ))
+                    tree.append(
+                        DependencyNode(
+                            name=t_name,
+                            depends_on=list(dag.reverse_adjacency.get(t_name, [])),
+                            level=level_idx,
+                            upstream_of_target=is_upstream,
+                            mandatory_if_upstream=is_upstream,
+                        )
+                    )
 
         return {
             "target": task_name,
@@ -924,6 +949,7 @@ class PipelineService:
             return ResolvedPipeline.from_yaml(spec, pipeline_file=run.pipeline_file)
         except Exception:
             import traceback
+
             logger.error("Failed to parse pipeline snapshot for run %s: %s", run.id, traceback.format_exc())
             return None
 
@@ -959,10 +985,12 @@ class PipelineService:
     @staticmethod
     def _resolve_template(command: str, env: dict[str, str]) -> str:
         import re
+
         def _replace(match):
             var_name = match.group(1)
             return env.get(var_name, match.group(0))
-        return re.sub(r'\$\{env\.([^}]+)\}', _replace, command)
+
+        return re.sub(r"\$\{env\.([^}]+)\}", _replace, command)
 
     def list_pipelines(self) -> list[str]:
         all_pipelines = self.loader.load_all()

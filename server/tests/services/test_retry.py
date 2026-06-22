@@ -36,7 +36,9 @@ class TestRetryRecordRepository:
 
             task_repo = TaskRunRepository(session)
             task_run = await task_repo.create_task_run(
-                run_id=run.id, task_name="sub.t1", task_type="command",
+                run_id=run.id,
+                task_name="sub.t1",
+                task_type="command",
             )
 
             repo = RetryRecordRepository(session)
@@ -65,16 +67,22 @@ class TestRetryRecordRepository:
 
             task_repo = TaskRunRepository(session)
             task_run = await task_repo.create_task_run(
-                run_id=run.id, task_name="sub.t1", task_type="command",
+                run_id=run.id,
+                task_name="sub.t1",
+                task_type="command",
             )
 
             repo = RetryRecordRepository(session)
             for v in range(1, 4):
                 await repo.create_retry_record(
-                    run_id=run.id, task_run_id=task_run.id,
-                    task_name="sub.t1", subpipeline_name="sub",
-                    retry_version=v, command=f"echo {v}",
-                    original_command=f"echo {v}", log_path=f"/tmp/{v}.log",
+                    run_id=run.id,
+                    task_run_id=task_run.id,
+                    task_name="sub.t1",
+                    subpipeline_name="sub",
+                    retry_version=v,
+                    command=f"echo {v}",
+                    original_command=f"echo {v}",
+                    log_path=f"/tmp/{v}.log",
                 )
 
             records = await repo.list_retries_by_task(run.id, "sub.t1")
@@ -91,15 +99,21 @@ class TestRetryRecordRepository:
 
             repo = RetryRecordRepository(session)
             record = await repo.create_retry_record(
-                run_id=run.id, task_run_id=task_run.id,
-                task_name="sub.t1", subpipeline_name="sub",
-                retry_version=1, command="echo ok",
-                original_command="echo ok", log_path="/tmp/test.log",
+                run_id=run.id,
+                task_run_id=task_run.id,
+                task_name="sub.t1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="echo ok",
+                original_command="echo ok",
+                log_path="/tmp/test.log",
             )
 
             now = datetime.now(timezone.utc)
             await repo.update_retry_status(
-                record.id, TaskStatus.SUCCESS, exit_code=0,
+                record.id,
+                TaskStatus.SUCCESS,
+                exit_code=0,
                 finished_at=now,
             )
 
@@ -121,10 +135,14 @@ class TestRetryRecordRepository:
             assert v1 == 1
 
             await repo.create_retry_record(
-                run_id=run.id, task_run_id=task_run.id,
-                task_name="sub.t1", subpipeline_name="sub",
-                retry_version=1, command="echo 1",
-                original_command="echo 1", log_path="/tmp/1.log",
+                run_id=run.id,
+                task_run_id=task_run.id,
+                task_name="sub.t1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="echo 1",
+                original_command="echo 1",
+                log_path="/tmp/1.log",
             )
 
             v2 = await repo.get_next_retry_version(run.id, "sub.t1")
@@ -140,10 +158,14 @@ class TestRetryRecordRepository:
 
             repo = RetryRecordRepository(session)
             await repo.create_retry_record(
-                run_id=run.id, task_run_id=task_run.id,
-                task_name="sub.t1", subpipeline_name="sub",
-                retry_version=1, command="echo",
-                original_command="echo", log_path="/tmp/1.log",
+                run_id=run.id,
+                task_run_id=task_run.id,
+                task_name="sub.t1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="echo",
+                original_command="echo",
+                log_path="/tmp/1.log",
             )
 
             deleted = await repo.delete_retries_for_run(run.id)
@@ -323,15 +345,20 @@ class TestPipelineServiceRetry:
                 params={"env": {"GLOBAL_VAR": "global_value"}},
             )
             tr1 = await task_repo.create_task_run(
-                run_id=run.id, task_name="sub.step1", task_type="command",
+                run_id=run.id,
+                task_name="sub.step1",
+                task_type="command",
                 subpipeline_name="sub",
             )
             tr2 = await task_repo.create_task_run(
-                run_id=run.id, task_name="sub.step2", task_type="command",
+                run_id=run.id,
+                task_name="sub.step2",
+                task_type="command",
                 subpipeline_name="sub",
             )
 
         import taskpps.config as cfg
+
         cfg._settings = None
         cfg.load_settings(str(cfg.find_project_root() / "taskpps.yaml"))
 
@@ -342,6 +369,7 @@ class TestPipelineServiceRetry:
             mock_task2 = ResolvedTask(name="step2", task_type="command", command="echo world")
             from taskpps.domain.pipeline import ResolvedSubPipeline
             from taskpps.schemas.pipeline import PipelineConfig
+
             mock_sub = ResolvedSubPipeline(name="sub", tasks=[mock_task1, mock_task2], config=PipelineConfig())
             mock_pipeline.subpipelines = [mock_sub]
             mock_pipeline.top_config = PipelineConfig()
@@ -385,23 +413,31 @@ class TestPipelineServiceRetry:
 
             run = await run_repo.create_run(pipeline_name="test")
             tr = await task_repo.create_task_run(
-                run_id=run.id, task_name="sub.t1", task_type="command",
+                run_id=run.id,
+                task_name="sub.t1",
+                task_type="command",
             )
             tr.status = TaskStatus.FAILED
             session.add(tr)
             await session.commit()
 
             record = await retry_repo.create_retry_record(
-                run_id=run.id, task_run_id=tr.id,
-                task_name="sub.t1", subpipeline_name="sub",
-                retry_version=1, command="echo ok",
-                original_command="echo ok", log_path="/tmp/r.log",
+                run_id=run.id,
+                task_run_id=tr.id,
+                task_name="sub.t1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="echo ok",
+                original_command="echo ok",
+                log_path="/tmp/r.log",
             )
             await retry_repo.update_retry_status(record.id, TaskStatus.SUCCESS, exit_code=0)
 
         service = PipelineService()
         result = await service.select_retry_report(
-            run_id=run.id, task_name="sub.t1", selected_retry_id=record.id,
+            run_id=run.id,
+            task_name="sub.t1",
+            selected_retry_id=record.id,
         )
         assert result["selected_retry_id"] == record.id
 
@@ -410,6 +446,58 @@ class TestPipelineServiceRetry:
             updated = await task_repo.get_task_run(tr.id)
             assert updated.selected_retry_id == record.id
             assert updated.status == TaskStatus.SUCCESS
+
+    async def test_select_original_version_as_final(self, db_engine, clean_db):
+        """Issue #92: 选择 v0（原始版本）作为最终版本应将 selected_retry_id 设为 null"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            retry_repo = RetryRecordRepository(session)
+
+            run = await run_repo.create_run(pipeline_name="test")
+            tr = await task_repo.create_task_run(
+                run_id=run.id,
+                task_name="sub.t1",
+                task_type="command",
+            )
+            tr.status = TaskStatus.FAILED
+            session.add(tr)
+            await session.commit()
+
+            record = await retry_repo.create_retry_record(
+                run_id=run.id,
+                task_run_id=tr.id,
+                task_name="sub.t1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="echo ok",
+                original_command="echo ok",
+                log_path="/tmp/r.log",
+            )
+            await retry_repo.update_retry_status(record.id, TaskStatus.SUCCESS, exit_code=0)
+
+        service = PipelineService()
+        # 先选中 v1
+        await service.select_retry_report(
+            run_id=run.id,
+            task_name="sub.t1",
+            selected_retry_id=record.id,
+        )
+
+        # 再切回 v0（原始版本），selected_retry_id=None
+        result = await service.select_retry_report(
+            run_id=run.id,
+            task_name="sub.t1",
+            selected_retry_id=None,
+        )
+        assert result["selected_retry_id"] is None
+
+        async with get_session_factory()() as session:
+            task_repo = TaskRunRepository(session)
+            updated = await task_repo.get_task_run(tr.id)
+            assert updated.selected_retry_id is None
 
     async def test_retry_versions(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
@@ -421,21 +509,27 @@ class TestPipelineServiceRetry:
 
             run = await run_repo.create_run(pipeline_name="test")
             tr = await task_repo.create_task_run(
-                run_id=run.id, task_name="sub.t1", task_type="command",
+                run_id=run.id,
+                task_name="sub.t1",
+                task_type="command",
             )
             for v in range(1, 4):
                 r = await retry_repo.create_retry_record(
-                    run_id=run.id, task_run_id=tr.id,
-                    task_name="sub.t1", subpipeline_name="sub",
-                    retry_version=v, command=f"echo {v}",
-                    original_command=f"echo {v}", log_path=f"/tmp/{v}.log",
+                    run_id=run.id,
+                    task_run_id=tr.id,
+                    task_name="sub.t1",
+                    subpipeline_name="sub",
+                    retry_version=v,
+                    command=f"echo {v}",
+                    original_command=f"echo {v}",
+                    log_path=f"/tmp/{v}.log",
                 )
                 await retry_repo.update_retry_status(r.id, TaskStatus.SUCCESS, exit_code=0)
 
         service = PipelineService()
         result = await service.get_retry_versions(run.id)
         assert "sub.t1" in result["task_retries"]
-        assert len(result["task_retries"]["sub.t1"]) == 3
+        assert len(result["task_retries"]["sub.t1"]) == 4  # v0 + 3 retry versions
 
     async def test_retry_command_flow(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
@@ -448,10 +542,14 @@ class TestPipelineServiceRetry:
             run = await run_repo.create_run(pipeline_name="test", params=json.dumps({"var": "val"}))
             tr = await task_repo.create_task_run(run_id=run.id, task_name="sub.t1")
             record = await retry_repo.create_retry_record(
-                run_id=run.id, task_run_id=tr.id,
-                task_name="sub.t1", subpipeline_name="sub",
-                retry_version=1, command="${env.var}",
-                original_command="${env.var}", log_path="/tmp/x.log",
+                run_id=run.id,
+                task_run_id=tr.id,
+                task_name="sub.t1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="${env.var}",
+                original_command="${env.var}",
+                log_path="/tmp/x.log",
             )
 
         service = PipelineService()
@@ -468,7 +566,8 @@ class TestPipelineServiceRetry:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             run = await run_repo.create_run(
-                pipeline_name="deploy", pipeline_file="deploy.yaml",
+                pipeline_name="deploy",
+                pipeline_file="deploy.yaml",
             )
 
         service = PipelineService()
@@ -520,7 +619,8 @@ class TestRetryAPI:
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             run = await run_repo.create_run(
-                pipeline_name="deploy", pipeline_file="deploy.yaml",
+                pipeline_name="deploy",
+                pipeline_file="deploy.yaml",
             )
 
         resp = await client.get(f"/api/runs/{run.id}/retry/dependency-tree?task=sub.step1")
