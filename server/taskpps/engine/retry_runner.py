@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,11 +15,9 @@ from taskpps.events.bus import SIGNAL_RETRY_FINISHED, SIGNAL_RETRY_STARTED, get_
 from taskpps.executors import create_executor
 from taskpps.executors.agent_executor import AgentExecutor
 from taskpps.executors.base import ExecutorResult
-from taskpps.executors.invoke import InvokeExecutor
-from taskpps.executors.local import LocalExecutor
 from taskpps.executors.git import GitExecutor
+from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.nexus import NexusExecutor
-from taskpps.i18n import t
 from taskpps.models.run import TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -41,8 +38,16 @@ class RetryRunner:
         self.max_parallel = max_parallel
         self.execution_strategy = execution_strategy
         self._cancelled = False
+        self._running_executors: dict[str, Any] = {}
 
     async def retry_tasks(self, task_plan: list[dict]) -> dict[str, ExecutorResult]:
+        _active_retries[self.run_id] = self
+        try:
+            return await self._retry_tasks(task_plan)
+        finally:
+            _active_retries.pop(self.run_id, None)
+
+    async def _retry_tasks(self, task_plan: list[dict]) -> dict[str, ExecutorResult]:
         task_names = [tp["name"] for tp in task_plan]
         levels = self._build_qualified_levels(task_names)
         semaphore = asyncio.Semaphore(self.max_parallel or 10)
@@ -143,6 +148,7 @@ class RetryRunner:
 
         try:
             executor = create_executor(task, self.context.project_workdir)
+            self._running_executors[task_name] = executor
             if isinstance(executor, AgentExecutor):
                 executor.run_id = self.run_id
                 executor.task_name = task_name
@@ -155,6 +161,10 @@ class RetryRunner:
             except Exception:
                 pass
             last_result = ExecutorResult(exit_code=1, stderr=str(e))
+        finally:
+            executor = self._running_executors.pop(task_name, None)
+            if isinstance(executor, AgentExecutor):
+                executor.cleanup()
 
         retry_status = TaskStatus.SUCCESS if last_result.success else TaskStatus.FAILED
         if self._cancelled:
@@ -253,3 +263,12 @@ class RetryRunner:
 
     async def cancel(self) -> None:
         self._cancelled = True
+        for _name, executor in self._running_executors.items():
+            await executor.cancel()
+
+
+_active_retries: dict[str, RetryRunner] = {}
+
+
+def get_active_retry_runner(run_id: str) -> RetryRunner | None:
+    return _active_retries.get(run_id)

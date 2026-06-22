@@ -3,20 +3,18 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timezone
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from taskpps.config import build_retry_log_path
 from taskpps.db.engine import get_session_factory
-from taskpps.db.engine import get_session_factory as _real_session_factory
 from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext
-from taskpps.domain.dag import DAG
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.engine.retry_runner import RetryRunner
 from taskpps.executors.base import ExecutorResult
-from taskpps.models.run import PipelineRun, RunStatus, TaskRetryRecord, TaskRun, TaskStatus
+from taskpps.models.run import RunStatus, TaskStatus
 
 
 def _mock_session_factory():
@@ -329,6 +327,55 @@ class TestRetryRunner:
 
         assert "sub.t1" in results
         assert not results["sub.t1"].success
+
+    async def test_retry_cancels_running_executor(self):
+        """Issue #102: 取消进行中的重试时应终止正在执行的 executor。"""
+        tasks = [ResolvedTask(name="t1", task_type="command", command="sleep 10")]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_retry")
+
+        runner = RetryRunner(run_id="retry_cancel_running", pipeline=pipeline, context=ctx)
+        runner._update_record = AsyncMock()
+
+        started = asyncio.Event()
+        stop_event = asyncio.Event()
+        mock_executor = AsyncMock()
+
+        async def _long_execute(*_args, **_kwargs):
+            started.set()
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                return ExecutorResult(exit_code=0, stdout="ok")
+            return ExecutorResult(exit_code=-1, stdout="cancelled")
+
+        async def _cancel():
+            stop_event.set()
+
+        mock_executor.execute.side_effect = _long_execute
+        mock_executor.cancel = AsyncMock(side_effect=_cancel)
+
+        task_plan = [
+            {
+                "name": "sub.t1",
+                "command": "sleep 10",
+                "retry_record_id": "rec_1",
+                "log_path": "/tmp/cancel_running.log",
+            }
+        ]
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            retry_task = asyncio.create_task(runner.retry_tasks(task_plan))
+            await asyncio.wait_for(started.wait(), timeout=1)
+            await runner.cancel()
+            results = await asyncio.wait_for(retry_task, timeout=2)
+
+        assert "sub.t1" in results
+        assert not results["sub.t1"].success
+        mock_executor.cancel.assert_awaited_once()
 
     async def test_retry_sequential_strategy_runs_one_at_a_time(self):
         tasks = [
@@ -747,6 +794,34 @@ class TestPipelineServiceRetry:
         result = await service.get_retry_versions(run.id)
         assert "sub.t1" in result["task_retries"]
         assert len(result["task_retries"]["sub.t1"]) == 4  # v0 + 3 retry versions
+
+    async def test_cancel_retry_run(self, db_engine, clean_db):
+        """Issue #102: cancel_retry_run 应找到并取消活跃的 RetryRunner。"""
+        from taskpps.engine.retry_runner import _active_retries
+        from taskpps.services.pipeline_service import PipelineService
+
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            run = await run_repo.create_run(pipeline_name="test", pipeline_file="test.yaml")
+            task_repo = TaskRunRepository(session)
+            await task_repo.create_task_run(run_id=run.id, task_name="sub.t1", task_type="command")
+
+        service = PipelineService()
+        mock_runner = AsyncMock()
+        _active_retries[run.id] = mock_runner
+        try:
+            result = await service.cancel_retry_run(run.id)
+            assert result is True
+            mock_runner.cancel.assert_awaited_once()
+        finally:
+            _active_retries.pop(run.id, None)
+
+    async def test_cancel_retry_run_not_found(self, db_engine, clean_db):
+        """Issue #102: 运行不存在或无活跃重试时 cancel_retry_run 返回 False。"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        service = PipelineService()
+        assert await service.cancel_retry_run("nonexistent") is False
 
     async def test_retry_command_flow(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService

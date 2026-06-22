@@ -344,8 +344,11 @@ async def test_run_stats(app, setup_project, tmp_project, db_engine):
         assert "cancelled" in data
         assert "partial" in data
         assert data["total"] >= 2
-        # 新创建的运行默认为 pending 状态
-        assert data["pending"] >= 2
+        # 各状态计数之和应等于总数（不依赖具体状态，因为后台 runner 可能已让运行状态变化）
+        assert (
+            data["pending"] + data["running"] + data["success"] + data["failed"] + data["cancelled"] + data["partial"]
+            == data["total"]
+        )
 
 
 @pytest.mark.asyncio
@@ -366,3 +369,47 @@ async def test_run_stats_with_pipeline_filter(app, setup_project, tmp_project, d
         assert response.status_code == 200
         data = response.json()
         assert data["total"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_cancel_retry_run_api(app, setup_project, tmp_project, db_engine):
+    """Issue #102: 取消重试 API 在存在活跃 RetryRunner 时返回 200。"""
+    from unittest.mock import AsyncMock, patch
+
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        run_id = create_resp.json()["id"]
+
+        mock_runner = AsyncMock()
+        with patch("taskpps.services.pipeline_service.get_active_retry_runner", return_value=mock_runner):
+            response = await client.post(f"/api/runs/{run_id}/retry/cancel")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "cancelled"
+            assert data["run_id"] == run_id
+            mock_runner.cancel.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_cancel_retry_run_api_no_active_retry(app, setup_project, tmp_project, db_engine):
+    """Issue #102: 无活跃重试时取消重试 API 返回 404。"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        run_id = create_resp.json()["id"]
+
+        response = await client.post(f"/api/runs/{run_id}/retry/cancel")
+        assert response.status_code == 404

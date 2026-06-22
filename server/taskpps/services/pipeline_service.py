@@ -23,7 +23,7 @@ from taskpps.db.repository import ProjectRepository, RetryRecordRepository, RunR
 from taskpps.domain.context import ExecutionContext, apply_overrides
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
-from taskpps.engine.retry_runner import RetryRunner
+from taskpps.engine.retry_runner import RetryRunner, get_active_retry_runner
 from taskpps.engine.runner import PipelineRunner
 from taskpps.i18n import t
 from taskpps.loaders.pipeline_loader import PipelineLoader
@@ -466,6 +466,20 @@ class PipelineService:
                 return True
 
             return False
+
+    async def cancel_retry_run(self, run_id: str) -> bool:
+        """取消正在进行的重试运行（RetryRunner）。"""
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            if await run_repo.get_run(run_id) is None:
+                return False
+
+        runner = get_active_retry_runner(run_id)
+        if runner is None:
+            return False
+
+        await runner.cancel()
+        return True
 
     async def delete_run(self, run_id: str) -> bool:
         async with get_session_factory()() as session:

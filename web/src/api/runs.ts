@@ -203,6 +203,24 @@ export function useRetryRun() {
   });
 }
 
+/** 取消正在进行的重试 */
+export function useCancelRetryRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (runId: string) => {
+      const res = await apiClient.post<{ status: string; run_id: string }>(
+        `/api/runs/${runId}/retry/cancel`,
+      );
+      return res.data;
+    },
+    onSuccess: (_data, runId) => {
+      queryClient.invalidateQueries({ queryKey: ['run', runId] });
+      queryClient.invalidateQueries({ queryKey: ['retryVersions', runId] });
+    },
+  });
+}
+
 /** 获取历史运行时的流水线快照（执行时的版本） */
 export function usePipelineSnapshot(runId: string | undefined) {
   return useQuery<PipelineDetail>({

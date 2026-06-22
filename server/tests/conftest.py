@@ -3,7 +3,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
 from taskpps.db.engine import get_engine, reset_engine, set_engine
@@ -210,13 +210,17 @@ def setup_project(tmp_project):
 
 
 @pytest_asyncio.fixture
-async def db_engine():
+async def db_engine(tmp_path):
     mark_external_engine()
+    # 使用文件数据库 + NullPool，避免内存数据库在 engine.dispose() 后被销毁，
+    # 导致孤儿后台任务报 "no such table" 错误。每个测试有独立的临时文件，
+    # 仍然保持隔离性。
+    db_file = tmp_path / "test.db"
     engine = create_async_engine(
-        "sqlite+aiosqlite://",
+        f"sqlite+aiosqlite:///{db_file}",
         echo=False,
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+        poolclass=NullPool,
     )
     set_engine(engine)
     async with engine.begin() as conn:

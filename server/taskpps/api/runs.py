@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from taskpps.config import build_pipeline_log_path, build_retry_log_path, get_logs_dir
+from taskpps.config import build_pipeline_log_path, get_logs_dir
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.events.bus import (
@@ -26,7 +26,6 @@ from taskpps.schemas.run import (
     CreateRunRequest,
     DependencyTreeResponse,
     RetryCommandResponse,
-    RetryRecordResponse,
     RetryRequest,
     RetryVersionsResponse,
     RunListResponse,
@@ -43,7 +42,7 @@ _pipeline_service = PipelineService()
 
 
 def _yield_complete_lines(new_content: str):
-    u"""将文本按换行分割，只返回完整行（以 \\n 结尾），剥离 \\r。
+    """将文本按换行分割，只返回完整行（以 \\n 结尾），剥离 \\r。
 
     返回 (lines, advance)：
     - lines: 完整行列表（不含换行符，\\r 已剥离）
@@ -64,7 +63,7 @@ def _yield_complete_lines(new_content: str):
 
 
 def _decode_log_bytes(raw: bytes) -> str:
-    u"""解码日志字节，先尝试 UTF-8 再回退 GBK。
+    """解码日志字节，先尝试 UTF-8 再回退 GBK。
 
     日志文件可能由不同工具写入（如 Windows 下的 Robot Framework），
     编码可能是 UTF-8 或 GBK。先尝试 UTF-8 严格解码，失败则使用 GBK。
@@ -78,7 +77,7 @@ def _decode_log_bytes(raw: bytes) -> str:
 def _read_log_lines(
     log_path: Path, position: int = 0, include_partial: bool = False
 ) -> tuple[list[str], int]:
-    u"""从日志文件的字节位置读取行。
+    """从日志文件的字节位置读取行。
 
     处理 UTF-8 和 GBK 编码。include_partial=False 时只返回完整行（以 \\n 结尾），
     避免截断多字节字符；include_partial=True 时返回所有剩余内容（用于任务结束后的最终刷新）。
@@ -464,6 +463,15 @@ async def get_dependency_tree(run_id: str, task: str = Query(..., description="T
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/{run_id}/retry/cancel")
+async def cancel_retry_run(run_id: str):
+    """取消正在进行的重试运行。"""
+    success = await _pipeline_service.cancel_retry_run(run_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=t("Run not found or no retry in progress"))
+    return {"status": "cancelled", "run_id": run_id}
 
 
 # 以下是有动态 retry_id 的路由

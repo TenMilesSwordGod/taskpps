@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Drawer, Spin, Tag, Button, Empty, Modal, App, Tooltip } from 'antd';
-import { History, Clock, Eye, Star, FileText } from 'lucide-react';
+import { History, Clock, Eye, Star, FileText, XCircle } from 'lucide-react';
 import dayjs from 'dayjs';
-import { useRetryVersions, useSelectRetryReport, useRetryLogs } from '@/api/runs';
+import { useRetryVersions, useSelectRetryReport, useRetryLogs, useCancelRetryRun } from '@/api/runs';
 import { useRetrySSELogs } from './hooks/useRetrySSELogs';
 import type { RetryLogEntry } from './hooks/useRetrySSELogs';
 import StatusTag from '@/components/StatusTag';
@@ -39,6 +39,7 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
 
   const { data: versionsData, isLoading } = useRetryVersions(open ? runId : undefined);
   const selectReport = useSelectRetryReport();
+  const cancelRetryRun = useCancelRetryRun();
 
   const retryList = versionsData?.task_retries?.[taskName] ?? [];
   const selectedRetryId = versionsData?.selected?.[taskName] ?? null;
@@ -126,6 +127,7 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
                   : selectedRetryId === retry.id;
                 const isFailed = retry.status === 'failed';
                 const isRunning = retry.status === 'running';
+                const isActive = isRunning || retry.status === 'pending';
 
                 return (
                   <div
@@ -156,7 +158,29 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
                           </Tag>
                         )}
                       </div>
-                      {isRunning && <Spin size="small" />}
+                      {isActive && (
+                        <div className="flex items-center gap-2">
+                          <Spin size="small" />
+                          <Button
+                            size="small"
+                            danger
+                            type="text"
+                            icon={<XCircle size={13} />}
+                            loading={cancelRetryRun.isPending}
+                            onClick={async () => {
+                              try {
+                                await cancelRetryRun.mutateAsync(runId);
+                                message.success('已取消重试');
+                              } catch (e: unknown) {
+                                const msg = e instanceof Error ? e.message : '取消重试失败';
+                                message.error(msg);
+                              }
+                            }}
+                          >
+                            取消重试
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     {/* 时间 + 耗时 */}
