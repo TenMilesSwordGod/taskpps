@@ -679,17 +679,17 @@ class PipelineService:
             for r in retry_records
         ]
 
-        await runner.retry_tasks(task_plan)
-
-        refreshed: dict[str, Any] = {}
-        async with get_session_factory()() as session:
-            retry_repo = RetryRecordRepository(session)
-            for r in retry_records:
-                record = await retry_repo.get_retry_record(r.id)
-                if record:
-                    refreshed[r.id] = record
-                    if record.status == TaskStatus.SUCCESS:
+        # Issue #98: 重试在后台执行，API 立即返回，避免前端按钮一直转圈
+        async def _run_and_finalize():
+            await runner.retry_tasks(task_plan)
+            async with get_session_factory()() as session:
+                retry_repo = RetryRecordRepository(session)
+                for r in retry_records:
+                    record = await retry_repo.get_retry_record(r.id)
+                    if record and record.status == TaskStatus.SUCCESS:
                         await self._auto_select_latest_retry(session, run_id, r.task_name)
+
+        _retry_task = asyncio.create_task(_run_and_finalize())
 
         return {
             "run_id": run_id,
@@ -698,13 +698,7 @@ class PipelineService:
                     "id": r.id,
                     "task_name": r.task_name,
                     "retry_version": r.retry_version,
-                    "status": (
-                        refreshed[r.id].status.value
-                        if r.id in refreshed
-                        else r.status.value
-                        if hasattr(r.status, "value")
-                        else r.status
-                    ),
+                    "status": r.status.value if hasattr(r.status, "value") else r.status,
                     "command": r.command,
                     "log_path": r.log_path,
                 }

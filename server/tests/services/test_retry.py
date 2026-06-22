@@ -539,7 +539,8 @@ class TestRetryRunner:
 
 @pytest.mark.asyncio
 class TestPipelineServiceRetry:
-    async def test_retry_run_success_path(self, db_engine, clean_db):
+    async def test_retry_run_returns_immediately_with_pending_status(self, db_engine, clean_db):
+        """Issue #98: retry_run 应立即返回，重试在后台执行，记录状态为 PENDING。"""
         from taskpps.services.pipeline_service import PipelineService
 
         async with get_session_factory()() as session:
@@ -551,15 +552,9 @@ class TestPipelineServiceRetry:
                 pipeline_file="deploy.yaml",
                 params={"env": {"GLOBAL_VAR": "global_value"}},
             )
-            tr1 = await task_repo.create_task_run(
+            await task_repo.create_task_run(
                 run_id=run.id,
                 task_name="sub.step1",
-                task_type="command",
-                subpipeline_name="sub",
-            )
-            tr2 = await task_repo.create_task_run(
-                run_id=run.id,
-                task_name="sub.step2",
                 task_type="command",
                 subpipeline_name="sub",
             )
@@ -573,26 +568,36 @@ class TestPipelineServiceRetry:
         with patch.object(service, "_load_resolved_pipeline") as mock_load:
             mock_pipeline = MagicMock()
             mock_task1 = ResolvedTask(name="step1", task_type="command", command="echo hello")
-            mock_task2 = ResolvedTask(name="step2", task_type="command", command="echo world")
             from taskpps.domain.pipeline import ResolvedSubPipeline
             from taskpps.schemas.pipeline import PipelineConfig
 
-            mock_sub = ResolvedSubPipeline(name="sub", tasks=[mock_task1, mock_task2], config=PipelineConfig())
+            mock_sub = ResolvedSubPipeline(name="sub", tasks=[mock_task1], config=PipelineConfig())
             mock_pipeline.subpipelines = [mock_sub]
             mock_pipeline.top_config = PipelineConfig()
-            mock_pipeline.get_task_by_name.side_effect = lambda n: {"step1": mock_task1, "step2": mock_task2}.get(n)
+            mock_pipeline.get_task_by_name.side_effect = lambda n: {"step1": mock_task1}.get(n)
             mock_load.return_value = mock_pipeline
 
-            with patch.object(service, "_auto_select_latest_retry"):
+            with patch("taskpps.services.pipeline_service.RetryRunner") as mock_runner_cls:
+                mock_runner = AsyncMock()
+                mock_runner_cls.return_value = mock_runner
+
                 result = await service.retry_run(
                     run_id=run.id,
                     tasks=["sub.step1"],
                     include_upstream=False,
                 )
 
+                # 让后台任务有机会执行
+                await asyncio.sleep(0)
+
+        # API 应立即返回，不等待重试完成
         assert result["run_id"] == run.id
         assert len(result["retry_records"]) == 1
         assert result["retry_records"][0]["task_name"] == "sub.step1"
+        # 返回时状态应为 PENDING（重试在后台执行）
+        assert result["retry_records"][0]["status"] == "pending"
+        # 后台任务应被创建
+        mock_runner.retry_tasks.assert_awaited_once()
 
     async def test_retry_run_passes_execution_strategy(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
@@ -633,12 +638,14 @@ class TestPipelineServiceRetry:
             with patch("taskpps.services.pipeline_service.RetryRunner") as mock_runner_cls:
                 mock_runner = AsyncMock()
                 mock_runner_cls.return_value = mock_runner
-                with patch.object(service, "_auto_select_latest_retry"):
-                    await service.retry_run(
-                        run_id=run.id,
-                        tasks=["sub.step1"],
-                        retry_execution_strategy="sequential",
-                    )
+                await service.retry_run(
+                    run_id=run.id,
+                    tasks=["sub.step1"],
+                    retry_execution_strategy="sequential",
+                )
+
+                # 让后台任务有机会执行
+                await asyncio.sleep(0)
 
         mock_runner_cls.assert_called_once()
         call_kwargs = mock_runner_cls.call_args[1]
