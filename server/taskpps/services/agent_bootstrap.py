@@ -41,7 +41,21 @@ class AgentBootstrap:
         credential_id = agent_data.get("credential_id", "")
 
         if not host or host in ("localhost", "127.0.0.1", "::1"):
-            return {"success": True, "agent_pid": 0, "message": "local agent"}
+            # Issue #107: 本地 agent 也需要等待 WebSocket 握手完成
+            manager = AgentManager.instance()
+            if manager.is_connected(agent_id):
+                return {"success": True, "agent_pid": 0, "message": "local agent"}
+            deploy_started_at = time.time()
+            try:
+                await asyncio.wait_for(
+                    self._wait_for_handshake(manager, agent_id, deploy_started_at),
+                    timeout=BOOTSTRAP_TIMEOUT,
+                )
+                return {"success": True, "agent_pid": 0, "message": "local agent"}
+            except asyncio.TimeoutError:
+                raise AgentBootstrapError(
+                    t("Local agent '{id}' did not connect within {timeout}s", id=agent_id, timeout=BOOTSTRAP_TIMEOUT)
+                )
 
         username = None
         password = None

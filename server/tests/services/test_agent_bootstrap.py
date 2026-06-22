@@ -59,14 +59,49 @@ class TestAgentBootstrapErrors:
 class TestAgentBootstrapLocal:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "::1"])
-    async def test_local_host_returns_immediately(self, host):
-        """本机三种 host 都直接走 fast-path，不建立 SSH 连接。"""
+    async def test_local_host_already_connected_returns_immediately(self, host):
+        """本机 agent 已连接时直接走 fast-path 返回成功。"""
         bootstrap = AgentBootstrap()
         loader = MagicMock()
         loader.get.return_value = {"id": "local-agent", "host": host, "port": 22}
-        result = await bootstrap.bootstrap("local-agent", agent_loader=loader)
+        with patch.object(AgentManager, "instance") as mock_inst:
+            mock_manager = MagicMock()
+            mock_manager.is_connected.return_value = True
+            mock_inst.return_value = mock_manager
+            result = await bootstrap.bootstrap("local-agent", agent_loader=loader)
         assert result["success"] is True
         assert result["message"] == "local agent"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "::1"])
+    async def test_local_host_not_connected_waits_for_handshake(self, host):
+        """Issue #107: 本机 agent 未连接时等待 WebSocket 握手完成。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = {"id": "local-agent", "host": host, "port": 22}
+        with patch.object(AgentManager, "instance") as mock_inst:
+            mock_manager = MagicMock()
+            mock_manager.is_connected.return_value = False
+            mock_inst.return_value = mock_manager
+            with patch.object(bootstrap, "_wait_for_handshake", new=AsyncMock()):
+                result = await bootstrap.bootstrap("local-agent", agent_loader=loader)
+        assert result["success"] is True
+        assert result["message"] == "local agent"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "::1"])
+    async def test_local_host_handshake_timeout_raises(self, host):
+        """Issue #107: 本机 agent 未连接且握手超时时应抛错。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = {"id": "local-agent", "host": host, "port": 22}
+        with patch.object(AgentManager, "instance") as mock_inst:
+            mock_manager = MagicMock()
+            mock_manager.is_connected.return_value = False
+            mock_inst.return_value = mock_manager
+            with patch.object(bootstrap, "_wait_for_handshake", new=AsyncMock(side_effect=asyncio.TimeoutError())):
+                with pytest.raises(AgentBootstrapError, match="did not connect"):
+                    await bootstrap.bootstrap("local-agent", agent_loader=loader)
 
 
 class TestAgentBootstrapMissingAuth:
