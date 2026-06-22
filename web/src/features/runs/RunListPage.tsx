@@ -391,7 +391,7 @@ export default function RunListPage() {
           columns={columns}
           dataSource={filtered}
           loading={isLoading}
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条`, size: 'small' }}
+          pagination={{ pageSize: 12, showSizeChanger: true, pageSizeOptions: [12, 20, 50, 100], showTotal: (t) => `共 ${t} 条`, size: 'small' }}
           size="small"
           scroll={tableScrollY ? { y: tableScrollY } : undefined}
           onRow={(record) => ({

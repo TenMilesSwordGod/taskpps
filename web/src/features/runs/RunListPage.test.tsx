@@ -30,11 +30,13 @@ const mockUseRuns = vi.fn()
 const mockMutateAsync = vi.fn()
 const mockUseDeleteRun = vi.fn()
 const mockUseCleanRuns = vi.fn()
+const mockUseRunStats = vi.fn()
 
 vi.mock('@/api/runs', () => ({
   useRuns: (params?: unknown) => mockUseRuns(params),
   useDeleteRun: () => mockUseDeleteRun(),
   useCleanRuns: () => mockUseCleanRuns(),
+  useRunStats: () => mockUseRunStats(),
 }))
 
 vi.mock('@/components/StatusTag', () => ({
@@ -78,7 +80,9 @@ describe('<RunListPage /> Issue #55 - 删除弹窗自动关闭', () => {
     mockUseDeleteRun.mockReset()
     mockUseCleanRuns.mockReset()
     mockMutateAsync.mockReset()
+    mockUseRunStats.mockReset()
     mockUseCleanRuns.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+    mockUseRunStats.mockReturnValue({ data: { total: 0, pending: 0, running: 0, success: 0, failed: 0, cancelled: 0, partial: 0 } })
   })
 
   it('删除成功后弹窗自动关闭', async () => {
@@ -140,14 +144,59 @@ describe('<RunListPage /> Issue #55 - 删除弹窗自动关闭', () => {
   })
 })
 
+describe('<RunListPage /> Issue #95 - 自定义分页条数', () => {
+  beforeEach(() => {
+    mockUseRuns.mockReset()
+    mockUseDeleteRun.mockReset()
+    mockUseCleanRuns.mockReset()
+    mockMutateAsync.mockReset()
+    mockUseRunStats.mockReset()
+    mockUseDeleteRun.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+    mockUseCleanRuns.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+    mockUseRunStats.mockReturnValue({ data: { total: 0, pending: 0, running: 0, success: 0, failed: 0, cancelled: 0, partial: 0 } })
+  })
+
+  it('默认分页条数应为 12', async () => {
+    mockUseRuns.mockReturnValue({
+      data: { items: [makeRun({ id: 'r1' })] },
+      isLoading: false,
+    })
+    render(<RunListPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('运行历史')).toBeInTheDocument())
+    // 验证分页器存在且默认 pageSize 为 12
+    const pagination = document.querySelector('.ant-pagination')
+    expect(pagination).toBeTruthy()
+    // Ant Design 在 size="small" 时分页大小选择器显示 "12 条/页"
+    const pageSizeChanger = pagination?.querySelector('.ant-pagination-options-size-changer')
+    expect(pageSizeChanger).toBeTruthy()
+    expect(pageSizeChanger?.textContent).toContain('12')
+  })
+
+  it('应支持切换分页条数', async () => {
+    const items = Array.from({ length: 30 }, (_, i) => makeRun({ id: `r${i}`, pipeline_name: `Pipe${i}` }))
+    mockUseRuns.mockReturnValue({
+      data: { items },
+      isLoading: false,
+    })
+    render(<RunListPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('运行历史')).toBeInTheDocument())
+    // 验证分页大小选择器存在
+    const pageSizeSelector = document.querySelector('.ant-pagination-options-size-changer')
+    expect(pageSizeSelector).toBeTruthy()
+    expect(pageSizeSelector?.textContent).toContain('12')
+  })
+})
+
 describe('<RunListPage /> UI 优化 - 统计与过滤', () => {
   beforeEach(() => {
     mockUseRuns.mockReset()
     mockUseDeleteRun.mockReset()
     mockUseCleanRuns.mockReset()
     mockMutateAsync.mockReset()
+    mockUseRunStats.mockReset()
     mockUseDeleteRun.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
     mockUseCleanRuns.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+    mockUseRunStats.mockReturnValue({ data: { total: 0, pending: 0, running: 0, success: 0, failed: 0, cancelled: 0, partial: 0 } })
   })
 
   it('统计胶囊展示正确的计数', async () => {
@@ -162,6 +211,7 @@ describe('<RunListPage /> UI 优化 - 统计与过滤', () => {
       },
       isLoading: false,
     })
+    mockUseRunStats.mockReturnValue({ data: { total: 4, pending: 0, running: 1, success: 2, failed: 1, cancelled: 0, partial: 0 } })
     render(<RunListPage />, { wrapper: Wrapper })
     await waitFor(() => expect(screen.getByText('运行历史')).toBeInTheDocument())
     expect(screen.getByText('总计 4')).toBeInTheDocument()

@@ -39,6 +39,127 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
+describe('<PipelineProgressPopover /> Issue #94 - 悬浮窗优化', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  it('完成时间应携带月日（MM-DD HH:mm:ss 格式）', async () => {
+    const tasks = [
+      makeTask({
+        task_name: 'step1-init',
+        status: 'success',
+        finished_at: '2026-06-22T14:01:42Z',
+      }),
+    ]
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/runs/run-1') {
+        return { ok: true, json: async () => ({ tasks }) }
+      }
+      return { ok: false, json: async () => ({}) }
+    })
+
+    render(
+      <Wrapper>
+        <PipelineProgressPopover runId="run-1">
+          <span data-testid="trigger">hover me</span>
+        </PipelineProgressPopover>
+      </Wrapper>,
+    )
+
+    fireEvent.mouseEnter(screen.getByTestId('trigger'))
+
+    // 等待数据加载后，验证时间格式包含月日（MM-DD 前缀）
+    await waitFor(() => {
+      // dayjs 在不同时区可能输出不同时间，但格式一定是 MM-DD HH:mm:ss
+      const timeEl = document.querySelector('[data-testid="task-time"]')
+      expect(timeEl).toBeTruthy()
+      const text = timeEl?.textContent ?? ''
+      // 格式应为 MM-DD HH:mm:ss，即以两位月-两位日开头
+      expect(text).toMatch(/^\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    })
+  })
+
+  it('完成时间和状态图标应显示在任务名下方（非同行右侧）', async () => {
+    const tasks = [
+      makeTask({
+        task_name: 'step1-init',
+        status: 'success',
+        finished_at: '2026-06-22T14:01:42Z',
+      }),
+      makeTask({
+        id: 'task-2',
+        task_name: 'step2-build',
+        status: 'failed',
+        finished_at: '2026-06-22T14:05:00Z',
+      }),
+    ]
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/runs/run-1') {
+        return { ok: true, json: async () => ({ tasks }) }
+      }
+      return { ok: false, json: async () => ({}) }
+    })
+
+    render(
+      <Wrapper>
+        <PipelineProgressPopover runId="run-1">
+          <span data-testid="trigger">hover me</span>
+        </PipelineProgressPopover>
+      </Wrapper>,
+    )
+
+    fireEvent.mouseEnter(screen.getByTestId('trigger'))
+
+    await waitFor(() => {
+      expect(screen.getByText('step1-init')).toBeInTheDocument()
+    })
+
+    // 任务行应该是纵向布局（flex-direction: column），时间在任务名下方
+    const taskRows = document.querySelectorAll('[data-testid="task-row"]')
+    expect(taskRows.length).toBeGreaterThan(0)
+    for (const row of Array.from(taskRows)) {
+      const style = (row as HTMLElement).style
+      expect(style.flexDirection).toBe('column')
+    }
+  })
+
+  it('panel 内容区域高度应足够大以减少滚动条', async () => {
+    const tasks = [
+      makeTask({ task_name: 'step1-init', status: 'success', finished_at: '2026-06-22T14:01:42Z' }),
+    ]
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/runs/run-1') {
+        return { ok: true, json: async () => ({ tasks }) }
+      }
+      return { ok: false, json: async () => ({}) }
+    })
+
+    render(
+      <Wrapper>
+        <PipelineProgressPopover runId="run-1">
+          <span data-testid="trigger">hover me</span>
+        </PipelineProgressPopover>
+      </Wrapper>,
+    )
+
+    fireEvent.mouseEnter(screen.getByTestId('trigger'))
+
+    await waitFor(() => {
+      expect(screen.getByText('step1-init')).toBeInTheDocument()
+    })
+
+    // 验证内容区域 maxHeight >= 480
+    const scrollContainer = document.querySelector('[data-testid="task-list-scroll"]')
+    expect(scrollContainer).toBeTruthy()
+    const style = (scrollContainer as HTMLElement).style
+    expect(parseInt(style.maxHeight)).toBeGreaterThanOrEqual(480)
+  })
+})
+
 describe('<PipelineProgressPopover /> Issue #82 - 悬浮窗动态加载', () => {
   beforeEach(() => {
     mockFetch.mockReset()

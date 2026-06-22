@@ -122,7 +122,7 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
       )}
 
       {!loading && groups && groups.size > 0 && (
-        <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+        <div data-testid="task-list-scroll" style={{ maxHeight: 480, overflowY: 'auto' }}>
           {[...groups.entries()].map(([subpipeline, subTasks]) => (
             <div key={subpipeline} style={{ marginBottom: 8 }}>
               {/* 子流水线标题 */}
@@ -160,51 +160,56 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
               {subTasks.map((t) => (
                 <div
                   key={t.task_name}
+                  data-testid="task-row"
                   style={{
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
+                    flexDirection: 'column',
                     padding: '2px 0 2px 14px',
-                    fontSize: 12,
                   }}
                 >
-                  {/* 状态圆点：运行中用呼吸灯 */}
-                  <span
-                    className={t.status === 'running' ? 'breathing-dot' : undefined}
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: '50%',
-                      background: STATUS_COLOR[t.status],
-                      flexShrink: 0,
-                      ...(t.status === 'running' ? { animation: 'breathing 2s ease-in-out infinite' } : {}),
-                    }}
-                  />
-                  <span style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    color: STATUS_COLOR[t.status],
-                    flex: 1,
-                    userSelect: 'text',
-                  }}>
-                    {t.task_name.includes('.') ? t.task_name.split('.').pop() : t.task_name}
-                  </span>
-                  {/* 完成时间 */}
-                  {t.finished_at && (
-                    <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      {dayjs(t.finished_at).format('HH:mm:ss')}
+                  {/* 任务名行：状态圆点 + 名称 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                    {/* 状态圆点：运行中用呼吸灯 */}
+                    <span
+                      className={t.status === 'running' ? 'breathing-dot' : undefined}
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: '50%',
+                        background: STATUS_COLOR[t.status],
+                        flexShrink: 0,
+                        ...(t.status === 'running' ? { animation: 'breathing 2s ease-in-out infinite' } : {}),
+                      }}
+                    />
+                    <span style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      color: STATUS_COLOR[t.status],
+                      flex: 1,
+                      userSelect: 'text',
+                    }}>
+                      {t.task_name.includes('.') ? t.task_name.split('.').pop() : t.task_name}
                     </span>
-                  )}
-                  {/* 状态图标 */}
-                  {t.status === 'success' && (
-                    <Check size={12} color="#10b981" style={{ flexShrink: 0 }} />
-                  )}
-                  {t.status === 'failed' && (
-                    <X size={12} color="#ef4444" style={{ flexShrink: 0 }} />
-                  )}
-                  {t.status === 'running' && (
-                    <Loader2 size={12} color="#3b82f6" className="animate-spin" style={{ flexShrink: 0 }} />
+                  </div>
+                  {/* 时间和状态图标行：在任务名下方，字号更小 */}
+                  {(t.finished_at || t.status === 'success' || t.status === 'failed' || t.status === 'running') && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 11, fontSize: 10, color: '#9ca3af', marginTop: 1 }}>
+                      {t.finished_at && (
+                        <span data-testid="task-time" style={{ whiteSpace: 'nowrap' }}>
+                          {dayjs(t.finished_at).format('MM-DD HH:mm:ss')}
+                        </span>
+                      )}
+                      {t.status === 'success' && (
+                        <Check size={10} color="#10b981" style={{ flexShrink: 0 }} />
+                      )}
+                      {t.status === 'failed' && (
+                        <X size={10} color="#ef4444" style={{ flexShrink: 0 }} />
+                      )}
+                      {t.status === 'running' && (
+                        <Loader2 size={10} color="#3b82f6" className="animate-spin" style={{ flexShrink: 0 }} />
+                      )}
+                    </div>
                   )}
                 </div>
               ))}
