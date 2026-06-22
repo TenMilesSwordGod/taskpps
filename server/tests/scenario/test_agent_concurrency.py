@@ -581,3 +581,46 @@ class TestGlobalMaxConcurrent:
         )
 
         assert max_acquired <= 2, f"全局并发数不应超过2: max_acquired={max_acquired}"
+
+
+class TestMaxConcurrentTasksDefault:
+    """Issue #106: max_concurrent_tasks 默认值为5"""
+
+    @pytest.mark.asyncio
+    async def test_default_max_concurrent_tasks_is_5(self, db_engine, clean_db):
+        """未配置 max_concurrent_tasks 时，默认允许5个任务并发"""
+        _setup_config()
+
+        # 创建6个 task，默认 max_concurrent_tasks=5
+        tasks = [ResolvedTask(name=f"task-{i}", task_type="command", command=f"echo {i}") for i in range(6)]
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel"),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="default-limit", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="default-limit-1")
+        runner = PipelineRunner(run_id="default-limit-1", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {f"sub.task-{i}": f"tr-{i}" for i in range(6)}
+
+        concurrent_count = 0
+        max_concurrent = 0
+
+        async def fake_execute_task_inner(task, sub_name=""):
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.05)
+            concurrent_count -= 1
+            return ExecutorResult(exit_code=0)
+
+        with (
+            patch.object(runner, "_execute_task_inner", side_effect=fake_execute_task_inner),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        # 默认5个并发，6个task中最多5个同时执行
+        assert max_concurrent <= 5, f"默认max_concurrent_tasks=5，但实际并发={max_concurrent}"
+        assert max_concurrent >= 2, f"应有并发执行，但实际并发={max_concurrent}"

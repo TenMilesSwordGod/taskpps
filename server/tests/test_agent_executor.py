@@ -402,3 +402,27 @@ class TestGlobalConcurrency:
         manager.configure_global_max_concurrent(5)
         assert manager._global_semaphore._value == 5
         assert manager._global_max_concurrent == 5
+
+    @pytest.mark.asyncio
+    async def test_execute_acquires_and_releases_global_semaphore(self, manager, log_path):
+        """AgentExecutor.execute() 应获取和释放全局信号量"""
+        manager.configure_global_max_concurrent(1)
+        assert manager._global_semaphore._value == 1
+
+        executor = AgentExecutor("agent-1", manager, {"max_parallel": 1})
+        executor.run_id = "run-global"
+        executor.task_name = "global-task"
+
+        def patched_create_pending(agent_id, command_id, **kwargs):
+            loop = asyncio.get_running_loop()
+            fut = loop.create_future()
+            fut.set_result({"exit_code": 0, "signal_name": "", "error": ""})
+            return fut
+
+        manager.create_pending = patched_create_pending
+        manager.promote_command_to_running = MagicMock()
+
+        result = await executor.execute("echo hello", {}, log_path)
+        assert result.exit_code == 0
+        # 全局信号量应已释放
+        assert manager._global_semaphore._value == 1
