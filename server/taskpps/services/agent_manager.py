@@ -138,6 +138,11 @@ class AgentManager:
         self._active = True
         # Issue #78: per-agent 信号量，限制并发命令数
         self._agent_semaphores: dict[str, asyncio.Semaphore] = {}
+        # Issue #106: 记录每个 agent 的 max_parallel 配置值，用于信号量升级
+        self._agent_max_parallel: dict[str, int] = {}
+        # Issue #106: 全局并发信号量
+        self._global_semaphore: asyncio.Semaphore | None = None
+        self._global_max_concurrent: int = 0
 
     @classmethod
     def instance(cls) -> AgentManager:
@@ -288,6 +293,7 @@ class AgentManager:
         return self._connections.get(agent_id)
 
     # Issue #78: per-agent 并发控制
+    # Issue #106: 支持信号量升级和全局并发限制
     async def acquire_agent(self, agent_id: str, max_parallel: int = 1, timeout: float = 300) -> None:
         """获取 agent 的执行槽位。如果 agent 已满，等待直到有空位或超时。
 
@@ -299,8 +305,17 @@ class AgentManager:
         Raises:
             TimeoutError: 等待超时
         """
-        if agent_id not in self._agent_semaphores:
-            self._agent_semaphores[agent_id] = asyncio.Semaphore(max_parallel)
+        # Issue #106: 信号量升级 - 如果新传入的 max_parallel 大于已记录的值，增加信号量容量
+        current_max = self._agent_max_parallel.get(agent_id, 0)
+        if max_parallel > current_max:
+            self._agent_max_parallel[agent_id] = max_parallel
+            if agent_id in self._agent_semaphores:
+                # 通过 release() 增加信号量的容量，不影响正在等待的 acquire 调用
+                for _ in range(max_parallel - current_max):
+                    self._agent_semaphores[agent_id].release()
+            else:
+                self._agent_semaphores[agent_id] = asyncio.Semaphore(max_parallel)
+
         sem = self._agent_semaphores[agent_id]
         if timeout <= 0:
             if not sem.locked() and sem._value > 0:
@@ -318,6 +333,46 @@ class AgentManager:
         sem = self._agent_semaphores.get(agent_id)
         if sem:
             sem.release()
+
+    # Issue #106: 全局并发限制
+    async def acquire_global(self, timeout: float = 300) -> None:
+        """获取全局并发槽位。如果全局并发数已满，等待直到有空位或超时。
+
+        Args:
+            timeout: 等待超时（秒）
+
+        Raises:
+            TimeoutError: 等待超时
+        """
+        if self._global_semaphore is None:
+            return
+        try:
+            await asyncio.wait_for(self._global_semaphore.acquire(), timeout=timeout)
+        except asyncio.TimeoutError:
+            raise TimeoutError(t("Global concurrency limit reached, queue timeout ({timeout}s)", timeout=timeout))
+
+    def release_global(self) -> None:
+        """释放全局并发槽位。"""
+        if self._global_semaphore:
+            self._global_semaphore.release()
+
+    def configure_global_max_concurrent(self, max_concurrent: int) -> None:
+        """配置全局并发限制。0 表示无限制。
+
+        仅在值增大时升级信号量容量，不会缩小。
+        """
+        if max_concurrent <= 0:
+            self._global_semaphore = None
+            self._global_max_concurrent = 0
+            return
+        if max_concurrent > self._global_max_concurrent:
+            if self._global_semaphore is not None:
+                # 通过 release() 增加容量
+                for _ in range(max_concurrent - self._global_max_concurrent):
+                    self._global_semaphore.release()
+            else:
+                self._global_semaphore = asyncio.Semaphore(max_concurrent)
+            self._global_max_concurrent = max_concurrent
 
     async def send_command(
         self, agent_id: str, command_id: str, command: str, env: dict[str, str], cwd: str, timeout: int

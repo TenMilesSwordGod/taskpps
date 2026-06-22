@@ -209,6 +209,11 @@ def _merge_config(top: PipelineConfig, override: PipelineConfig | None) -> Pipel
         execution_strategy=override.execution_strategy
         if override.execution_strategy != "sequential" or top.execution_strategy == "sequential"
         else top.execution_strategy,
-        max_parallel=override.max_parallel if override.max_parallel is not None else top.max_parallel,
+        max_concurrent_runs=override.max_concurrent_runs
+        if override.max_concurrent_runs is not None
+        else top.max_concurrent_runs,
+        max_concurrent_tasks=override.max_concurrent_tasks
+        if override.max_concurrent_tasks is not None
+        else top.max_concurrent_tasks,
         cwd=override.cwd if override.cwd is not None else top.cwd,
     )

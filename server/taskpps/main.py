@@ -114,6 +114,14 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _recover_stale_runs()
 
+    # Issue #106: 初始化全局并发信号量
+    from taskpps.services.agent_manager import AgentManager
+
+    global_max = settings.executor.global_max_concurrent
+    if global_max > 0:
+        AgentManager.instance().configure_global_max_concurrent(global_max)
+        logger.info("Global max concurrent tasks: %d", global_max)
+
     _plugin_manager = PluginManager()
     _plugin_manager.discover_plugins()
     _plugin_manager.start_triggers()

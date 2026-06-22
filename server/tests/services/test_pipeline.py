@@ -123,39 +123,42 @@ class TestPipelineService:
         assert len(result["items"]) >= 3
 
     @pytest.mark.asyncio
-    async def test_max_parallel_sequential_enforced(self, setup_project, tmp_project, db_engine):
-        # Two sequential create_run calls for a pipeline with max_parallel: 1
-        # must result in the second one being rejected. See issue #11.
+    async def test_max_concurrent_runs_sequential_enforced(self, setup_project, tmp_project, db_engine):
+        # Two sequential create_run calls for a pipeline with max_concurrent_runs: 1
+        # must result in the second one being rejected. See issue #11/#106.
         import taskpps.config as cfg
 
         cfg._project_root = tmp_project
         cfg._settings = None
         cfg.load_settings(str(tmp_project / "taskpps.yaml"))
         pipelines_dir = tmp_project / "pipelines"
-        (pipelines_dir / "max_parallel.yaml").write_text(
-            "name: max_parallel\noptions:\n  max_parallel: 1\ntasks:\n  - name: t\n    command: echo ok\n"
+        (pipelines_dir / "max_concurrent_runs.yaml").write_text(
+            "name: max_concurrent_runs\noptions:\n  max_concurrent_runs: 1\ntasks:\n  - name: t\n    command: sleep 30\n"
         )
         svc = PipelineService()
-        first = await svc.create_run("max_parallel.yaml")
+        first = await svc.create_run("max_concurrent_runs.yaml")
         assert "id" in first
 
-        with pytest.raises(ValueError, match="max_parallel"):
-            await svc.create_run("max_parallel.yaml")
+        with pytest.raises(ValueError, match="max_concurrent_runs"):
+            await svc.create_run("max_concurrent_runs.yaml")
+
+        # 清理：取消第一个 run
+        await svc.cancel_run(first["id"])
 
     @pytest.mark.asyncio
-    async def test_max_parallel_concurrent_race(self, setup_project, tmp_project, db_engine):
+    async def test_max_concurrent_runs_concurrent_race(self, setup_project, tmp_project, db_engine):
         # Two truly concurrent create_run calls for a pipeline with
-        # max_parallel: 1 must result in exactly one success and one
+        # max_concurrent_runs: 1 must result in exactly one success and one
         # ValueError. The fix uses a per-pipeline asyncio.Lock; without it
-        # the count + create would be a check-then-act race. See issue #11.
+        # the count + create would be a check-then-act race. See issue #11/#106.
         import taskpps.config as cfg
 
         cfg._project_root = tmp_project
         cfg._settings = None
         cfg.load_settings(str(tmp_project / "taskpps.yaml"))
         pipelines_dir = tmp_project / "pipelines"
-        (pipelines_dir / "max_parallel.yaml").write_text(
-            "name: max_parallel\noptions:\n  max_parallel: 1\ntasks:\n  - name: t\n    command: echo ok\n"
+        (pipelines_dir / "max_concurrent_runs.yaml").write_text(
+            "name: max_concurrent_runs\noptions:\n  max_concurrent_runs: 1\ntasks:\n  - name: t\n    command: sleep 30\n"
         )
 
         # Clear the per-pipeline lock so a previous test cannot serialize us.
@@ -165,7 +168,7 @@ class TestPipelineService:
 
         async def go() -> str:
             try:
-                r = await svc.create_run("max_parallel.yaml")
+                r = await svc.create_run("max_concurrent_runs.yaml")
                 return r["id"]
             except ValueError:
                 return "rejected"
@@ -176,6 +179,34 @@ class TestPipelineService:
         rejections = [r for r in results if r == "rejected"]
         assert len(successes) == 1, f"expected 1 success, got {results}"
         assert len(rejections) == 1, f"expected 1 rejection, got {results}"
+
+        # 清理
+        for r in results:
+            if isinstance(r, str) and r != "rejected":
+                await svc.cancel_run(r)
+
+    @pytest.mark.asyncio
+    async def test_max_parallel_backward_compat(self, setup_project, tmp_project, db_engine):
+        """Issue #106: YAML 中写 max_parallel 仍能正常工作（向后兼容）"""
+        import taskpps.config as cfg
+
+        cfg._project_root = tmp_project
+        cfg._settings = None
+        cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+        pipelines_dir = tmp_project / "pipelines"
+        (pipelines_dir / "max_parallel_compat.yaml").write_text(
+            "name: max_parallel_compat\noptions:\n  max_parallel: 1\ntasks:\n  - name: t\n    command: sleep 30\n"
+        )
+        svc = PipelineService()
+        first = await svc.create_run("max_parallel_compat.yaml")
+        assert "id" in first
+
+        # 第二次应该被拒绝（max_parallel 映射到 max_concurrent_runs=1）
+        with pytest.raises(ValueError, match="max_concurrent_runs"):
+            await svc.create_run("max_parallel_compat.yaml")
+
+        # 清理
+        await svc.cancel_run(first["id"])
 
     @pytest.mark.asyncio
     async def test_cancel_nonexistent(self, tmp_project, db_engine):
@@ -380,12 +411,7 @@ class TestPipelineServiceMore:
         other_pipelines = other_project / "pipelines"
         other_pipelines.mkdir(parents=True, exist_ok=True)
         other_project_yaml = other_pipelines / "other_deploy.yaml"
-        other_project_yaml.write_text(
-            "name: other_deploy\n"
-            "tasks:\n"
-            "  - name: step1\n"
-            "    command: echo other\n"
-        )
+        other_project_yaml.write_text("name: other_deploy\ntasks:\n  - name: step1\n    command: echo other\n")
         other_config = other_project / "taskpps.yaml"
         other_config.write_text("server:\n  host: 127.0.0.1\n  port: 26521\n")
 
@@ -595,33 +621,41 @@ class TestExtractEnvOverrides:
 
     def test_dotpath_overrides_nested(self):
         """dot-path 优先级高于 nested（后 update 覆盖）"""
-        result = _extract_env_overrides({
-            "config": {"env": {"K": "old"}},
-            "config.env": {"K": "new"},
-        })
+        result = _extract_env_overrides(
+            {
+                "config": {"env": {"K": "old"}},
+                "config.env": {"K": "new"},
+            }
+        )
         assert result == {"K": "new"}
 
     def test_task_env_dotpath(self):
         """task 级别 env override"""
-        result = _extract_env_overrides({
-            'tasks["step1"].env': {"TASK_KEY": "val"},
-        })
+        result = _extract_env_overrides(
+            {
+                'tasks["step1"].env': {"TASK_KEY": "val"},
+            }
+        )
         assert result == {"TASK_KEY": "val"}
 
     def test_config_and_task_env_merged(self):
         """config env + task env 合并"""
-        result = _extract_env_overrides({
-            "config.env": {"GLOBAL": "g"},
-            'tasks["step1"].env': {"TASK": "t"},
-        })
+        result = _extract_env_overrides(
+            {
+                "config.env": {"GLOBAL": "g"},
+                'tasks["step1"].env': {"TASK": "t"},
+            }
+        )
         assert result == {"GLOBAL": "g", "TASK": "t"}
 
     def test_task_env_overrides_config(self):
         """task env 覆盖同名 config env"""
-        result = _extract_env_overrides({
-            "config.env": {"K": "config_val"},
-            'tasks["step1"].env': {"K": "task_val"},
-        })
+        result = _extract_env_overrides(
+            {
+                "config.env": {"K": "config_val"},
+                'tasks["step1"].env': {"K": "task_val"},
+            }
+        )
         assert result == {"K": "task_val"}
 
     def test_nested_config_not_dict(self):
@@ -633,8 +667,10 @@ class TestExtractEnvOverrides:
         assert result == {}
 
     def test_ignores_non_env_dotpath_keys(self):
-        result = _extract_env_overrides({
-            "options.timeout": 120,
-            "config.retry": 3,
-        })
+        result = _extract_env_overrides(
+            {
+                "options.timeout": 120,
+                "config.retry": 3,
+            }
+        )
         assert result == {}

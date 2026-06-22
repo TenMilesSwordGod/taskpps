@@ -127,12 +127,26 @@ class AgentExecutor(BaseExecutor):
         # Issue #78: 获取 agent 执行槽位，排队等待
         max_parallel = (self._agent_data or {}).get("max_parallel", 1)
         queue_timeout = get_settings().executor.agent_queue_timeout
+
+        # Issue #106: 获取全局并发槽位
+        global_acquired = False
+        try:
+            await self._manager.acquire_global(queue_timeout)
+            global_acquired = True
+        except TimeoutError as e:
+            self._log(log_path, f"[ERROR] Global concurrency limit reached: {e}\n")
+            self._manager.cleanup_command(self._agent_id, command_id)
+            return ExecutorResult(exit_code=-1, stderr=str(e))
+
         try:
             await self._manager.acquire_agent(self._agent_id, max_parallel, queue_timeout)
             self._slot_acquired = True
         except TimeoutError as e:
             self._log(log_path, f"[ERROR] Agent slot acquisition failed: {e}\n")
             self._manager.cleanup_command(self._agent_id, command_id)
+            if global_acquired:
+                self._manager.release_global()
+                global_acquired = False
             return ExecutorResult(exit_code=-1, stderr=str(e))
 
         # 获得槽位后提升为 running
@@ -144,6 +158,8 @@ class AgentExecutor(BaseExecutor):
             if self._slot_acquired:
                 self._manager.release_agent(self._agent_id)
                 self._slot_acquired = False
+            if global_acquired:
+                self._manager.release_global()
 
     async def _execute_command(
         self,

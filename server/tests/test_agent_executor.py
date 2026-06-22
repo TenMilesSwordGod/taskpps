@@ -1,5 +1,7 @@
 """Issue #78: agent 占用排队+超时 + 断开等待重启+超时 测试"""
+
 import asyncio
+import contextlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -251,3 +253,152 @@ class TestExecutorSemaphore:
         assert result.exit_code == -1
         assert "not connected" in result.stderr.lower()
         assert "agent-1" not in manager._agent_semaphores
+
+
+class TestAgentSemaphoreUpgrade:
+    """Issue #106: agent 信号量升级测试"""
+
+    @pytest.mark.asyncio
+    async def test_semaphore_upgrade_from_1_to_3(self, manager, log_path):
+        """信号量从1升级到3：应增加容量而不影响已持有的槽位"""
+        # 初始 max_parallel=1
+        await manager.acquire_agent("agent-1", max_parallel=1, timeout=5)
+        assert manager._agent_semaphores["agent-1"]._value == 0
+        assert manager._agent_max_parallel["agent-1"] == 1
+
+        # 升级到 max_parallel=3
+        await manager.acquire_agent("agent-1", max_parallel=3, timeout=5)
+        # 信号量容量应增加到3，已持有2个，剩余1个
+        assert manager._agent_max_parallel["agent-1"] == 3
+        assert manager._agent_semaphores["agent-1"]._value == 1
+
+        # 第3个槽位也能获取
+        await manager.acquire_agent("agent-1", max_parallel=3, timeout=5)
+        assert manager._agent_semaphores["agent-1"]._value == 0
+
+        # 释放所有
+        manager.release_agent("agent-1")
+        manager.release_agent("agent-1")
+        manager.release_agent("agent-1")
+        assert manager._agent_semaphores["agent-1"]._value == 3
+
+    @pytest.mark.asyncio
+    async def test_semaphore_no_downgrade(self, manager, log_path):
+        """max_parallel 变小不应缩小信号量容量"""
+        await manager.acquire_agent("agent-1", max_parallel=3, timeout=5)
+        # 尝试用更小的 max_parallel 获取，不应缩小容量
+        await manager.acquire_agent("agent-1", max_parallel=1, timeout=5)
+        assert manager._agent_max_parallel["agent-1"] == 3  # 保持最大值
+        manager.release_agent("agent-1")
+        manager.release_agent("agent-1")
+
+    @pytest.mark.asyncio
+    async def test_semaphore_upgrade_does_not_affect_waiters(self, manager, log_path):
+        """信号量升级不影响正在等待的 acquire 调用"""
+        # 初始 max_parallel=1，占满
+        await manager.acquire_agent("agent-1", max_parallel=1, timeout=5)
+
+        # 启动一个等待的 acquire
+        acquired = asyncio.Event()
+
+        async def wait_and_acquire():
+            await manager.acquire_agent("agent-1", max_parallel=1, timeout=5)
+            acquired.set()
+
+        task = asyncio.create_task(wait_and_acquire())
+        await asyncio.sleep(0.05)
+        assert not acquired.is_set()
+
+        # 升级信号量到3，等待者应能获取
+        # 注意：这里用 max_parallel=3 触发升级
+        await manager.acquire_agent("agent-1", max_parallel=3, timeout=5)
+
+        # 等待者应该已经获取到了
+        await asyncio.sleep(0.05)
+        assert acquired.is_set()
+
+        # 清理
+        manager.release_agent("agent-1")
+        manager.release_agent("agent-1")
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+class TestGlobalConcurrency:
+    """Issue #106: 全局并发限制测试"""
+
+    @pytest.mark.asyncio
+    async def test_global_semaphore_acquire_release(self, manager, log_path):
+        """全局信号量获取和释放"""
+        manager.configure_global_max_concurrent(2)
+        assert manager._global_semaphore is not None
+        assert manager._global_max_concurrent == 2
+
+        await manager.acquire_global(timeout=5)
+        assert manager._global_semaphore._value == 1
+
+        await manager.acquire_global(timeout=5)
+        assert manager._global_semaphore._value == 0
+
+        manager.release_global()
+        assert manager._global_semaphore._value == 1
+
+        manager.release_global()
+        assert manager._global_semaphore._value == 2
+
+    @pytest.mark.asyncio
+    async def test_global_semaphore_zero_means_no_limit(self, manager, log_path):
+        """global_max_concurrent=0 表示无限制"""
+        manager.configure_global_max_concurrent(0)
+        assert manager._global_semaphore is None
+
+        # acquire_global 应该立即返回
+        await manager.acquire_global(timeout=5)
+
+    @pytest.mark.asyncio
+    async def test_global_semaphore_blocks_when_full(self, manager, log_path):
+        """全局信号量满时排队等待"""
+        manager.configure_global_max_concurrent(1)
+        await manager.acquire_global(timeout=5)
+
+        acquired = asyncio.Event()
+
+        async def wait_and_acquire():
+            await manager.acquire_global(timeout=5)
+            acquired.set()
+
+        task = asyncio.create_task(wait_and_acquire())
+        await asyncio.sleep(0.05)
+        assert not acquired.is_set()
+
+        manager.release_global()
+        await asyncio.sleep(0.05)
+        assert acquired.is_set()
+
+        manager.release_global()
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    @pytest.mark.asyncio
+    async def test_global_semaphore_timeout(self, manager, log_path):
+        """全局信号量超时"""
+        manager.configure_global_max_concurrent(1)
+        await manager.acquire_global(timeout=5)
+
+        with pytest.raises(TimeoutError):
+            await manager.acquire_global(timeout=0.1)
+
+        manager.release_global()
+
+    @pytest.mark.asyncio
+    async def test_configure_global_max_concurrent_upgrade(self, manager, log_path):
+        """全局信号量升级"""
+        manager.configure_global_max_concurrent(2)
+        assert manager._global_semaphore._value == 2
+
+        # 升级到5
+        manager.configure_global_max_concurrent(5)
+        assert manager._global_semaphore._value == 5
+        assert manager._global_max_concurrent == 5

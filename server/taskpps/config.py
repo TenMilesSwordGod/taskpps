@@ -35,6 +35,8 @@ class ExecutorConfig(BaseModel):
     agent_queue_timeout: int = 300
     # Issue #78: agent 断连等待重连超时（秒），0 表示不等待直接失败
     agent_offline_timeout: int = 300
+    # Issue #106: 全局并发限制（0 表示无限制）
+    global_max_concurrent: int = 0
 
 
 class PluginsConfig(BaseModel):
@@ -293,7 +295,9 @@ def build_legacy_log_path(pipeline_file: str, run_id: str, task_run_id: str) -> 
     return log_dir / "task.log"
 
 
-def build_retry_log_path(pipeline_id: str, pipeline_version: str, run_id: str, task_name: str, retry_version: int) -> Path:
+def build_retry_log_path(
+    pipeline_id: str, pipeline_version: str, run_id: str, task_name: str, retry_version: int
+) -> Path:
     base = get_logs_dir() / pipeline_id / f"v_{pipeline_version}" / "builds" / run_id
     retry_dir = base / "retries"
     retry_dir.mkdir(parents=True, exist_ok=True)

@@ -80,12 +80,16 @@ class PipelineRunner:
         self._cancel_signal_path: Path | None = None
         self._start_time: datetime | None = None
         self._error_messages: list[str] = []
+        # Issue #106: per-pipeline 并发任务数信号量
+        self._task_semaphore: asyncio.Semaphore | None = None
 
     def _init_cancel_signal_path(self) -> None:
         if self._pipeline_id:
             logs_dir = get_logs_dir()
             v = self._pipeline_version or "unknown"
-            self._cancel_signal_path = logs_dir / self._pipeline_id / f"v_{v}" / "builds" / self.run_id / ".cancel-requested"
+            self._cancel_signal_path = (
+                logs_dir / self._pipeline_id / f"v_{v}" / "builds" / self.run_id / ".cancel-requested"
+            )
 
     def _check_cancel_signal(self) -> bool:
         if self._cancelled:
@@ -104,7 +108,9 @@ class PipelineRunner:
     def _init_pipeline_log(self) -> None:
         """Initialize pipeline-level console.log for runtime logging."""
         if self._pipeline_id:
-            self._pipeline_log_path = build_pipeline_log_path(self._pipeline_id, self._pipeline_version or "", self.run_id)
+            self._pipeline_log_path = build_pipeline_log_path(
+                self._pipeline_id, self._pipeline_version or "", self.run_id
+            )
 
             with open(self._pipeline_log_path, "w") as f:
                 f.write(f"{'=' * 80}\n")
@@ -183,8 +189,10 @@ class PipelineRunner:
                     run_repo = RunRepository(session)
                     end_time = datetime.now(timezone.utc)
                     await run_repo.update_run_status(
-                        self.run_id, RunStatus.SUCCESS,
-                        started_at=self._start_time, finished_at=end_time,
+                        self.run_id,
+                        RunStatus.SUCCESS,
+                        started_at=self._start_time,
+                        finished_at=end_time,
                     )
             finally:
                 _active_runs.pop(self.run_id, None)
@@ -194,6 +202,12 @@ class PipelineRunner:
         self._start_time = datetime.now(timezone.utc)
         self._init_pipeline_log()
         self._init_cancel_signal_path()
+
+        # Issue #106: 初始化 per-pipeline 并发任务数信号量
+        max_concurrent_tasks = self.pipeline.top_config.max_concurrent_tasks
+        if not isinstance(max_concurrent_tasks, int) or max_concurrent_tasks <= 0:
+            max_concurrent_tasks = 5
+        self._task_semaphore = asyncio.Semaphore(max_concurrent_tasks)
 
         logger.info("PipelineRunner: starting pipeline '%s' run_id=%s", self.pipeline.name, self.run_id)
 
@@ -385,7 +399,9 @@ class PipelineRunner:
                         finished_at=datetime.now(timezone.utc),
                     )
             except Exception:
-                logger.exception("PipelineRunner: failed to set fallback terminal status for tasks in run %s", self.run_id)
+                logger.exception(
+                    "PipelineRunner: failed to set fallback terminal status for tasks in run %s", self.run_id
+                )
 
             self._cleanup_cancel_signal()
             _active_runs.pop(self.run_id, None)
@@ -568,7 +584,11 @@ class PipelineRunner:
             self._write_pipeline_log(f"SUB:{sub_name}:TEARDOWN", "")
             self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' finished")
             self._write_separator("=", f"[subpipeline] {sub_name} end")
-            return {"success": False, "failed_tasks": list(failed_tasks), "error": "; ".join(task_error_details) if task_error_details else ""}
+            return {
+                "success": False,
+                "failed_tasks": list(failed_tasks),
+                "error": "; ".join(task_error_details) if task_error_details else "",
+            }
 
         self._write_pipeline_log(
             "SUCCESS",
@@ -580,6 +600,16 @@ class PipelineRunner:
         return {"success": True}
 
     async def _execute_task(self, task: ResolvedTask, sub_name: str = "") -> ExecutorResult:
+        # Issue #106: 获取 per-pipeline 并发槽位
+        if self._task_semaphore:
+            await self._task_semaphore.acquire()
+        try:
+            return await self._execute_task_inner(task, sub_name)
+        finally:
+            if self._task_semaphore:
+                self._task_semaphore.release()
+
+    async def _execute_task_inner(self, task: ResolvedTask, sub_name: str = "") -> ExecutorResult:
         event_bus = get_event_bus()
 
         qualified_name = f"{sub_name}.{task.name}" if sub_name else task.name

@@ -76,7 +76,7 @@ def _extract_env_overrides(params: dict[str, Any]) -> dict[str, str]:
 
 
 class PipelineService:
-    # Per-pipeline asyncio.Lock to make the max_parallel check and run
+    # Per-pipeline asyncio.Lock to make the max_concurrent_runs check and run
     # creation atomic within a single event loop. The dict is class-level
     # so it is shared across PipelineService instances within one process.
     # NOTE: with gunicorn's multi-worker setup, this only protects against
@@ -202,16 +202,16 @@ class PipelineService:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
 
-            # Enforce max_parallel (atomic with run creation under the per-pipeline lock)
-            max_parallel = resolved.top_config.max_parallel
-            if max_parallel is not None and max_parallel > 0:
+            # Enforce max_concurrent_runs (atomic with run creation under the per-pipeline lock)
+            max_concurrent_runs = resolved.top_config.max_concurrent_runs
+            if max_concurrent_runs is not None and max_concurrent_runs > 0:
                 active_count = await run_repo.count_runs(pipeline_id=pipeline_id, status="running")
                 active_count += await run_repo.count_runs(pipeline_id=pipeline_id, status="pending")
-                if active_count >= max_parallel:
+                if active_count >= max_concurrent_runs:
                     raise ValueError(
                         t(
-                            "Cannot start pipeline: max_parallel={max} reached ({active} active runs)",
-                            max=max_parallel,
+                            "Cannot start pipeline: max_concurrent_runs={max} reached ({active} active runs)",
+                            max=max_concurrent_runs,
                             active=active_count,
                         )
                     )
@@ -660,12 +660,12 @@ class PipelineService:
                 )
                 retry_records.append(record)
 
-        max_parallel = resolved.top_config.max_parallel
+        max_concurrent_runs = resolved.top_config.max_concurrent_runs
         runner = RetryRunner(
             run_id=run_id,
             pipeline=resolved,
             context=context,
-            max_parallel=max_parallel,
+            max_parallel=max_concurrent_runs,
             execution_strategy=retry_execution_strategy,
         )
 

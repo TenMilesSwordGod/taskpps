@@ -449,3 +449,135 @@ class TestAgentSemaphoreBehavior:
         assert len(acquire_calls) == 2
         assert acquire_calls[0] == "agent1"
         assert acquire_calls[1] == "agent2"
+
+
+class TestMaxConcurrentTasks:
+    """Issue #106: max_concurrent_tasks per-pipeline 并发任务数限制"""
+
+    @pytest.mark.asyncio
+    async def test_max_concurrent_tasks_limits_parallel_execution(self, db_engine, clean_db):
+        """max_concurrent_tasks=1 时，parallel 策略下同一 pipeline 的 task 应顺序执行"""
+        _setup_config()
+
+        task_a = ResolvedTask(name="task-a", task_type="command", command="echo a")
+        task_b = ResolvedTask(name="task-b", task_type="command", command="echo b")
+        task_c = ResolvedTask(name="task-c", task_type="command", command="echo c")
+
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel", max_concurrent_tasks=1),
+            tasks=[task_a, task_b, task_c],
+        )
+        pipeline = ResolvedPipeline(
+            name="limited", subpipelines=[sub], top_config=PipelineConfig(max_concurrent_tasks=1)
+        )
+        ctx = ExecutionContext(pipeline=pipeline, run_id="limited-1")
+        runner = PipelineRunner(run_id="limited-1", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"sub.task-a": "tr-a", "sub.task-b": "tr-b", "sub.task-c": "tr-c"}
+
+        execution_order: list[str] = []
+
+        async def fake_execute_task_inner(task, sub_name=""):
+            qualified = f"{sub_name}.{task.name}" if sub_name else task.name
+            execution_order.append(f"start:{qualified}")
+            await asyncio.sleep(0.01)
+            execution_order.append(f"end:{qualified}")
+            return ExecutorResult(exit_code=0)
+
+        with (
+            patch.object(runner, "_execute_task_inner", side_effect=fake_execute_task_inner),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        # max_concurrent_tasks=1 时，task 应顺序执行
+        expected_order = [
+            "start:sub.task-a",
+            "end:sub.task-a",
+            "start:sub.task-b",
+            "end:sub.task-b",
+            "start:sub.task-c",
+            "end:sub.task-c",
+        ]
+        assert execution_order == expected_order
+
+    @pytest.mark.asyncio
+    async def test_max_concurrent_tasks_allows_parallel_within_limit(self, db_engine, clean_db):
+        """max_concurrent_tasks=2 时，parallel 策略下最多2个 task 并发执行"""
+        _setup_config()
+
+        task_a = ResolvedTask(name="task-a", task_type="command", command="echo a")
+        task_b = ResolvedTask(name="task-b", task_type="command", command="echo b")
+        task_c = ResolvedTask(name="task-c", task_type="command", command="echo c")
+
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel"),
+            tasks=[task_a, task_b, task_c],
+        )
+        pipeline = ResolvedPipeline(
+            name="limited2", subpipelines=[sub], top_config=PipelineConfig(max_concurrent_tasks=2)
+        )
+        ctx = ExecutionContext(pipeline=pipeline, run_id="limited2-1")
+        runner = PipelineRunner(run_id="limited2-1", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"sub.task-a": "tr-a", "sub.task-b": "tr-b", "sub.task-c": "tr-c"}
+
+        execution_order: list[str] = []
+
+        async def fake_execute_task_inner(task, sub_name=""):
+            qualified = f"{sub_name}.{task.name}" if sub_name else task.name
+            execution_order.append(f"start:{qualified}")
+            await asyncio.sleep(0.05)
+            execution_order.append(f"end:{qualified}")
+            return ExecutorResult(exit_code=0)
+
+        with (
+            patch.object(runner, "_execute_task_inner", side_effect=fake_execute_task_inner),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        # 前2个 task 应并发执行（所有 start 在第一个 end 之前）
+        starts = [i for i, e in enumerate(execution_order) if e.startswith("start:")]
+        ends = [i for i, e in enumerate(execution_order) if e.startswith("end:")]
+        # 前2个 start 应在第一个 end 之前
+        assert starts[1] < ends[0], f"前2个task应并发: {execution_order}"
+        # 第3个 task 应在某个 task 完成后才开始（因为限制为2）
+        assert starts[2] > ends[0], f"第3个task应在某个task完成后开始: {execution_order}"
+
+
+class TestGlobalMaxConcurrent:
+    """Issue #106: 跨 pipeline 全局并发限制"""
+
+    @pytest.mark.asyncio
+    async def test_global_semaphore_enforces_limit(self, db_engine, clean_db):
+        """全局信号量限制跨 pipeline 的并发任务数"""
+        _setup_config()
+
+        from taskpps.services.agent_manager import AgentManager
+
+        manager = AgentManager()
+        manager.configure_global_max_concurrent(2)
+
+        acquired_count = 0
+        max_acquired = 0
+
+        async def tracked_task(task_id):
+            nonlocal acquired_count, max_acquired
+            await manager.acquire_global(timeout=5)
+            acquired_count += 1
+            max_acquired = max(max_acquired, acquired_count)
+            await asyncio.sleep(0.05)
+            acquired_count -= 1
+            manager.release_global()
+
+        # 启动3个任务，全局限制2
+        await asyncio.gather(
+            tracked_task("t1"),
+            tracked_task("t2"),
+            tracked_task("t3"),
+        )
+
+        assert max_acquired <= 2, f"全局并发数不应超过2: max_acquired={max_acquired}"

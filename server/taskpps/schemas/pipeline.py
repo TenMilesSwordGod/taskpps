@@ -86,8 +86,20 @@ class PipelineConfig(BaseModel):
     retry: int = 0
     on_failure: str = "fail"
     execution_strategy: str = "sequential"
-    max_parallel: int | None = None
+    max_concurrent_runs: int | None = None
+    max_concurrent_tasks: int | None = None
     cwd: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_max_parallel(cls, values):
+        # 向后兼容：max_parallel 映射到 max_concurrent_runs
+        if isinstance(values, dict):
+            if "max_parallel" in values and "max_concurrent_runs" not in values:
+                values["max_concurrent_runs"] = values.pop("max_parallel")
+            elif "max_parallel" in values and "max_concurrent_runs" in values:
+                values.pop("max_parallel")  # 优先使用新字段
+        return values
 
 
 class OptionsYAML(PipelineConfig):

@@ -162,7 +162,7 @@ python3 .trae/skills/gitea-issue/scripts/comment_issue.py "<issue_url>" --file c
 - 仓库：`AM-SYS/taskpps`
 - Git remote `origin`：Gitea（默认推送目标）
 - Git remote `github`：GitHub（仅用户明确要求时推送）
-- 认证：URL 中已嵌入凭据，无需额外 Token
+- 认证：脚本已内置 Access Token，无需额外配置（也可通过 `GITEA_TOKEN` 环境变量覆盖）
 
 ### MCP TalkToFigma
 
