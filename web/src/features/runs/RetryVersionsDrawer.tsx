@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Drawer, Spin, Tag, Button, Empty, Modal, App, Tooltip } from 'antd';
 import { History, Clock, Eye, Star, FileText } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useRetryVersions, useSelectRetryReport, useRetryLogs } from '@/api/runs';
+import { useRetrySSELogs } from './hooks/useRetrySSELogs';
+import type { RetryLogEntry } from './hooks/useRetrySSELogs';
 import StatusTag from '@/components/StatusTag';
+import LogViewer from './LogViewer';
+import type { LogEntry } from './hooks/useSSELogs';
 
 interface RetryVersionsDrawerProps {
   open: boolean;
@@ -29,18 +33,45 @@ function fmtDur(start: string | null, end: string | null): string {
 export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: RetryVersionsDrawerProps) {
   const { message } = App.useApp();
   const [logRetryId, setLogRetryId] = useState<string | null>(null);
+  const [logRetryStatus, setLogRetryStatus] = useState<string | null>(null);
 
   const { data: versionsData, isLoading } = useRetryVersions(open ? runId : undefined);
   const selectReport = useSelectRetryReport();
 
-  // 日志查看（仅重试版本使用 useRetryLogs，v0 原始版本的日志通过 SSE/主日志查看）
-  const { data: logData, isLoading: logLoading } = useRetryLogs(
-    logRetryId ? runId : undefined,
-    logRetryId ?? undefined,
-  );
-
   const retryList = versionsData?.task_retries?.[taskName] ?? [];
   const selectedRetryId = versionsData?.selected?.[taskName] ?? null;
+
+  // 判断当前查看的重试是否正在运行
+  const isLogActive = logRetryStatus === 'running' || logRetryStatus === 'pending';
+
+  // 运行中的重试：使用 SSE 流式日志
+  const sseResult = useRetrySSELogs(isLogActive ? runId : undefined, isLogActive ? logRetryId : undefined);
+  // 已完成的重试：使用 REST 一次性加载
+  const { data: logData, isLoading: logLoading } = useRetryLogs(
+    !isLogActive && logRetryId ? runId : undefined,
+    !isLogActive && logRetryId ? logRetryId : undefined,
+  );
+
+  // SSE 日志转换为 LogEntry 格式（供 LogViewer 使用）
+  const sseLogs: LogEntry[] = useMemo(
+    () => sseResult.logs.map((entry: RetryLogEntry) => ({
+      seq: entry.seq,
+      taskName: '',
+      content: entry.content,
+      timestamp: entry.timestamp,
+    })),
+    [sseResult.logs],
+  );
+
+  const handleViewLog = (retryId: string, status: string) => {
+    setLogRetryId(retryId);
+    setLogRetryStatus(status);
+  };
+
+  const handleCloseLog = () => {
+    setLogRetryId(null);
+    setLogRetryStatus(null);
+  };
 
   const handleSelect = async (retryId: string | null) => {
     try {
@@ -169,13 +200,13 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
                           </Button>
                         </Tooltip>
                       )}
-                      {/* 重试版本通过 useRetryLogs 查看日志；v0 原始版本日志通过主日志查看 */}
+                      {/* 重试版本查看日志：运行中用 SSE 流式，已完成用 REST */}
                       {!isOriginal && (
                         <Button
                           size="small"
                           type="text"
                           icon={<Eye size={13} />}
-                          onClick={() => setLogRetryId(retry.id)}
+                          onClick={() => handleViewLog(retry.id, retry.status)}
                         >
                           查看日志
                         </Button>
@@ -199,15 +230,32 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose }: 
                 {retryList.find((r) => r.id === logRetryId)?.task_name}
               </span>
             )}
+            {isLogActive && sseResult.connected && (
+              <Tag color="processing" style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 6px' }}>
+                实时
+              </Tag>
+            )}
           </div>
         }
         open={logRetryId !== null}
-        onCancel={() => setLogRetryId(null)}
+        onCancel={handleCloseLog}
         footer={null}
         width={800}
         destroyOnHidden
       >
-        {logLoading ? (
+        {isLogActive ? (
+          // 运行中：SSE 流式日志 + LogViewer
+          <div style={{ height: '60vh' }}>
+            <LogViewer
+              logs={sseLogs}
+              connected={sseResult.connected}
+              autoScroll={sseResult.autoScroll}
+              onAutoScrollChange={sseResult.setAutoScroll}
+              onClear={sseResult.clearLogs}
+              failedCount={0}
+            />
+          </div>
+        ) : logLoading ? (
           <div className="flex items-center justify-center py-8">
             <Spin size="small" />
           </div>
