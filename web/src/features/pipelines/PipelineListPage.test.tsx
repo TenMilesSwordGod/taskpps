@@ -48,6 +48,89 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
+describe('<PipelineListPage /> Issue #105 - 最近运行时间和状态分开', () => {
+  beforeEach(() => {
+    mockUsePipelines.mockReset()
+  })
+
+  it('pipeline 行有 last_run 时，"最近运行时间"列显示格式化时间，"最近运行状态"列显示状态标签', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({
+            name: 'deploy',
+            file: 'deploy.yaml',
+            last_run: { id: 'run1', status: 'success', created_at: '2026-06-20T14:56:00+08:00' },
+          }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // 验证时间列显示格式化时间
+    expect(screen.getByText('06-20 14:56')).toBeInTheDocument()
+
+    // 验证状态列显示 StatusTag
+    expect(screen.getByTestId('status-tag')).toHaveTextContent('success')
+  })
+
+  it('pipeline 行无 last_run 时，"最近运行时间"和"最近运行状态"列均显示 "-"', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({ name: 'deploy', file: 'deploy.yaml', last_run: null }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // 表格中应有两个 "-"（时间列和状态列各一个）
+    const dashes = screen.getAllByText('-')
+    expect(dashes.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('非 pipeline 行（project/folder），"最近运行时间"和"最近运行状态"列均显示 "--"', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({ name: 'p1', file: 'p1.yaml', project_id: 'proj1', project_name: 'Proj1' }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // project 行的两列都应显示 "--"
+    const dashes = screen.getAllByText('--')
+    expect(dashes.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('last_run 有 status 但无 created_at 时，时间列显示 "-"，状态列正常显示', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({
+            name: 'deploy',
+            file: 'deploy.yaml',
+            last_run: { id: 'run2', status: 'failed', created_at: null },
+          }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // 状态列应显示 failed
+    expect(screen.getByTestId('status-tag')).toHaveTextContent('failed')
+  })
+})
+
 describe('<PipelineListPage /> Issue #104 - 展开/折叠动画', () => {
   beforeEach(() => {
     mockUsePipelines.mockReset()

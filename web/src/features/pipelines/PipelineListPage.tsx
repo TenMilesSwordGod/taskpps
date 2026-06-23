@@ -218,17 +218,23 @@ export default function PipelineListPage() {
       render: (_: unknown, r: Row) => r.subpipeline_count,
     },
     {
-      title: '最近运行',
-      key: 'last_run',
+      title: '最近运行时间',
+      key: 'last_run_time',
+      width: 110,
+      render: (_: unknown, record: Row) => {
+        if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af' }}>--</span>;
+        if (!record.last_run || !record.last_run.created_at) return '-';
+        return dayjs(record.last_run.created_at).format('MM-DD HH:mm');
+      },
+    },
+    {
+      title: '最近运行状态',
+      key: 'last_run_status',
+      width: 90,
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af' }}>--</span>;
         if (!record.last_run) return '-';
-        return (
-          <Space>
-            {record.last_run.created_at && dayjs(record.last_run.created_at).format('MM-DD HH:mm')}
-            <StatusTag status={record.last_run.status as RunStatus} />
-          </Space>
-        );
+        return <StatusTag status={record.last_run.status as RunStatus} />;
       },
     },
     {
