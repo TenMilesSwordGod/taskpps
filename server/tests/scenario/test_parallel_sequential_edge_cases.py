@@ -758,6 +758,142 @@ class TestCancelDuringQueueWait:
         assert len(executed_tasks) < 4, "取消后不应所有 task 都执行"
 
 
+class TestCancelDuringParallelExecution:
+    """测试取消信号在 parallel 任务并发执行时的行为"""
+
+    @pytest.mark.asyncio
+    async def test_cancel_during_concurrent_tasks(self, db_engine, clean_db):
+        """max_concurrent_tasks=2 时,取消后排队的 task 不应启动"""
+        _setup_config()
+        tasks = [ResolvedTask(name=f"t{i}", task_type="command", command=f"echo {i}") for i in range(6)]
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel", max_concurrent_tasks=2),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="cancel-concurrent")
+        runner = PipelineRunner(run_id="cancel-concurrent", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {f"sub.t{i}": f"tr{i}" for i in range(6)}
+
+        executed_tasks: list[str] = []
+
+        async def fake_execute(task, sub_name="", max_parallel=None):
+            executed_tasks.append(task.name)
+            if task.name == "t0":
+                runner._cancelled = True
+            await asyncio.sleep(0.02)
+            return ExecutorResult(exit_code=0)
+
+        with (
+            patch.object(runner, "_execute_task", side_effect=fake_execute),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert len(executed_tasks) <= 3, f"取消后不应启动所有 task,实际执行了 {len(executed_tasks)} 个"
+
+    @pytest.mark.asyncio
+    async def test_cancel_preserves_completed_task_results(self, db_engine, clean_db):
+        """取消后已完成的 task 结果应被保留"""
+        _setup_config()
+        tasks = [ResolvedTask(name=f"t{i}", task_type="command", command=f"echo {i}") for i in range(4)]
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel", max_concurrent_tasks=1),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="cancel-results")
+        runner = PipelineRunner(run_id="cancel-results", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {f"sub.t{i}": f"tr{i}" for i in range(4)}
+
+        completed_tasks: list[str] = []
+
+        async def fake_execute(task, sub_name="", max_parallel=None):
+            completed_tasks.append(task.name)
+            if task.name == "t0":
+                runner._cancelled = True
+            return ExecutorResult(exit_code=0, stdout=f"output-{task.name}")
+
+        with (
+            patch.object(runner, "_execute_task", side_effect=fake_execute),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert "t0" in completed_tasks, "t0 应完成并返回结果"
+
+    @pytest.mark.asyncio
+    async def test_cancel_before_first_task(self, db_engine, clean_db):
+        """在第一个 task 启动前就设置取消信号"""
+        _setup_config()
+        tasks = [ResolvedTask(name=f"t{i}", task_type="command", command=f"echo {i}") for i in range(3)]
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel"),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="cancel-before")
+        runner = PipelineRunner(run_id="cancel-before", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {f"sub.t{i}": f"tr{i}" for i in range(3)}
+        runner._cancelled = True
+
+        executed_tasks: list[str] = []
+
+        async def fake_execute(task, sub_name="", max_parallel=None):
+            executed_tasks.append(task.name)
+            return ExecutorResult(exit_code=0)
+
+        with (
+            patch.object(runner, "_execute_task", side_effect=fake_execute),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert len(executed_tasks) == 0, f"取消前不应有 task 执行,实际执行了 {len(executed_tasks)} 个"
+
+    @pytest.mark.asyncio
+    async def test_cancel_stops_new_tasks_after_first_batch(self, db_engine, clean_db):
+        """取消后不启动新 task,但已启动的 task 继续完成"""
+        _setup_config()
+        tasks = [ResolvedTask(name=f"t{i}", task_type="command", command=f"echo {i}") for i in range(4)]
+        sub = ResolvedSubPipeline(
+            name="sub",
+            config=PipelineConfig(execution_strategy="parallel", max_concurrent_tasks=2),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="cancel-after-batch")
+        runner = PipelineRunner(run_id="cancel-after-batch", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {f"sub.t{i}": f"tr{i}" for i in range(4)}
+
+        start_times: dict[str, float] = {}
+        end_times: dict[str, float] = {}
+
+        async def fake_execute(task, sub_name="", max_parallel=None):
+            start_times[task.name] = time.monotonic()
+            if task.name == "t0":
+                runner._cancelled = True
+            await asyncio.sleep(0.03)
+            end_times[task.name] = time.monotonic()
+            return ExecutorResult(exit_code=0)
+
+        with (
+            patch.object(runner, "_execute_task", side_effect=fake_execute),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        executed = set(start_times.keys())
+        assert len(executed) <= 2, f"取消后不应启动所有 task,实际执行了 {executed}"
+
+
 class TestEdgeCasesMaxConcurrentTasks:
     """测试 max_concurrent_tasks 的边界值"""
 
