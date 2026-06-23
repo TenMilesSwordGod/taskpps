@@ -536,13 +536,69 @@ class PipelineRunner:
                     effective_max_parallel = sub.config.max_concurrent_tasks
                     if not isinstance(effective_max_parallel, int) or effective_max_parallel <= 0:
                         effective_max_parallel = 5
-                    results = await asyncio.gather(
-                        *[
-                            self._execute_task(task, sub_name, max_parallel=effective_max_parallel)
-                            for task in tasks_to_run
-                        ],
-                        return_exceptions=True,
-                    )
+                    # Issue #124: parallel 分支需要支持 cancel 信号,使用受控并发
+                    # 避免 asyncio.gather 一次性启动所有 task 后无法中断排队的任务。
+                    parallel_semaphore = asyncio.Semaphore(effective_max_parallel)
+                    task_list = list(tasks_to_run)
+                    results: list[ExecutorResult | BaseException | None] = [None] * len(task_list)
+                    pending: set[asyncio.Task] = set()
+                    task_index_map: dict[asyncio.Task, int] = {}
+                    next_task_idx = 0
+
+                    async def _run_with_limit(task: ResolvedTask) -> ExecutorResult:
+                        async with parallel_semaphore:  # noqa: B023
+                            if self._check_cancel_signal():
+                                return ExecutorResult(exit_code=-1, stdout="Task cancelled")
+                            return await self._execute_task(
+                                task,
+                                sub_name,
+                                max_parallel=effective_max_parallel,  # noqa: B023
+                            )
+
+                    def _schedule_task(idx: int) -> None:
+                        nonlocal next_task_idx
+                        coro = _run_with_limit(task_list[idx])  # noqa: B023
+                        aio_task = asyncio.create_task(coro)
+                        pending.add(aio_task)  # noqa: B023
+                        task_index_map[aio_task] = idx  # noqa: B023
+                        next_task_idx += 1
+
+                    initial_batch = min(effective_max_parallel, len(task_list))
+                    for i in range(initial_batch):
+                        _schedule_task(i)
+
+                    while pending:
+                        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                        for aio_task in done:
+                            idx = task_index_map.pop(aio_task)
+                            try:
+                                results[idx] = aio_task.result()
+                            except asyncio.CancelledError:
+                                results[idx] = ExecutorResult(exit_code=-1, stdout="Task cancelled")
+                            except BaseException as e:
+                                results[idx] = e
+
+                        if self._check_cancel_signal():
+                            self._write_pipeline_log(
+                                "WARN",
+                                f"SubPipeline '{sub_name}' cancelled; stopping queued parallel tasks",
+                            )
+                            for aio_task in pending:
+                                aio_task.cancel()
+                            if pending:
+                                await asyncio.gather(*pending, return_exceptions=True)
+                            for aio_task in pending:
+                                idx = task_index_map.pop(aio_task)
+                                results[idx] = ExecutorResult(exit_code=-1, stdout="Task cancelled")
+                            break
+
+                        while next_task_idx < len(task_list) and len(pending) < effective_max_parallel:
+                            _schedule_task(next_task_idx)
+
+                    # 将 cancel 导致的 None 补齐为取消结果
+                    for idx, result in enumerate(results):
+                        if result is None:
+                            results[idx] = ExecutorResult(exit_code=-1, stdout="Task cancelled")
                 else:
                     self._write_pipeline_log("DEBUG", f"Executing {len(tasks_to_run)} tasks sequentially")
                     results = []
