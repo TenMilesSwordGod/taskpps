@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from taskpps.config import (  # noqa: F401
+from taskpps.config import (
     build_log_path,
     build_pipeline_log_path,
     get_logs_dir,
@@ -116,7 +116,7 @@ class PipelineRunner:
                 f.write(f"{'=' * 80}\n")
                 f.write("Pipeline Execution Log\n")
                 f.write(f"{'=' * 80}\n\n")
-                f.write(f"[PIPELINE:SETUP]\n")
+                f.write("[PIPELINE:SETUP]\n")
                 f.write(f"[SYSTEM] Run ID: {self.run_id}\n")
                 f.write(f"[SYSTEM] Pipeline ID: {self._pipeline_id}\n")
                 f.write(f"[SYSTEM] Pipeline Version: {self._pipeline_version}\n")
@@ -359,14 +359,14 @@ class PipelineRunner:
 
             event_bus.emit(SIGNAL_RUN_COMPLETED, sender=self, run_id=self.run_id, status=final_status)
         except asyncio.CancelledError:
-            # Issue #66: CancelledError (BaseException) 跳过正常终态更新，
-            # 由 finally 兜底设置终态。不重新抛出，避免 run() 抛异常给调用方。
+            # Issue #66: CancelledError (BaseException) 跳过正常终态更新,
+            # 由 finally 兜底设置终态。不重新抛出,避免 run() 抛异常给调用方。
             self._cancelled = True
             logger.warning("PipelineRunner: run_id=%s cancelled unexpectedly", self.run_id)
         finally:
             # Issue #66: 兜底确保 run 总是到达终态。
-            # asyncio.CancelledError (BaseException) 不会被 except Exception 捕获，
-            # 会跳过上方的最终状态更新，导致 run 永远停在 RUNNING。
+            # asyncio.CancelledError (BaseException) 不会被 except Exception 捕获,
+            # 会跳过上方的最终状态更新,导致 run 永远停在 RUNNING。
             if not _final_status_updated:
                 fallback_status = RunStatus.CANCELLED if self._cancelled else RunStatus.FAILED
                 logger.warning(
@@ -387,8 +387,8 @@ class PipelineRunner:
                     logger.exception("PipelineRunner: failed to set fallback terminal status for run %s", self.run_id)
 
             # Issue #68: 兜底确保卡在 RUNNING/PENDING 的 task 也到达终态。
-            # 当 run 被 CancelledError 或其他异常中断时，部分 task 可能
-            # 已设为 RUNNING 但尚未收到终态更新，导致 UI 上永远显示"运行中"。
+            # 当 run 被 CancelledError 或其他异常中断时,部分 task 可能
+            # 已设为 RUNNING 但尚未收到终态更新,导致 UI 上永远显示"运行中"。
             try:
                 async with get_session_factory()() as session:
                     task_repo = TaskRunRepository(session)
@@ -531,8 +531,16 @@ class PipelineRunner:
             if tasks_to_run:
                 if strategy == "parallel":
                     self._write_pipeline_log("DEBUG", f"Executing {len(tasks_to_run)} tasks in parallel")
+                    # Issue #115: parallel 策略下,将 pipeline 的 max_concurrent_tasks
+                    # 作为 agent 默认 max_parallel,避免同一 agent 的任务被串行化。
+                    effective_max_parallel = sub.config.max_concurrent_tasks
+                    if not isinstance(effective_max_parallel, int) or effective_max_parallel <= 0:
+                        effective_max_parallel = 5
                     results = await asyncio.gather(
-                        *[self._execute_task(task, sub_name) for task in tasks_to_run],
+                        *[
+                            self._execute_task(task, sub_name, max_parallel=effective_max_parallel)
+                            for task in tasks_to_run
+                        ],
                         return_exceptions=True,
                     )
                 else:
@@ -550,7 +558,7 @@ class PipelineRunner:
                         failed_tasks.add(qualified_name)
                         if isinstance(result, ExecutorResult):
                             exit_code = result.exit_code
-                            # 收集任务错误根因（取 stderr 前 200 字符，避免 run.error 过长）
+                            # 收集任务错误根因(取 stderr 前 200 字符,避免 run.error 过长)
                             err_detail = (result.stderr or "").strip()[:200]
                             if err_detail:
                                 task_error_details.append(f"{qualified_name}: {err_detail}")
@@ -599,17 +607,21 @@ class PipelineRunner:
         self._write_separator("=", f"[subpipeline] {sub_name} end")
         return {"success": True}
 
-    async def _execute_task(self, task: ResolvedTask, sub_name: str = "") -> ExecutorResult:
+    async def _execute_task(
+        self, task: ResolvedTask, sub_name: str = "", max_parallel: int | None = None
+    ) -> ExecutorResult:
         # Issue #106: 获取 per-pipeline 并发槽位
         if self._task_semaphore:
             await self._task_semaphore.acquire()
         try:
-            return await self._execute_task_inner(task, sub_name)
+            return await self._execute_task_inner(task, sub_name, max_parallel=max_parallel)
         finally:
             if self._task_semaphore:
                 self._task_semaphore.release()
 
-    async def _execute_task_inner(self, task: ResolvedTask, sub_name: str = "") -> ExecutorResult:
+    async def _execute_task_inner(
+        self, task: ResolvedTask, sub_name: str = "", max_parallel: int | None = None
+    ) -> ExecutorResult:
         event_bus = get_event_bus()
 
         qualified_name = f"{sub_name}.{task.name}" if sub_name else task.name
@@ -693,10 +705,10 @@ class PipelineRunner:
             effective_cwd = task.cwd or self.context.get_workspace()
 
             try:
-                executor = create_executor(task, self.context.project_workdir)
+                executor = create_executor(task, self.context.project_workdir, max_parallel=max_parallel)
                 self._running_executors[task.name] = executor
 
-                # 为 AgentExecutor 设置运行上下文，用于服务器面板显示运行中命令
+                # 为 AgentExecutor 设置运行上下文,用于服务器面板显示运行中命令
                 if isinstance(executor, AgentExecutor):
                     executor.run_id = self.run_id
                     executor.task_name = qualified_name
@@ -772,7 +784,7 @@ class PipelineRunner:
                 logger.exception(error_msg)
                 self._write_pipeline_log("ERROR", error_msg)
                 self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
-                # 将错误信息写入 task.log，确保 UI 上可查看
+                # 将错误信息写入 task.log,确保 UI 上可查看
                 try:
                     log_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(log_path, "a") as f:
@@ -782,10 +794,10 @@ class PipelineRunner:
                     pass
                 result = ExecutorResult(exit_code=1, stderr=str(e))
             finally:
-                # CancelledError 是 BaseException，不会被 except Exception 捕获，
-                # 必须在 finally 中清理 _running_executors，避免 executor 引用泄漏
+                # CancelledError 是 BaseException,不会被 except Exception 捕获,
+                # 必须在 finally 中清理 _running_executors,避免 executor 引用泄漏
                 executor = self._running_executors.pop(task.name, None)
-                # 清理 executor 内部注册的 output callback，防止内存泄漏
+                # 清理 executor 内部注册的 output callback,防止内存泄漏
                 if isinstance(executor, AgentExecutor):
                     executor.cleanup()
             last_result = result

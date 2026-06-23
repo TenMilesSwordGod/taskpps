@@ -23,7 +23,9 @@ class AgentNotFoundError(Exception):
     pass
 
 
-def create_executor(task: ResolvedTask, project_workdir: str | None = None) -> BaseExecutor:
+def create_executor(
+    task: ResolvedTask, project_workdir: str | None = None, max_parallel: int | None = None
+) -> BaseExecutor:
     if task.task_type == "invoke":
         return InvokeExecutor()
 
@@ -64,12 +66,12 @@ def create_executor(task: ResolvedTask, project_workdir: str | None = None) -> B
         agent_loader = AgentLoader(base_dir=agents_dir) if agents_dir else AgentLoader()
         agent_data = _resolve_agent(agent_loader, task.host)
 
-        # 如果在项目 agents 目录未找到，尝试默认 agents 目录
+        # 如果在项目 agents 目录未找到,尝试默认 agents 目录
         if agent_data is None and agents_dir is not None:
             default_loader = AgentLoader()
             agent_data = _resolve_agent(default_loader, task.host)
 
-        # 对于已通过 WebSocket 连接的 execution-agent，即使没有配置文件也可执行
+        # 对于已通过 WebSocket 连接的 execution-agent,即使没有配置文件也可执行
         if agent_data is None:
             manager = AgentManager.instance()
             if manager.is_connected(task.host):
@@ -91,6 +93,13 @@ def create_executor(task: ResolvedTask, project_workdir: str | None = None) -> B
 
         if agent_data.get("execution_agent", True):
             manager = AgentManager.instance()
+            # Issue #115: parallel 策略下,若 agent 未显式配置 max_parallel,
+            # 使用 pipeline 的 max_concurrent_tasks 作为默认值,避免任务被串行化。
+            effective_max_parallel: int | None = agent_data.get("max_parallel")
+            if effective_max_parallel is None:
+                effective_max_parallel = max_parallel
+            if effective_max_parallel is not None:
+                agent_data = {**agent_data, "max_parallel": effective_max_parallel}
             return AgentExecutor(agent_id=task.host, manager=manager, agent_data=agent_data)
 
         return _make_ssh_executor(host, port, agent_data, task)
@@ -98,9 +107,7 @@ def create_executor(task: ResolvedTask, project_workdir: str | None = None) -> B
     return LocalExecutor()
 
 
-def _make_ssh_executor(
-    host: str, port: int, agent_data: dict[str, Any], task: ResolvedTask
-) -> SSHExecutor:
+def _make_ssh_executor(host: str, port: int, agent_data: dict[str, Any], task: ResolvedTask) -> SSHExecutor:
     username = None
     password = None
     key_path = None

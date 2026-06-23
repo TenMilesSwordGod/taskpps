@@ -268,8 +268,10 @@ class TestPipelineRunnerRun:
         runner._task_run_ids = {"sub.task-a": "ta", "sub.task-b": "tb", "sub.task-c": "tc"}
 
         execution_order: list[str] = []
+        received_max_parallel: list[int | None] = []
 
-        async def fake_execute_task(task, sub_name=""):
+        async def fake_execute_task(task, sub_name="", max_parallel=None):
+            received_max_parallel.append(max_parallel)
             qualified = f"{sub_name}.{task.name}" if sub_name else task.name
             execution_order.append(f"start:{qualified}")
             # 让出事件循环,使并发执行的 task 在此交错;顺序执行时不会交错
@@ -284,6 +286,9 @@ class TestPipelineRunnerRun:
         ):
             await runner.run()
 
+        # Issue #115: parallel 策略下,runner 必须将默认的 max_concurrent_tasks(5)
+        # 作为 max_parallel 传递给 _execute_task,避免 agent 默认串行化。
+        assert received_max_parallel == [5, 5, 5], f"Unexpected max_parallel values: {received_max_parallel}"
         starts = [i for i, e in enumerate(execution_order) if e.startswith("start:")]
         ends = [i for i, e in enumerate(execution_order) if e.startswith("end:")]
         assert len(starts) == 3
@@ -453,7 +458,7 @@ class TestPipelineRunnerRun:
 
     @pytest.mark.asyncio
     async def test_cancelled_error_sets_terminal_status(self, mock_session_factory):
-        """Issue #66: asyncio.CancelledError (BaseException) 跳过最终状态更新，
+        """Issue #66: asyncio.CancelledError (BaseException) 跳过最终状态更新,
         导致 run 永远停在 RUNNING。修复后 finally 块应兜底设置终态。"""
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -470,7 +475,7 @@ class TestPipelineRunnerRun:
         ):
             await runner.run()
 
-        # 最终状态必须是终态（failed/cancelled），不能停留在 running
+        # 最终状态必须是终态(failed/cancelled),不能停留在 running
         final_status = run_repo.update_run_status.call_args[0][1]
         assert final_status in ("failed", "cancelled"), f"Expected terminal status, got {final_status}"
 
