@@ -183,7 +183,14 @@ class TestPipelineExecution:
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             run_task = asyncio.create_task(runner.run())
-            await asyncio.sleep(0.01)
+            # 等待 executor 进入 _running_executors, 避免 0.01s 固定 sleep
+            # 受系统负载影响导致尚未启动就调用 cancel()。
+            for _ in range(100):
+                if "build" in runner._running_executors:
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("Executor was not added to _running_executors within 1s")
             await runner.cancel()
             await run_task
 
