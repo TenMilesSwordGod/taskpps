@@ -68,7 +68,9 @@ Rules:
     - write tests for new features or changes, and ensure they pass(just run influence domain, run full tests will cost so much time)
     - before start should use find skills to check all skills description for any situatuion    
     - use TDD to write code, ensure each change pass the test
-    - python should use uv to manage dependencies, not pip
+    - python should use uv to manage dependencies, if do not want use uv, can use local: .venv
+    - **当原定方案无法完成用户任务时，必须先与用户确认替代方案，禁止擅自切换方案或执行不可逆操作（如 commit/push/创建 PR）**
+    - all debug tmp files should store in current folder .debug folder.
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

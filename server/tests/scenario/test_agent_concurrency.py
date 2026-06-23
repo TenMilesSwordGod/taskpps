@@ -752,3 +752,174 @@ class TestAgentParallelDefaultMaxParallel:
         assert all(m is None for m in create_executor_calls), (
             f"sequential 任务不应覆盖 max_parallel,实际={create_executor_calls}"
         )
+
+    @pytest.mark.asyncio
+    async def test_parallel_uses_explicit_sub_max_concurrent_tasks(self, db_engine, clean_db):
+        """subpipeline 显式配置 max_concurrent_tasks=10 时, max_parallel 应等于 10。"""
+        _setup_config()
+        tasks = [
+            ResolvedTask(name="step3", task_type="command", command="sleep 15", host="auto-cts"),
+            ResolvedTask(name="step4", task_type="command", command="sleep 15", host="auto-cts"),
+        ]
+        sub = ResolvedSubPipeline(
+            name="Sync Automation code",
+            config=PipelineConfig(execution_strategy="parallel", max_concurrent_tasks=10),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="TestEx10", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test115-ex10")
+        runner = PipelineRunner(run_id="test115-ex10", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {
+            "Sync Automation code.step3": "tr3",
+            "Sync Automation code.step4": "tr4",
+        }
+
+        create_executor_calls: list[int | None] = []
+
+        def patched_create_executor(task, project_workdir=None, max_parallel=None):
+            create_executor_calls.append(max_parallel)
+            mock_executor = AsyncMock()
+            mock_executor.execute.return_value = ExecutorResult(exit_code=0)
+            return mock_executor
+
+        with (
+            patch("taskpps.engine.runner.create_executor", side_effect=patched_create_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert len(create_executor_calls) == 2
+        assert all(m == 10 for m in create_executor_calls), (
+            f"显式 max_concurrent_tasks=10 时 max_parallel 应为 10,实际={create_executor_calls}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_parallel_invalid_max_concurrent_tasks_falls_back_to_5(self, db_engine, clean_db):
+        """subpipeline 配置 max_concurrent_tasks=0(非法) 时, 应回退到默认 5。"""
+        _setup_config()
+        tasks = [
+            ResolvedTask(name="step3", task_type="command", command="sleep 15", host="auto-cts"),
+            ResolvedTask(name="step4", task_type="command", command="sleep 15", host="auto-cts"),
+        ]
+        sub = ResolvedSubPipeline(
+            name="Sync Automation code",
+            config=PipelineConfig(execution_strategy="parallel", max_concurrent_tasks=0),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="TestInvalid", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test115-invalid")
+        runner = PipelineRunner(run_id="test115-invalid", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {
+            "Sync Automation code.step3": "tr3",
+            "Sync Automation code.step4": "tr4",
+        }
+
+        create_executor_calls: list[int | None] = []
+
+        def patched_create_executor(task, project_workdir=None, max_parallel=None):
+            create_executor_calls.append(max_parallel)
+            mock_executor = AsyncMock()
+            mock_executor.execute.return_value = ExecutorResult(exit_code=0)
+            return mock_executor
+
+        with (
+            patch("taskpps.engine.runner.create_executor", side_effect=patched_create_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert len(create_executor_calls) == 2
+        assert all(m == 5 for m in create_executor_calls), (
+            f"max_concurrent_tasks=0 时应回退到 5,实际={create_executor_calls}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_parallel_explicit_max_concurrent_tasks_one(self, db_engine, clean_db):
+        """subpipeline 显式配置 max_concurrent_tasks=1 时, max_parallel 应等于 1。"""
+        _setup_config()
+        tasks = [
+            ResolvedTask(name="step3", task_type="command", command="sleep 15", host="auto-cts"),
+            ResolvedTask(name="step4", task_type="command", command="sleep 15", host="auto-cts"),
+        ]
+        sub = ResolvedSubPipeline(
+            name="Sync Automation code",
+            config=PipelineConfig(execution_strategy="parallel", max_concurrent_tasks=1),
+            tasks=tasks,
+        )
+        pipeline = ResolvedPipeline(name="TestOne", subpipelines=[sub], top_config=PipelineConfig())
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test115-one")
+        runner = PipelineRunner(run_id="test115-one", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {
+            "Sync Automation code.step3": "tr3",
+            "Sync Automation code.step4": "tr4",
+        }
+
+        create_executor_calls: list[int | None] = []
+
+        def patched_create_executor(task, project_workdir=None, max_parallel=None):
+            create_executor_calls.append(max_parallel)
+            mock_executor = AsyncMock()
+            mock_executor.execute.return_value = ExecutorResult(exit_code=0)
+            return mock_executor
+
+        with (
+            patch("taskpps.engine.runner.create_executor", side_effect=patched_create_executor),
+            patch("taskpps.engine.runner.get_logs_dir"),
+            patch("taskpps.engine.runner.get_event_bus"),
+        ):
+            await runner.run()
+
+        assert len(create_executor_calls) == 2
+        assert all(m == 1 for m in create_executor_calls), (
+            f"显式 max_concurrent_tasks=1 时 max_parallel 应为 1,实际={create_executor_calls}"
+        )
+
+    def test_create_executor_websocket_connected_agent_uses_default_max_parallel(self):
+        """agent 通过 WebSocket 连接但无配置文件时, create_executor 应使用传入的 max_parallel。"""
+        task = ResolvedTask(name="t1", task_type="command", command="echo hi", host="auto-cts")
+
+        with (
+            patch("taskpps.executors.AgentLoader") as mock_loader,
+            patch("taskpps.executors.AgentManager.instance") as mock_instance,
+        ):
+            mock_loader.return_value.get.return_value = None
+            mock_loader.return_value.load.side_effect = FileNotFoundError("not found")
+            mock_manager = MagicMock()
+            mock_manager.is_connected.return_value = True
+            mock_instance.return_value = mock_manager
+
+            executor = create_executor(task, project_workdir=None, max_parallel=5)
+
+            assert isinstance(executor, AgentExecutor)
+            assert executor._agent_data["max_parallel"] == 5
+
+    def test_create_executor_no_max_parallel_arg_keeps_agent_default(self):
+        """create_executor 不传 max_parallel 时, agent 默认 max_parallel 应被保留 (默认 1)。"""
+        task = ResolvedTask(name="t1", task_type="command", command="echo hi", host="auto-cts")
+
+        with (
+            patch("taskpps.executors.AgentLoader") as mock_loader,
+            patch("taskpps.executors.AgentManager.instance") as mock_instance,
+        ):
+            mock_loader.return_value.get.return_value = {"id": "auto-cts", "execution_agent": True}
+            mock_manager = MagicMock()
+            mock_instance.return_value = mock_manager
+
+            executor = create_executor(task)
+
+            assert isinstance(executor, AgentExecutor)
+            # 不传 max_parallel 时, agent_data 中不写入 max_parallel
+            # 后续 AgentExecutor 默认 max_parallel=1
+            assert "max_parallel" not in executor._agent_data
+
+    def test_create_executor_local_task_ignores_max_parallel(self):
+        """local task (无 host) 不应受 max_parallel 参数影响。"""
+        task = ResolvedTask(name="t1", task_type="command", command="echo hi")
+
+        executor = create_executor(task, project_workdir=None, max_parallel=5)
+
+        from taskpps.executors.local import LocalExecutor
+
+        assert isinstance(executor, LocalExecutor)
