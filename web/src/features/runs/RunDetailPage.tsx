@@ -1,12 +1,13 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
-import { XCircle, ListTree, RefreshCw, Copy, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
+import { XCircle, ListTree, RefreshCw, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot, useRetryVersions } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
+import RunStagePanel from './RunStagePanel';
 import RetryModal from './RetryModal';
 import RetryVersionsDrawer from './RetryVersionsDrawer';
 import { useSSELogs } from './hooks/useSSELogs';
@@ -241,7 +242,34 @@ export default function RunDetailPage() {
           style={{ marginBottom: 8 }}
         />
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <Space size={12} wrap>
+          <Space size={12} wrap align="center">
+            {/* Issue #113: 常用操作收拢到标题左侧图标区 */}
+            <Space size={4}>
+              <Tooltip title="手动刷新运行状态">
+                <Button size="small" icon={<RefreshCw size={14} />} onClick={handleRefresh}>
+                  刷新
+                </Button>
+              </Tooltip>
+              <Tooltip title={treeCollapsed ? '显示任务树' : '隐藏任务树'}>
+                <Button
+                  size="small"
+                  icon={<ListTree size={14} />}
+                  onClick={() => setTreeCollapsed((v) => !v)}
+                >
+                  {treeCollapsed ? '显示任务树' : '隐藏任务树'}
+                </Button>
+              </Tooltip>
+              <Tooltip title={debugVisible ? '关闭 Debug' : 'Debug'}>
+                <Button
+                  size="small"
+                  icon={<Bug size={14} />}
+                  onClick={() => setDebugVisible((v) => !v)}
+                  type={debugVisible ? 'primary' : 'default'}
+                >
+                  {debugVisible ? '关闭 Debug' : 'Debug'}
+                </Button>
+              </Tooltip>
+            </Space>
             <span style={{ fontSize: 18, fontWeight: 600 }}>{run.pipeline_name}</span>
             <StatusTag status={run.status} error={run.error} />
             <ProgressBadge
@@ -254,7 +282,11 @@ export default function RunDetailPage() {
               <Tag color="processing" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>运行中 {progress.running}</Tag>
             )}
           </Space>
-          <Space>
+          <Space size={12} wrap align="center">
+            {/* Issue #113: 右侧新增执行节点顺序面板 */}
+            {pipeline && run.tasks && (
+              <RunStagePanel pipeline={pipeline} taskRuns={run.tasks} />
+            )}
             {run.started_at && (
               <Tooltip title={`开始: ${new Date(run.started_at).toLocaleString('zh-CN')}${run.finished_at ? `\n结束: ${new Date(run.finished_at).toLocaleString('zh-CN')}` : ''}`}>
                 <Tag icon={<Clock size={12} />} color="default" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
@@ -262,35 +294,6 @@ export default function RunDetailPage() {
                 </Tag>
               </Tooltip>
             )}
-            <Tooltip title="手动刷新运行状态">
-              <Button
-                size="small"
-                icon={<RefreshCw size={14} />}
-                onClick={handleRefresh}
-              >
-                刷新
-              </Button>
-            </Tooltip>
-            <Tooltip title="复制全部日志到剪贴板">
-              <Button size="small" icon={<Copy size={14} />} onClick={handleCopyLogs}>
-                复制日志
-              </Button>
-            </Tooltip>
-            <Button
-              size="small"
-              icon={<ListTree size={14} />}
-              onClick={() => setTreeCollapsed((v) => !v)}
-            >
-              {treeCollapsed ? '显示任务树' : '隐藏任务树'}
-            </Button>
-            <Button
-              size="small"
-              icon={<Bug size={14} />}
-              onClick={() => setDebugVisible((v) => !v)}
-              type={debugVisible ? 'primary' : 'default'}
-            >
-              {debugVisible ? '关闭 Debug' : 'Debug'}
-            </Button>
             {canCancel && (
               <Popconfirm title="确认取消运行？" onConfirm={handleCancel}>
                 <Button danger size="small" icon={<XCircle size={14} />} loading={cancelRun.isPending}>
@@ -329,6 +332,7 @@ export default function RunDetailPage() {
               selectedTaskId={selectedTaskId}
               onClearTaskFilter={() => setSelectedTaskId(null)}
               failedCount={progress.failed}
+              onCopyLogs={handleCopyLogs}
             />
           </div>
         ) : (
@@ -375,6 +379,7 @@ export default function RunDetailPage() {
                   selectedTaskId={selectedTaskId}
                   onClearTaskFilter={() => setSelectedTaskId(null)}
                   failedCount={progress.failed}
+                  onCopyLogs={handleCopyLogs}
                 />
               </div>
             </Splitter.Panel>

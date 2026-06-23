@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Select, Input, Switch, Button, Empty, Tag, Tooltip } from 'antd';
-import { Trash2, Filter, Layers, Download, AlertCircle, AlertTriangle, Info, Bug, Terminal } from 'lucide-react';
+import { Trash2, Filter, Layers, Download, Copy, AlertCircle, AlertTriangle, Info, Bug, Terminal } from 'lucide-react';
 import { VariableSizeList as List } from 'react-window';
 import type { LogEntry } from './hooks/useSSELogs';
 
@@ -13,6 +13,7 @@ interface LogViewerProps {
   selectedTaskId?: string | null;
   onClearTaskFilter?: () => void;
   failedCount?: number;
+  onCopyLogs?: () => void;
 }
 
 const TASK_COLORS = [
@@ -67,6 +68,7 @@ export default function LogViewer({
   selectedTaskId,
   onClearTaskFilter,
   failedCount = 0,
+  onCopyLogs,
 }: LogViewerProps) {
   const [taskFilter, setTaskFilter] = useState<string | undefined>();
   const [searchText, setSearchText] = useState('');
@@ -336,6 +338,11 @@ export default function LogViewer({
         <Button size="small" icon={<Trash2 size={14} />} onClick={onClear}>
           清空
         </Button>
+        {onCopyLogs && (
+          <Button size="small" icon={<Copy size={14} />} onClick={onCopyLogs} disabled={logs.length === 0}>
+            复制
+          </Button>
+        )}
         <Button size="small" icon={<Download size={14} />} onClick={handleExport} disabled={filtered.length === 0}>
           导出
         </Button>

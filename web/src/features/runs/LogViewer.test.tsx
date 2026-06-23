@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import LogViewer from './LogViewer';
 import type { LogEntry } from './hooks/useSSELogs';
 
@@ -71,5 +71,24 @@ describe('<LogViewer /> Issue #71 - 任务颜色优化', () => {
     for (let i = 0; i < colors.length - 1; i++) {
       expect(colors[i]).not.toBe(colors[i + 1]);
     }
+  });
+
+  it('Issue #113: 传入 onCopyLogs 时显示复制按钮，点击后触发回调', () => {
+    const onCopyLogs = vi.fn();
+    const logs: LogEntry[] = [makeLog(1, 'TaskA', 'line 1')];
+    render(<LogViewer logs={logs} {...baseProps} onCopyLogs={onCopyLogs} />);
+
+    const copyBtn = screen.getByRole('button', { name: '复制' });
+    expect(copyBtn).toBeInTheDocument();
+
+    fireEvent.click(copyBtn);
+    expect(onCopyLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('Issue #113: 未传入 onCopyLogs 时不显示复制按钮', () => {
+    const logs: LogEntry[] = [makeLog(1, 'TaskA', 'line 1')];
+    render(<LogViewer logs={logs} {...baseProps} />);
+
+    expect(screen.queryByRole('button', { name: '复制' })).not.toBeInTheDocument();
   });
 });

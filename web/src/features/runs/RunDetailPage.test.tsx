@@ -42,6 +42,15 @@ vi.mock('./LogViewer', () => ({
   default: () => <div data-testid="log-viewer" />,
 }))
 
+// Issue #113: 捕获 RunStagePanel 收到的 props，用于断言面板传入快照和任务运行记录
+const mockRunStagePanelProps = vi.fn()
+vi.mock('./RunStagePanel', () => ({
+  default: (props: Record<string, unknown>) => {
+    mockRunStagePanelProps(props)
+    return <div data-testid="run-stage-panel" />
+  },
+}))
+
 vi.mock('./hooks/useSSELogs', () => ({
   useSSELogs: () => ({
     logs: [],
@@ -106,6 +115,7 @@ function Wrapper({ id }: { id: string }) {
 describe('<RunDetailPage /> Issue #57 - 历史运行必须用快照', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRunStagePanelProps.mockClear()
     mockUseCancelRun.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
     mockUseRunConsole.mockReturnValue({ data: null })
     mockUseRetryVersions.mockReturnValue({ data: undefined })
@@ -156,5 +166,49 @@ describe('<RunDetailPage /> Issue #57 - 历史运行必须用快照', () => {
     })
     // 即便出错，也不应回退到 usePipeline
     expect(mockUsePipeline).not.toHaveBeenCalled()
+  })
+
+  it('Issue #113: 右侧展示执行节点面板，并传入快照和任务运行记录', async () => {
+    const run = makeRun({
+      tasks: [
+        {
+          id: 'tr-1',
+          run_id: 'run-abc',
+          task_name: 'demo.build',
+          subpipeline_name: 'demo',
+          task_type: 'command',
+          status: 'success',
+          exit_code: 0,
+          error: null,
+          log_path: '',
+          started_at: null,
+          finished_at: null,
+          created_at: '',
+        },
+      ],
+    })
+    const snapshot = makePipeline({
+      id: 'snapshot-v1',
+      pipelines: [
+        {
+          name: 'demo',
+          depends_on: [],
+          tasks: [{ name: 'build', command: 'make', env: {}, retry: 0, depends_on: [] }],
+        },
+      ],
+    })
+    mockUseRun.mockReturnValue({ data: run, isLoading: false })
+    mockUsePipelineSnapshot.mockReturnValue({ data: snapshot, isLoading: false, error: null })
+
+    render(<Wrapper id="run-abc" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('run-stage-panel')).toBeInTheDocument()
+    })
+
+    expect(mockRunStagePanelProps).toHaveBeenCalled()
+    const lastProps = mockRunStagePanelProps.mock.calls.at(-1)![0] as { pipeline: PipelineDetail; taskRuns: unknown[] }
+    expect(lastProps.pipeline.id).toBe('snapshot-v1')
+    expect(lastProps.taskRuns).toHaveLength(1)
   })
 })
