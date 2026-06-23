@@ -27,6 +27,8 @@ export interface RunResponse {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+  /** 服务端计算的耗时（毫秒），避免客户端时钟偏差 */
+  duration_ms: number | null;
   tasks: TaskRunResponse[];
   /** 任务状态计数摘要，列表 API 使用（避免加载完整 tasks） */
   task_summary: Record<string, number>;
@@ -46,6 +48,8 @@ export interface TaskRunResponse {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+  /** 服务端计算的耗时（毫秒），避免客户端时钟偏差 */
+  duration_ms: number | null;
 }
 
 /** 运行列表响应 */

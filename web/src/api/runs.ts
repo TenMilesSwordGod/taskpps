@@ -29,6 +29,12 @@ export function useRuns(params?: { pipeline?: string; status?: string; limit?: n
       const res = await apiClient.get('/api/runs/', { params: cleanParams });
       return res.data;
     },
+    refetchInterval: (query) => {
+      const hasActive = query.state.data?.items.some(
+        (r) => r.status === 'running' || r.status === 'pending',
+      );
+      return hasActive ? 3000 : false;
+    },
   });
 }
 

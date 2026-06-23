@@ -22,16 +22,16 @@ const STATUS_OPTIONS: { label: string; value: RunStatus | 'all' }[] = [
   { label: '部分完成', value: 'partial' },
 ];
 
-/** 计算耗时 */
-function formatDuration(start: string | null, end: string | null, nowTs?: number) {
-  if (!start) return '-';
-  const s = dayjs(start.endsWith('Z') || start.includes('+') ? start : start + 'Z');
-  const e = end ? dayjs(end.endsWith('Z') || end.includes('+') ? end : end + 'Z') : dayjs(nowTs || undefined);
-  const ms = e.diff(s);
-  const d = dayjs.duration(ms);
-  if (d.asHours() >= 1) return `${Math.floor(d.asHours())}h ${d.minutes()}m`;
-  if (d.asMinutes() >= 1) return `${d.minutes()}m ${d.seconds()}s`;
-  return `${d.seconds()}s`;
+/** 计算耗时（基于服务端返回的 duration_ms） */
+function formatDuration(durationMs: number | null): string {
+  if (durationMs == null || durationMs < 0) return '-';
+  const totalSec = Math.floor(durationMs / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 /** 运行状态对应的行背景色（轻量提示） */
@@ -75,18 +75,7 @@ export default function RunListPage() {
     return () => observer.disconnect();
   }, []);
 
-  // 实时刷新运行中任务的耗时
-  const [now, setNow] = useState(Date.now());
   const allItems = useMemo(() => data?.items ?? [], [data?.items]);
-  const hasRunning = useMemo(
-    () => allItems.some((r) => r.status === 'running'),
-    [allItems],
-  );
-  useEffect(() => {
-    if (!hasRunning) return;
-    const t = setInterval(() => setNow(Date.now()), 5000);
-    return () => clearInterval(t);
-  }, [hasRunning]);
 
   // 统计胶囊（来自后端全量统计 API）
   const stats = useMemo(() => statsData ?? { total: 0, pending: 0, running: 0, success: 0, failed: 0, cancelled: 0, partial: 0 }, [statsData]);
@@ -247,7 +236,7 @@ export default function RunListPage() {
       title: '耗时',
       key: 'duration',
       width: 120,
-      render: (_: unknown, record: RunResponse) => formatDuration(record.started_at, record.finished_at, now),
+      render: (_: unknown, record: RunResponse) => formatDuration(record.duration_ms),
     },
     {
       title: '操作',
@@ -273,7 +262,7 @@ export default function RunListPage() {
         </Space>
       ),
     },
-  ], [handleOpenDetail, now, handleDeleteConfirm]);
+  ], [handleOpenDetail, handleDeleteConfirm]);
 
   return (
     <div className="flex flex-col h-full p-4 gap-3 bg-gray-50 overflow-hidden">

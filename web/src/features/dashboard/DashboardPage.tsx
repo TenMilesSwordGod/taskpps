@@ -1,5 +1,5 @@
 import { Card, Col, Row, Statistic, Table, Tag, Button } from 'antd';
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { GitBranch, Play, Loader, AlertCircle, History } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -10,12 +10,10 @@ import StatusTag from '@/components/StatusTag';
 import PipelineProgressPopover from '@/components/PipelineProgressPopover';
 import type { RunResponse, RunStatus } from '@/types';
 
-/** 计算耗时 */
-function formatDuration(run: RunResponse, nowTs?: number): string {
-  if (!run.started_at) return '-';
-  const s = dayjs(run.started_at.endsWith('Z') || run.started_at.includes('+') ? run.started_at : run.started_at + 'Z');
-  const end = run.finished_at ? dayjs(run.finished_at.endsWith('Z') || run.finished_at.includes('+') ? run.finished_at : run.finished_at + 'Z') : dayjs(nowTs || undefined);
-  const sec = end.diff(s, 'second');
+/** 计算耗时（基于服务端返回的 duration_ms） */
+function formatDuration(durationMs: number | null): string {
+  if (durationMs == null || durationMs < 0) return '-';
+  const sec = Math.floor(durationMs / 1000);
   if (sec < 60) return `${sec}秒`;
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
@@ -45,14 +43,6 @@ export default function DashboardPage() {
   const todayRuns = runs.filter((r) => dayjs(r.created_at).isSame(dayjs(), 'day')).length;
   const runningCount = runs.filter((r) => r.status === 'running').length;
   const failedCount = runs.filter((r) => r.status === 'failed').length;
-
-  // 实时刷新运行中任务的耗时
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (runningCount === 0) return;
-    const t = setInterval(() => setNow(Date.now()), 5000);
-    return () => clearInterval(t);
-  }, [runningCount]);
 
   // 最近 10 条运行
   const recentRuns = runs.slice(0, 10);
@@ -105,9 +95,9 @@ export default function DashboardPage() {
       title: '耗时',
       key: 'duration',
       width: 90,
-      render: (_: unknown, record: RunResponse) => formatDuration(record, now),
+      render: (_: unknown, record: RunResponse) => formatDuration(record.duration_ms),
     },
-  ], [navigate, now]);
+  ], [navigate]);
 
   return (
     <div className="p-4 space-y-4">

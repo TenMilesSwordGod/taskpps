@@ -674,3 +674,153 @@ class TestExtractEnvOverrides:
             }
         )
         assert result == {}
+
+
+class TestComputeDurationMs:
+    def test_no_start_time_returns_none(self):
+        from taskpps.services.pipeline_service import _compute_duration_ms
+
+        assert _compute_duration_ms(None, None) is None
+
+    def test_completed_run_uses_finished_at(self):
+        from taskpps.services.pipeline_service import _compute_duration_ms
+
+        start = datetime(2026, 6, 23, 14, 52, 59, tzinfo=timezone.utc)
+        end = start + timedelta(seconds=42, milliseconds=500)
+        assert _compute_duration_ms(start, end) == 42500
+
+    def test_running_run_uses_server_now(self):
+        from taskpps.services.pipeline_service import _compute_duration_ms
+
+        server_now = datetime(2026, 6, 23, 14, 53, 10, tzinfo=timezone.utc)
+        start = datetime(2026, 6, 23, 14, 52, 59, tzinfo=timezone.utc)
+        assert _compute_duration_ms(start, None, server_now) == 11000
+
+    def test_naive_start_time_treated_as_utc(self):
+        from taskpps.services.pipeline_service import _compute_duration_ms
+
+        start = datetime(2026, 6, 23, 14, 52, 59)
+        end = datetime(2026, 6, 23, 14, 53, 10, tzinfo=timezone.utc)
+        assert _compute_duration_ms(start, end) == 11000
+
+    def test_negative_duration_clamped_to_zero(self):
+        from taskpps.services.pipeline_service import _compute_duration_ms
+
+        start = datetime(2026, 6, 23, 14, 53, 10, tzinfo=timezone.utc)
+        end = datetime(2026, 6, 23, 14, 52, 59, tzinfo=timezone.utc)
+        assert _compute_duration_ms(start, end) == 0
+
+    def test_microsecond_precision(self):
+        from taskpps.services.pipeline_service import _compute_duration_ms
+
+        start = datetime(2026, 6, 23, 14, 52, 59, 123000, tzinfo=timezone.utc)
+        end = datetime(2026, 6, 23, 14, 52, 59, 456000, tzinfo=timezone.utc)
+        assert _compute_duration_ms(start, end) == 333
+
+
+class TestRunDurationResponse:
+    @pytest.mark.asyncio
+    async def test_get_run_includes_duration_ms(self, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        from taskpps.db.engine import get_session_factory
+        from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus
+
+        run_id = "run-duration-get"
+        async with get_session_factory()() as session:
+            session.add(
+                PipelineRun(
+                    id=run_id,
+                    pipeline_name="deploy",
+                    pipeline_file="deploy.yaml",
+                    pipeline_id="deploy",
+                    pipeline_version="v1",
+                    status=RunStatus.SUCCESS,
+                    params="{}",
+                    started_at=datetime.now(timezone.utc) - timedelta(seconds=5),
+                    finished_at=datetime.now(timezone.utc),
+                )
+            )
+            session.add(
+                TaskRun(
+                    id="task-duration-get",
+                    run_id=run_id,
+                    task_name="deploy.step1",
+                    subpipeline_name="deploy",
+                    task_type="command",
+                    status=TaskStatus.SUCCESS,
+                    started_at=datetime.now(timezone.utc) - timedelta(seconds=4),
+                    finished_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+                )
+            )
+            await session.commit()
+
+        svc = PipelineService()
+        fetched = await svc.get_run(run_id)
+        assert fetched is not None
+        assert "duration_ms" in fetched
+        assert fetched["duration_ms"] is not None
+        assert fetched["duration_ms"] >= 5000
+        for task in fetched["tasks"]:
+            assert "duration_ms" in task
+            assert task["duration_ms"] is not None
+            assert task["duration_ms"] >= 3000
+
+    @pytest.mark.asyncio
+    async def test_list_runs_includes_duration_ms(self, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        from taskpps.db.engine import get_session_factory
+        from taskpps.models.run import PipelineRun, RunStatus
+
+        run_id = "run-duration-list"
+        async with get_session_factory()() as session:
+            session.add(
+                PipelineRun(
+                    id=run_id,
+                    pipeline_name="deploy",
+                    pipeline_file="deploy.yaml",
+                    pipeline_id="deploy",
+                    pipeline_version="v1",
+                    status=RunStatus.SUCCESS,
+                    params="{}",
+                    started_at=datetime.now(timezone.utc) - timedelta(seconds=3),
+                    finished_at=datetime.now(timezone.utc),
+                )
+            )
+            await session.commit()
+
+        svc = PipelineService()
+        listed = await svc.list_runs()
+        run = next((r for r in listed["items"] if r["id"] == run_id), None)
+        assert run is not None
+        assert "duration_ms" in run
+        assert run["duration_ms"] is not None
+        assert run["duration_ms"] >= 3000
+
+    @pytest.mark.asyncio
+    async def test_get_run_running_duration_ms_positive(self, tmp_project, db_engine):
+        _setup_config(tmp_project)
+        from taskpps.db.engine import get_session_factory
+        from taskpps.models.run import PipelineRun, RunStatus
+
+        run_id = "run-duration-running"
+        start = datetime.now(timezone.utc) - timedelta(seconds=2)
+        async with get_session_factory()() as session:
+            session.add(
+                PipelineRun(
+                    id=run_id,
+                    pipeline_name="deploy",
+                    pipeline_file="deploy.yaml",
+                    pipeline_id="deploy",
+                    pipeline_version="v1",
+                    status=RunStatus.RUNNING,
+                    params="{}",
+                    started_at=start,
+                )
+            )
+            await session.commit()
+
+        svc = PipelineService()
+        fetched = await svc.get_run(run_id)
+        assert fetched is not None
+        assert fetched["duration_ms"] is not None
+        assert fetched["duration_ms"] >= 2000

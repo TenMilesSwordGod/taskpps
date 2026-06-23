@@ -41,6 +41,24 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+def _compute_duration_ms(
+    started_at: datetime | None,
+    finished_at: datetime | None,
+    server_now: datetime | None = None,
+) -> int | None:
+    """计算耗时（毫秒），避免前端使用本地 Date.now() 时受浏览器时钟偏差影响。
+
+    已开始但未结束时使用服务端当前时间；未开始则返回 None。
+    """
+    if started_at is None:
+        return None
+    start = _ensure_utc(started_at)
+    if start is None:
+        return None
+    end = _ensure_utc(finished_at) or server_now or datetime.now(timezone.utc)
+    return max(0, int((end - start).total_seconds() * 1000))
+
+
 async def _resolve_project_name(project_id: str | None) -> str | None:
     """根据 project_id 查找项目名称，名称为空时用 workdir 最后一段路径作为回退。"""
     if project_id is None:
@@ -361,6 +379,7 @@ class PipelineService:
                 console_log_path = str(build_pipeline_log_path(run.pipeline_id, run.pipeline_version, run.id))
 
             project_name = await _resolve_project_name(getattr(run, "project_id", None))
+            server_now = datetime.now(timezone.utc)
 
             return {
                 "id": run.id,
@@ -378,6 +397,7 @@ class PipelineService:
                 "started_at": _ensure_utc(run.started_at),
                 "finished_at": _ensure_utc(run.finished_at),
                 "created_at": _ensure_utc(run.created_at),
+                "duration_ms": _compute_duration_ms(run.started_at, run.finished_at, server_now),
                 "tasks": [
                     {
                         "id": t.id,
@@ -392,6 +412,7 @@ class PipelineService:
                         "started_at": _ensure_utc(t.started_at),
                         "finished_at": _ensure_utc(t.finished_at),
                         "created_at": _ensure_utc(t.created_at),
+                        "duration_ms": _compute_duration_ms(t.started_at, t.finished_at, server_now),
                     }
                     for t in tasks
                 ],
@@ -413,6 +434,7 @@ class PipelineService:
             project_ids = {getattr(r, "project_id", None) for r in runs}
             project_name_map = await _batch_resolve_project_names(project_ids)
 
+            server_now = datetime.now(timezone.utc)
             items = []
             for run in runs:
                 params = {}
@@ -445,6 +467,7 @@ class PipelineService:
                         "started_at": _ensure_utc(run.started_at),
                         "finished_at": _ensure_utc(run.finished_at),
                         "created_at": _ensure_utc(run.created_at),
+                        "duration_ms": _compute_duration_ms(run.started_at, run.finished_at, server_now),
                         "tasks": [],
                         "task_summary": task_summaries.get(run.id, {}),
                     }

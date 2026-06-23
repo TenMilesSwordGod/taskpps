@@ -25,6 +25,7 @@ class TaskRunResponse(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     created_at: datetime
+    duration_ms: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -48,6 +49,7 @@ class RunResponse(BaseModel):
     created_at: datetime
     tasks: list[TaskRunResponse] = []
     task_summary: dict[str, int] = {}
+    duration_ms: int | None = None
 
     model_config = {"from_attributes": True}
 

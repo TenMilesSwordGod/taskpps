@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
 import { XCircle, ListTree, RefreshCw, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
@@ -60,10 +60,6 @@ function formatDuration(ms: number): string {
   const s = total % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
-
-function parseUTC(s: string): number {
-  return new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z').getTime();
 }
 
 /** 运行详情页面 */
@@ -175,20 +171,9 @@ export default function RunDetailPage() {
   const setAutoScroll = sseResult.setAutoScroll;
   const clearLogs = sseResult.clearLogs;
 
-  // 进度与耗时
+  // 进度与耗时（使用服务端计算的 duration_ms，避免客户端时钟偏差）
   const progress = useMemo(() => calcProgress(run), [run]);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (!isLive) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [isLive]);
-  const durationMs = useMemo(() => {
-    if (!run?.started_at) return null;
-    const start = parseUTC(run.started_at);
-    const end = run.finished_at ? parseUTC(run.finished_at) : now;
-    return Math.max(0, end - start);
-  }, [run?.started_at, run?.finished_at, now]);
+  const durationMs = run?.duration_ms ?? null;
 
   const handleCancel = async () => {
     if (!id) return;

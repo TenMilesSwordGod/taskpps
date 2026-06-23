@@ -25,6 +25,8 @@ interface TaskRunInfo {
   error?: string | null;
   started_at: string | null;
   finished_at: string | null;
+  /** 服务端计算的耗时（毫秒） */
+  duration_ms: number | null;
 }
 
 interface TaskTreeProps {
@@ -163,22 +165,6 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
     return m;
   }, [liveTaskRuns, taskRuns]);
 
-  // 实时计时器：运行中有 started_at 的任务需要实时更新耗时
-  const [now, setNow] = useState(Date.now());
-  const hasRunning = useMemo(() => {
-    if (!isLive) return false;
-    for (const r of runMap.values()) {
-      if (r.status === 'running' && r.started_at && !r.finished_at) return true;
-    }
-    return false;
-  }, [isLive, runMap]);
-
-  useEffect(() => {
-    if (!hasRunning) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [hasRunning]);
-
   // 拉取 console.log（仅 debugVisible 且 runId 存在时）
   const { data: consoleData } = useRunConsole(
     debugVisible && runId ? runId : undefined,
@@ -267,16 +253,10 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         const isRunning = run?.status === 'running';
 
         let durStr: string | null = null;
-        if (run?.started_at && run?.finished_at) {
-          const dur = new Date(run.finished_at).getTime() - new Date(run.started_at).getTime();
-          durStr = fmtDur(Math.max(0, dur));
+        if (run?.duration_ms != null && run.duration_ms >= 0) {
+          durStr = fmtDur(run.duration_ms);
         } else if (run?.started_at && !run?.finished_at) {
-          if (isRunning && isLive) {
-            const dur = now - new Date(run.started_at).getTime();
-            durStr = fmtDur(Math.max(0, dur));
-          } else {
-            durStr = '…';
-          }
+          durStr = '…';
         }
 
         const isSelected = selectedTaskId === taskId;
@@ -415,7 +395,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
     const pipelineTeardown = pipelinePhases.filter((g) => g.phase === 'teardown').map(buildPhaseNode);
 
     return [...pipelineSetup, ...nodes, ...pipelineTeardown];
-  }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, now, onRetry, onShowVersions, retryCounts]);
+  }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, onRetry, onShowVersions, retryCounts]);
 
   const selectedKeys = selectedTaskId ? [selectedTaskId] : [];
 
