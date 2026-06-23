@@ -996,6 +996,11 @@ class PipelineRunner:
         event_bus = get_event_bus()
         event_bus.emit(SIGNAL_RUN_CANCELLED, sender=self, run_id=self.run_id)
 
+        # Snapshot running executors before any await point so that executors
+        # completing during the subsequent async DB operations are still
+        # cancelled below.
+        running_executors = list(self._running_executors.items())
+
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
@@ -1006,7 +1011,7 @@ class PipelineRunner:
             await run_repo.update_run_status(self.run_id, RunStatus.CANCELLED)
             await task_repo.cancel_pending_tasks(self.run_id)
 
-        for _name, executor in self._running_executors.items():
+        for _name, executor in running_executors:
             self._write_pipeline_log("INFO", f"Cancelling running executor for task: {_name}")
             await executor.cancel()
 
