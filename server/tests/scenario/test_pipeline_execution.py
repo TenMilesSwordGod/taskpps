@@ -84,7 +84,7 @@ class TestPipelineExecution:
         ):
             await runner.run()
 
-        assert call_count == 2
+        assert call_count == 1, "flaky 失败后依赖它的 next 应被跳过"
 
     @pytest.mark.asyncio
     async def test_on_failure_continue(self, db_engine, clean_db):
@@ -122,7 +122,7 @@ class TestPipelineExecution:
         ):
             await runner.run()
 
-        assert call_count == 2
+        assert call_count == 1, "flaky 失败后依赖它的 reliable 应被跳过"
 
     @pytest.mark.asyncio
     async def test_task_dag_execution_order(self, db_engine, clean_db):

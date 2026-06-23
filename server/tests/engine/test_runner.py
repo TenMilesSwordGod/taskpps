@@ -651,7 +651,7 @@ class TestPipelineRunnerBoundary:
         assert mock_executor.execute.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_on_failure_continue_only_affects_own_deps(self, mock_session_factory):
+    async def test_on_failure_continue_skips_dependent_tasks(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         tasks = [
             ResolvedTask(name="t1", task_type="command", command="exit 1"),
@@ -682,7 +682,7 @@ class TestPipelineRunnerBoundary:
         ):
             await runner.run()
 
-        assert mock_executor.execute.call_count == 2
+        assert mock_executor.execute.call_count == 1, "sequential 下 t1 失败后: 隐式依赖 t1 的 t2 应被跳过"
 
     @pytest.mark.asyncio
     async def test_retry_on_failure(self, mock_session_factory):
