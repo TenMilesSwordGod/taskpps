@@ -131,6 +131,83 @@ describe('<PipelineListPage /> Issue #105 - 最近运行时间和状态分开', 
   })
 })
 
+describe('<PipelineListPage /> Issue #105 - 额外边界场景测试', () => {
+  beforeEach(() => {
+    mockUsePipelines.mockReset()
+  })
+
+  it('多个 pipeline 行的时间和状态列各自独立显示', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({
+            name: 'deploy',
+            file: 'deploy.yaml',
+            last_run: { id: 'run1', status: 'success', created_at: '2026-06-20T14:56:00+08:00' },
+          }),
+          makePipeline({
+            name: 'test',
+            file: 'test.yaml',
+            last_run: { id: 'run2', status: 'failed', created_at: '2026-06-21T10:30:00+08:00' },
+          }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // 时间列：两个不同时间
+    expect(screen.getByText('06-20 14:56')).toBeInTheDocument()
+    expect(screen.getByText('06-21 10:30')).toBeInTheDocument()
+
+    // 状态列：两个 StatusTag
+    const statusTags = screen.getAllByTestId('status-tag')
+    expect(statusTags.length).toBe(2)
+    expect(statusTags[0]).toHaveTextContent('success')
+    expect(statusTags[1]).toHaveTextContent('failed')
+  })
+
+  it('partial 状态正确显示为"部分完成"', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({
+            name: 'deploy',
+            file: 'deploy.yaml',
+            last_run: { id: 'run1', status: 'partial', created_at: '2026-06-20T14:56:00+08:00' },
+          }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    expect(screen.getByText('06-20 14:56')).toBeInTheDocument()
+    expect(screen.getByTestId('status-tag')).toHaveTextContent('partial')
+  })
+
+  it('cancelled 状态正确显示为"已取消"', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({
+            name: 'deploy',
+            file: 'deploy.yaml',
+            last_run: { id: 'run1', status: 'cancelled', created_at: '2026-06-20T14:56:00+08:00' },
+          }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    expect(screen.getByTestId('status-tag')).toHaveTextContent('cancelled')
+  })
+})
+
 describe('<PipelineListPage /> Issue #104 - 展开/折叠动画', () => {
   beforeEach(() => {
     mockUsePipelines.mockReset()
