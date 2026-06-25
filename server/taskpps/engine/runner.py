@@ -39,6 +39,11 @@ from taskpps.executors.local import LocalExecutor
 from taskpps.executors.nexus import NexusExecutor
 from taskpps.i18n import t
 from taskpps.models.run import RunStatus, TaskStatus
+from taskpps.services.artifact_service import (
+    collect_default_artifacts,
+    collect_task_artifacts,
+    substitute_artifact_refs,
+)
 
 logger = logging.getLogger(__name__)
 _active_runs: dict[str, PipelineRunner] = {}
@@ -352,6 +357,33 @@ class PipelineRunner:
                 await run_repo.update_run_status(self.run_id, final_status, finished_at=end_time, error=run_error)
                 _final_status_updated = True
 
+            task_names = [f"{sub.name}.{t.name}" for sub in self.pipeline.subpipelines for t in sub.tasks]
+            try:
+                await collect_default_artifacts(
+                    run_id=self.run_id,
+                    pipeline_name=self.pipeline.name,
+                    pipeline_id=self._pipeline_id,
+                    pipeline_version=self._pipeline_version,
+                    status=final_status.value,
+                    started_at=self._start_time,
+                    finished_at=end_time,
+                    task_names=task_names,
+                )
+                self._write_pipeline_log("INFO", "Default artifacts collected (log.txt + meta.json)")
+            except Exception as art_err:
+                self._write_pipeline_log("WARN", f"Failed to collect default artifacts: {art_err}")
+
+            if self.pipeline.artifacts:
+                workspace = self.context.get_workspace()
+                try:
+                    from taskpps.services.artifact_service import collect_task_artifacts as collect_pipeline_artifacts
+                    await collect_pipeline_artifacts(
+                        self.run_id, "pipeline", self.pipeline.artifacts, Path(workspace) if workspace else Path.cwd()
+                    )
+                    self._write_pipeline_log("INFO", f"Collected {len(self.pipeline.artifacts)} pipeline-level artifact(s)")
+                except Exception as art_err:
+                    self._write_pipeline_log("WARN", f"Failed to collect pipeline artifacts: {art_err}")
+
             self._write_pipeline_log("PIPELINE:TEARDOWN", "")
             self._write_pipeline_log("SYSTEM", f"End Time: {end_time.isoformat()}")
             self._write_pipeline_log("SYSTEM", f"Duration: {duration}")
@@ -656,6 +688,15 @@ class PipelineRunner:
             "SUCCESS",
             f"SubPipeline '{sub_name}' completed successfully ({len(completed_tasks)}/{len(sub.tasks)} tasks)",
         )
+
+        if sub.artifacts:
+            workspace = self.context.get_workspace()
+            try:
+                await collect_task_artifacts(self.run_id, sub_name, sub.artifacts, Path(workspace) if workspace else Path.cwd())
+                self._write_pipeline_log("INFO", f"Collected {len(sub.artifacts)} subpipeline-level artifact(s) for '{sub_name}'")
+            except Exception as art_err:
+                self._write_pipeline_log("WARN", f"Failed to collect subpipeline artifacts for '{sub_name}': {art_err}")
+
         self._write_pipeline_log(f"SUB:{sub_name}:TEARDOWN", "")
         self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' finished")
         self._write_separator("=", f"[subpipeline] {sub_name} end")
@@ -689,6 +730,10 @@ class PipelineRunner:
         env = self.context.get_task_env(task)
         env["TASKPPS_RUN_ID"] = self.run_id
         env["TASKPPS_TASK_ID"] = task_run_id or qualified_name
+
+        for key, val in env.items():
+            if isinstance(val, str) and "${artifact:" in val:
+                env[key] = substitute_artifact_refs(val, self.run_id, sub_name)
 
         logger.debug(
             f"[DEBUG-EXEC] _execute_task '{qualified_name}': task_type={task.task_type}, command={task.command!r:.200}, commands={task.commands}, steps={task.steps}, cwd={task.cwd}"
@@ -885,6 +930,14 @@ class PipelineRunner:
             )
 
         event_bus.emit(SIGNAL_TASK_FINISHED, sender=self, run_id=self.run_id, task=qualified_name, status=task_status)
+
+        if task.artifacts:
+            workdir = Path(effective_cwd) if effective_cwd else Path.cwd()
+            try:
+                await collect_task_artifacts(self.run_id, qualified_name, task.artifacts, workdir)
+                self._write_pipeline_log("INFO", f"Collected {len(task.artifacts)} artifact(s) for task '{qualified_name}'")
+            except Exception as art_err:
+                self._write_pipeline_log("WARN", f"Failed to collect artifacts for task '{qualified_name}': {art_err}")
 
         if not last_result.success:
             self._write_pipeline_log("ERROR", f"Task '{qualified_name}' failed with exit code {last_result.exit_code}")

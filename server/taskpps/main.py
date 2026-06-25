@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from taskpps.api import agents, health, pipelines, projects, runs, triggers, ws_agent
+from taskpps.api import agents, artifacts, health, pipelines, projects, runs, triggers, ws_agent
 from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale
@@ -163,6 +163,7 @@ app.include_router(triggers.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(ws_agent.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
+app.include_router(artifacts.router, prefix="/api")
 
 # 挂载 Web UI 静态文件（生产模式）
 # 从 SERVER_HOME/web/dist 或项目根目录的 web/dist 查找构建产物

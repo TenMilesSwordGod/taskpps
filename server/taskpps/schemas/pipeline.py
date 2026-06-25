@@ -15,6 +15,10 @@ class TaskStep(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
 
 
+class ArtifactDeclaration(BaseModel):
+    path: str
+
+
 class GitSpec(BaseModel):
     repo: str
     ref: str | None = None
@@ -58,6 +62,7 @@ class TaskYAML(BaseModel):
     on_failure: str | None = None
     depends_on: list[str] = Field(default_factory=list)
     when: str | None = None
+    artifacts: list[ArtifactDeclaration] = Field(default_factory=list)
 
     def get_task_type(self) -> str:
         if self.invoke is not None:
@@ -111,6 +116,7 @@ class SubPipeline(BaseModel):
     config: PipelineConfig | None = None
     depends_on: list[str] = Field(default_factory=list)
     tasks: list[TaskYAML]
+    artifacts: list[ArtifactDeclaration] = Field(default_factory=list)
 
 
 class PipelineYAML(BaseModel):
@@ -119,6 +125,7 @@ class PipelineYAML(BaseModel):
     config: PipelineConfig | None = None
     tasks: list[TaskYAML] | None = None
     pipelines: list[SubPipeline] | None = None
+    artifacts: list[ArtifactDeclaration] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _normalize(self) -> "PipelineYAML":

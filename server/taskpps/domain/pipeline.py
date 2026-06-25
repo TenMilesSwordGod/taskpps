@@ -45,6 +45,7 @@ class ResolvedTask:
         on_failure: str | None = None,
         depends_on: list[str] | None = None,
         when: str | None = None,
+        artifacts: list[dict[str, str]] | None = None,
     ):
         self.name = name
         self.task_type = task_type
@@ -65,6 +66,7 @@ class ResolvedTask:
         self.on_failure = on_failure
         self.depends_on = depends_on or []
         self.when = when
+        self.artifacts = artifacts or []
 
     @classmethod
     def from_yaml(
@@ -106,6 +108,7 @@ class ResolvedTask:
             on_failure=task_yaml.on_failure or config.on_failure,
             depends_on=task_yaml.depends_on,
             when=task_yaml.when,
+            artifacts=[{"path": a.path} for a in task_yaml.artifacts],
         )
 
 
@@ -116,17 +119,25 @@ class ResolvedSubPipeline:
         tasks: list[ResolvedTask],
         config: PipelineConfig,
         depends_on: list[str] | None = None,
+        artifacts: list[dict[str, str]] | None = None,
     ):
         self.name = name
         self.tasks = tasks
         self.config = config
         self.depends_on = depends_on or []
+        self.artifacts = artifacts or []
 
     @classmethod
     def from_yaml(cls, sub: SubPipeline, top_config: PipelineConfig) -> ResolvedSubPipeline:
         merged_config = _merge_config(top_config, sub.config)
         tasks = [ResolvedTask.from_yaml(t, merged_config) for t in sub.tasks]
-        return cls(name=sub.name, tasks=tasks, config=merged_config, depends_on=sub.depends_on)
+        return cls(
+            name=sub.name,
+            tasks=tasks,
+            config=merged_config,
+            depends_on=sub.depends_on,
+            artifacts=[{"path": a.path} for a in sub.artifacts],
+        )
 
     def get_task_by_name(self, name: str) -> ResolvedTask | None:
         for t in self.tasks:
@@ -144,9 +155,11 @@ class ResolvedPipeline:
         subpipelines: list[ResolvedSubPipeline] | None = None,
         top_config: PipelineConfig | None = None,
         pipeline_file: str = "",
+        artifacts: list[dict[str, str]] | None = None,
     ):
         self.name = name
         self.pipeline_file = pipeline_file
+        self.artifacts = artifacts or []
 
         if subpipelines is not None:
             self.subpipelines = subpipelines
@@ -170,7 +183,13 @@ class ResolvedPipeline:
         if spec.pipelines:
             for sub in spec.pipelines:
                 subs.append(ResolvedSubPipeline.from_yaml(sub, top_config))
-        return cls(name=spec.name, subpipelines=subs, top_config=top_config, pipeline_file=pipeline_file)
+        return cls(
+            name=spec.name,
+            subpipelines=subs,
+            top_config=top_config,
+            pipeline_file=pipeline_file,
+            artifacts=[{"path": a.path} for a in spec.artifacts],
+        )
 
     def get_subpipeline_by_name(self, name: str) -> ResolvedSubPipeline | None:
         for s in self.subpipelines:
