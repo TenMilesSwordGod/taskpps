@@ -9,6 +9,7 @@ const PipelineDetailPage = lazy(() => import('@/features/pipelines/PipelineDetai
 const RunListPage = lazy(() => import('@/features/runs/RunListPage'));
 const RunDetailPage = lazy(() => import('@/features/runs/RunDetailPage'));
 const ServersPage = lazy(() => import('@/features/servers/ServersPage'));
+const PluginListPage = lazy(() => import('@/features/plugins/PluginListPage'));
 
 /** 路由级 Suspense fallback */
 function RouteFallback() {
@@ -29,6 +30,7 @@ const routes: RouteObject[] = [
   { path: '/runs', element: wrap(<RunListPage />) },
   { path: '/runs/:id', element: wrap(<RunDetailPage />) },
   { path: '/servers', element: wrap(<ServersPage />) },
+  { path: '/plugins', element: wrap(<PluginListPage />) },
 ];
 
 export default routes;

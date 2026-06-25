@@ -1,15 +1,45 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
 import sys
 from pathlib import Path
 
-from taskpps.config import get_plugins_dir, get_settings
-from taskpps.plugins.base import BasePlugin, TriggerPlugin
+from taskpps.config import get_pipelines_dir, get_plugins_dir, get_settings
+from taskpps.plugins.base import BasePlugin, ExecutorPlugin, NotifierPlugin, TriggerPlugin
 from taskpps.plugins.cron_trigger import CronTrigger
 
 logger = logging.getLogger(__name__)
+
+
+_PLUGIN_TYPE_NAMES = {
+    TriggerPlugin: "TriggerPlugin",
+    NotifierPlugin: "NotifierPlugin",
+    ExecutorPlugin: "ExecutorPlugin",
+}
+
+
+def _get_plugin_type(plugin: BasePlugin) -> str:
+    """Determine the plugin type based on which base class it inherits from."""
+    for base_cls, type_name in _PLUGIN_TYPE_NAMES.items():
+        if isinstance(plugin, base_cls):
+            return type_name
+    return type(plugin).__name__
+
+
+def _run_coro_sync(coro):
+    """在同步上下文中安全地运行一个异步协程。"""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    else:
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
 
 
 class PluginManager:
@@ -39,6 +69,44 @@ class PluginManager:
             ):
                 self._try_load_plugin(path)
 
+        self._upsert_discovered_to_db()
+
+    def _upsert_discovered_to_db(self) -> None:
+        """将已发现的插件信息写入 DB, 默认 enabled=False。"""
+        from datetime import datetime, timezone
+
+        async def _upsert():
+            from sqlalchemy import select
+
+            from taskpps.db.engine import get_session_factory
+            from taskpps.models.plugin import Plugin
+
+            async with get_session_factory()() as session:
+                for name, plugin in self._plugins.items():
+                    result = await session.execute(select(Plugin).where(Plugin.name == name))
+                    existing = result.scalar_one_or_none()
+                    if existing:
+                        existing.version = plugin.version
+                        existing.help_msg = plugin.help_msg
+                        existing.type = _get_plugin_type(plugin)
+                        existing.updated_at = datetime.now(timezone.utc)
+                    else:
+                        new_plugin = Plugin(
+                            name=plugin.name,
+                            type=_get_plugin_type(plugin),
+                            version=plugin.version,
+                            help_msg=plugin.help_msg,
+                            enabled=False,
+                        )
+                        session.add(new_plugin)
+                await session.commit()
+            logger.info("Synced %d discovered plugins to DB", len(self._plugins))
+
+        try:
+            _run_coro_sync(_upsert())
+        except Exception as e:
+            logger.warning("Failed to sync discovered plugins to DB: %s", e)
+
     def _try_load_plugin(self, path: Path) -> None:
         try:
             if path.is_dir():
@@ -60,8 +128,7 @@ class PluginManager:
                 if (
                     isinstance(attr, type)
                     and issubclass(attr, BasePlugin)
-                    and attr is not BasePlugin
-                    and attr is not TriggerPlugin
+                    and attr not in (BasePlugin, TriggerPlugin, NotifierPlugin, ExecutorPlugin)
                 ):
                     try:
                         instance = attr()
@@ -73,9 +140,41 @@ class PluginManager:
             logger.error(f"Failed to load plugin from {path}: {e}")
 
     def start_triggers(self, callback=None) -> None:
+        from sqlalchemy import select
+
+        from taskpps.db.engine import get_session_factory
+        from taskpps.models.plugin import Plugin
+
         settings = get_settings()
+
+        async def _get_enabled_names() -> set[str] | None:
+            try:
+                async with get_session_factory()() as session:
+                    result = await session.execute(
+                        select(Plugin.name).where(Plugin.enabled, Plugin.type == "TriggerPlugin"),
+                    )
+                    return {row[0] for row in result.fetchall()}
+            except Exception:
+                logger.warning("Failed to query plugin DB for enabled status, assuming all enabled")
+                return None
+
+        try:
+            enabled_names = _run_coro_sync(_get_enabled_names())
+        except Exception:
+            enabled_names = None
+
         for trigger_cfg in settings.triggers:
             if trigger_cfg.type == "cron" and trigger_cfg.schedule:
+                cron_name = f"cron:{trigger_cfg.schedule}:{trigger_cfg.pipeline}"
+
+                if enabled_names is not None and cron_name not in enabled_names:
+                    logger.warning("Skipping disabled plugin: %s", cron_name)
+                    continue
+
+                pipeline_path = get_pipelines_dir() / trigger_cfg.pipeline
+                if not pipeline_path.exists():
+                    raise FileNotFoundError(f"Pipeline {trigger_cfg.pipeline} 不存在")
+
                 cron_trigger = CronTrigger(
                     expression=trigger_cfg.schedule,
                     pipeline_file=trigger_cfg.pipeline,

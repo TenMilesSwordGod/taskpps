@@ -6,6 +6,7 @@ import {
   PartitionOutlined,
   HistoryOutlined,
   CloudServerOutlined,
+  ApiOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 
@@ -50,6 +51,11 @@ const menuRoutes = [
     path: '/servers',
     name: '服务器',
     icon: <CloudServerOutlined />,
+  },
+  {
+    path: '/plugins',
+    name: '插件',
+    icon: <ApiOutlined />,
   },
 ];
 

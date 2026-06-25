@@ -70,6 +70,14 @@ class WebhookNotifier(NotifierPlugin):
     def name(self) -> str:
         return f"webhook:{self._url}"
 
+    @property
+    def help_msg(self) -> str:
+        return "## WebhookNotifier\n\nHTTP Webhook 通知插件，将 pipeline 事件以 JSON 格式推送到外部 URL。\n\n- **支持事件**: `pipeline_started`, `task_started`, `task_finished`, `run_completed` 等\n- **重试机制**: 可配置重试次数和超时时间\n- **请求头自定义**: 支持自定义 HTTP Headers"
+
+    @property
+    def version(self) -> str:
+        return "1.0.0"
+
     def start(self) -> None:
         self._running = True
         logger.info(f"WebhookNotifier started: {self._url}")
