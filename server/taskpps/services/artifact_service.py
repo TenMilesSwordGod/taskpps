@@ -32,34 +32,58 @@ def _guess_content_type(path: str) -> str:
     return ct or "application/octet-stream"
 
 
+def _normalize_path_segments(segments: list[str]) -> list[str]:
+    """Resolve . and .. in a list of path segments."""
+    result: list[str] = []
+    for seg in segments:
+        if seg == "." or not seg:
+            continue
+        if seg == "..":
+            if result:
+                result.pop()
+            continue
+        result.append(seg)
+    return result
+
+
 def parse_artifact_ref(ref: str) -> ArtifactRef | None:
     """Parse ${artifact:...} reference into structured parts.
 
     Supported formats:
-    - ${artifact:task/path} (same subpipeline, path can contain /)
-    - ${artifact:subpipeline/task/path} (cross subpipeline, 3+ parts)
-    - ${artifact:run_id/subpipeline/task/path} (cross run, 4+ parts)
+    - ${artifact:task/path} (same subpipeline, 2 parts)
+    - ${artifact:task/path/deep} (same subpipeline, 3 parts, path has slashes)
+    - ${artifact:subpipeline/task/path} (cross subpipeline, 4 parts)
+    - ${artifact:run_id/subpipeline/task/path} (cross run, 5+ parts)
 
-    Disambiguation: 3 parts = same subpipeline (task/path/with/slashes).
-    To specify cross-subpipeline, use 4+ parts: sub/pipeline/task/path.
+    If the raw value contains . or .. segments, they are normalized first
+    and the result is treated as same-subpipeline (task_name + path).
     """
     match = _ARTIFACT_REF_PATTERN.search(ref)
     if not match:
         return None
 
     raw = match.group(1).strip("/")
-    parts = raw.split("/")
+    parts = [p for p in raw.split("/") if p]
 
     if len(parts) < 2:
         return None
+
+    has_traversal = any(p in (".", "..") for p in parts)
+
+    if has_traversal:
+        parts = _normalize_path_segments(parts)
+        if len(parts) < 2:
+            return None
+        return ArtifactRef(task_name=parts[0], path="/".join(parts[1:]))
 
     if len(parts) == 2:
         return ArtifactRef(task_name=parts[0], path=parts[1])
     elif len(parts) == 3:
         return ArtifactRef(task_name=parts[0], path="/".join(parts[1:]))
-    elif len(parts) >= 4:
+    elif len(parts) == 4:
+        return ArtifactRef(subpipeline=parts[0], task_name=parts[1], path="/".join(parts[2:]))
+    else:
         return ArtifactRef(run_id=parts[0], subpipeline=parts[1], task_name=parts[2], path="/".join(parts[3:]))
-    return None
 
 
 def resolve_artifact_ref(
