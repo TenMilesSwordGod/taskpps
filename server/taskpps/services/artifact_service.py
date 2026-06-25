@@ -249,7 +249,7 @@ async def collect_task_artifacts(
                     )
                 else:
                     dst = task_artifacts_dir / src.name
-                    shutil.copy2(src, dst)
+                    dst.write_bytes(src.read_bytes())
                     item = ArtifactItem(
                         task_name=task_name,
                         path=src.name,
@@ -309,13 +309,18 @@ async def promote_artifact(
 
         stat = dst.stat()
         ct = _guess_content_type(filename)
-        await repo.create_artifact(
-            run_id=run_id,
-            task_name=task_name,
-            path=filename,
-            size=stat.st_size,
-            content_type=ct,
-        )
+        try:
+            await repo.create_artifact(
+                run_id=run_id,
+                task_name=task_name,
+                path=filename,
+                size=stat.st_size,
+                content_type=ct,
+            )
+        except Exception as exc:
+            if "UNIQUE" in str(exc).upper() or "unique" in str(exc):
+                raise FileExistsError(f"Artifact already exists: {task_name}/{filename}") from exc
+            raise
 
     return ArtifactItem(
         task_name=task_name,

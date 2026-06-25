@@ -61,34 +61,6 @@ async def list_artifacts(run_id: str):
     )
 
 
-@router.get("/{path:path}")
-async def download_artifact(run_id: str, path: str):
-    parts = path.split("/", 1)
-    if len(parts) < 2:
-        raise HTTPException(status_code=400, detail="Path must be in format task_name/file_path")
-
-    task_name = parts[0]
-    file_path = parts[1]
-
-    async with get_session_factory()() as session:
-        repo = ArtifactRepository(session)
-        artifact = await repo.get_artifact(run_id, task_name, file_path)
-        if artifact is None:
-            raise HTTPException(status_code=404, detail=t("Artifact not found"))
-
-    abs_path = get_artifact_file_path(run_id, task_name, file_path)
-    if abs_path is None:
-        raise HTTPException(status_code=404, detail=t("Artifact file not found"))
-
-    filename = Path(file_path).name
-    return FileResponse(
-        path=str(abs_path),
-        media_type=artifact.content_type,
-        filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @router.get("/zip")
 async def download_artifacts_zip(
     run_id: str,
@@ -129,6 +101,34 @@ async def download_artifacts_zip(
     return StreamingResponse(
         _generate_zip(),
         media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{path:path}")
+async def download_artifact(run_id: str, path: str):
+    parts = path.split("/", 1)
+    if len(parts) < 2:
+        raise HTTPException(status_code=400, detail="Path must be in format task_name/file_path")
+
+    task_name = parts[0]
+    file_path = parts[1]
+
+    async with get_session_factory()() as session:
+        repo = ArtifactRepository(session)
+        artifact = await repo.get_artifact(run_id, task_name, file_path)
+        if artifact is None:
+            raise HTTPException(status_code=404, detail=t("Artifact not found"))
+
+    abs_path = get_artifact_file_path(run_id, task_name, file_path)
+    if abs_path is None:
+        raise HTTPException(status_code=404, detail=t("Artifact file not found"))
+
+    filename = Path(file_path).name
+    return FileResponse(
+        path=str(abs_path),
+        media_type=artifact.content_type,
+        filename=filename,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
