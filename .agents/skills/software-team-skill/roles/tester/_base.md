@@ -85,13 +85,14 @@ Manager 会把 QA 作为 sub-agent 启动（**在 Dev 完成后**）：
 zentao story $STORY_ID
 python3 scripts/gitea/fetch_issue.py "$ISSUE_URL" --role tester
 
-# 2. 场景穷尽 — 4 维度
+# 2. 场景穷尽 — 5 维度
 #    边界值: min/max/空/极大/特殊字符
 #    异常流: 非法输入/缺字段/类型错误/超时/中断
 #    并发: 并发请求/重复提交/竞态/幂等
 #    环境: OS/浏览器/弱网/磁盘满/依赖不可用
-#
-#    注意：不重复 dev 的 TDD 场景（dev 测实现路径，你测边界/异常/并发/环境）
+#    交互: click/check/input/select→状态流转→event handler 参数格式
+#          （必须 fireEvent 触发组件交互，不能只测渲染快照）
+#          （issue #142 教训：Tree checkbox 勾选→onCheck 回调→checkedKeys 状态→按钮启用，整个链路必须测到）
 
 # 3. 在 zentao 推 testcase
 for SCENARIO in "<场景1>" "<场景2>" "<场景3>" "<场景4>"; do
@@ -109,6 +110,7 @@ done
 #    异常：test_<module>_exception.py
 #    并发：test_<module>_concurrency.py
 #    环境：test_<module>_environment.py
+#    交互：test_<module>_interaction.py（fireEvent 触发→状态验证→UI 更新）
 
 # 5. 跑测试验证（先跑新写的测试，再跑全量确认无回归）
 cd server && uv run pytest tests/<相关模块>/ -v
@@ -136,7 +138,7 @@ fi
 
 # 8. gitea 极简主描述
 python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
-  "[QA Testcase 就绪] zentao testcase: ${TC_IDS[*]}。测试代码: tests/<模块>/test_*.py。维度: 边界/异常/并发/环境。" --role tester
+  "[QA Testcase 就绪] zentao testcase: ${TC_IDS[*]}。测试代码: tests/<模块>/test_*.py。维度: 边界/异常/并发/环境/交互。" --role tester
 
 # 9. 写 status.json
 python3 -c "
@@ -335,6 +337,7 @@ json.dump(s, open('$DEBUG_DIR/status.json','w'), indent=2)
 | 流程维度 | 主流程/备选流/异常流/取消/中断/回滚 |
 | 数据维度 | 已存在/不存在/软删除/硬删除/脏数据/历史迁移 |
 | UI 维度 | 分辨率/浏览器/深色/浅色/可访问性/键盘操作 |
+| 交互维度 | **click/check/input/select/drag** 等用户操作；组件状态流转（勾选→按钮启禁、表单校验）；event handler 不同参数格式（数组/对象/null）；loading→error→data 状态切换；tree/table/form/modal/drawer 组件交互 |
 
 ### 覆盖完备性自检
 

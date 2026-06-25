@@ -36,7 +36,7 @@ function buildTree(artifacts: ArtifactItem[], defaultArtifacts: ArtifactItem[]):
   }))
 }
 
-function getCheckedItems(checkedKeys: string[], tree: DataNode[]): ArtifactItem[] {
+export function getCheckedItems(checkedKeys: string[], tree: DataNode[]): ArtifactItem[] {
   const keys = new Set(checkedKeys)
   const items: ArtifactItem[] = []
   for (const node of tree) {
@@ -88,7 +88,10 @@ export default function ArtifactsDrawer({ runId, open, onClose }: ArtifactsDrawe
             defaultExpandAll
             treeData={tree}
             checkedKeys={checkedKeys}
-            onCheck={(keys) => setCheckedKeys(keys as string[])}
+            onCheck={(keys) => {
+              const checked = Array.isArray(keys) ? keys : keys.checked ?? []
+              setCheckedKeys(checked as string[])
+            }}
             checkStrictly
           />
           <div style={{ marginTop: 16 }}>
