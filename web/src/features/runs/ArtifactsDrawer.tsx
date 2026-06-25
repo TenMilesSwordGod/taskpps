@@ -15,7 +15,7 @@ interface ArtifactLeafNode extends DataNode {
   item: ArtifactItem
 }
 
-function buildTree(artifacts: ArtifactItem[]): ArtifactLeafNode[] {
+function buildTree(artifacts: ArtifactItem[]): DataNode[] {
   const groups: Record<string, ArtifactItem[]> = {}
   for (const item of artifacts) {
     if (!groups[item.task_name]) groups[item.task_name] = []
@@ -33,7 +33,7 @@ function buildTree(artifacts: ArtifactItem[]): ArtifactLeafNode[] {
   }))
 }
 
-function getCheckedItems(checkedKeys: string[], tree: ArtifactLeafNode[]): ArtifactItem[] {
+function getCheckedItems(checkedKeys: string[], tree: DataNode[]): ArtifactItem[] {
   const keys = new Set(checkedKeys)
   const items: ArtifactItem[] = []
   for (const node of tree) {
