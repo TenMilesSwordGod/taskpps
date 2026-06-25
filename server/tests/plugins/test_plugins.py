@@ -18,6 +18,14 @@ class TestBasePlugin:
             def name(self):
                 return "concrete"
 
+            @property
+            def help_msg(self):
+                return "## Help"
+
+            @property
+            def version(self):
+                return "1.0.0"
+
             def start(self):
                 pass
 
@@ -26,6 +34,50 @@ class TestBasePlugin:
 
         p = ConcretePlugin()
         assert p.name == "concrete"
+        assert p.help_msg == "## Help"
+        assert p.version == "1.0.0"
+
+    @pytest.mark.zentao("TC-S0490", domain="server/plugins", priority="P1")
+    def test_missing_help_msg_raises(self):
+        """验证未实现 help_msg 的子类实例化报 TypeError。"""
+        class NoHelpPlugin(BasePlugin):
+            @property
+            def name(self):
+                return "no-help"
+
+            @property
+            def version(self):
+                return "1.0"
+
+            def start(self):
+                pass
+
+            def stop(self):
+                pass
+
+        with pytest.raises(TypeError):
+            NoHelpPlugin()
+
+    @pytest.mark.zentao("TC-S0491", domain="server/plugins", priority="P1")
+    def test_missing_version_raises(self):
+        """验证未实现 version 的子类实例化报 TypeError。"""
+        class NoVersionPlugin(BasePlugin):
+            @property
+            def name(self):
+                return "no-version"
+
+            @property
+            def help_msg(self):
+                return "## Help"
+
+            def start(self):
+                pass
+
+            def stop(self):
+                pass
+
+        with pytest.raises(TypeError):
+            NoVersionPlugin()
 
 
 class TestTriggerPlugin:
@@ -38,6 +90,14 @@ class TestTriggerPlugin:
             @property
             def name(self):
                 return "test-trigger"
+
+            @property
+            def help_msg(self):
+                return "## Trigger"
+
+            @property
+            def version(self):
+                return "1.0.0"
 
             def start(self):
                 pass
@@ -63,6 +123,14 @@ class TestNotifierPlugin:
             def name(self):
                 return "test-notifier"
 
+            @property
+            def help_msg(self):
+                return "## Notifier"
+
+            @property
+            def version(self):
+                return "1.0.0"
+
             def start(self):
                 pass
 
@@ -87,6 +155,14 @@ class TestExecutorPlugin:
             def name(self):
                 return "test-executor"
 
+            @property
+            def help_msg(self):
+                return "## Executor"
+
+            @property
+            def version(self):
+                return "1.0.0"
+
             def start(self):
                 pass
 
@@ -110,6 +186,16 @@ class TestCronTrigger:
     def test_type(self):
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
         assert trigger.get_type() == "cron"
+
+    @pytest.mark.zentao("TC-S0492", domain="server/plugins", priority="P1")
+    def test_help_msg(self):
+        trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
+        assert "Cron" in trigger.help_msg
+
+    @pytest.mark.zentao("TC-S0493", domain="server/plugins", priority="P1")
+    def test_version(self):
+        trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
+        assert trigger.version == "1.0.0"
 
     @pytest.mark.zentao("TC-S0464", domain="server/plugins", priority="P1")
     def test_start_stop(self):
@@ -193,6 +279,14 @@ class SimplePlugin(BasePlugin):
     def name(self):
         return "simple"
 
+    @property
+    def help_msg(self):
+        return "## Simple Plugin"
+
+    @property
+    def version(self):
+        return "1.0.0"
+
     def start(self):
         pass
 
@@ -257,6 +351,14 @@ class SimplePlugin(BasePlugin):
             def name(self):
                 return "bad"
 
+            @property
+            def help_msg(self):
+                return "## Bad"
+
+            @property
+            def version(self):
+                return "1.0.0"
+
             def start(self):
                 pass
 
@@ -304,6 +406,14 @@ class MockPlugin(BasePlugin):
     @property
     def name(self):
         return "mock"
+
+    @property
+    def help_msg(self):
+        return "## Mock Plugin"
+
+    @property
+    def version(self):
+        return "1.0.0"
 
     def start(self):
         pass

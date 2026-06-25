@@ -1,3 +1,19 @@
+/** 插件类型 */
+export type PluginType = 'TriggerPlugin' | 'NotifierPlugin' | 'ExecutorPlugin';
+
+/** 插件信息 */
+export interface PluginResponse {
+  id: string;
+  name: string;
+  type: PluginType;
+  version: string;
+  enabled: boolean;
+  help_msg: string;
+  config: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** 运行状态 */
 export type RunStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled' | 'partial';
 

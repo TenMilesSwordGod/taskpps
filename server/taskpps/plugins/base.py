@@ -10,6 +10,16 @@ class BasePlugin(ABC):
     def name(self) -> str:  # pragma: no cover
         ...
 
+    @property
+    @abstractmethod
+    def help_msg(self) -> str:  # pragma: no cover
+        ...
+
+    @property
+    @abstractmethod
+    def version(self) -> str:  # pragma: no cover
+        ...
+
     @abstractmethod
     def start(self) -> None:  # pragma: no cover
         ...

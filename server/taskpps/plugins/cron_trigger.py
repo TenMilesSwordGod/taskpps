@@ -25,6 +25,14 @@ class CronTrigger(TriggerPlugin):
     def name(self) -> str:
         return f"cron:{self._expression}:{self._pipeline_file}"
 
+    @property
+    def help_msg(self) -> str:
+        return "## CronTrigger\n\n基于 Cron 表达式的定时触发器插件。\n\n- **表达式**: 支持标准 cron 五段式\n- **触发方式**: 按 cron 调度自动执行关联的 pipeline\n- **用途**: 定时构建、定期巡检等场景"
+
+    @property
+    def version(self) -> str:
+        return "1.0.0"
+
     def get_type(self) -> str:
         return "cron"
 
