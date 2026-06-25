@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from taskpps.models.artifact import Artifact
 from taskpps.models.project import Project
 from taskpps.models.run import PipelineRun, RunStatus, TaskRetryRecord, TaskRun, TaskStatus
 from taskpps.models.trigger import Trigger
@@ -554,3 +555,50 @@ class ProjectRepository:
         logger.debug("Counting projects")
         result = await self.session.execute(select(func.count(Project.id)))
         return result.scalar() or 0
+
+
+class ArtifactRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_artifact(
+        self,
+        run_id: str,
+        task_name: str,
+        path: str,
+        size: int = 0,
+        content_type: str = "application/octet-stream",
+    ) -> Artifact:
+        artifact = Artifact(
+            run_id=run_id,
+            task_name=task_name,
+            path=path,
+            size=size,
+            content_type=content_type,
+        )
+        self.session.add(artifact)
+        await self.session.commit()
+        await self.session.refresh(artifact)
+        return artifact
+
+    async def list_artifacts(self, run_id: str) -> list[Artifact]:
+        result = await self.session.execute(
+            select(Artifact).where(Artifact.run_id == run_id).order_by(Artifact.task_name, Artifact.path)
+        )
+        return list(result.scalars().all())
+
+    async def get_artifact(self, run_id: str, task_name: str, path: str) -> Artifact | None:
+        result = await self.session.execute(
+            select(Artifact).where(
+                Artifact.run_id == run_id,
+                Artifact.task_name == task_name,
+                Artifact.path == path,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_artifacts_for_run(self, run_id: str) -> int:
+        stmt = delete(Artifact).where(Artifact.run_id == run_id)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount

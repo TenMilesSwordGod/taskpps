@@ -20,6 +20,7 @@ dependencies = [
     "croniter",
     "sse-starlette",
     "httpx>=0.28.1",
+    "python-multipart",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +35,9 @@ taskpps-server = "taskpps.main:cli"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "zentao(id, domain, priority): 关联 Zentao 测试用例",
+]
 
 [tool.coverage.run]
 omit = [
