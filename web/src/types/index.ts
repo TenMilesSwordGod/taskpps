@@ -392,6 +392,22 @@ export interface DependencyTreeResponse {
   tree: DependencyNode[];
 }
 
+/** Artifact 文件项 */
+export interface ArtifactItem {
+  task_name: string
+  path: string
+  size: number
+  mtime: string
+  content_type: string
+}
+
+/** Artifact 列表响应 */
+export interface ArtifactListResponse {
+  run_id: string
+  default: ArtifactItem[]
+  artifacts: ArtifactItem[]
+}
+
 /** 重试触发响应 */
 export interface RetryRunResponse {
   run_id: string;
