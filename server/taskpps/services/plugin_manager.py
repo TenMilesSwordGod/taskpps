@@ -60,16 +60,15 @@ class PluginManager:
 
     def discover_plugins(self) -> None:
         plugins_dir = get_plugins_dir()
-        if not plugins_dir.exists():
-            return
-
-        for path in plugins_dir.iterdir():
-            if (path.is_dir() and not path.name.startswith("_")) or (
-                path.suffix == ".py" and not path.name.startswith("_")
-            ):
-                self._try_load_plugin(path)
+        if plugins_dir.exists():
+            for path in plugins_dir.iterdir():
+                if (path.is_dir() and not path.name.startswith("_")) or (
+                    path.suffix == ".py" and not path.name.startswith("_")
+                ):
+                    self._try_load_plugin(path)
 
         self._upsert_discovered_to_db()
+        self._seed_builtin_plugins_to_db()
 
     def _upsert_discovered_to_db(self) -> None:
         """将已发现的插件信息写入 DB, 默认 enabled=False。"""
@@ -106,6 +105,71 @@ class PluginManager:
             _run_coro_sync(_upsert())
         except Exception as e:
             logger.warning("Failed to sync discovered plugins to DB: %s", e)
+
+    def _seed_builtin_plugins_to_db(self) -> None:
+        """将内置插件（taskpps.plugins 包内）的信息写入 DB，确保插件页面始终有可用的插件类型。"""
+        import importlib
+
+        import taskpps.plugins as _pkg
+
+        pkg_dir = Path(_pkg.__file__).parent
+        builtin_plugins: list[dict[str, str]] = []
+
+        for path in sorted(pkg_dir.iterdir()):
+            if path.suffix != ".py" or path.name.startswith("_"):
+                continue
+            module_name = path.stem
+            module = importlib.import_module(f"taskpps.plugins.{module_name}")
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if (
+                    isinstance(attr, type)
+                    and issubclass(attr, BasePlugin)
+                    and attr not in (BasePlugin, TriggerPlugin, NotifierPlugin, ExecutorPlugin)
+                ):
+                    meta = getattr(attr, "PLUGIN_META", None)
+                    if meta and isinstance(meta, dict):
+                        builtin_plugins.append(meta)
+
+        if not builtin_plugins:
+            return
+
+        from datetime import datetime, timezone
+
+        async def _seed():
+            from sqlalchemy import select
+
+            from taskpps.db.engine import get_session_factory
+            from taskpps.models.plugin import Plugin
+
+            async with get_session_factory()() as session:
+                for info in builtin_plugins:
+                    result = await session.execute(select(Plugin).where(Plugin.name == info["name"]))
+                    existing = result.scalar_one_or_none()
+                    if existing:
+                        if not existing.help_msg:
+                            existing.help_msg = info.get("help_msg", "")
+                        if not existing.type:
+                            existing.type = info.get("type", "")
+                        if not existing.version:
+                            existing.version = info.get("version", "")
+                        existing.updated_at = datetime.now(timezone.utc)
+                    else:
+                        new_plugin = Plugin(
+                            name=info["name"],
+                            type=info.get("type", ""),
+                            version=info.get("version", ""),
+                            help_msg=info.get("help_msg", ""),
+                            enabled=False,
+                        )
+                        session.add(new_plugin)
+                await session.commit()
+            logger.info("Seeded %d built-in plugins to DB", len(builtin_plugins))
+
+        try:
+            _run_coro_sync(_seed())
+        except Exception as e:
+            logger.warning("Failed to seed builtin plugins to DB: %s", e)
 
     def _try_load_plugin(self, path: Path) -> None:
         try:

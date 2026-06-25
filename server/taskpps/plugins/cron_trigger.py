@@ -13,6 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class CronTrigger(TriggerPlugin):
+    PLUGIN_META: dict[str, str] = {
+        "name": "cron_trigger",
+        "type": "TriggerPlugin",
+        "version": "1.0.0",
+        "help_msg": "基于 Cron 表达式的定时触发器。需在 taskpps.yaml triggers 中配置 cron 类型的触发器实例。",
+    }
+
     def __init__(self, expression: str, pipeline_file: str, callback=None):
         self._expression = expression
         self._pipeline_file = pipeline_file

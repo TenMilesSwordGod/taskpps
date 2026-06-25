@@ -22,9 +22,10 @@ const TYPE_META: Record<PluginType, { icon: LucideIcon; color: string; label: st
 
 const TYPE_FILTER_OPTIONS: { label: string; value: string }[] = [
   { label: '全部', value: '' },
-  { label: 'TriggerPlugin', value: 'TriggerPlugin' },
-  { label: 'NotifierPlugin', value: 'NotifierPlugin' },
-  { label: 'ExecutorPlugin', value: 'ExecutorPlugin' },
+  ...Object.entries(TYPE_META).map(([key, meta]) => ({
+    label: meta.label,
+    value: key,
+  })),
 ];
 
 export default function PluginListPage() {
