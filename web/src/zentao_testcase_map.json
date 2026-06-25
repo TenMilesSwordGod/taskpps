@@ -1,0 +1,1535 @@
+{
+  "total": 170,
+  "mappings": {
+    "features/runs/hooks/useRetrySSELogs.test.ts::done": {
+      "tc_local_id": "TC-W0001",
+      "zentao_id": 1182,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "done",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::runId 或 retryId 为空时：不建立连接": {
+      "tc_local_id": "TC-W0002",
+      "zentao_id": 1183,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "runId 或 retryId 为空时：不建立连接",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::runId + retryId 给定后：建立 EventSource 连接到重试日志端点": {
+      "tc_local_id": "TC-W0003",
+      "zentao_id": 1184,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "runId + retryId 给定后：建立 EventSource 连接到重试日志端点",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::连接打开后：connected 为 true": {
+      "tc_local_id": "TC-W0004",
+      "zentao_id": 1185,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "连接打开后：connected 为 true",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::收到 ": {
+      "tc_local_id": "TC-W0005",
+      "zentao_id": 1186,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "收到 ",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::retry_log": {
+      "tc_local_id": "TC-W0006",
+      "zentao_id": 1187,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "retry_log",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::多行 retry_log 事件：按换行拆分": {
+      "tc_local_id": "TC-W0007",
+      "zentao_id": 1188,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "多行 retry_log 事件：按换行拆分",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::每条日志有全局唯一的 seq，严格递增": {
+      "tc_local_id": "TC-W0008",
+      "zentao_id": 1189,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "每条日志有全局唯一的 seq，严格递增",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::done 事件：关闭连接，connected 为 false": {
+      "tc_local_id": "TC-W0009",
+      "zentao_id": 1190,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "done 事件：关闭连接，connected 为 false",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::网络错误：关闭连接，清空日志": {
+      "tc_local_id": "TC-W0010",
+      "zentao_id": 1191,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "网络错误：关闭连接，清空日志",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::clearLogs：清空已收集的日志": {
+      "tc_local_id": "TC-W0011",
+      "zentao_id": 1192,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "clearLogs：清空已收集的日志",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::组件卸载：关闭 EventSource": {
+      "tc_local_id": "TC-W0012",
+      "zentao_id": 1193,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "组件卸载：关闭 EventSource",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::retryId 变更时：建立新连接": {
+      "tc_local_id": "TC-W0013",
+      "zentao_id": 1194,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "retryId 变更时：建立新连接",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::\\\\r 字符正确剥离": {
+      "tc_local_id": "TC-W0014",
+      "zentao_id": 1195,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "\\\\r 字符正确剥离",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useRetrySSELogs.test.ts::空字符串 SSE 事件：不追加任何日志": {
+      "tc_local_id": "TC-W0015",
+      "zentao_id": 1196,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "空字符串 SSE 事件：不追加任何日志",
+      "file": "features/runs/hooks/useRetrySSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::done": {
+      "tc_local_id": "TC-W0016",
+      "zentao_id": 1197,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "done",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::runId 为空时：不建立连接": {
+      "tc_local_id": "TC-W0017",
+      "zentao_id": 1198,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "runId 为空时：不建立连接",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::runId 给定后：建立 EventSource 并标记 connected": {
+      "tc_local_id": "TC-W0018",
+      "zentao_id": 1199,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "runId 给定后：建立 EventSource 并标记 connected",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::收到 ": {
+      "tc_local_id": "TC-W0019",
+      "zentao_id": 1200,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "收到 ",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::log": {
+      "tc_local_id": "TC-W0020",
+      "zentao_id": 1201,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "log",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::无 taskName 前缀：作为匿名日志": {
+      "tc_local_id": "TC-W0021",
+      "zentao_id": 1202,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "无 taskName 前缀：作为匿名日志",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::单事件多行：按换行拆分并保留空行": {
+      "tc_local_id": "TC-W0022",
+      "zentao_id": 1203,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "单事件多行：按换行拆分并保留空行",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::每条日志有全局唯一的 seq，同毫秒内不重复（P0-5 回归）": {
+      "tc_local_id": "TC-W0023",
+      "zentao_id": 1204,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "每条日志有全局唯一的 seq，同毫秒内不重复（P0-5 回归）",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::超过 MAX_LOG_LINES 上限：裁剪为 75%": {
+      "tc_local_id": "TC-W0024",
+      "zentao_id": 1205,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "超过 MAX_LOG_LINES 上限：裁剪为 75%",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::done 事件：关闭连接并把 connected 置为 false": {
+      "tc_local_id": "TC-W0025",
+      "zentao_id": 1206,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "done 事件：关闭连接并把 connected 置为 false",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::网络错误：同样关闭并断开": {
+      "tc_local_id": "TC-W0026",
+      "zentao_id": 1207,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "网络错误：同样关闭并断开",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::重连时清空已有日志，避免重复（Issue #66）": {
+      "tc_local_id": "TC-W0027",
+      "zentao_id": 1208,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "重连时清空已有日志，避免重复（Issue #66）",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::clearLogs：清空已收集的日志": {
+      "tc_local_id": "TC-W0028",
+      "zentao_id": 1209,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "clearLogs：清空已收集的日志",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::组件卸载：关闭 EventSource": {
+      "tc_local_id": "TC-W0029",
+      "zentao_id": 1210,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "组件卸载：关闭 EventSource",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::reconnect：关闭旧连接并建立新连接（Issue #99）": {
+      "tc_local_id": "TC-W0030",
+      "zentao_id": 1211,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "reconnect：关闭旧连接并建立新连接（Issue #99）",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::seq 跨 hook re-mount 保持递增（模块级计数器不重置）": {
+      "tc_local_id": "TC-W0031",
+      "zentao_id": 1212,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "seq 跨 hook re-mount 保持递增（模块级计数器不重置）",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::seq 在 clearLogs 后继续递增": {
+      "tc_local_id": "TC-W0032",
+      "zentao_id": 1213,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "seq 在 clearLogs 后继续递增",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::上限裁剪后 seq 保留（裁剪的是旧数据，新数据 seq 正确）": {
+      "tc_local_id": "TC-W0033",
+      "zentao_id": 1214,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "上限裁剪后 seq 保留（裁剪的是旧数据，新数据 seq 正确）",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::taskName 含冒号：只按第一个 ": {
+      "tc_local_id": "TC-W0034",
+      "zentao_id": 1215,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "taskName 含冒号：只按第一个 ",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::内容本身含 ": {
+      "tc_local_id": "TC-W0035",
+      "zentao_id": 1216,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "内容本身含 ",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::仅冒号无空格：作为匿名日志全文保留": {
+      "tc_local_id": "TC-W0036",
+      "zentao_id": 1217,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "仅冒号无空格：作为匿名日志全文保留",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::单字符 taskName + 单字符 content": {
+      "tc_local_id": "TC-W0037",
+      "zentao_id": 1218,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "单字符 taskName + 单字符 content",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::超长单行 content（10KB 不丢失）": {
+      "tc_local_id": "TC-W0038",
+      "zentao_id": 1219,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "超长单行 content（10KB 不丢失）",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::\\r\\n 换行符正确拆分，同时剥离 \\r": {
+      "tc_local_id": "TC-W0039",
+      "zentao_id": 1220,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "\\r\\n 换行符正确拆分，同时剥离 \\r",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::\\r 字符全局剥离（清理 \\\\r\\\\n 残留）": {
+      "tc_local_id": "TC-W0040",
+      "zentao_id": 1221,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "\\r 字符全局剥离（清理 \\\\r\\\\n 残留）",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::空行保留：仅过滤末尾空元素，中间空白行保留": {
+      "tc_local_id": "TC-W0041",
+      "zentao_id": 1222,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "空行保留：仅过滤末尾空元素，中间空白行保留",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::混合 taskName：同一 batch 中不同前缀各行独立": {
+      "tc_local_id": "TC-W0042",
+      "zentao_id": 1223,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "混合 taskName：同一 batch 中不同前缀各行独立",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::空字符串 SSE 事件：不追加任何日志": {
+      "tc_local_id": "TC-W0043",
+      "zentao_id": 1224,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "空字符串 SSE 事件：不追加任何日志",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::恰好 MAX_LOG_LINES 不触发裁剪": {
+      "tc_local_id": "TC-W0044",
+      "zentao_id": 1225,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "恰好 MAX_LOG_LINES 不触发裁剪",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "features/runs/hooks/useSSELogs.test.ts::多次小批量推送 + 逐批验证 seq 递增": {
+      "tc_local_id": "TC-W0045",
+      "zentao_id": 1226,
+      "domain": "web/features/runs/hooks",
+      "source": "web",
+      "test_name": "多次小批量推送 + 逐批验证 seq 递增",
+      "file": "features/runs/hooks/useSSELogs.test.ts",
+      "priority": "P2"
+    },
+    "lib/utils.test.ts::拼接简单字符串": {
+      "tc_local_id": "TC-W0046",
+      "zentao_id": 1227,
+      "domain": "web/lib",
+      "source": "web",
+      "test_name": "拼接简单字符串",
+      "file": "lib/utils.test.ts",
+      "priority": "P2"
+    },
+    "lib/utils.test.ts::过滤 falsy 值（false / null / undefined / 0 / ": {
+      "tc_local_id": "TC-W0047",
+      "zentao_id": 1228,
+      "domain": "web/lib",
+      "source": "web",
+      "test_name": "过滤 falsy 值（false / null / undefined / 0 / ",
+      "file": "lib/utils.test.ts",
+      "priority": "P2"
+    },
+    "lib/utils.test.ts::支持 clsx 对象语法": {
+      "tc_local_id": "TC-W0048",
+      "zentao_id": 1229,
+      "domain": "web/lib",
+      "source": "web",
+      "test_name": "支持 clsx 对象语法",
+      "file": "lib/utils.test.ts",
+      "priority": "P2"
+    },
+    "lib/utils.test.ts::支持数组": {
+      "tc_local_id": "TC-W0049",
+      "zentao_id": 1230,
+      "domain": "web/lib",
+      "source": "web",
+      "test_name": "支持数组",
+      "file": "lib/utils.test.ts",
+      "priority": "P2"
+    },
+    "lib/utils.test.ts::空入参返回空字符串": {
+      "tc_local_id": "TC-W0050",
+      "zentao_id": 1231,
+      "domain": "web/lib",
+      "source": "web",
+      "test_name": "空入参返回空字符串",
+      "file": "lib/utils.test.ts",
+      "priority": "P2"
+    },
+    "stores/appStore.test.ts::初始状态": {
+      "tc_local_id": "TC-W0051",
+      "zentao_id": 1232,
+      "domain": "web/stores",
+      "source": "web",
+      "test_name": "初始状态",
+      "file": "stores/appStore.test.ts",
+      "priority": "P2"
+    },
+    "stores/appStore.test.ts::setSelectedNodeId 更新 selectedNodeId": {
+      "tc_local_id": "TC-W0052",
+      "zentao_id": 1233,
+      "domain": "web/stores",
+      "source": "web",
+      "test_name": "setSelectedNodeId 更新 selectedNodeId",
+      "file": "stores/appStore.test.ts",
+      "priority": "P2"
+    },
+    "stores/appStore.test.ts::setPanelWidth 更新 panelWidth": {
+      "tc_local_id": "TC-W0053",
+      "zentao_id": 1234,
+      "domain": "web/stores",
+      "source": "web",
+      "test_name": "setPanelWidth 更新 panelWidth",
+      "file": "stores/appStore.test.ts",
+      "priority": "P2"
+    },
+    "stores/appStore.test.ts::setPanelMaximized 切换 panelMaximized": {
+      "tc_local_id": "TC-W0054",
+      "zentao_id": 1235,
+      "domain": "web/stores",
+      "source": "web",
+      "test_name": "setPanelMaximized 切换 panelMaximized",
+      "file": "stores/appStore.test.ts",
+      "priority": "P2"
+    },
+    "stores/appStore.test.ts::setPanelMinimized 切换 panelMinimized": {
+      "tc_local_id": "TC-W0055",
+      "zentao_id": 1236,
+      "domain": "web/stores",
+      "source": "web",
+      "test_name": "setPanelMinimized 切换 panelMinimized",
+      "file": "stores/appStore.test.ts",
+      "priority": "P2"
+    },
+    "utils/dagreLayout.test.ts::空图：返回空数组（不抛错）": {
+      "tc_local_id": "TC-W0056",
+      "zentao_id": 1237,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "空图：返回空数组（不抛错）",
+      "file": "utils/dagreLayout.test.ts",
+      "priority": "P2"
+    },
+    "utils/dagreLayout.test.ts::单节点：position 被 dagre 重写，类型保持 Node": {
+      "tc_local_id": "TC-W0057",
+      "zentao_id": 1238,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "单节点：position 被 dagre 重写，类型保持 Node",
+      "file": "utils/dagreLayout.test.ts",
+      "priority": "P2"
+    },
+    "utils/dagreLayout.test.ts::不修改节点 ID / data，只重写 position": {
+      "tc_local_id": "TC-W0058",
+      "zentao_id": 1239,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "不修改节点 ID / data，只重写 position",
+      "file": "utils/dagreLayout.test.ts",
+      "priority": "P2"
+    },
+    "utils/dagreLayout.test.ts::依赖关系：a→b 布局后 b 应当在 a 下方（rankdir=TB）": {
+      "tc_local_id": "TC-W0059",
+      "zentao_id": 1240,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "依赖关系：a→b 布局后 b 应当在 a 下方（rankdir=TB）",
+      "file": "utils/dagreLayout.test.ts",
+      "priority": "P2"
+    },
+    "utils/dagreLayout.test.ts::多分支：a→b, a→c 布局后 b/c 在 a 下方，b/c 同行（y 相同）": {
+      "tc_local_id": "TC-W0060",
+      "zentao_id": 1241,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "多分支：a→b, a→c 布局后 b/c 在 a 下方，b/c 同行（y 相同）",
+      "file": "utils/dagreLayout.test.ts",
+      "priority": "P2"
+    },
+    "utils/dagreLayout.test.ts::孤立节点（无任何边）：位置仍被 dagre 写入": {
+      "tc_local_id": "TC-W0061",
+      "zentao_id": 1242,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "孤立节点（无任何边）：位置仍被 dagre 写入",
+      "file": "utils/dagreLayout.test.ts",
+      "priority": "P2"
+    },
+    "utils/exportImage.test.ts::exportAsPng 调用 toPng 并触发下载": {
+      "tc_local_id": "TC-W0062",
+      "zentao_id": 1243,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "exportAsPng 调用 toPng 并触发下载",
+      "file": "utils/exportImage.test.ts",
+      "priority": "P2"
+    },
+    "utils/exportImage.test.ts::exportAsSvg 调用 toSvg 并触发下载": {
+      "tc_local_id": "TC-W0063",
+      "zentao_id": 1244,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "exportAsSvg 调用 toSvg 并触发下载",
+      "file": "utils/exportImage.test.ts",
+      "priority": "P2"
+    },
+    "utils/exportImage.test.ts::copyToClipboard 调用 toBlob 并写入 ClipboardItem": {
+      "tc_local_id": "TC-W0064",
+      "zentao_id": 1245,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "copyToClipboard 调用 toBlob 并写入 ClipboardItem",
+      "file": "utils/exportImage.test.ts",
+      "priority": "P2"
+    },
+    "utils/exportImage.test.ts::copyToClipboard 在 toBlob 返回 null 时抛错": {
+      "tc_local_id": "TC-W0065",
+      "zentao_id": 1246,
+      "domain": "web/utils",
+      "source": "web",
+      "test_name": "copyToClipboard 在 toBlob 返回 null 时抛错",
+      "file": "utils/exportImage.test.ts",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::triggers retry and invalidates queries": {
+      "tc_local_id": "TC-W0066",
+      "zentao_id": 1247,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "triggers retry and invalidates queries",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::sends include_upstream and command_overrides": {
+      "tc_local_id": "TC-W0067",
+      "zentao_id": 1248,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "sends include_upstream and command_overrides",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::sends subpipeline instead of tasks": {
+      "tc_local_id": "TC-W0068",
+      "zentao_id": 1249,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "sends subpipeline instead of tasks",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::sends custom retry_execution_strategy": {
+      "tc_local_id": "TC-W0069",
+      "zentao_id": 1250,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "sends custom retry_execution_strategy",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::fetches retry versions": {
+      "tc_local_id": "TC-W0070",
+      "zentao_id": 1251,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "fetches retry versions",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::does not fetch when runId is undefined": {
+      "tc_local_id": "TC-W0071",
+      "zentao_id": 1252,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "does not fetch when runId is undefined",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::fetches retry command": {
+      "tc_local_id": "TC-W0072",
+      "zentao_id": 1253,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "fetches retry command",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::does not fetch when ids are missing": {
+      "tc_local_id": "TC-W0073",
+      "zentao_id": 1254,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "does not fetch when ids are missing",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::updates retry command": {
+      "tc_local_id": "TC-W0074",
+      "zentao_id": 1255,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "updates retry command",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::fetches dependency tree": {
+      "tc_local_id": "TC-W0075",
+      "zentao_id": 1256,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "fetches dependency tree",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::does not fetch when params are missing": {
+      "tc_local_id": "TC-W0076",
+      "zentao_id": 1257,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "does not fetch when params are missing",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::selects retry report": {
+      "tc_local_id": "TC-W0077",
+      "zentao_id": 1258,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "selects retry report",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::batch selects retry reports": {
+      "tc_local_id": "TC-W0078",
+      "zentao_id": 1259,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "batch selects retry reports",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::fetches retry logs": {
+      "tc_local_id": "TC-W0079",
+      "zentao_id": 1260,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "fetches retry logs",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "api/retry.test.tsx::fetches retry logs with tail": {
+      "tc_local_id": "TC-W0080",
+      "zentao_id": 1261,
+      "domain": "web/api",
+      "source": "web",
+      "test_name": "fetches retry logs with tail",
+      "file": "api/retry.test.tsx",
+      "priority": "P2"
+    },
+    "components/PipelineProgressPopover.test.tsx::完成时间应携带月日（MM-DD HH:mm:ss 格式）": {
+      "tc_local_id": "TC-W0081",
+      "zentao_id": 1262,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "完成时间应携带月日（MM-DD HH:mm:ss 格式）",
+      "file": "components/PipelineProgressPopover.test.tsx",
+      "priority": "P2"
+    },
+    "components/PipelineProgressPopover.test.tsx::完成时间和状态图标应显示在任务名下方（非同行右侧）": {
+      "tc_local_id": "TC-W0082",
+      "zentao_id": 1263,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "完成时间和状态图标应显示在任务名下方（非同行右侧）",
+      "file": "components/PipelineProgressPopover.test.tsx",
+      "priority": "P2"
+    },
+    "components/PipelineProgressPopover.test.tsx::panel 内容区域高度应足够大以减少滚动条": {
+      "tc_local_id": "TC-W0083",
+      "zentao_id": 1264,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "panel 内容区域高度应足够大以减少滚动条",
+      "file": "components/PipelineProgressPopover.test.tsx",
+      "priority": "P2"
+    },
+    "components/PipelineProgressPopover.test.tsx::每次 hover 都应重新获取最新任务状态": {
+      "tc_local_id": "TC-W0084",
+      "zentao_id": 1265,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "每次 hover 都应重新获取最新任务状态",
+      "file": "components/PipelineProgressPopover.test.tsx",
+      "priority": "P2"
+    },
+    "components/PipelineProgressPopover.test.tsx::有 tasks prop 时，hover 也应重新获取最新状态": {
+      "tc_local_id": "TC-W0085",
+      "zentao_id": 1266,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "有 tasks prop 时，hover 也应重新获取最新状态",
+      "file": "components/PipelineProgressPopover.test.tsx",
+      "priority": "P2"
+    },
+    "components/PipelineProgressPopover.test.tsx::无 runId 时不应发送请求": {
+      "tc_local_id": "TC-W0086",
+      "zentao_id": 1267,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "无 runId 时不应发送请求",
+      "file": "components/PipelineProgressPopover.test.tsx",
+      "priority": "P2"
+    },
+    "components/StatusTag.test.tsx::渲染中文标签": {
+      "tc_local_id": "TC-W0087",
+      "zentao_id": 1268,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "渲染中文标签",
+      "file": "components/StatusTag.test.tsx",
+      "priority": "P2"
+    },
+    "components/StatusTag.test.tsx::success 状态显示成功": {
+      "tc_local_id": "TC-W0088",
+      "zentao_id": 1269,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "success 状态显示成功",
+      "file": "components/StatusTag.test.tsx",
+      "priority": "P2"
+    },
+    "components/StatusTag.test.tsx::failed 状态显示失败": {
+      "tc_local_id": "TC-W0089",
+      "zentao_id": 1270,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "failed 状态显示失败",
+      "file": "components/StatusTag.test.tsx",
+      "priority": "P2"
+    },
+    "components/StatusTag.test.tsx::skipped 状态显示已跳过": {
+      "tc_local_id": "TC-W0090",
+      "zentao_id": 1271,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "skipped 状态显示已跳过",
+      "file": "components/StatusTag.test.tsx",
+      "priority": "P2"
+    },
+    "components/StatusTag.test.tsx::有 error 时 Tag 存在": {
+      "tc_local_id": "TC-W0091",
+      "zentao_id": 1272,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "有 error 时 Tag 存在",
+      "file": "components/StatusTag.test.tsx",
+      "priority": "P2"
+    },
+    "components/StatusTag.test.tsx::无 error 时 Tag 正常渲染": {
+      "tc_local_id": "TC-W0092",
+      "zentao_id": 1273,
+      "domain": "web/components",
+      "source": "web",
+      "test_name": "无 error 时 Tag 正常渲染",
+      "file": "components/StatusTag.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::pipeline 行有 last_run 时，": {
+      "tc_local_id": "TC-W0093",
+      "zentao_id": 1274,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "pipeline 行有 last_run 时，",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::pipeline 行无 last_run 时，": {
+      "tc_local_id": "TC-W0094",
+      "zentao_id": 1275,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "pipeline 行无 last_run 时，",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::非 pipeline 行（project/folder），": {
+      "tc_local_id": "TC-W0095",
+      "zentao_id": 1276,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "非 pipeline 行（project/folder），",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::last_run 有 status 但无 created_at 时，时间列显示 ": {
+      "tc_local_id": "TC-W0096",
+      "zentao_id": 1277,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "last_run 有 status 但无 created_at 时，时间列显示 ",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::多个 pipeline 行的时间和状态列各自独立显示": {
+      "tc_local_id": "TC-W0097",
+      "zentao_id": 1278,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "多个 pipeline 行的时间和状态列各自独立显示",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::partial 状态正确显示为": {
+      "tc_local_id": "TC-W0098",
+      "zentao_id": 1279,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "partial 状态正确显示为",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::cancelled 状态正确显示为": {
+      "tc_local_id": "TC-W0099",
+      "zentao_id": 1280,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "cancelled 状态正确显示为",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::project 行显示带旋转动画的展开图标": {
+      "tc_local_id": "TC-W0100",
+      "zentao_id": 1281,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "project 行显示带旋转动画的展开图标",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::点击展开图标切换展开状态，图标旋转角度变化": {
+      "tc_local_id": "TC-W0101",
+      "zentao_id": 1282,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "点击展开图标切换展开状态，图标旋转角度变化",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::非可展开行不显示旋转图标": {
+      "tc_local_id": "TC-W0102",
+      "zentao_id": 1283,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "非可展开行不显示旋转图标",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/pipelines/PipelineListPage.test.tsx::渲染展开行动画 CSS 样式": {
+      "tc_local_id": "TC-W0103",
+      "zentao_id": 1284,
+      "domain": "web/features/pipelines",
+      "source": "web",
+      "test_name": "渲染展开行动画 CSS 样式",
+      "file": "features/pipelines/PipelineListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/LogViewer.test.tsx::不同任务名分配不同颜色（避免 hash 碰撞）": {
+      "tc_local_id": "TC-W0104",
+      "zentao_id": 1285,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "不同任务名分配不同颜色（避免 hash 碰撞）",
+      "file": "features/runs/LogViewer.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/LogViewer.test.tsx::同一任务名始终使用相同颜色": {
+      "tc_local_id": "TC-W0105",
+      "zentao_id": 1286,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "同一任务名始终使用相同颜色",
+      "file": "features/runs/LogViewer.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/LogViewer.test.tsx::多个任务按首次出现顺序分配颜色，相邻不同色": {
+      "tc_local_id": "TC-W0106",
+      "zentao_id": 1287,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "多个任务按首次出现顺序分配颜色，相邻不同色",
+      "file": "features/runs/LogViewer.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/LogViewer.test.tsx::Issue #113: 传入 onCopyLogs 时显示复制按钮，点击后触发回调": {
+      "tc_local_id": "TC-W0107",
+      "zentao_id": 1288,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "Issue #113: 传入 onCopyLogs 时显示复制按钮，点击后触发回调",
+      "file": "features/runs/LogViewer.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/LogViewer.test.tsx::Issue #113: 未传入 onCopyLogs 时不显示复制按钮": {
+      "tc_local_id": "TC-W0108",
+      "zentao_id": 1289,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "Issue #113: 未传入 onCopyLogs 时不显示复制按钮",
+      "file": "features/runs/LogViewer.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::展示任务名、状态和原始命令（只读）": {
+      "tc_local_id": "TC-W0109",
+      "zentao_id": 1290,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "展示任务名、状态和原始命令（只读）",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::展示依赖树并标记目标任务": {
+      "tc_local_id": "TC-W0110",
+      "zentao_id": 1291,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "展示依赖树并标记目标任务",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::有上游依赖时显示": {
+      "tc_local_id": "TC-W0111",
+      "zentao_id": 1292,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "有上游依赖时显示",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::无上游依赖时不显示": {
+      "tc_local_id": "TC-W0112",
+      "zentao_id": 1293,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "无上游依赖时不显示",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::确认重试时调用 mutateAsync 并传入正确的任务列表": {
+      "tc_local_id": "TC-W0113",
+      "zentao_id": 1294,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "确认重试时调用 mutateAsync 并传入正确的任务列表",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::展示原始版本 (v0) 和重试版本（按版本号倒序）": {
+      "tc_local_id": "TC-W0114",
+      "zentao_id": 1295,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "展示原始版本 (v0) 和重试版本（按版本号倒序）",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::无版本数据时显示空状态": {
+      "tc_local_id": "TC-W0115",
+      "zentao_id": 1296,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "无版本数据时显示空状态",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::点击": {
+      "tc_local_id": "TC-W0116",
+      "zentao_id": 1297,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "点击",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RetryModal.test.tsx::Issue #99: 设置最终版本成功后触发 onVersionsChanged": {
+      "tc_local_id": "TC-W0117",
+      "zentao_id": 1298,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "Issue #99: 设置最终版本成功后触发 onVersionsChanged",
+      "file": "features/runs/RetryModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunDetailPage.test.tsx::使用快照渲染 TaskTree，且不调用 usePipeline": {
+      "tc_local_id": "TC-W0118",
+      "zentao_id": 1299,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "使用快照渲染 TaskTree，且不调用 usePipeline",
+      "file": "features/runs/RunDetailPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunDetailPage.test.tsx::快照加载中显示占位文案": {
+      "tc_local_id": "TC-W0119",
+      "zentao_id": 1300,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "快照加载中显示占位文案",
+      "file": "features/runs/RunDetailPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunDetailPage.test.tsx::快照加载失败时显示错误占位": {
+      "tc_local_id": "TC-W0120",
+      "zentao_id": 1301,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "快照加载失败时显示错误占位",
+      "file": "features/runs/RunDetailPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunDetailPage.test.tsx::Issue #113: 右侧展示执行节点面板，并传入快照和任务运行记录": {
+      "tc_local_id": "TC-W0121",
+      "zentao_id": 1302,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "Issue #113: 右侧展示执行节点面板，并传入快照和任务运行记录",
+      "file": "features/runs/RunDetailPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunListPage.test.tsx::删除成功后弹窗自动关闭": {
+      "tc_local_id": "TC-W0122",
+      "zentao_id": 1303,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "删除成功后弹窗自动关闭",
+      "file": "features/runs/RunListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunListPage.test.tsx::删除失败时弹窗保持打开以便重试": {
+      "tc_local_id": "TC-W0123",
+      "zentao_id": 1304,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "删除失败时弹窗保持打开以便重试",
+      "file": "features/runs/RunListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunListPage.test.tsx::默认分页条数应为 12": {
+      "tc_local_id": "TC-W0124",
+      "zentao_id": 1305,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "默认分页条数应为 12",
+      "file": "features/runs/RunListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunListPage.test.tsx::应支持切换分页条数": {
+      "tc_local_id": "TC-W0125",
+      "zentao_id": 1306,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "应支持切换分页条数",
+      "file": "features/runs/RunListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunListPage.test.tsx::统计胶囊展示正确的计数": {
+      "tc_local_id": "TC-W0126",
+      "zentao_id": 1307,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "统计胶囊展示正确的计数",
+      "file": "features/runs/RunListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunListPage.test.tsx::Segmented 状态过滤：选择": {
+      "tc_local_id": "TC-W0127",
+      "zentao_id": 1308,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "Segmented 状态过滤：选择",
+      "file": "features/runs/RunListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunListPage.test.tsx::运行中行有蓝色背景提示": {
+      "tc_local_id": "TC-W0128",
+      "zentao_id": 1309,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "运行中行有蓝色背景提示",
+      "file": "features/runs/RunListPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::无流水线定义且无任务运行时不渲染": {
+      "tc_local_id": "TC-W0129",
+      "zentao_id": 1310,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "无流水线定义且无任务运行时不渲染",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::按流水线定义顺序渲染所有任务节点，并显示 stage 名称": {
+      "tc_local_id": "TC-W0130",
+      "zentao_id": 1311,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "按流水线定义顺序渲染所有任务节点，并显示 stage 名称",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::未匹配到运行记录的任务默认显示 pending 状态": {
+      "tc_local_id": "TC-W0131",
+      "zentao_id": 1312,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "未匹配到运行记录的任务默认显示 pending 状态",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::任务状态颜色按运行结果正确设置，且圆点内包含图标": {
+      "tc_local_id": "TC-W0132",
+      "zentao_id": 1313,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "任务状态颜色按运行结果正确设置，且圆点内包含图标",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::运行中的任务图标带有旋转动画": {
+      "tc_local_id": "TC-W0133",
+      "zentao_id": 1314,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "运行中的任务图标带有旋转动画",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::顺序 stage 的任务节点水平排列": {
+      "tc_local_id": "TC-W0134",
+      "zentao_id": 1315,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "顺序 stage 的任务节点水平排列",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::并行 stage 的任务节点垂直排列": {
+      "tc_local_id": "TC-W0135",
+      "zentao_id": 1316,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "并行 stage 的任务节点垂直排列",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::stage 之间用带箭头的连线连接": {
+      "tc_local_id": "TC-W0136",
+      "zentao_id": 1317,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "stage 之间用带箭头的连线连接",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/RunStagePanel.test.tsx::运行记录中存在但流水线定义中不存在的任务追加为新 stage": {
+      "tc_local_id": "TC-W0137",
+      "zentao_id": 1318,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "运行记录中存在但流水线定义中不存在的任务追加为新 stage",
+      "file": "features/runs/RunStagePanel.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/TaskTree.test.tsx::有重试版本时显示重试数徽标": {
+      "tc_local_id": "TC-W0138",
+      "zentao_id": 1319,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "有重试版本时显示重试数徽标",
+      "file": "features/runs/TaskTree.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/TaskTree.test.tsx::无重试版本时不显示徽标": {
+      "tc_local_id": "TC-W0139",
+      "zentao_id": 1320,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "无重试版本时不显示徽标",
+      "file": "features/runs/TaskTree.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/TaskTree.test.tsx::接受 onRetry / onShowVersions 回调且不报错": {
+      "tc_local_id": "TC-W0140",
+      "zentao_id": 1321,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "接受 onRetry / onShowVersions 回调且不报错",
+      "file": "features/runs/TaskTree.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/TaskTree.test.tsx::运行中（isLive=true）的任务不显示重试菜单（canRetry=false）": {
+      "tc_local_id": "TC-W0141",
+      "zentao_id": 1322,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "运行中（isLive=true）的任务不显示重试菜单（canRetry=false）",
+      "file": "features/runs/TaskTree.test.tsx",
+      "priority": "P2"
+    },
+    "features/runs/TaskTree.test.tsx::Issue #99: 服务端终态不被陈旧 SSE 覆盖": {
+      "tc_local_id": "TC-W0142",
+      "zentao_id": 1323,
+      "domain": "web/features/runs",
+      "source": "web",
+      "test_name": "Issue #99: 服务端终态不被陈旧 SSE 覆盖",
+      "file": "features/runs/TaskTree.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/HostInfoModal.test.tsx::正常渲染磁盘列表": {
+      "tc_local_id": "TC-W0143",
+      "zentao_id": 1324,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "正常渲染磁盘列表",
+      "file": "features/servers/HostInfoModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/HostInfoModal.test.tsx::issue #64：磁盘超过阈值时折叠，点击展开": {
+      "tc_local_id": "TC-W0144",
+      "zentao_id": 1325,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "issue #64：磁盘超过阈值时折叠，点击展开",
+      "file": "features/servers/HostInfoModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/HostInfoModal.test.tsx::磁盘少于阈值时不显示折叠按钮": {
+      "tc_local_id": "TC-W0145",
+      "zentao_id": 1326,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "磁盘少于阈值时不显示折叠按钮",
+      "file": "features/servers/HostInfoModal.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServerCard.test.tsx::显示运行中、等待中数量和最大并发": {
+      "tc_local_id": "TC-W0146",
+      "zentao_id": 1327,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "显示运行中、等待中数量和最大并发",
+      "file": "features/servers/ServerCard.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServerCard.test.tsx::max_parallel 缺失时默认显示为 1": {
+      "tc_local_id": "TC-W0147",
+      "zentao_id": 1328,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "max_parallel 缺失时默认显示为 1",
+      "file": "features/servers/ServerCard.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServerCard.test.tsx::无运行/等待命令时状态不可点击且不会弹出空队列": {
+      "tc_local_id": "TC-W0148",
+      "zentao_id": 1329,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "无运行/等待命令时状态不可点击且不会弹出空队列",
+      "file": "features/servers/ServerCard.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServerCard.test.tsx::点击运行中状态展示按顺序编号的任务队列": {
+      "tc_local_id": "TC-W0149",
+      "zentao_id": 1330,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "点击运行中状态展示按顺序编号的任务队列",
+      "file": "features/servers/ServerCard.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServerCard.test.tsx::队列中同时显示运行中和等待中任务分组": {
+      "tc_local_id": "TC-W0150",
+      "zentao_id": 1331,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "队列中同时显示运行中和等待中任务分组",
+      "file": "features/servers/ServerCard.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServerCard.test.tsx::队列中显示可点击的 run_id 链接": {
+      "tc_local_id": "TC-W0151",
+      "zentao_id": 1332,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "队列中显示可点击的 run_id 链接",
+      "file": "features/servers/ServerCard.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::正常渲染 agent 列表": {
+      "tc_local_id": "TC-W0152",
+      "zentao_id": 1333,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "正常渲染 agent 列表",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::P0-9 回归：system/arch/hostname 为 null 时过滤不崩溃": {
+      "tc_local_id": "TC-W0153",
+      "zentao_id": 1334,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "P0-9 回归：system/arch/hostname 为 null 时过滤不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::P0-9 回归：所有字段为 undefined 时过滤不崩溃": {
+      "tc_local_id": "TC-W0154",
+      "zentao_id": 1335,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "P0-9 回归：所有字段为 undefined 时过滤不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::仅 system 为 null — 其他字段有效时搜索不崩溃": {
+      "tc_local_id": "TC-W0155",
+      "zentao_id": 1336,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "仅 system 为 null — 其他字段有效时搜索不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::仅 arch 为 null — 搜索其他字段不崩溃": {
+      "tc_local_id": "TC-W0156",
+      "zentao_id": 1337,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "仅 arch 为 null — 搜索其他字段不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::仅 ip 为 null — 搜索 host 不崩溃": {
+      "tc_local_id": "TC-W0157",
+      "zentao_id": 1338,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "仅 ip 为 null — 搜索 host 不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::仅 hostname 为 null — 搜索 agent_id 不崩溃": {
+      "tc_local_id": "TC-W0158",
+      "zentao_id": 1339,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "仅 hostname 为 null — 搜索 agent_id 不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::仅 name 为 null — 搜索 agent_id 不崩溃": {
+      "tc_local_id": "TC-W0159",
+      "zentao_id": 1340,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "仅 name 为 null — 搜索 agent_id 不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::仅 type 为 null — 搜索其他字段不崩溃": {
+      "tc_local_id": "TC-W0160",
+      "zentao_id": 1341,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "仅 type 为 null — 搜索其他字段不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::IPv6 地址 — 搜索不崩溃": {
+      "tc_local_id": "TC-W0161",
+      "zentao_id": 1342,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "IPv6 地址 — 搜索不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::agent_id 含正则特殊字符（. * + $）— 不崩溃": {
+      "tc_local_id": "TC-W0162",
+      "zentao_id": 1343,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "agent_id 含正则特殊字符（. * + $）— 不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::中文名称 — 搜索不崩溃（toLowerCase 对中文为 no-op）": {
+      "tc_local_id": "TC-W0163",
+      "zentao_id": 1344,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "中文名称 — 搜索不崩溃（toLowerCase 对中文为 no-op）",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::混合 null + 有效值：搜索有效值能命中，null 字段不崩溃": {
+      "tc_local_id": "TC-W0164",
+      "zentao_id": 1345,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "混合 null + 有效值：搜索有效值能命中，null 字段不崩溃",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::大小写不敏感：搜索 ": {
+      "tc_local_id": "TC-W0165",
+      "zentao_id": 1346,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "大小写不敏感：搜索 ",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::搜索无匹配结果时不崩溃（空列表 + null 字段）": {
+      "tc_local_id": "TC-W0166",
+      "zentao_id": 1347,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "搜索无匹配结果时不崩溃（空列表 + null 字段）",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::按项目分组：默认项目 + 命名项目分别展示": {
+      "tc_local_id": "TC-W0167",
+      "zentao_id": 1348,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "按项目分组：默认项目 + 命名项目分别展示",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::项目分组头显示该组在线/离线计数": {
+      "tc_local_id": "TC-W0168",
+      "zentao_id": 1349,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "项目分组头显示该组在线/离线计数",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::状态过滤：选择": {
+      "tc_local_id": "TC-W0169",
+      "zentao_id": 1350,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "状态过滤：选择",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    },
+    "features/servers/ServersPage.test.tsx::点击项目分组头可折叠/展开卡片": {
+      "tc_local_id": "TC-W0170",
+      "zentao_id": 1351,
+      "domain": "web/features/servers",
+      "source": "web",
+      "test_name": "点击项目分组头可折叠/展开卡片",
+      "file": "features/servers/ServersPage.test.tsx",
+      "priority": "P2"
+    }
+  }
+}

@@ -1,0 +1,680 @@
+{
+  "total": 75,
+  "mappings": {
+    "agent/executor_boundary_test.go::TestNewExecutor_DefaultShell": {
+      "tc_local_id": "TC-A0001",
+      "zentao_id": 1429,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestNewExecutor_DefaultShell",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestNewExecutor_CustomShell": {
+      "tc_local_id": "TC-A0002",
+      "zentao_id": 1430,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestNewExecutor_CustomShell",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestNewExecutor_NilCallbacks": {
+      "tc_local_id": "TC-A0003",
+      "zentao_id": 1431,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestNewExecutor_NilCallbacks",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestNewExecutor_WithCallbacks": {
+      "tc_local_id": "TC-A0004",
+      "zentao_id": 1432,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestNewExecutor_WithCallbacks",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestMergeEnv_Empty": {
+      "tc_local_id": "TC-A0005",
+      "zentao_id": 1433,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMergeEnv_Empty",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestMergeEnv_AddNew": {
+      "tc_local_id": "TC-A0006",
+      "zentao_id": 1434,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMergeEnv_AddNew",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestMergeEnv_Overwrite": {
+      "tc_local_id": "TC-A0007",
+      "zentao_id": 1435,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMergeEnv_Overwrite",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestMergeEnv_NilExtra": {
+      "tc_local_id": "TC-A0008",
+      "zentao_id": 1436,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMergeEnv_NilExtra",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestMergeEnv_EmptyBase": {
+      "tc_local_id": "TC-A0009",
+      "zentao_id": 1437,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMergeEnv_EmptyBase",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestMergeEnv_MultipleKeys": {
+      "tc_local_id": "TC-A0010",
+      "zentao_id": 1438,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMergeEnv_MultipleKeys",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestExecutor_CancelNonExistent": {
+      "tc_local_id": "TC-A0011",
+      "zentao_id": 1439,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutor_CancelNonExistent",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestExecutor_CancelAllEmpty": {
+      "tc_local_id": "TC-A0012",
+      "zentao_id": 1440,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutor_CancelAllEmpty",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestExecutor_SendResultNilCallback": {
+      "tc_local_id": "TC-A0013",
+      "zentao_id": 1441,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutor_SendResultNilCallback",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_boundary_test.go::TestExecutor_SendResultWithCallback": {
+      "tc_local_id": "TC-A0014",
+      "zentao_id": 1442,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutor_SendResultWithCallback",
+      "file": "agent/executor_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorSuccess": {
+      "tc_local_id": "TC-A0015",
+      "zentao_id": 1443,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorSuccess",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorFailure": {
+      "tc_local_id": "TC-A0016",
+      "zentao_id": 1444,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorFailure",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorTimeout": {
+      "tc_local_id": "TC-A0017",
+      "zentao_id": 1445,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorTimeout",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorCancel": {
+      "tc_local_id": "TC-A0018",
+      "zentao_id": 1446,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorCancel",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorCancelKillsChildProcess": {
+      "tc_local_id": "TC-A0019",
+      "zentao_id": 1447,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorCancelKillsChildProcess",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorEnv": {
+      "tc_local_id": "TC-A0020",
+      "zentao_id": 1448,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorEnv",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorCommands": {
+      "tc_local_id": "TC-A0021",
+      "zentao_id": 1449,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorCommands",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorStartError": {
+      "tc_local_id": "TC-A0022",
+      "zentao_id": 1450,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorStartError",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorShellFallback": {
+      "tc_local_id": "TC-A0023",
+      "zentao_id": 1451,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorShellFallback",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestExecutorCwdPassed": {
+      "tc_local_id": "TC-A0024",
+      "zentao_id": 1452,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecutorCwdPassed",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestResolveShell": {
+      "tc_local_id": "TC-A0025",
+      "zentao_id": 1453,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestResolveShell",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestSignalToString": {
+      "tc_local_id": "TC-A0026",
+      "zentao_id": 1454,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestSignalToString",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestMergeEnv": {
+      "tc_local_id": "TC-A0027",
+      "zentao_id": 1455,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMergeEnv",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestProcessCheck": {
+      "tc_local_id": "TC-A0028",
+      "zentao_id": 1456,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestProcessCheck",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestIsDigit": {
+      "tc_local_id": "TC-A0029",
+      "zentao_id": 1457,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestIsDigit",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/executor_test.go::TestReadPPID": {
+      "tc_local_id": "TC-A0030",
+      "zentao_id": 1458,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestReadPPID",
+      "file": "agent/executor_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestMessageType_Values": {
+      "tc_local_id": "TC-A0031",
+      "zentao_id": 1459,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMessageType_Values",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestProtocolVersion": {
+      "tc_local_id": "TC-A0032",
+      "zentao_id": 1460,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestProtocolVersion",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestMessage_Empty": {
+      "tc_local_id": "TC-A0033",
+      "zentao_id": 1461,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMessage_Empty",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestHandshakeRequest_Defaults": {
+      "tc_local_id": "TC-A0034",
+      "zentao_id": 1462,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestHandshakeRequest_Defaults",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestHandshakeRequest_Full": {
+      "tc_local_id": "TC-A0035",
+      "zentao_id": 1463,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestHandshakeRequest_Full",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestHandshakeResponse_Fields": {
+      "tc_local_id": "TC-A0036",
+      "zentao_id": 1464,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestHandshakeResponse_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestExecCommand_Defaults": {
+      "tc_local_id": "TC-A0037",
+      "zentao_id": 1465,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecCommand_Defaults",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestExecCommand_Full": {
+      "tc_local_id": "TC-A0038",
+      "zentao_id": 1466,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecCommand_Full",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestCancelCommand_Fields": {
+      "tc_local_id": "TC-A0039",
+      "zentao_id": 1467,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestCancelCommand_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestStdoutChunk_Fields": {
+      "tc_local_id": "TC-A0040",
+      "zentao_id": 1468,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestStdoutChunk_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestStderrChunk_Fields": {
+      "tc_local_id": "TC-A0041",
+      "zentao_id": 1469,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestStderrChunk_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestExecResult_Success": {
+      "tc_local_id": "TC-A0042",
+      "zentao_id": 1470,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecResult_Success",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestExecResult_Failure": {
+      "tc_local_id": "TC-A0043",
+      "zentao_id": 1471,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecResult_Failure",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_boundary_test.go::TestExecResult_Signaled": {
+      "tc_local_id": "TC-A0044",
+      "zentao_id": 1472,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecResult_Signaled",
+      "file": "agent/protocol_boundary_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_test.go::TestMessageSerialization": {
+      "tc_local_id": "TC-A0045",
+      "zentao_id": 1473,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestMessageSerialization",
+      "file": "agent/protocol_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_test.go::TestHandshakeRequestFields": {
+      "tc_local_id": "TC-A0046",
+      "zentao_id": 1474,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestHandshakeRequestFields",
+      "file": "agent/protocol_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_test.go::TestExecCommandSerialization": {
+      "tc_local_id": "TC-A0047",
+      "zentao_id": 1475,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecCommandSerialization",
+      "file": "agent/protocol_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_test.go::TestExecResultSerialization": {
+      "tc_local_id": "TC-A0048",
+      "zentao_id": 1476,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecResultSerialization",
+      "file": "agent/protocol_test.go",
+      "priority": "P2"
+    },
+    "agent/protocol_test.go::TestExecResultSuccess": {
+      "tc_local_id": "TC-A0049",
+      "zentao_id": 1477,
+      "domain": "execution_agent/agent",
+      "source": "execution_agent",
+      "test_name": "TestExecResultSuccess",
+      "file": "agent/protocol_test.go",
+      "priority": "P2"
+    },
+    "cmd/pidfile_test.go::TestCheckInstanceRunning_NoPidFile": {
+      "tc_local_id": "TC-A0050",
+      "zentao_id": 1478,
+      "domain": "execution_agent/cmd",
+      "source": "execution_agent",
+      "test_name": "TestCheckInstanceRunning_NoPidFile",
+      "file": "cmd/pidfile_test.go",
+      "priority": "P2"
+    },
+    "cmd/pidfile_test.go::TestCheckInstanceRunning_EmptyPidFile": {
+      "tc_local_id": "TC-A0051",
+      "zentao_id": 1479,
+      "domain": "execution_agent/cmd",
+      "source": "execution_agent",
+      "test_name": "TestCheckInstanceRunning_EmptyPidFile",
+      "file": "cmd/pidfile_test.go",
+      "priority": "P2"
+    },
+    "cmd/pidfile_test.go::TestCheckInstanceRunning_GarbagePidFile": {
+      "tc_local_id": "TC-A0052",
+      "zentao_id": 1480,
+      "domain": "execution_agent/cmd",
+      "source": "execution_agent",
+      "test_name": "TestCheckInstanceRunning_GarbagePidFile",
+      "file": "cmd/pidfile_test.go",
+      "priority": "P2"
+    },
+    "cmd/pidfile_test.go::TestCheckInstanceRunning_StalePidFile": {
+      "tc_local_id": "TC-A0053",
+      "zentao_id": 1481,
+      "domain": "execution_agent/cmd",
+      "source": "execution_agent",
+      "test_name": "TestCheckInstanceRunning_StalePidFile",
+      "file": "cmd/pidfile_test.go",
+      "priority": "P2"
+    },
+    "cmd/pidfile_test.go::TestCheckInstanceRunning_CurrentProcess": {
+      "tc_local_id": "TC-A0054",
+      "zentao_id": 1482,
+      "domain": "execution_agent/cmd",
+      "source": "execution_agent",
+      "test_name": "TestCheckInstanceRunning_CurrentProcess",
+      "file": "cmd/pidfile_test.go",
+      "priority": "P2"
+    },
+    "cmd/pidfile_test.go::TestCheckInstanceRunning_OtherProcess": {
+      "tc_local_id": "TC-A0055",
+      "zentao_id": 1483,
+      "domain": "execution_agent/cmd",
+      "source": "execution_agent",
+      "test_name": "TestCheckInstanceRunning_OtherProcess",
+      "file": "cmd/pidfile_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_ServerURL": {
+      "tc_local_id": "TC-A0056",
+      "zentao_id": 1484,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_ServerURL",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_AgentID": {
+      "tc_local_id": "TC-A0057",
+      "zentao_id": 1485,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_AgentID",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_Shell": {
+      "tc_local_id": "TC-A0058",
+      "zentao_id": 1486,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_Shell",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_PidFile": {
+      "tc_local_id": "TC-A0059",
+      "zentao_id": 1487,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_PidFile",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_LogFile": {
+      "tc_local_id": "TC-A0060",
+      "zentao_id": 1488,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_LogFile",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_Secret": {
+      "tc_local_id": "TC-A0061",
+      "zentao_id": 1489,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_Secret",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_WorkDir": {
+      "tc_local_id": "TC-A0062",
+      "zentao_id": 1490,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_WorkDir",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestDefaultConfig_Daemon": {
+      "tc_local_id": "TC-A0063",
+      "zentao_id": 1491,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestDefaultConfig_Daemon",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestConfig_ModifyFields": {
+      "tc_local_id": "TC-A0064",
+      "zentao_id": 1492,
+      "domain": "execution_agent/config",
+      "source": "execution_agent",
+      "test_name": "TestConfig_ModifyFields",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestInitStderr": {
+      "tc_local_id": "TC-A0065",
+      "zentao_id": 1493,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestInitStderr",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestInitFile": {
+      "tc_local_id": "TC-A0066",
+      "zentao_id": 1494,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestInitFile",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestClose": {
+      "tc_local_id": "TC-A0067",
+      "zentao_id": 1495,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestClose",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestCloseNoFile": {
+      "tc_local_id": "TC-A0068",
+      "zentao_id": 1496,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestCloseNoFile",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestSetLevel": {
+      "tc_local_id": "TC-A0069",
+      "zentao_id": 1497,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestSetLevel",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestSetLevelByName": {
+      "tc_local_id": "TC-A0070",
+      "zentao_id": 1498,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestSetLevelByName",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestGetLevel": {
+      "tc_local_id": "TC-A0071",
+      "zentao_id": 1499,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestGetLevel",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestLogLevelString": {
+      "tc_local_id": "TC-A0072",
+      "zentao_id": 1500,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestLogLevelString",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestLogLevelFiltering": {
+      "tc_local_id": "TC-A0073",
+      "zentao_id": 1501,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestLogLevelFiltering",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestDefaultLevelIsInfo": {
+      "tc_local_id": "TC-A0074",
+      "zentao_id": 1502,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestDefaultLevelIsInfo",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestLogFormat": {
+      "tc_local_id": "TC-A0075",
+      "zentao_id": 1503,
+      "domain": "execution_agent/logger",
+      "source": "execution_agent",
+      "test_name": "TestLogFormat",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    }
+  }
+}

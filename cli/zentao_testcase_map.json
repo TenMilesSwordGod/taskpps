@@ -1,0 +1,698 @@
+{
+  "total": 77,
+  "mappings": {
+    "client/client_test.go::TestParseParams": {
+      "tc_local_id": "TC-C0001",
+      "zentao_id": 1352,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/client_test.go::TestBuildNestedMap": {
+      "tc_local_id": "TC-C0002",
+      "zentao_id": 1353,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestBuildNestedMap",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/client_test.go::TestNew": {
+      "tc_local_id": "TC-C0003",
+      "zentao_id": 1354,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestNew",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/client_test.go::TestParseResp_Success": {
+      "tc_local_id": "TC-C0004",
+      "zentao_id": 1355,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseResp_Success",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/client_test.go::TestParseResp_NonJSONResponse": {
+      "tc_local_id": "TC-C0005",
+      "zentao_id": 1356,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseResp_NonJSONResponse",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/client_test.go::TestParseResp_HTTPError": {
+      "tc_local_id": "TC-C0006",
+      "zentao_id": 1357,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseResp_HTTPError",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/client_test.go::TestParseResp_404Error": {
+      "tc_local_id": "TC-C0007",
+      "zentao_id": 1358,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseResp_404Error",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/client_test.go::TestParseResp_500WithHTML": {
+      "tc_local_id": "TC-C0008",
+      "zentao_id": 1359,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseResp_500WithHTML",
+      "file": "client/client_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_Empty": {
+      "tc_local_id": "TC-C0009",
+      "zentao_id": 1360,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_Empty",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_Single": {
+      "tc_local_id": "TC-C0010",
+      "zentao_id": 1361,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_Single",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_Multiple": {
+      "tc_local_id": "TC-C0011",
+      "zentao_id": 1362,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_Multiple",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_InvalidFormat": {
+      "tc_local_id": "TC-C0012",
+      "zentao_id": 1363,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_InvalidFormat",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_TrimWhitespace": {
+      "tc_local_id": "TC-C0013",
+      "zentao_id": 1364,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_TrimWhitespace",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_Nested": {
+      "tc_local_id": "TC-C0014",
+      "zentao_id": 1365,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_Nested",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_MultipleNested": {
+      "tc_local_id": "TC-C0015",
+      "zentao_id": 1366,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_MultipleNested",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestParseParams_QuotedKey": {
+      "tc_local_id": "TC-C0016",
+      "zentao_id": 1367,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestParseParams_QuotedKey",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestBuildNestedMap_Empty": {
+      "tc_local_id": "TC-C0017",
+      "zentao_id": 1368,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestBuildNestedMap_Empty",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "client/parse_params_test.go::TestBuildNestedMap_OverwriteNonMap": {
+      "tc_local_id": "TC-C0018",
+      "zentao_id": 1369,
+      "domain": "cli/client",
+      "source": "cli",
+      "test_name": "TestBuildNestedMap_OverwriteNonMap",
+      "file": "client/parse_params_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestGroupByFile": {
+      "tc_local_id": "TC-C0019",
+      "zentao_id": 1370,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestGroupByFile",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestGroupByFileSingleGroup": {
+      "tc_local_id": "TC-C0020",
+      "zentao_id": 1371,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestGroupByFileSingleGroup",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestGroupByFileEmpty": {
+      "tc_local_id": "TC-C0021",
+      "zentao_id": 1372,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestGroupByFileEmpty",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestTruncateType": {
+      "tc_local_id": "TC-C0022",
+      "zentao_id": 1373,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestTruncateType",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestAgentCommandRegistration": {
+      "tc_local_id": "TC-C0023",
+      "zentao_id": 1374,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestAgentCommandRegistration",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestAgentCommandRootRegistration": {
+      "tc_local_id": "TC-C0024",
+      "zentao_id": 1375,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestAgentCommandRootRegistration",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestAgentTryConnectRequiresArg": {
+      "tc_local_id": "TC-C0025",
+      "zentao_id": 1376,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestAgentTryConnectRequiresArg",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestAgentCheckArgs": {
+      "tc_local_id": "TC-C0026",
+      "zentao_id": 1377,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestAgentCheckArgs",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/agent_test.go::TestAgentTimeoutFlag": {
+      "tc_local_id": "TC-C0027",
+      "zentao_id": 1378,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestAgentTimeoutFlag",
+      "file": "cmd/agent_test.go",
+      "priority": "P2"
+    },
+    "cmd/run_test.go::TestRunCommandFlagShorthands": {
+      "tc_local_id": "TC-C0028",
+      "zentao_id": 1379,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestRunCommandFlagShorthands",
+      "file": "cmd/run_test.go",
+      "priority": "P2"
+    },
+    "cmd/run_test.go::TestNoShorthandConflicts": {
+      "tc_local_id": "TC-C0029",
+      "zentao_id": 1380,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestNoShorthandConflicts",
+      "file": "cmd/run_test.go",
+      "priority": "P2"
+    },
+    "cmd/run_test.go::TestRunCommandRegistration": {
+      "tc_local_id": "TC-C0030",
+      "zentao_id": 1381,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestRunCommandRegistration",
+      "file": "cmd/run_test.go",
+      "priority": "P2"
+    },
+    "cmd/run_test.go::TestRunCommandArgs": {
+      "tc_local_id": "TC-C0031",
+      "zentao_id": 1382,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestRunCommandArgs",
+      "file": "cmd/run_test.go",
+      "priority": "P2"
+    },
+    "cmd/run_test.go::TestRunCommandParamFlagType": {
+      "tc_local_id": "TC-C0032",
+      "zentao_id": 1383,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestRunCommandParamFlagType",
+      "file": "cmd/run_test.go",
+      "priority": "P2"
+    },
+    "cmd/run_test.go::TestRunCommandDetachFlag": {
+      "tc_local_id": "TC-C0033",
+      "zentao_id": 1384,
+      "domain": "cli/cmd",
+      "source": "cli",
+      "test_name": "TestRunCommandDetachFlag",
+      "file": "cmd/run_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestFindProjectRoot_NotFound": {
+      "tc_local_id": "TC-C0034",
+      "zentao_id": 1385,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestFindProjectRoot_NotFound",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestFindProjectRoot_FoundWithTaskppsYaml": {
+      "tc_local_id": "TC-C0035",
+      "zentao_id": 1386,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestFindProjectRoot_FoundWithTaskppsYaml",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestFindProjectRoot_FoundWithDotTaskpps": {
+      "tc_local_id": "TC-C0036",
+      "zentao_id": 1387,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestFindProjectRoot_FoundWithDotTaskpps",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestFindProjectRoot_ParentDir": {
+      "tc_local_id": "TC-C0037",
+      "zentao_id": 1388,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestFindProjectRoot_ParentDir",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestGetServerAddr_Default": {
+      "tc_local_id": "TC-C0038",
+      "zentao_id": 1389,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestGetServerAddr_Default",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestGetServerAddr_Custom": {
+      "tc_local_id": "TC-C0039",
+      "zentao_id": 1390,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestGetServerAddr_Custom",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestGetServerAddr_ZeroPort": {
+      "tc_local_id": "TC-C0040",
+      "zentao_id": 1391,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestGetServerAddr_ZeroPort",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestLoad_ConfigWithEnv": {
+      "tc_local_id": "TC-C0041",
+      "zentao_id": 1392,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestLoad_ConfigWithEnv",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestLoad_InvalidConfig": {
+      "tc_local_id": "TC-C0042",
+      "zentao_id": 1393,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestLoad_InvalidConfig",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestFindWorkDir_WithProjectFlag": {
+      "tc_local_id": "TC-C0043",
+      "zentao_id": 1394,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestFindWorkDir_WithProjectFlag",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestFindWorkDir_EnvVar": {
+      "tc_local_id": "TC-C0044",
+      "zentao_id": 1395,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestFindWorkDir_EnvVar",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestConfig_Defaults": {
+      "tc_local_id": "TC-C0045",
+      "zentao_id": 1396,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestConfig_Defaults",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_boundary_test.go::TestExecutorConfig_Defaults": {
+      "tc_local_id": "TC-C0046",
+      "zentao_id": 1397,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestExecutorConfig_Defaults",
+      "file": "config/config_boundary_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestGetServerAddr": {
+      "tc_local_id": "TC-C0047",
+      "zentao_id": 1398,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestGetServerAddr",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestGetServerAddrWithPortZero": {
+      "tc_local_id": "TC-C0048",
+      "zentao_id": 1399,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestGetServerAddrWithPortZero",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestLoadWithoutProjectDir": {
+      "tc_local_id": "TC-C0049",
+      "zentao_id": 1400,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestLoadWithoutProjectDir",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestLoadWithDefaults": {
+      "tc_local_id": "TC-C0050",
+      "zentao_id": 1401,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestLoadWithDefaults",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "config/config_test.go::TestFindProjectRoot": {
+      "tc_local_id": "TC-C0051",
+      "zentao_id": 1402,
+      "domain": "cli/config",
+      "source": "cli",
+      "test_name": "TestFindProjectRoot",
+      "file": "config/config_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestSetLevel": {
+      "tc_local_id": "TC-C0052",
+      "zentao_id": 1403,
+      "domain": "cli/logger",
+      "source": "cli",
+      "test_name": "TestSetLevel",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestSetLevelByName": {
+      "tc_local_id": "TC-C0053",
+      "zentao_id": 1404,
+      "domain": "cli/logger",
+      "source": "cli",
+      "test_name": "TestSetLevelByName",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestGetLevel": {
+      "tc_local_id": "TC-C0054",
+      "zentao_id": 1405,
+      "domain": "cli/logger",
+      "source": "cli",
+      "test_name": "TestGetLevel",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestLogLevelString": {
+      "tc_local_id": "TC-C0055",
+      "zentao_id": 1406,
+      "domain": "cli/logger",
+      "source": "cli",
+      "test_name": "TestLogLevelString",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestLoggingAtDifferentLevels": {
+      "tc_local_id": "TC-C0056",
+      "zentao_id": 1407,
+      "domain": "cli/logger",
+      "source": "cli",
+      "test_name": "TestLoggingAtDifferentLevels",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestSetOutput": {
+      "tc_local_id": "TC-C0057",
+      "zentao_id": 1408,
+      "domain": "cli/logger",
+      "source": "cli",
+      "test_name": "TestSetOutput",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "logger/logger_test.go::TestEnableVerboseOutput": {
+      "tc_local_id": "TC-C0058",
+      "zentao_id": 1409,
+      "domain": "cli/logger",
+      "source": "cli",
+      "test_name": "TestEnableVerboseOutput",
+      "file": "logger/logger_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestRunStatus_Values": {
+      "tc_local_id": "TC-C0059",
+      "zentao_id": 1410,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestRunStatus_Values",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestTaskStatus_Values": {
+      "tc_local_id": "TC-C0060",
+      "zentao_id": 1411,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestTaskStatus_Values",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestRun_Defaults": {
+      "tc_local_id": "TC-C0061",
+      "zentao_id": 1412,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestRun_Defaults",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestTaskRun_Defaults": {
+      "tc_local_id": "TC-C0062",
+      "zentao_id": 1413,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestTaskRun_Defaults",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestCreateRunRequest_Defaults": {
+      "tc_local_id": "TC-C0063",
+      "zentao_id": 1414,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestCreateRunRequest_Defaults",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestCleanResponse_Fields": {
+      "tc_local_id": "TC-C0064",
+      "zentao_id": 1415,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestCleanResponse_Fields",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestTrigger_Defaults": {
+      "tc_local_id": "TC-C0065",
+      "zentao_id": 1416,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestTrigger_Defaults",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestHealthResponse_Fields": {
+      "tc_local_id": "TC-C0066",
+      "zentao_id": 1417,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestHealthResponse_Fields",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestAgentCheckResult_Defaults": {
+      "tc_local_id": "TC-C0067",
+      "zentao_id": 1418,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestAgentCheckResult_Defaults",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestAgentCheckSummary_Counts": {
+      "tc_local_id": "TC-C0068",
+      "zentao_id": 1419,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestAgentCheckSummary_Counts",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestAgentStatus_Fields": {
+      "tc_local_id": "TC-C0069",
+      "zentao_id": 1420,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestAgentStatus_Fields",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestAgentExecRequest_Fields": {
+      "tc_local_id": "TC-C0070",
+      "zentao_id": 1421,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestAgentExecRequest_Fields",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestAgentExecResult_Fields": {
+      "tc_local_id": "TC-C0071",
+      "zentao_id": 1422,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestAgentExecResult_Fields",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestAgentDeployResult_Fields": {
+      "tc_local_id": "TC-C0072",
+      "zentao_id": 1423,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestAgentDeployResult_Fields",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_boundary_test.go::TestRunListResponse_Fields": {
+      "tc_local_id": "TC-C0073",
+      "zentao_id": 1424,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestRunListResponse_Fields",
+      "file": "models/models_boundary_test.go",
+      "priority": "P2"
+    },
+    "models/models_test.go::TestRunStatusConstants": {
+      "tc_local_id": "TC-C0074",
+      "zentao_id": 1425,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestRunStatusConstants",
+      "file": "models/models_test.go",
+      "priority": "P2"
+    },
+    "models/models_test.go::TestTaskStatusConstants": {
+      "tc_local_id": "TC-C0075",
+      "zentao_id": 1426,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestTaskStatusConstants",
+      "file": "models/models_test.go",
+      "priority": "P2"
+    },
+    "models/models_test.go::TestRunStruct": {
+      "tc_local_id": "TC-C0076",
+      "zentao_id": 1427,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestRunStruct",
+      "file": "models/models_test.go",
+      "priority": "P2"
+    },
+    "models/models_test.go::TestTaskRunStruct": {
+      "tc_local_id": "TC-C0077",
+      "zentao_id": 1428,
+      "domain": "cli/models",
+      "source": "cli",
+      "test_name": "TestTaskRunStruct",
+      "file": "models/models_test.go",
+      "priority": "P2"
+    }
+  }
+}
