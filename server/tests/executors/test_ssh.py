@@ -9,6 +9,7 @@ from taskpps.executors.ssh import SSHExecutor
 
 
 class TestSSHExecutorExitCodeCoverage:
+    @pytest.mark.zentao("TC-S0635", domain="server/executors", priority="P1")
     def test_ssh_transport_none_raises(self, tmp_path):
         log_path = tmp_path / "ssh_trans.log"
         executor = SSHExecutor(host="1.2.3.4", password="p")
@@ -22,6 +23,7 @@ class TestSSHExecutorExitCodeCoverage:
             assert not result.success
             assert result.exit_code == -1
 
+    @pytest.mark.zentao("TC-S0636", domain="server/executors", priority="P1")
     def test_ssh_client_none_during_read(self, tmp_path):
         log_path = tmp_path / "ssh_none.log"
         executor = SSHExecutor(host="1.2.3.4", password="p")
@@ -55,6 +57,7 @@ class TestSSHExecutorExitCodeCoverage:
                 assert not result.success
                 assert result.exit_code == -1
 
+    @pytest.mark.zentao("TC-S0637", domain="server/executors", priority="P1")
     def test_ssh_cancelled_error(self, tmp_path):
         log_path = tmp_path / "ssh_cancel.log"
         executor = SSHExecutor(host="1.2.3.4", password="p")
@@ -68,6 +71,7 @@ class TestSSHExecutorExitCodeCoverage:
             assert not result.success
             assert result.exit_code == -1
 
+    @pytest.mark.zentao("TC-S0638", domain="server/executors", priority="P1")
     def test_ssh_channel_close_exception(self, tmp_path):
         log_path = tmp_path / "ssh_chclose.log"
         executor = SSHExecutor(host="1.2.3.4", password="p")
@@ -91,6 +95,7 @@ class TestSSHExecutorExitCodeCoverage:
                 assert result.success
                 assert result.exit_code == 0
 
+    @pytest.mark.zentao("TC-S0639", domain="server/executors", priority="P1")
     def test_ssh_client_close_exception(self, tmp_path):
         log_path = tmp_path / "ssh_clclose.log"
         executor = SSHExecutor(host="1.2.3.4", password="p")
@@ -114,6 +119,7 @@ class TestSSHExecutorExitCodeCoverage:
                 assert result.success
                 assert result.exit_code == 0
 
+    @pytest.mark.zentao("TC-S0640", domain="server/executors", priority="P1")
     def test_ssh_cancel_handles_close_exception(self, tmp_path):
         executor = SSHExecutor(host="1.2.3.4", password="p")
         mock_client = MagicMock()
@@ -123,6 +129,7 @@ class TestSSHExecutorExitCodeCoverage:
         asyncio.run(executor.cancel())
         assert executor._client is None
 
+    @pytest.mark.zentao("TC-S0641", domain="server/executors", priority="P1")
     def test_ssh_execute_with_stderr_reading(self, tmp_path):
         log_path = tmp_path / "ssh_stderr.log"
         executor = SSHExecutor(host="1.2.3.4", password="p")
@@ -158,6 +165,7 @@ class TestSSHExecutorExitCodeCoverage:
 
 
 class TestSSHExecutor:
+    @pytest.mark.zentao("TC-S0642", domain="server/executors", priority="P2")
     def test_init(self):
         executor = SSHExecutor(host="192.168.1.1", port=22, username="root", password="secret")
         assert executor.host == "192.168.1.1"
@@ -166,27 +174,32 @@ class TestSSHExecutor:
         assert executor.password == "secret"
         assert executor.key_path is None
 
+    @pytest.mark.zentao("TC-S0643", domain="server/executors", priority="P2")
     def test_init_with_key(self):
         executor = SSHExecutor(host="10.0.0.1", port=2222, username="admin", key_path="/home/user/.ssh/id_rsa")
         assert executor.host == "10.0.0.1"
         assert executor.port == 2222
         assert executor.key_path == "/home/user/.ssh/id_rsa"
 
+    @pytest.mark.zentao("TC-S0644", domain="server/executors", priority="P2")
     def test_make_connect_kwargs_password(self):
         executor = SSHExecutor(host="h", password="pass")
         kwargs = executor._make_connect_kwargs()
         assert kwargs == {"password": "pass"}
 
+    @pytest.mark.zentao("TC-S0645", domain="server/executors", priority="P2")
     def test_make_connect_kwargs_key(self):
         executor = SSHExecutor(host="h", key_path="/key")
         kwargs = executor._make_connect_kwargs()
         assert kwargs == {"key_filename": "/key"}
 
+    @pytest.mark.zentao("TC-S0646", domain="server/executors", priority="P2")
     def test_make_connect_kwargs_key_over_password(self):
         executor = SSHExecutor(host="h", password="pass", key_path="/key")
         kwargs = executor._make_connect_kwargs()
         assert kwargs == {"key_filename": "/key"}
 
+    @pytest.mark.zentao("TC-S0647", domain="server/executors", priority="P2")
     def test_make_connect_kwargs_none(self):
         executor = SSHExecutor(host="h")
         kwargs = executor._make_connect_kwargs()
@@ -211,6 +224,7 @@ class TestSSHExecutor:
         return mock_client, mock_channel
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0648", domain="server/executors", priority="P0")
     async def test_execute_success(self, tmp_path):
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="192.168.1.1", port=22, username="root", password="secret")
@@ -234,6 +248,7 @@ class TestSSHExecutor:
         assert "/workspace/repo" in cmd_arg
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0649", domain="server/executors", priority="P1")
     async def test_execute_failure(self, tmp_path):
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="192.168.1.1", port=22, username="root", password="secret")
@@ -253,6 +268,7 @@ class TestSSHExecutor:
         assert result.exit_code == 127
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0650", domain="server/executors", priority="P1")
     async def test_execute_connection_error(self, tmp_path):
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="192.168.1.1", port=22, username="root", password="secret")
@@ -269,6 +285,7 @@ class TestSSHExecutor:
         assert "Connection refused" in result.stderr
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0651", domain="server/executors", priority="P1")
     async def test_execute_no_cwd(self, tmp_path):
         log_path = tmp_path / "test.log"
         executor = SSHExecutor(host="h", password="p")
@@ -288,6 +305,7 @@ class TestSSHExecutor:
         assert "cd" in cmd_arg and "." in cmd_arg
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0652", domain="server/executors", priority="P1")
     async def test_cancel_with_connection(self):
         executor = SSHExecutor(host="h", password="p")
         mock_client = MagicMock()
@@ -298,6 +316,7 @@ class TestSSHExecutor:
         assert executor._client is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0653", domain="server/executors", priority="P2")
     async def test_execute_with_key_path(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", key_path="/path/to/key")
         assert ex.key_path == "/path/to/key"
@@ -320,6 +339,7 @@ class TestSSHExecutor:
         assert log_path.exists()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0654", domain="server/executors", priority="P1")
     async def test_execute_script_and_cleanup(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", password="pass")
 
@@ -341,6 +361,7 @@ class TestSSHExecutor:
         mock_client.close.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0655", domain="server/executors", priority="P1")
     async def test_execute_run_failure(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", password="pass")
 
@@ -360,6 +381,7 @@ class TestSSHExecutor:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0656", domain="server/executors", priority="P0")
     async def test_execute_with_cwd(self, tmp_path):
         ex = SSHExecutor(host="1.2.3.4", username="root", password="pass")
 
@@ -381,6 +403,7 @@ class TestSSHExecutor:
         assert "/var/www" in cmd_arg
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0657", domain="server/executors", priority="P0")
     async def test_execute_with_cwd_exception(self, tmp_path):
         executor = SSHExecutor(host="127.0.0.1", port=29999, username="test")
         log_path = tmp_path / "cwd_test.log"
@@ -388,6 +411,7 @@ class TestSSHExecutor:
         assert not result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0658", domain="server/executors", priority="P1")
     async def test_execute_exception(self, tmp_path):
         executor = SSHExecutor(host="127.0.0.1", port=29999, username="test")
         log_path = tmp_path / "exception.log"
@@ -403,11 +427,13 @@ class TestSSHExecutor:
         assert log_content == result.stdout, "日志内容应该与返回的输出一致"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0659", domain="server/executors", priority="P1")
     async def test_cancel_no_connection(self):
         executor = SSHExecutor(host="127.0.0.1", port=29999, username="test")
         await executor.cancel()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0660", domain="server/executors", priority="P1")
     async def test_cancel_with_client(self):
         executor = SSHExecutor(host="127.0.0.1", port=29999, username="test")
         executor._client = MagicMock()
@@ -416,6 +442,7 @@ class TestSSHExecutor:
         assert executor._client is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0661", domain="server/executors", priority="P1")
     async def test_cancel_close_exception(self):
         executor = SSHExecutor(host="127.0.0.1", port=29999, username="test")
         executor._channel = MagicMock()
@@ -425,6 +452,8 @@ class TestSSHExecutor:
         await executor.cancel()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0662", domain="server/executors", priority="P2")
     async def test_with_key_path_attr(self):
         executor = SSHExecutor(host="1.2.3.4", port=22, username="root", key_path="/tmp/key")
         assert executor.key_path == "/tmp/key"
+

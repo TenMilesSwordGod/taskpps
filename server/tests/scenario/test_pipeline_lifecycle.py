@@ -22,6 +22,7 @@ def project_env(setup_project, tmp_project):
 
 class TestPipelineCreateAndFetch:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0210", domain="server/scenario", priority="P2")
     async def test_create_run_and_fetch(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -41,6 +42,7 @@ class TestPipelineCreateAndFetch:
             assert get_resp.json()["id"] == run_id
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0211", domain="server/scenario", priority="P1")
     async def test_list_runs_after_create(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -53,6 +55,7 @@ class TestPipelineCreateAndFetch:
             assert len(data.get("items", [])) >= 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0212", domain="server/scenario", priority="P1")
     async def test_list_runs_filter_by_pipeline(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -66,6 +69,7 @@ class TestPipelineCreateAndFetch:
                 assert item["pipeline_name"] == "simple"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0213", domain="server/scenario", priority="P1")
     async def test_list_runs_filter_by_status(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -78,6 +82,7 @@ class TestPipelineCreateAndFetch:
                 assert item["status"] == "pending"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0214", domain="server/scenario", priority="P2")
     async def test_create_run_with_params(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -93,6 +98,7 @@ class TestPipelineCreateAndFetch:
             assert run_data["pipeline_name"] == "deploy"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0215", domain="server/scenario", priority="P2")
     async def test_get_nonexistent_run(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -102,6 +108,7 @@ class TestPipelineCreateAndFetch:
 
 class TestPipelineCancel:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0216", domain="server/scenario", priority="P1")
     async def test_cancel_pending_run(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -116,6 +123,7 @@ class TestPipelineCancel:
             assert get_resp.json()["status"] in ("cancelled", "pending", "running")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0217", domain="server/scenario", priority="P1")
     async def test_cancel_nonexistent_run(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -125,6 +133,7 @@ class TestPipelineCancel:
 
 class TestPipelineCleanup:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0218", domain="server/scenario", priority="P1")
     async def test_cleanup_runs_force(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -140,6 +149,7 @@ class TestPipelineCleanup:
             assert data.get("deleted_runs", 0) >= 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0219", domain="server/scenario", priority="P1")
     async def test_cleanup_no_force_no_delete_recent(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -156,6 +166,7 @@ class TestPipelineCleanup:
 
 class TestPipelineErrorHandling:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0220", domain="server/scenario", priority="P2")
     async def test_create_run_missing_pipeline_field(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -163,6 +174,7 @@ class TestPipelineErrorHandling:
             assert resp.status_code == 422
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0221", domain="server/scenario", priority="P2")
     async def test_create_run_empty_pipeline_name(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -170,6 +182,7 @@ class TestPipelineErrorHandling:
             assert resp.status_code == 400
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0222", domain="server/scenario", priority="P2")
     async def test_create_run_nonexistent_pipeline(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -177,6 +190,7 @@ class TestPipelineErrorHandling:
             assert resp.status_code == 400
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0223", domain="server/scenario", priority="P2")
     async def test_invalid_json_body(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -188,8 +202,10 @@ class TestPipelineErrorHandling:
             assert resp.status_code == 422
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0224", domain="server/scenario", priority="P0")
     async def test_create_run_with_cycle_detection(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post("/api/runs/", json={"pipeline": "cycle"})
             assert resp.status_code == 400
+

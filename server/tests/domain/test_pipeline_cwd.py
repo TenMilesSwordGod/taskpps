@@ -9,6 +9,7 @@ def _resolve(yaml_dict: dict) -> ResolvedPipeline:
     return ResolvedPipeline.from_yaml(spec, pipeline_file="test.yaml")
 
 
+@pytest.mark.zentao("TC-S1133", domain="server/domain", priority="P1")
 def test_cwd_inherits_from_top_config():
     spec = {
         "name": "p",
@@ -25,6 +26,7 @@ def test_cwd_inherits_from_top_config():
     assert p.subpipelines[0].tasks[0].cwd == "/top"
 
 
+@pytest.mark.zentao("TC-S1134", domain="server/domain", priority="P1")
 def test_cwd_inherits_from_subpipeline_config():
     spec = {
         "name": "p",
@@ -42,6 +44,7 @@ def test_cwd_inherits_from_subpipeline_config():
     assert p.subpipelines[0].tasks[0].cwd == "/sub"
 
 
+@pytest.mark.zentao("TC-S1135", domain="server/domain", priority="P1")
 def test_task_cwd_overrides_all():
     spec = {
         "name": "p",
@@ -58,6 +61,7 @@ def test_task_cwd_overrides_all():
     assert p.subpipelines[0].tasks[0].cwd == "/task"
 
 
+@pytest.mark.zentao("TC-S1136", domain="server/domain", priority="P1")
 def test_legacy_options_cwd():
     spec = {
         "name": "p",
@@ -67,3 +71,4 @@ def test_legacy_options_cwd():
     p = _resolve(spec)
     assert p.top_config.cwd == "/opt"
     assert p.subpipelines[0].tasks[0].cwd == "/opt"
+

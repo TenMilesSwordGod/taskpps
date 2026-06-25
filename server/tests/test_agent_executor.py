@@ -35,6 +35,7 @@ class TestAgentSchedulingScenarios:
     """Issue #100: 并发/顺序重试调度场景测试。"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0001", domain="server/root", priority="P1")
     async def test_sequential_task_waits_for_busy_agent(self, manager, log_path):
         """
         场景 A：一个 task 期望顺序执行，但当前 agent 正在跑一个允许并发的 task，
@@ -78,6 +79,7 @@ class TestAgentSchedulingScenarios:
         assert manager._agent_semaphores["agent-1"]._value == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0002", domain="server/root", priority="P2")
     async def test_queued_task_on_busy_agent_allows_other_agent_to_run(self, manager, log_path):
         """
         场景 B：任务 B 在 agent-1 上排队等待，此时任务 C 在 agent-2 上可立即执行。
@@ -109,6 +111,7 @@ class TestAgentSchedulingScenarios:
 
 class TestAcquireAgent:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0003", domain="server/root", priority="P2")
     async def test_acquire_release_basic(self, manager, log_path):
         """基本获取和释放信号量"""
         await manager.acquire_agent("agent-1", max_parallel=2, timeout=5)
@@ -118,6 +121,7 @@ class TestAcquireAgent:
         assert manager._agent_semaphores["agent-1"]._value == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0004", domain="server/root", priority="P2")
     async def test_acquire_blocks_when_full(self, manager, log_path):
         """信号量满时排队等待"""
         await manager.acquire_agent("agent-1", max_parallel=1, timeout=5)
@@ -139,6 +143,7 @@ class TestAcquireAgent:
         manager.release_agent("agent-1")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0005", domain="server/root", priority="P1")
     async def test_acquire_timeout(self, manager, log_path):
         """排队超时抛出 TimeoutError"""
         await manager.acquire_agent("agent-1", max_parallel=1, timeout=5)
@@ -149,6 +154,7 @@ class TestAcquireAgent:
         manager.release_agent("agent-1")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0006", domain="server/root", priority="P1")
     async def test_acquire_zero_timeout_no_wait(self, manager, log_path):
         """timeout=0 时，满则直接失败"""
         await manager.acquire_agent("agent-1", max_parallel=1, timeout=5)
@@ -159,6 +165,7 @@ class TestAcquireAgent:
         manager.release_agent("agent-1")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0007", domain="server/root", priority="P2")
     async def test_release_unknown_agent(self, manager):
         """释放不存在的 agent 不报错"""
         manager.release_agent("nonexistent")
@@ -166,6 +173,7 @@ class TestAcquireAgent:
 
 class TestExecutorSemaphore:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0008", domain="server/root", priority="P2")
     async def test_execute_acquires_and_releases(self, manager, log_path):
         """execute 方法正确获取和释放信号量"""
         executor = AgentExecutor("agent-1", manager, {"max_parallel": 2})
@@ -183,6 +191,7 @@ class TestExecutorSemaphore:
         assert manager._agent_semaphores["agent-1"]._value == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0009", domain="server/root", priority="P1")
     async def test_execute_releases_on_failure(self, manager, log_path):
         """execute 失败时也释放信号量"""
         executor = AgentExecutor("agent-1", manager, {"max_parallel": 1})
@@ -197,6 +206,7 @@ class TestExecutorSemaphore:
         assert manager._agent_semaphores["agent-1"]._value == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0010", domain="server/root", priority="P1")
     async def test_execute_queue_timeout(self, manager, log_path):
         """排队超时返回错误结果"""
         # 先占满信号量
@@ -221,6 +231,7 @@ class TestExecutorSemaphore:
         manager.release_agent("agent-1")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0011", domain="server/root", priority="P1")
     async def test_cleanup_releases_semaphore(self, manager, log_path):
         """cleanup 方法释放信号量"""
         executor = AgentExecutor("agent-1", manager, {"max_parallel": 1})
@@ -238,6 +249,7 @@ class TestExecutorSemaphore:
         assert manager._agent_semaphores["agent-1"]._value == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0012", domain="server/root", priority="P1")
     async def test_not_connected_no_semaphore(self, manager, log_path):
         """agent 未连接时不获取信号量"""
         manager.is_connected = MagicMock(return_value=False)
@@ -259,6 +271,7 @@ class TestAgentSemaphoreUpgrade:
     """Issue #106: agent 信号量升级测试"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0013", domain="server/root", priority="P2")
     async def test_semaphore_upgrade_from_1_to_3(self, manager, log_path):
         """信号量从1升级到3：应增加容量而不影响已持有的槽位"""
         # 初始 max_parallel=1
@@ -283,6 +296,7 @@ class TestAgentSemaphoreUpgrade:
         assert manager._agent_semaphores["agent-1"]._value == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0014", domain="server/root", priority="P2")
     async def test_semaphore_no_downgrade(self, manager, log_path):
         """max_parallel 变小不应缩小信号量容量"""
         await manager.acquire_agent("agent-1", max_parallel=3, timeout=5)
@@ -293,6 +307,7 @@ class TestAgentSemaphoreUpgrade:
         manager.release_agent("agent-1")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0015", domain="server/root", priority="P2")
     async def test_semaphore_upgrade_does_not_affect_waiters(self, manager, log_path):
         """信号量升级不影响正在等待的 acquire 调用"""
         # 初始 max_parallel=1，占满
@@ -329,6 +344,7 @@ class TestGlobalConcurrency:
     """Issue #106: 全局并发限制测试"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0016", domain="server/root", priority="P2")
     async def test_global_semaphore_acquire_release(self, manager, log_path):
         """全局信号量获取和释放"""
         manager.configure_global_max_concurrent(2)
@@ -348,6 +364,7 @@ class TestGlobalConcurrency:
         assert manager._global_semaphore._value == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0017", domain="server/root", priority="P2")
     async def test_global_semaphore_zero_means_no_limit(self, manager, log_path):
         """global_max_concurrent=0 表示无限制"""
         manager.configure_global_max_concurrent(0)
@@ -357,6 +374,7 @@ class TestGlobalConcurrency:
         await manager.acquire_global(timeout=5)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0018", domain="server/root", priority="P2")
     async def test_global_semaphore_blocks_when_full(self, manager, log_path):
         """全局信号量满时排队等待"""
         manager.configure_global_max_concurrent(1)
@@ -382,6 +400,7 @@ class TestGlobalConcurrency:
             await task
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0019", domain="server/root", priority="P1")
     async def test_global_semaphore_timeout(self, manager, log_path):
         """全局信号量超时"""
         manager.configure_global_max_concurrent(1)
@@ -393,6 +412,7 @@ class TestGlobalConcurrency:
         manager.release_global()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0020", domain="server/root", priority="P1")
     async def test_configure_global_max_concurrent_upgrade(self, manager, log_path):
         """全局信号量升级"""
         manager.configure_global_max_concurrent(2)
@@ -404,6 +424,7 @@ class TestGlobalConcurrency:
         assert manager._global_max_concurrent == 5
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0021", domain="server/root", priority="P2")
     async def test_execute_acquires_and_releases_global_semaphore(self, manager, log_path):
         """AgentExecutor.execute() 应获取和释放全局信号量"""
         manager.configure_global_max_concurrent(1)
@@ -426,3 +447,4 @@ class TestGlobalConcurrency:
         assert result.exit_code == 0
         # 全局信号量应已释放
         assert manager._global_semaphore._value == 1
+

@@ -12,16 +12,19 @@ from taskpps.executors.ssh import SSHExecutor
 
 
 class TestCreateExecutor:
+    @pytest.mark.zentao("TC-S0515", domain="server/executors", priority="P2")
     def test_local(self):
         task = ResolvedTask(name="t", task_type="command", command="echo")
         executor = create_executor(task)
         assert isinstance(executor, LocalExecutor)
 
+    @pytest.mark.zentao("TC-S0516", domain="server/executors", priority="P1")
     def test_invoke(self):
         task = ResolvedTask(name="t", task_type="invoke", invoke_task="mod.fn")
         executor = create_executor(task)
         assert isinstance(executor, InvokeExecutor)
 
+    @pytest.mark.zentao("TC-S0517", domain="server/executors", priority="P1")
     def test_ssh(self, tmp_path):
         task = ResolvedTask(
             name="t",
@@ -43,6 +46,7 @@ class TestCreateExecutor:
             assert executor.port == 2222
             assert executor.username == "admin"
 
+    @pytest.mark.zentao("TC-S0518", domain="server/executors", priority="P1")
     def test_ssh_with_credential(self, tmp_path):
         task = ResolvedTask(
             name="t",
@@ -72,6 +76,7 @@ class TestCreateExecutor:
             assert isinstance(executor, SSHExecutor)
             assert executor.password == "secret123"
 
+    @pytest.mark.zentao("TC-S0519", domain="server/executors", priority="P1")
     def test_ssh_agent_not_found(self, tmp_path):
         task = ResolvedTask(
             name="t",
@@ -88,6 +93,7 @@ class TestCreateExecutor:
             with pytest.raises(AgentNotFoundError, match="nonexistent-host"):
                 create_executor(task)
 
+    @pytest.mark.zentao("TC-S0520", domain="server/executors", priority="P1")
     def test_ssh_credential_not_found(self, tmp_path):
         task = ResolvedTask(
             name="t",
@@ -116,11 +122,13 @@ class TestCreateExecutor:
             assert executor.password is None
             assert executor.key_path is None
 
+    @pytest.mark.zentao("TC-S0521", domain="server/executors", priority="P2")
     def test_command_no_host(self):
         task = ResolvedTask(name="t", task_type="command", command="echo")
         executor = create_executor(task)
         assert isinstance(executor, LocalExecutor)
 
+    @pytest.mark.zentao("TC-S0522", domain="server/executors", priority="P2")
     def test_project_workdir_passed_to_agent_loader(self, tmp_path):
         """project_workdir 应传递给 AgentLoader，使其在正确的 agents 目录查找。"""
         project_dir = tmp_path / "myproject"
@@ -143,6 +151,7 @@ class TestCreateExecutor:
         assert isinstance(executor, AgentExecutor)
         assert executor._agent_id == "auto-03"
 
+    @pytest.mark.zentao("TC-S0523", domain="server/executors", priority="P1")
     def test_project_workdir_not_found_agent(self, tmp_path):
         """project_workdir 指向的目录没有对应 agent 时应抛出 AgentNotFoundError。"""
         project_dir = tmp_path / "empty_project"
@@ -160,7 +169,9 @@ class TestCreateExecutor:
         with pytest.raises(AgentNotFoundError, match="auto-03"):
             create_executor(task, project_workdir=str(project_dir))
 
+    @pytest.mark.zentao("TC-S0524", domain="server/executors", priority="P1")
     def test_invoke_type(self):
         task = ResolvedTask(name="t", task_type="invoke", invoke_task="mod.fn")
         executor = create_executor(task)
         assert isinstance(executor, InvokeExecutor)
+

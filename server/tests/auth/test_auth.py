@@ -12,6 +12,7 @@ def app():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1018", domain="server/auth", priority="P2")
 async def test_no_auth_header(app, setup_project, tmp_project):
     import taskpps.config as cfg
 
@@ -26,6 +27,7 @@ async def test_no_auth_header(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1019", domain="server/auth", priority="P0")
 async def test_auth_with_valid_token(app, setup_project, tmp_project):
     import taskpps.config as cfg
 
@@ -40,6 +42,7 @@ async def test_auth_with_valid_token(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1020", domain="server/auth", priority="P2")
 async def test_auth_middleware_bypasses_health(app, setup_project, tmp_project):
     import taskpps.config as cfg
 
@@ -58,6 +61,7 @@ async def test_auth_middleware_bypasses_health(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1021", domain="server/auth", priority="P0")
 async def test_auth_protected_endpoint(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -72,6 +76,7 @@ async def test_auth_protected_endpoint(app, setup_project, tmp_project, db_engin
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1022", domain="server/auth", priority="P2")
 async def test_auth_create_run(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -86,3 +91,4 @@ async def test_auth_create_run(app, setup_project, tmp_project, db_engine):
             json={"pipeline": "deploy.yaml", "params": {}},
         )
         assert response.status_code in (200, 201)
+

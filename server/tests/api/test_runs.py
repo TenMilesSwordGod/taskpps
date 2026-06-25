@@ -12,6 +12,7 @@ def app():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0981", domain="server/api", priority="P2")
 async def test_health(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -22,6 +23,7 @@ async def test_health(app):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0982", domain="server/api", priority="P1")
 async def test_list_runs(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -39,6 +41,7 @@ async def test_list_runs(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0983", domain="server/api", priority="P2")
 async def test_create_run(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -58,6 +61,7 @@ async def test_create_run(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0984", domain="server/api", priority="P1")
 async def test_get_run(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -80,6 +84,7 @@ async def test_get_run(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0985", domain="server/api", priority="P1")
 async def test_get_run_not_found(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -94,6 +99,7 @@ async def test_get_run_not_found(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0986", domain="server/api", priority="P2")
 async def test_create_run_invalid(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -111,6 +117,7 @@ async def test_create_run_invalid(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0987", domain="server/api", priority="P1")
 async def test_cancel_run(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -131,6 +138,7 @@ async def test_cancel_run(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0988", domain="server/api", priority="P1")
 async def test_list_runs_filter(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -152,6 +160,7 @@ async def test_list_runs_filter(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0989", domain="server/api", priority="P1")
 async def test_list_runs_limit(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -168,6 +177,7 @@ async def test_list_runs_limit(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0990", domain="server/api", priority="P1")
 async def test_get_run_logs(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -194,6 +204,7 @@ async def test_get_run_logs(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0991", domain="server/api", priority="P1")
 async def test_clean_runs(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -210,6 +221,7 @@ async def test_clean_runs(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0992", domain="server/api", priority="P1")
 async def test_clean_runs_older_than(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -226,6 +238,7 @@ async def test_clean_runs_older_than(app, setup_project, tmp_project, db_engine)
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0993", domain="server/api", priority="P2")
 async def test_pipeline_snapshot(app, setup_project, tmp_project, db_engine):
     """Issue #58: 获取运行的流水线快照"""
     import taskpps.config as cfg
@@ -249,6 +262,7 @@ async def test_pipeline_snapshot(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0994", domain="server/api", priority="P1")
 async def test_pipeline_snapshot_not_found(app, setup_project, tmp_project, db_engine):
     """Issue #58: 不存在的运行返回 404"""
     import taskpps.config as cfg
@@ -264,6 +278,7 @@ async def test_pipeline_snapshot_not_found(app, setup_project, tmp_project, db_e
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0995", domain="server/api", priority="P2")
 async def test_delete_single_run(app, setup_project, tmp_project, db_engine):
     """Issue #55: 删除单条运行记录"""
     import taskpps.config as cfg
@@ -290,6 +305,7 @@ async def test_delete_single_run(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0996", domain="server/api", priority="P1")
 async def test_delete_run_not_found(app, setup_project, tmp_project, db_engine):
     """Issue #55: 删除不存在的运行返回 404"""
     import taskpps.config as cfg
@@ -305,6 +321,7 @@ async def test_delete_run_not_found(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0997", domain="server/api", priority="P2")
 async def test_no_auth_header(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
 
@@ -319,6 +336,7 @@ async def test_no_auth_header(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0998", domain="server/api", priority="P2")
 async def test_run_stats(app, setup_project, tmp_project, db_engine):
     """Issue #89: 运行历史状态统计接口"""
     import taskpps.config as cfg
@@ -352,6 +370,7 @@ async def test_run_stats(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0999", domain="server/api", priority="P1")
 async def test_run_stats_with_pipeline_filter(app, setup_project, tmp_project, db_engine):
     """Issue #89: 运行历史状态统计支持 pipeline 过滤"""
     import taskpps.config as cfg
@@ -372,6 +391,7 @@ async def test_run_stats_with_pipeline_filter(app, setup_project, tmp_project, d
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1000", domain="server/api", priority="P1")
 async def test_cancel_retry_run_api(app, setup_project, tmp_project, db_engine):
     """Issue #102: 取消重试 API 在存在活跃 RetryRunner 时返回 200。"""
     from unittest.mock import AsyncMock, patch
@@ -398,6 +418,7 @@ async def test_cancel_retry_run_api(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1001", domain="server/api", priority="P1")
 async def test_cancel_retry_run_api_no_active_retry(app, setup_project, tmp_project, db_engine):
     """Issue #102: 无活跃重试时取消重试 API 返回 404。"""
     import taskpps.config as cfg
@@ -413,3 +434,4 @@ async def test_cancel_retry_run_api_no_active_retry(app, setup_project, tmp_proj
 
         response = await client.post(f"/api/runs/{run_id}/retry/cancel")
         assert response.status_code == 404
+

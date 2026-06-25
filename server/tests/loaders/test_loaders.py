@@ -8,6 +8,7 @@ from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
 
 
 class TestPipelineLoader:
+    @pytest.mark.zentao("TC-S0811", domain="server/loaders", priority="P2")
     def test_load(self, setup_project, tmp_project):
         loader = PipelineLoader(tmp_project / "pipelines")
         spec = loader.load("deploy.yaml")
@@ -16,6 +17,7 @@ class TestPipelineLoader:
         assert spec.tasks[0].name == "step1"
         assert spec.tasks[1].depends_on == ["step1"]
 
+    @pytest.mark.zentao("TC-S0812", domain="server/loaders", priority="P2")
     def test_load_with_pipelines_prefix(self, setup_project, tmp_project):
         loader = PipelineLoader(tmp_project / "pipelines")
         spec = loader.load("pipelines/deploy.yaml")
@@ -25,6 +27,7 @@ class TestPipelineLoader:
         spec2 = loader.load("pipelines/simple.yaml")
         assert spec2.name == "simple"
 
+    @pytest.mark.zentao("TC-S0813", domain="server/loaders", priority="P2")
     def test_load_prefix_with_subdir(self, setup_project, tmp_project):
         subdir = tmp_project / "pipelines" / "nested"
         subdir.mkdir()
@@ -39,17 +42,20 @@ class TestPipelineLoader:
             nested_yaml.unlink()
             subdir.rmdir()
 
+    @pytest.mark.zentao("TC-S0814", domain="server/loaders", priority="P2")
     def test_load_all(self, setup_project, tmp_project):
         loader = PipelineLoader(tmp_project / "pipelines")
         all_pipelines = loader.load_all()
         assert "deploy" in all_pipelines
         assert "simple" in all_pipelines
 
+    @pytest.mark.zentao("TC-S0815", domain="server/loaders", priority="P1")
     def test_not_found(self, setup_project, tmp_project):
         loader = PipelineLoader(tmp_project / "pipelines")
         with pytest.raises(FileNotFoundError):
             loader.load("nonexistent.yaml")
 
+    @pytest.mark.zentao("TC-S0816", domain="server/loaders", priority="P2")
     def test_empty_file(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -59,11 +65,13 @@ class TestPipelineLoader:
         with pytest.raises(ValueError, match="empty"):
             loader.load("empty.yaml")
 
+    @pytest.mark.zentao("TC-S0817", domain="server/loaders", priority="P2")
     def test_load_all_no_dir(self, tmp_path):
         loader = PipelineLoader(tmp_path / "nonexistent")
         result = loader.load_all()
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0818", domain="server/loaders", priority="P1")
     def test_load_with_env_subst(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -76,6 +84,7 @@ class TestPipelineLoader:
         assert spec.options.env["KEY"] == "resolved_value"
         assert spec.tasks[0].command == "echo resolved_value"
 
+    @pytest.mark.zentao("TC-S0819", domain="server/loaders", priority="P2")
     def test_load_absolute_path(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir(parents=True, exist_ok=True)
@@ -85,6 +94,7 @@ class TestPipelineLoader:
         spec = loader.load("absolute.yaml")
         assert spec.name == "absolute"
 
+    @pytest.mark.zentao("TC-S0820", domain="server/loaders", priority="P2")
     def test_load_all_includes_yml(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -96,6 +106,7 @@ class TestPipelineLoader:
 
 
 class TestAgentLoader:
+    @pytest.mark.zentao("TC-S0811", domain="server/loaders", priority="P2")
     def test_load(self, setup_project, tmp_project):
         loader = AgentLoader(tmp_project / "agents")
         data = loader.load("staging-server")
@@ -103,21 +114,25 @@ class TestAgentLoader:
         assert data["port"] == 22
         assert data["username"] == "test"
 
+    @pytest.mark.zentao("TC-S0815", domain="server/loaders", priority="P1")
     def test_not_found(self, setup_project, tmp_project):
         loader = AgentLoader(tmp_project / "agents")
         with pytest.raises(FileNotFoundError):
             loader.load("nonexistent")
 
+    @pytest.mark.zentao("TC-S0814", domain="server/loaders", priority="P2")
     def test_load_all(self, setup_project, tmp_project):
         loader = AgentLoader(tmp_project / "agents")
         all_agents = loader.load_all()
         assert "staging-server" in all_agents
 
+    @pytest.mark.zentao("TC-S0817", domain="server/loaders", priority="P2")
     def test_load_all_no_dir(self, tmp_path):
         loader = AgentLoader(tmp_path / "nonexistent")
         result = loader.load_all()
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0820", domain="server/loaders", priority="P2")
     def test_load_all_includes_yml(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -127,6 +142,7 @@ class TestAgentLoader:
         result = loader.load_all()
         assert "test-agent" in result
 
+    @pytest.mark.zentao("TC-S0821", domain="server/loaders", priority="P2")
     def test_empty_yaml(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -136,6 +152,7 @@ class TestAgentLoader:
         with pytest.raises(ValueError, match="empty"):
             loader.load("empty")
 
+    @pytest.mark.zentao("TC-S0822", domain="server/loaders", priority="P1")
     def test_load_all_with_exception(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -145,6 +162,7 @@ class TestAgentLoader:
         result = loader.load_all()
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0823", domain="server/loaders", priority="P2")
     def test_load_yml_extension(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -156,21 +174,25 @@ class TestAgentLoader:
 
 
 class TestCredentialLoader:
+    @pytest.mark.zentao("TC-S0811", domain="server/loaders", priority="P2")
     def test_load(self, setup_project, tmp_project):
         loader = CredentialLoader(tmp_project / "credentials")
         data = loader.load("default-cred")
         assert data["password"] == "testpass"
 
+    @pytest.mark.zentao("TC-S0815", domain="server/loaders", priority="P1")
     def test_not_found(self, setup_project, tmp_project):
         loader = CredentialLoader(tmp_project / "credentials")
         with pytest.raises(FileNotFoundError):
             loader.load("nonexistent")
 
+    @pytest.mark.zentao("TC-S0817", domain="server/loaders", priority="P2")
     def test_load_all_no_dir(self, tmp_path):
         loader = CredentialLoader(tmp_path / "nonexistent")
         result = loader.load_all()
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0820", domain="server/loaders", priority="P2")
     def test_load_all_includes_yml(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -180,6 +202,7 @@ class TestCredentialLoader:
         result = loader.load_all()
         assert "test-cred" in result
 
+    @pytest.mark.zentao("TC-S0821", domain="server/loaders", priority="P2")
     def test_empty_yaml(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -189,6 +212,7 @@ class TestCredentialLoader:
         with pytest.raises(ValueError, match="empty"):
             loader.load("empty")
 
+    @pytest.mark.zentao("TC-S0822", domain="server/loaders", priority="P1")
     def test_load_all_with_exception(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -198,6 +222,7 @@ class TestCredentialLoader:
         result = loader.load_all()
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0823", domain="server/loaders", priority="P2")
     def test_load_yml_extension(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -207,6 +232,7 @@ class TestCredentialLoader:
         data = loader.load("test-cred")
         assert data["password"] == "secret"
 
+    @pytest.mark.zentao("TC-S0824", domain="server/loaders", priority="P2")
     def test_password_warning(self, tmp_path, caplog):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -218,6 +244,7 @@ class TestCredentialLoader:
         assert data["password"] == "changeme"
         assert "plaintext password" in caplog.text
 
+    @pytest.mark.zentao("TC-S0825", domain="server/loaders", priority="P2")
     def test_key_path_no_warning(self, tmp_path, caplog):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -231,16 +258,19 @@ class TestCredentialLoader:
 
 
 class TestSubstituteEnvVars:
+    @pytest.mark.zentao("TC-S0826", domain="server/loaders", priority="P2")
     def test_simple(self):
         env = {"APP_ENV": "production", "TAG": "v1.0"}
         result = substitute_env_vars("echo ${APP_ENV} ${TAG}", env)
         assert result == "echo production v1.0"
 
+    @pytest.mark.zentao("TC-S0827", domain="server/loaders", priority="P2")
     def test_missing(self):
         env = {}
         result = substitute_env_vars("echo ${MISSING}", env)
         assert result == "echo ${MISSING}"
 
+    @pytest.mark.zentao("TC-S0828", domain="server/loaders", priority="P2")
     def test_dict(self):
         env = {"KEY": "val"}
         data = {"command": "echo ${KEY}", "nested": {"val": "${KEY}"}}
@@ -248,34 +278,41 @@ class TestSubstituteEnvVars:
         assert result["command"] == "echo val"
         assert result["nested"]["val"] == "val"
 
+    @pytest.mark.zentao("TC-S0829", domain="server/loaders", priority="P2")
     def test_list(self):
         env = {"X": "1"}
         data = ["${X}", "static"]
         result = substitute_env_vars(data, env)
         assert result == ["1", "static"]
 
+    @pytest.mark.zentao("TC-S0830", domain="server/loaders", priority="P2")
     def test_no_match(self):
         result = substitute_env_vars("no vars here", {})
         assert result == "no vars here"
 
+    @pytest.mark.zentao("TC-S0831", domain="server/loaders", priority="P2")
     def test_int(self):
         result = substitute_env_vars(42, {})
         assert result == 42
 
+    @pytest.mark.zentao("TC-S0832", domain="server/loaders", priority="P1")
     def test_env_prefix(self):
         env = {"DUT_IP": "192.168.1.100"}
         result = substitute_env_vars("echo ${env.DUT_IP}", env)
         assert result == "echo 192.168.1.100"
 
+    @pytest.mark.zentao("TC-S0833", domain="server/loaders", priority="P1")
     def test_env_prefix_missing(self):
         result = substitute_env_vars("echo ${env.MISSING}", {})
         assert result == "echo ${env.MISSING}"
 
+    @pytest.mark.zentao("TC-S0834", domain="server/loaders", priority="P2")
     def test_nested_variable_substitution(self):
         env = {"DUT_IP": "10.239.1.2", "EXEC_CMD": "uv run run.py -v ip:${DUT_IP}"}
         result = substitute_env_vars("${EXEC_CMD} -v extra:1", env)
         assert result == "uv run run.py -v ip:10.239.1.2 -v extra:1"
 
+    @pytest.mark.zentao("TC-S0835", domain="server/loaders", priority="P1")
     def test_load_with_env_prefix_and_no_env_param(self, tmp_path, monkeypatch):
         # 测试没有显式传入 env 参数时,仍然可以通过 settings.env 和 os.environ 替换
         monkeypatch.setenv("SYS_ENV", "sys_value")
@@ -303,6 +340,7 @@ tasks:
         finally:
             taskpps.config._settings = original_settings
 
+    @pytest.mark.zentao("TC-S0836", domain="server/loaders", priority="P1")
     def test_load_with_env_prefix_and_params(self, tmp_path, monkeypatch):
         # 测试传入 env 参数时的优先级
         monkeypatch.setenv("SYS_ENV", "sys_value")
@@ -331,6 +369,7 @@ tasks:
         finally:
             taskpps.config._settings = original_settings
 
+    @pytest.mark.zentao("TC-S0837", domain="server/loaders", priority="P2")
     def test_load_always_substitute_vars(self, tmp_path, monkeypatch):
         # 测试即使没有 env 参数,也会执行变量替换
         monkeypatch.setenv("TEST_VAR", "os_value")
@@ -348,6 +387,7 @@ tasks:
         spec = loader.load("always_substitute.yaml")
         assert spec.tasks[0].command == "echo os_value"
 
+    @pytest.mark.zentao("TC-S0838", domain="server/loaders", priority="P1")
     def test_no_env_prefix_also_uses_settings_and_os(self, tmp_path, monkeypatch):
         # 测试没有 env. 前缀的变量也会按同样的优先级查找
         monkeypatch.setenv("SYS_NO_PREFIX", "sys_no_prefix")
@@ -378,6 +418,7 @@ tasks:
         finally:
             taskpps.config._settings = original_settings
 
+    @pytest.mark.zentao("TC-S0839", domain="server/loaders", priority="P1")
     def test_config_env_available_in_command_substitution(self, tmp_path):
         """测试 pipeline config.env 中定义的变量能在命令的 ${env.X} 中被正确替换"""
         pipelines_dir = tmp_path / "pipelines"
@@ -400,6 +441,7 @@ tasks:
         assert spec.tasks[0].command == "echo 192.168.1.100"
         assert spec.tasks[1].command == "echo staging 192.168.1.100"
 
+    @pytest.mark.zentao("TC-S0840", domain="server/loaders", priority="P1")
     def test_config_env_not_overriding_params_env(self, tmp_path):
         """测试传入的 params.env 优先级高于 config.env"""
         pipelines_dir = tmp_path / "pipelines"
@@ -419,6 +461,7 @@ tasks:
         # params.env 应优先于 config.env
         assert spec.tasks[0].command == "echo param_val"
 
+    @pytest.mark.zentao("TC-S0841", domain="server/loaders", priority="P2")
     def test_agent_variable_substitution_with_project_dir(self, tmp_path):
         """Issue #87: ${agent:X.host} 应使用项目目录下的 agents 配置"""
         # 创建项目目录结构
@@ -446,6 +489,7 @@ tasks:
         spec = loader.load("agent_var_test.yaml")
         assert spec.tasks[0].command == "echo host=192.168.1.100 port=2222"
 
+    @pytest.mark.zentao("TC-S0842", domain="server/loaders", priority="P2")
     def test_agent_variable_substitution_with_explicit_project_workdir(self, tmp_path):
         """Issue #87: PipelineLoader.load() 接受 project_workdir 参数"""
         # 创建项目目录结构
@@ -474,6 +518,7 @@ tasks:
         spec = loader.load("agent_test.yaml", project_workdir=project_dir)
         assert spec.tasks[0].command == "connect 10.0.0.1:3306"
 
+    @pytest.mark.zentao("TC-S0843", domain="server/loaders", priority="P2")
     def test_agent_variable_substitution_fallback_to_websocket_connection(self, tmp_path):
         """Issue #87: ${agent:X.host} 在配置文件找不到时，应从 AgentManager WebSocket 连接解析。
 
@@ -519,6 +564,7 @@ tasks:
             spec = loader.load("ws_agent_test.yaml", project_workdir=project_dir)
             assert spec.tasks[0].command == "echo host=ws-host-10.98.72.23"
 
+    @pytest.mark.zentao("TC-S0844", domain="server/loaders", priority="P1")
     def test_agent_variable_substitution_no_config_no_connection_returns_original(self, tmp_path):
         """Issue #87: agent 既不在配置文件中，也未通过 WebSocket 连接时，保留原文本。"""
         from unittest.mock import MagicMock, patch
@@ -549,3 +595,4 @@ tasks:
             spec = loader.load("missing_agent_test.yaml", project_workdir=project_dir)
             # 未找到 agent，保留原文本
             assert spec.tasks[0].command == "echo host=${agent:missing-agent.host}"
+

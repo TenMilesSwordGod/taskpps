@@ -10,6 +10,7 @@ from taskpps.executors.invoke import InvokeExecutor
 
 class TestInvokeExecutorExitCodeCoverage:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0544", domain="server/executors", priority="P1")
     async def test_invoke_cancelled_error(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "invoke_cancel.log"
@@ -40,6 +41,7 @@ def slow_func():
             assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0545", domain="server/executors", priority="P1")
     async def test_invoke_function_runtime_error(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "invoke_runtime.log"
@@ -64,6 +66,7 @@ def failing_func():
             assert "intentional test error" in result.stderr
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0546", domain="server/executors", priority="P1")
     async def test_invoke_function_with_none_return(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "invoke_none.log"
@@ -87,6 +90,7 @@ def none_func():
             assert result.exit_code == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0547", domain="server/executors", priority="P1")
     async def test_invoke_function_with_env_cleanup(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "invoke_env.log"
@@ -111,6 +115,7 @@ def env_func():
             assert "test_value" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0548", domain="server/executors", priority="P1")
     async def test_invoke_cancel_method(self, tmp_path):
         executor = InvokeExecutor()
         with patch.object(executor, "_cancelled", True):
@@ -120,6 +125,7 @@ def env_func():
 
 class TestInvokeExecutor:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0549", domain="server/executors", priority="P2")
     async def test_valid(self, tmp_path, setup_project, tmp_project):
         executor = InvokeExecutor()
         log_path = tmp_path / "test.log"
@@ -132,6 +138,7 @@ class TestInvokeExecutor:
         assert result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0550", domain="server/executors", priority="P2")
     async def test_invalid(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "test.log"
@@ -144,6 +151,7 @@ class TestInvokeExecutor:
         assert not result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0551", domain="server/executors", priority="P2")
     async def test_no_task(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "no_task.log"
@@ -152,6 +160,7 @@ class TestInvokeExecutor:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0552", domain="server/executors", priority="P2")
     async def test_invalid_format(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "invalid.log"
@@ -160,6 +169,7 @@ class TestInvokeExecutor:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0553", domain="server/executors", priority="P1")
     async def test_timeout(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "timeout.log"
@@ -185,6 +195,7 @@ def slow_func():
         assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0554", domain="server/executors", priority="P1")
     async def test_cancel(self, tmp_path):
         executor = InvokeExecutor()
 
@@ -193,6 +204,7 @@ def slow_func():
             assert executor._cancelled is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0555", domain="server/executors", priority="P1")
     async def test_import_error(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "import_err.log"
@@ -205,6 +217,7 @@ def slow_func():
         assert not result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0556", domain="server/executors", priority="P1")
     async def test_run_invoke_function(self, tmp_path):
         executor = InvokeExecutor()
         log_path = tmp_path / "invoke_fn.log"
@@ -227,3 +240,4 @@ def greet(name="world"):
             )
         assert result.success
         assert "hello test" in result.stdout
+

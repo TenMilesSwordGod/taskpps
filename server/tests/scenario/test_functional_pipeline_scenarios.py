@@ -27,6 +27,7 @@ class TestRealWorldPipelineScenarios:
     """真实世界 pipeline 场景测试 — 模拟 CI/CD、部署、测试等实际使用场景"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0121", domain="server/scenario", priority="P2")
     async def test_ci_cd_full_pipeline(self, db_engine, clean_db):
         """CI/CD 完整流水线: lint → build → test → deploy,每步有依赖"""
         _setup_config()
@@ -84,6 +85,7 @@ class TestRealWorldPipelineScenarios:
         assert idx["smoke-test"] < idx["deploy-prod"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0122", domain="server/scenario", priority="P1")
     async def test_microservice_deploy_with_shared_dependency(self, db_engine, clean_db):
         """微服务部署: 共享依赖库构建后,3 个服务并行部署"""
         _setup_config()
@@ -150,6 +152,7 @@ class TestRealWorldPipelineScenarios:
         assert max_inflight >= 3, f"3 个微服务应并行部署,最大并发={max_inflight}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0123", domain="server/scenario", priority="P1")
     async def test_cascade_failure_with_continue(self, db_engine, clean_db):
         """级联失败场景: A→B→C→D,B 失败但 on_failure=continue,验证 C/D 行为"""
         _setup_config()
@@ -190,6 +193,7 @@ class TestRealWorldPipelineScenarios:
         assert "D" not in executed, "C 被跳过后依赖 C 的 D 不应执行"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0124", domain="server/scenario", priority="P2")
     async def test_multi_subpipeline_complex_chain(self, db_engine, clean_db):
         """复杂多 subpipeline 依赖链: build(pipeline) → test-parallel(pipeline) → deploy(pipeline)
         其中 test-parallel 内部 3 个 task 并行执行"""
@@ -267,6 +271,7 @@ class TestRealWorldPipelineScenarios:
             assert spread < 0.005, f"test 内部 3 个 task 应并行,时间差={spread:.4f}s"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0125", domain="server/scenario", priority="P1")
     async def test_partial_failure_in_parallel_subpipeline(self, db_engine, clean_db):
         """parallel subpipeline 中部分 task 失败,验证 on_failure=continue 时其他 task 继续"""
         _setup_config()
@@ -306,6 +311,7 @@ class TestRealWorldPipelineScenarios:
         assert "slow" in executed
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0126", domain="server/scenario", priority="P1")
     async def test_timeout_cascades_to_dependent_tasks(self, db_engine, clean_db):
         """超时场景: task A 超时失败后,依赖 A 的 task B 不应执行"""
         _setup_config()
@@ -342,6 +348,7 @@ class TestRealWorldPipelineScenarios:
         assert "B" not in executed, "A 超时失败后 B 不应执行"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0127", domain="server/scenario", priority="P2")
     async def test_empty_pipeline_runs_successfully(self, db_engine, clean_db):
         """空 pipeline(无 task)应成功完成"""
         _setup_config()
@@ -362,6 +369,7 @@ class TestRealWorldPipelineScenarios:
             await runner.run()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0128", domain="server/scenario", priority="P2")
     async def test_single_task_pipeline(self, db_engine, clean_db):
         """单 task pipeline 应正常执行"""
         _setup_config()
@@ -392,6 +400,7 @@ class TestRealWorldPipelineScenarios:
         assert executed == ["only"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0129", domain="server/scenario", priority="P2")
     async def test_many_independent_tasks_all_execute(self, db_engine, clean_db):
         """20 个独立 task 全部执行(无依赖)"""
         _setup_config()
@@ -424,6 +433,7 @@ class TestRealWorldPipelineScenarios:
         assert set(executed) == {f"task-{i:02d}" for i in range(20)}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0130", domain="server/scenario", priority="P2")
     async def test_deep_dependency_chain(self, db_engine, clean_db):
         """10 层深度依赖链: t0→t1→t2→...→t9"""
         _setup_config()
@@ -459,6 +469,7 @@ class TestRealWorldPipelineScenarios:
             assert execution_order.index(f"t{i}") < execution_order.index(f"t{i + 1}"), f"t{i} 应在 t{i + 1} 之前"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0131", domain="server/scenario", priority="P1")
     async def test_diamond_with_parallel_and_failure(self, db_engine, clean_db):
         """菱形依赖 + parallel + 部分失败: a→b,a→c,b→d,c→d,b 失败时 d 是否跳过"""
         _setup_config()
@@ -498,6 +509,7 @@ class TestRealWorldPipelineScenarios:
         assert "d" not in executed, "b 失败了,d 依赖 b 不应执行"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0132", domain="server/scenario", priority="P1")
     async def test_cross_subpipeline_failure_propagation(self, db_engine, clean_db):
         """跨 subpipeline 失败传播: build(fail) → test → deploy,build 失败后 test 和 deploy 都跳过"""
         _setup_config()
@@ -555,6 +567,7 @@ class TestRealWorldPipelineScenarios:
         assert "deploy.push" not in executed
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0133", domain="server/scenario", priority="P1")
     async def test_mixed_strategy_subpipelines_parallel_then_sequential(self, db_engine, clean_db):
         """混合策略 subpipeline: parallel(deploy多服务) → sequential(验证)"""
         _setup_config()
@@ -609,6 +622,7 @@ class TestRealWorldPipelineScenarios:
         assert len(deploy_start) == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0134", domain="server/scenario", priority="P1")
     async def test_cancel_during_parallel_execution(self, db_engine, clean_db):
         """parallel 执行中取消: 5 个 task,第 2 个完成后取消,验证后续 task 行为"""
         _setup_config()
@@ -750,6 +764,7 @@ class TestRealWorldPipelineScenarios:
         assert "boom" in executed
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0135", domain="server/scenario", priority="P1")
     async def test_rapid_success_failure_success(self, db_engine, clean_db):
         """快速成功-失败-成功交替: A(ok) → B(fail, continue) → C(ok) → D(fail, continue) → E(ok); 失败依赖级联跳过"""
         _setup_config()
@@ -786,3 +801,4 @@ class TestRealWorldPipelineScenarios:
             await runner.run()
 
         assert executed == ["A", "B"], "B 失败后依赖 B 的下游 task 应级联跳过"
+

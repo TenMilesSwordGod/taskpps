@@ -15,6 +15,7 @@ class TestAgentWebSocket:
     """Tests for the WebSocket endpoint handler function."""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1008", domain="server/api", priority="P1")
     async def test_handshake_and_heartbeat_timeout(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -40,6 +41,7 @@ class TestAgentWebSocket:
         ws.send_json.assert_any_call({"type": "heartbeat_request", "data": {}})
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1009", domain="server/api", priority="P2")
     async def test_no_ping_messages_sent(self):
         """验证 _ping_loop 已移除，不再发送 ping 类型消息。"""
         manager = AgentManager()
@@ -73,6 +75,7 @@ class TestAgentWebSocket:
             assert msg.get("type") != "ping", f"不应发送 ping 消息，但收到了: {msg}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1010", domain="server/api", priority="P1")
     async def test_heartbeat_request_uses_send_lock(self):
         """验证 heartbeat_request 通过 conn.send_msg（即 _send_lock）发送，而非直接 ws.send_json。"""
         manager = AgentManager()
@@ -105,6 +108,7 @@ class TestAgentWebSocket:
         assert conn.last_heartbeat == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1011", domain="server/api", priority="P1")
     async def test_json_decode_error(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -135,6 +139,7 @@ class TestAgentWebSocket:
         ws.accept.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1012", domain="server/api", priority="P1")
     async def test_heartbeat_response(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -166,6 +171,7 @@ class TestAgentWebSocket:
         ws.send_json.assert_any_call({"type": "heartbeat_request", "data": {}})
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1013", domain="server/api", priority="P2")
     async def test_stdout_chunk(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -196,6 +202,7 @@ class TestAgentWebSocket:
         assert conn is not None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1014", domain="server/api", priority="P2")
     async def test_exec_result(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -221,6 +228,7 @@ class TestAgentWebSocket:
             await ws_agent.agent_websocket(ws)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1015", domain="server/api", priority="P1")
     async def test_websocket_disconnect(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -246,6 +254,7 @@ class TestAgentWebSocket:
         assert conn.last_heartbeat == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1016", domain="server/api", priority="P1")
     async def test_generic_exception(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -271,6 +280,7 @@ class TestAgentWebSocket:
         assert conn.last_heartbeat == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1017", domain="server/api", priority="P2")
     async def test_unknown_message_type(self):
         manager = AgentManager()
         ws = AsyncMock()
@@ -294,3 +304,4 @@ class TestAgentWebSocket:
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
             await ws_agent.agent_websocket(ws)
+

@@ -6,31 +6,37 @@ from taskpps.schemas.pipeline import PipelineConfig
 class TestPipelineConfigBackwardCompat:
     """测试 max_parallel 旧字段自动映射到 max_concurrent_runs"""
 
+    @pytest.mark.zentao("TC-S0663", domain="server/schemas", priority="P2")
     def test_new_field_works(self):
         """使用新字段 max_concurrent_runs 正常工作"""
         cfg = PipelineConfig(max_concurrent_runs=3)
         assert cfg.max_concurrent_runs == 3
 
+    @pytest.mark.zentao("TC-S0664", domain="server/schemas", priority="P2")
     def test_old_field_maps_to_new(self):
         """YAML 中写 max_parallel 自动映射到 max_concurrent_runs"""
         cfg = PipelineConfig(**{"max_parallel": 5})
         assert cfg.max_concurrent_runs == 5
 
+    @pytest.mark.zentao("TC-S0665", domain="server/schemas", priority="P2")
     def test_both_fields_new_wins(self):
         """同时写 max_parallel 和 max_concurrent_runs 时，新字段优先"""
         cfg = PipelineConfig(**{"max_parallel": 2, "max_concurrent_runs": 3})
         assert cfg.max_concurrent_runs == 3
 
+    @pytest.mark.zentao("TC-S0666", domain="server/schemas", priority="P2")
     def test_neither_field_defaults_none(self):
         """两个字段都不写时，max_concurrent_runs 为 None"""
         cfg = PipelineConfig()
         assert cfg.max_concurrent_runs is None
 
+    @pytest.mark.zentao("TC-S0667", domain="server/schemas", priority="P2")
     def test_old_field_zero_maps(self):
         """max_parallel=0 也应映射到 max_concurrent_runs"""
         cfg = PipelineConfig(**{"max_parallel": 0})
         assert cfg.max_concurrent_runs == 0
 
+    @pytest.mark.zentao("TC-S0668", domain="server/schemas", priority="P2")
     def test_model_dump_uses_new_name(self):
         """model_dump 输出使用新字段名"""
         cfg = PipelineConfig(**{"max_parallel": 4})
@@ -42,15 +48,19 @@ class TestPipelineConfigBackwardCompat:
 class TestPipelineConfigMaxConcurrentTasks:
     """测试新增的 max_concurrent_tasks 字段"""
 
+    @pytest.mark.zentao("TC-S0669", domain="server/schemas", priority="P2")
     def test_default_none(self):
         cfg = PipelineConfig()
         assert cfg.max_concurrent_tasks is None
 
+    @pytest.mark.zentao("TC-S0670", domain="server/schemas", priority="P2")
     def test_set_value(self):
         cfg = PipelineConfig(max_concurrent_tasks=5)
         assert cfg.max_concurrent_tasks == 5
 
+    @pytest.mark.zentao("TC-S0671", domain="server/schemas", priority="P2")
     def test_in_model_dump(self):
         cfg = PipelineConfig(max_concurrent_tasks=3)
         data = cfg.model_dump()
         assert data["max_concurrent_tasks"] == 3
+

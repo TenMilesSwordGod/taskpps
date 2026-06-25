@@ -3,6 +3,7 @@ import pytest
 from taskpps.schemas.run import RunResponse, RunListResponse
 
 
+@pytest.mark.zentao("TC-S0029", domain="server/root", priority="P2")
 def test_run_response_accepts_task_summary():
     """RunResponse 模型接受 task_summary 字段"""
     data = {
@@ -16,6 +17,7 @@ def test_run_response_accepts_task_summary():
     assert resp.task_summary == {"success": 3, "failed": 1, "running": 2}
 
 
+@pytest.mark.zentao("TC-S0030", domain="server/root", priority="P2")
 def test_run_response_defaults_empty_task_summary():
     """task_summary 默认为空字典"""
     data = {
@@ -28,6 +30,7 @@ def test_run_response_defaults_empty_task_summary():
     assert resp.task_summary == {}
 
 
+@pytest.mark.zentao("TC-S0031", domain="server/root", priority="P2")
 def test_run_list_response_preserves_task_summary():
     """RunListResponse 序列化时保留 task_summary"""
     data = {
@@ -47,6 +50,7 @@ def test_run_list_response_preserves_task_summary():
     assert serialized["items"][0]["task_summary"] == {"success": 2, "failed": 1}
 
 
+@pytest.mark.zentao("TC-S0032", domain="server/root", priority="P2")
 def test_from_orm_with_parsed_params_includes_task_summary():
     """from_orm_with_parsed_params 包含 task_summary"""
     class FakeORM:
@@ -69,6 +73,7 @@ def test_from_orm_with_parsed_params_includes_task_summary():
     assert resp.task_summary == {"running": 1, "success": 3}
 
 
+@pytest.mark.zentao("TC-S0033", domain="server/root", priority="P2")
 def test_from_orm_without_task_summary_defaults_empty():
     """ORM 对象没有 task_summary 属性时默认空字典"""
     class FakeORM:
@@ -88,3 +93,4 @@ def test_from_orm_without_task_summary_defaults_empty():
     obj = FakeORM()
     resp = RunResponse.from_orm_with_parsed_params(obj)
     assert resp.task_summary == {}
+

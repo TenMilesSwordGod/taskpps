@@ -22,6 +22,7 @@ def create_mock_ws():
 
 class TestAgentManager:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0415", domain="server/agent", priority="P1")
     async def test_is_connected_uses_display_grace_period(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -32,6 +33,7 @@ class TestAgentManager:
         assert manager.is_connected("test-agent") is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0416", domain="server/agent", priority="P1")
     async def test_is_connected_false_after_grace_period(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -42,11 +44,13 @@ class TestAgentManager:
         assert manager.is_connected("test-agent") is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0417", domain="server/agent", priority="P2")
     async def test_is_connected_nonexistent(self):
         manager = AgentManager()
         assert manager.is_connected("nonexistent") is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0418", domain="server/agent", priority="P0")
     async def test_handle_connection_returns_tuple(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -71,6 +75,7 @@ class TestAgentManager:
         assert manager.get_connection("agent-1") is conn
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0419", domain="server/agent", priority="P1")
     async def test_handle_connection_closes_old_connection(self):
         manager = AgentManager()
         old_ws = create_mock_ws()
@@ -107,6 +112,7 @@ class TestAgentManager:
         assert new_conn.hostname == "newhost"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0420", domain="server/agent", priority="P1")
     async def test_disconnect_with_matching_conn(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -121,6 +127,7 @@ class TestAgentManager:
         assert conn.last_heartbeat < 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0421", domain="server/agent", priority="P1")
     async def test_disconnect_with_non_matching_conn_does_not_remove(self):
         manager = AgentManager()
         ws1 = create_mock_ws()
@@ -135,6 +142,7 @@ class TestAgentManager:
         assert manager.get_connection("agent-1") is conn1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0422", domain="server/agent", priority="P1")
     async def test_disconnect_without_conn_always_removes(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -149,6 +157,7 @@ class TestAgentManager:
         assert conn.last_heartbeat < 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0423", domain="server/agent", priority="P1")
     async def test_disconnect_preserves_pending_commands(self):
         # Pending commands must survive disconnect() so that long-running
         # tasks do not get a spurious "connection lost" failure when the
@@ -165,6 +174,7 @@ class TestAgentManager:
         assert "cmd-1" in conn._pending_commands
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0424", domain="server/agent", priority="P1")
     async def test_reconnect_transfers_pending_commands(self):
         # When a new connection arrives for the same agent_id, the new
         # connection must inherit the old connection's pending commands and
@@ -205,6 +215,7 @@ class TestAgentManager:
         assert "cmd-keep" in new_conn._output_callbacks
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0425", domain="server/agent", priority="P1")
     async def test_reconnect_race_condition(self):
         """模拟重连竞态: 旧 handler 的 disconnect 不应移除新连接"""
         manager = AgentManager()
@@ -241,6 +252,7 @@ class TestAgentManager:
 
         assert manager.get_connection("agent-1") is new_conn
 
+    @pytest.mark.zentao("TC-S0426", domain="server/agent", priority="P2")
     def test_get_connection(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -255,6 +267,7 @@ class TestAgentManagerMore:
     """Tests for AgentManager branches not covered in existing tests."""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0427", domain="server/agent", priority="P1")
     async def test_handle_connection_timeout(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -268,6 +281,7 @@ class TestAgentManagerMore:
         assert call_kwargs[1]["code"] == 4001
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0428", domain="server/agent", priority="P2")
     async def test_handle_connection_wrong_message_type(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -284,6 +298,7 @@ class TestAgentManagerMore:
         assert call_kwargs[1]["code"] == 4002
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0429", domain="server/agent", priority="P2")
     async def test_handle_connection_agent_id_mismatch(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -300,18 +315,21 @@ class TestAgentManagerMore:
         assert call_kwargs[1]["code"] == 4003
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0430", domain="server/agent", priority="P1")
     async def test_send_command_not_connected(self):
         manager = AgentManager()
         with pytest.raises(RuntimeError, match="not connected"):
             await manager.send_command("agent-1", "cmd-1", "echo", {}, "", 30)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0431", domain="server/agent", priority="P1")
     async def test_cancel_command_not_connected(self):
         manager = AgentManager()
         # Should not raise
         await manager.cancel_command("agent-1", "cmd-1")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0432", domain="server/agent", priority="P1")
     async def test_create_pending_not_connected(self):
         manager = AgentManager()
         fut = manager.create_pending("agent-1", "cmd-1")
@@ -321,12 +339,14 @@ class TestAgentManagerMore:
         assert result["error"] == "agent not connected"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0433", domain="server/agent", priority="P1")
     async def test_register_output_callback_not_connected(self):
         manager = AgentManager()
         # Should not raise
         manager.register_output_callback("agent-1", "cmd-1", lambda x: x)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0434", domain="server/agent", priority="P1")
     async def test_stop(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -339,6 +359,7 @@ class TestAgentManagerMore:
         assert manager._active is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0435", domain="server/agent", priority="P2")
     async def test_send_command_with_lock(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -354,12 +375,14 @@ class TestAgentManagerMore:
         assert call_args["data"]["command"] == "echo hello"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0436", domain="server/agent", priority="P1")
     async def test_disconnect_nonexistent_agent(self):
         manager = AgentManager()
         # Should not raise
         await manager.disconnect("nonexistent", None)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0437", domain="server/agent", priority="P1")
     async def test_is_connected_no_heartbeat_yet(self):
         manager = AgentManager()
         ws = create_mock_ws()
@@ -368,3 +391,4 @@ class TestAgentManagerMore:
         manager._connections["test-agent"] = conn
 
         assert manager.is_connected("test-agent") is True
+

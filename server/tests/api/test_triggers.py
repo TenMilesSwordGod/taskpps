@@ -12,6 +12,7 @@ def app():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1002", domain="server/api", priority="P2")
 async def test_create_trigger(app, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -28,6 +29,7 @@ async def test_create_trigger(app, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1003", domain="server/api", priority="P2")
 async def test_list_triggers(app, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -36,6 +38,7 @@ async def test_list_triggers(app, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1004", domain="server/api", priority="P2")
 async def test_delete_trigger(app, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -55,6 +58,7 @@ async def test_delete_trigger(app, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1005", domain="server/api", priority="P2")
 async def test_delete_nonexistent_trigger(app, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -63,6 +67,7 @@ async def test_delete_nonexistent_trigger(app, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1006", domain="server/api", priority="P2")
 async def test_create_trigger_without_pipeline_file(app, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -78,6 +83,7 @@ async def test_create_trigger_without_pipeline_file(app, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1007", domain="server/api", priority="P2")
 async def test_create_trigger_disabled(app, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -91,3 +97,4 @@ async def test_create_trigger_disabled(app, db_engine):
             },
         )
         assert response.status_code == 201
+

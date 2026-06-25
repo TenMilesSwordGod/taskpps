@@ -26,6 +26,7 @@ class TestExecuteCommands:
     """测试 _execute_commands 方法的各种场景"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0176", domain="server/scenario", priority="P1")
     async def test_commands中途失败_stops_execution(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -65,6 +66,7 @@ class TestExecuteCommands:
         assert call_count == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0177", domain="server/scenario", priority="P2")
     async def test_empty_commands_list_returns_success(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -96,6 +98,7 @@ class TestExecuteCommands:
         mock_executor.execute.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0178", domain="server/scenario", priority="P1")
     async def test_commands_timeout_distribution(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -133,6 +136,7 @@ class TestExecuteCommands:
         assert all(t == 3 for t in timeouts)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0179", domain="server/scenario", priority="P1")
     async def test_commands_timeout_minimum_1_second(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -174,6 +178,7 @@ class TestExecuteSteps:
     """测试 _execute_steps 方法的各种场景"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0180", domain="server/scenario", priority="P2")
     async def test_steps_complete_execution(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -214,6 +219,7 @@ class TestExecuteSteps:
         assert executed_commands == ["echo step1", "echo step2", "echo step3"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0181", domain="server/scenario", priority="P1")
     async def test_steps中途失败_stops_execution(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -256,6 +262,7 @@ class TestExecuteSteps:
         assert executed_commands == ["echo ok", "exit 1"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0182", domain="server/scenario", priority="P1")
     async def test_steps_with_cd_and_env(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -298,6 +305,7 @@ class TestExecuteSteps:
         assert captured_envs[0] == "hello"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0183", domain="server/scenario", priority="P1")
     async def test_steps_timeout_distribution(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -343,6 +351,7 @@ class TestSubpipelineOnFailure:
     """测试 SubPipeline 级别的 on_failure 策略"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0184", domain="server/scenario", priority="P0")
     async def test_subpipeline_on_failure_continue_allows_dependents(self, db_engine, clean_db):
         """on_failure=continue 时，失败的 subpipeline 的依赖者应继续执行"""
         _setup_config()
@@ -381,6 +390,7 @@ class TestSubpipelineOnFailure:
         assert "B.b1" in executed_subs
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0185", domain="server/scenario", priority="P0")
     async def test_subpipeline_on_failure_fail_blocks_dependents(self, db_engine, clean_db):
         """on_failure=fail（默认）时，失败 subpipeline 的依赖者应被跳过"""
         _setup_config()
@@ -423,6 +433,7 @@ class TestTransitiveDependencies:
     """测试传递性 subpipeline 依赖 (A -> B -> C)"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0186", domain="server/scenario", priority="P1")
     async def test_transitive_dependency_failure_cascades(self, db_engine, clean_db):
         """A 失败时，B 和 C 都应被标记为失败"""
         _setup_config()
@@ -468,6 +479,7 @@ class TestTransitiveDependencies:
         assert "C.c1" not in executed_subs
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0187", domain="server/scenario", priority="P2")
     async def test_transitive_dependency_success_propagates(self, db_engine, clean_db):
         """A 成功时，B 和 C 都应执行"""
         _setup_config()
@@ -513,6 +525,7 @@ class TestPartialVsFailed:
     """测试 PARTIAL vs FAILED 状态的精确区分"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0188", domain="server/scenario", priority="P2")
     async def test_partial_status_when_some_succeed(self, db_engine, clean_db):
         """部分 subpipeline 成功、部分失败时应返回 PARTIAL"""
         _setup_config()
@@ -544,6 +557,7 @@ class TestPartialVsFailed:
             await runner.run()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0189", domain="server/scenario", priority="P1")
     async def test_failed_status_when_all_fail(self, db_engine, clean_db):
         """所有 subpipeline 都失败时应返回 FAILED"""
         _setup_config()
@@ -577,6 +591,7 @@ class TestParallelWithDependencies:
     """测试 parallel 策略 + task depends_on 混合使用"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0190", domain="server/scenario", priority="P1")
     async def test_parallel_respects_explicit_depends_on(self, db_engine, clean_db):
         """parallel 模式下，有显式 depends_on 的 task 仍应按顺序执行"""
         _setup_config()
@@ -613,6 +628,7 @@ class TestParallelWithDependencies:
         assert idx["sub.a"] < idx["sub.b"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0191", domain="server/scenario", priority="P1")
     async def test_parallel_mixed_success_and_failure(self, db_engine, clean_db):
         """parallel 模式下，部分 task 成功部分失败时结果正确处理"""
         _setup_config()
@@ -645,6 +661,7 @@ class TestTaskOnFailureOverride:
     """测试 task 级 on_failure 覆盖 subpipeline 级 on_failure"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0192", domain="server/scenario", priority="P1")
     async def test_task_on_failure_overrides_sub_level(self, db_engine, clean_db):
         """task B 级 on_failure=continue 应覆盖 sub 级 on_failure=fail"""
         _setup_config()
@@ -693,6 +710,7 @@ class TestEmptySubpipeline:
     """测试空 subpipeline (tasks=[])"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0193", domain="server/scenario", priority="P2")
     async def test_empty_subpipeline_succeeds(self, db_engine, clean_db):
         _setup_config()
         sub = ResolvedSubPipeline(
@@ -716,6 +734,7 @@ class TestEvaluateWhenEnvMerge:
     """测试 when 条件评估时的 env 合并"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0194", domain="server/scenario", priority="P1")
     async def test_when_uses_top_level_env(self, db_engine, clean_db):
         """when 条件可引用 top-level pipeline config 级 env"""
         _setup_config()
@@ -752,6 +771,7 @@ class TestEvaluateWhenEnvMerge:
         mock_executor.execute.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0195", domain="server/scenario", priority="P1")
     async def test_when_skips_based_on_top_level_env(self, db_engine, clean_db):
         """when 条件不满足时 task 应被跳过"""
         _setup_config()
@@ -792,6 +812,7 @@ class TestRetryWithLogging:
     """测试重试逻辑和日志记录"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0196", domain="server/scenario", priority="P1")
     async def test_retry_writes_log_on_each_attempt(self, db_engine, clean_db):
         """每次重试应写入日志"""
         _setup_config()
@@ -837,6 +858,7 @@ class TestSubpipelineNotFound:
     """测试 subpipeline 不存在时的处理"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0197", domain="server/scenario", priority="P1")
     async def test_missing_subpipeline_returns_failure(self, db_engine, clean_db):
         _setup_config()
         pipeline = ResolvedPipeline(
@@ -856,6 +878,7 @@ class TestGetActiveRunner:
     """测试 get_active_runner 在 pipeline 运行期间返回 runner"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0198", domain="server/scenario", priority="P2")
     async def test_active_runner_available_during_execution(self, db_engine, clean_db):
         _setup_config()
         from taskpps.engine.runner import get_active_runner
@@ -892,6 +915,7 @@ class TestExceptionInSubpipeline:
     """测试 subpipeline 执行中抛出 BaseException"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0199", domain="server/scenario", priority="P1")
     async def test_base_exception_marks_dependents_as_failed(self, db_engine, clean_db):
         _setup_config()
         sub_a = ResolvedSubPipeline(
@@ -933,6 +957,7 @@ class TestCommandWithNoneTimeout:
     """测试 commands/steps 在无 timeout 时使用默认 timeout 并正确分配"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0200", domain="server/scenario", priority="P1")
     async def test_commands_uses_default_timeout(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -972,3 +997,4 @@ class TestCommandWithNoneTimeout:
 
         expected_per_cmd = default_timeout // 2
         assert all(t == expected_per_cmd for t in timeouts)
+

@@ -19,6 +19,7 @@ def _setup_config(tmp_project):
 
 class TestPipelineService:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0319", domain="server/services", priority="P0")
     async def test_list_pipelines(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -28,6 +29,7 @@ class TestPipelineService:
         assert "simple" in pipelines
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0320", domain="server/services", priority="P0")
     async def test_list_pipelines_multiple(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -35,6 +37,7 @@ class TestPipelineService:
         assert len(pipelines) >= 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0321", domain="server/services", priority="P0")
     async def test_create_and_get(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -48,6 +51,7 @@ class TestPipelineService:
         assert fetched["pipeline_name"] == "deploy"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0322", domain="server/services", priority="P2")
     async def test_get_nonexistent(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -55,6 +59,7 @@ class TestPipelineService:
         assert result is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0323", domain="server/services", priority="P2")
     async def test_create_invalid(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -62,6 +67,7 @@ class TestPipelineService:
             await svc.create_run("nonexistent.yaml")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0324", domain="server/services", priority="P2")
     async def test_create_cycle(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -69,6 +75,7 @@ class TestPipelineService:
             await svc.create_run("cycle.yaml")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0325", domain="server/services", priority="P2")
     async def test_create_with_params(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -76,6 +83,7 @@ class TestPipelineService:
         assert "id" in result
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0326", domain="server/services", priority="P2")
     async def test_create_with_bad_params(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -83,6 +91,7 @@ class TestPipelineService:
             await svc.create_run("deploy.yaml", params={"nonexistent.path": "value"})
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0327", domain="server/services", priority="P1")
     async def test_list_runs(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -91,6 +100,7 @@ class TestPipelineService:
         assert result["total"] >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0328", domain="server/services", priority="P1")
     async def test_list_runs_filter(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -102,6 +112,7 @@ class TestPipelineService:
             assert r["pipeline_name"] == "deploy"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0329", domain="server/services", priority="P1")
     async def test_list_runs_with_limit(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -112,6 +123,7 @@ class TestPipelineService:
         assert len(result["items"]) == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0330", domain="server/services", priority="P1")
     async def test_many_list_runs(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -123,6 +135,7 @@ class TestPipelineService:
         assert len(result["items"]) >= 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0331", domain="server/services", priority="P1")
     async def test_max_concurrent_runs_sequential_enforced(self, setup_project, tmp_project, db_engine):
         # Two sequential create_run calls for a pipeline with max_concurrent_runs: 1
         # must result in the second one being rejected. See issue #11/#106.
@@ -146,6 +159,7 @@ class TestPipelineService:
         await svc.cancel_run(first["id"])
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0332", domain="server/services", priority="P1")
     async def test_max_concurrent_runs_concurrent_race(self, setup_project, tmp_project, db_engine):
         # Two truly concurrent create_run calls for a pipeline with
         # max_concurrent_runs: 1 must result in exactly one success and one
@@ -186,6 +200,7 @@ class TestPipelineService:
                 await svc.cancel_run(r)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0333", domain="server/services", priority="P1")
     async def test_max_parallel_backward_compat(self, setup_project, tmp_project, db_engine):
         """Issue #106: YAML 中写 max_parallel 仍能正常工作（向后兼容）"""
         import taskpps.config as cfg
@@ -209,6 +224,7 @@ class TestPipelineService:
         await svc.cancel_run(first["id"])
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0334", domain="server/services", priority="P1")
     async def test_cancel_nonexistent(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -216,6 +232,7 @@ class TestPipelineService:
         assert result is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0335", domain="server/services", priority="P1")
     async def test_cancel_pending_status(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         from taskpps.db.engine import get_session_factory
@@ -233,6 +250,7 @@ class TestPipelineService:
         assert cancel_result is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0336", domain="server/services", priority="P1")
     async def test_cancel_completed_status(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         import asyncio
@@ -263,6 +281,7 @@ class TestPipelineService:
         assert cancel_result is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0337", domain="server/services", priority="P1")
     async def test_clean_no_params(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -270,6 +289,7 @@ class TestPipelineService:
         assert result == {"deleted_runs": 0, "deleted_logs": 0}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0338", domain="server/services", priority="P1")
     async def test_clean_older_than(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         from taskpps.db.engine import get_session_factory
@@ -289,6 +309,7 @@ class TestPipelineService:
         assert clean_result["deleted_runs"] >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0339", domain="server/services", priority="P1")
     async def test_clean_keep(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -299,6 +320,7 @@ class TestPipelineService:
         assert clean_result["deleted_runs"] >= 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0340", domain="server/services", priority="P1")
     async def test_clean_with_logs(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         from taskpps.config import get_logs_dir
@@ -317,6 +339,7 @@ class TestPipelineService:
         assert clean_result["deleted_logs"] >= 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0341", domain="server/services", priority="P2")
     async def test_params_parsing(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -328,6 +351,7 @@ class TestPipelineService:
         assert fetched["params"] == params
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0342", domain="server/services", priority="P2")
     async def test_params_parsing_list(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -349,6 +373,7 @@ class TestPipelineService:
         assert fetched["params"] == {}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0343", domain="server/services", priority="P2")
     async def test_null_params(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -359,6 +384,7 @@ class TestPipelineService:
         assert fetched["params"] == {}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0344", domain="server/services", priority="P2")
     async def test_invalid_json_params(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         PipelineService()
@@ -374,6 +400,7 @@ class TestPipelineService:
 
 class TestPipelineServiceMore:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0345", domain="server/services", priority="P2")
     async def test_save_pipeline_snapshot(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         from taskpps.config import get_logs_dir
@@ -387,6 +414,7 @@ class TestPipelineServiceMore:
         assert snapshot.exists()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0346", domain="server/services", priority="P2")
     async def test_save_pipeline_snapshot_nonexistent_file(self, tmp_project, db_engine):
         _setup_config(tmp_project)
 
@@ -397,6 +425,7 @@ class TestPipelineServiceMore:
         assert "id" in result
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0347", domain="server/services", priority="P2")
     async def test_save_pipeline_snapshot_multi_project(self, tmp_project, db_engine):
         """Issue #58: 非默认项目的 pipeline 快照应能正确保存"""
         import taskpps.config as cfg
@@ -430,6 +459,7 @@ class TestPipelineServiceMore:
         assert snapshot.exists(), f"快照文件不存在: {snapshot}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0348", domain="server/services", priority="P2")
     async def test_version_changed_detection(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
 
@@ -443,6 +473,7 @@ class TestPipelineServiceMore:
         assert result2["version_changed"] is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0349", domain="server/services", priority="P1")
     async def test_handle_run_error_cancelled(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         import asyncio
@@ -461,6 +492,7 @@ class TestPipelineServiceMore:
         PipelineService._handle_run_error(task)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0350", domain="server/services", priority="P1")
     async def test_handle_run_error_generic(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         import asyncio
@@ -478,6 +510,7 @@ class TestPipelineServiceMore:
         PipelineService._handle_run_error(task)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0351", domain="server/services", priority="P1")
     async def test_handle_run_error_success(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         import asyncio
@@ -492,6 +525,7 @@ class TestPipelineServiceMore:
         PipelineService._handle_run_error(task)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0352", domain="server/services", priority="P1")
     async def test_create_run_with_config_env(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -499,6 +533,7 @@ class TestPipelineServiceMore:
         assert "id" in result
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0353", domain="server/services", priority="P1")
     async def test_create_run_with_config_env_not_dict(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -507,6 +542,7 @@ class TestPipelineServiceMore:
         assert "id" in result
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0354", domain="server/services", priority="P1")
     async def test_clean_keep_zero(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -515,6 +551,7 @@ class TestPipelineServiceMore:
         assert clean_result["deleted_runs"] >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0355", domain="server/services", priority="P1")
     async def test_clean_runs_force_empty(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = PipelineService()
@@ -522,6 +559,7 @@ class TestPipelineServiceMore:
         assert clean_result == {"deleted_runs": 0, "deleted_logs": 0}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0356", domain="server/services", priority="P1")
     async def test_create_run_with_dotpath_config_env(self, setup_project, tmp_project, db_engine):
         """#54: dot-path格式 params={"config.env":{...}} 应正确提取env用于YAML加载"""
         pipelines_dir = tmp_project / "pipelines"
@@ -549,6 +587,7 @@ class TestPipelineServiceMore:
         assert fetched["params"]["config.env"]["OVERRIDE_KEY"] == "new_value"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0357", domain="server/services", priority="P1")
     async def test_create_run_with_dotpath_task_env(self, setup_project, tmp_project, db_engine):
         """#54: dot-path格式 task env 应正确提取"""
         pipelines_dir = tmp_project / "pipelines"
@@ -576,6 +615,7 @@ class TestPipelineServiceMore:
 
 
 class TestEnsureUTC:
+    @pytest.mark.zentao("TC-S0358", domain="server/services", priority="P2")
     def test_naive_datetime_becomes_utc_aware(self):
         from datetime import datetime
 
@@ -587,6 +627,7 @@ class TestEnsureUTC:
         assert result.tzinfo is not None
         assert str(result.tzinfo) == "UTC"
 
+    @pytest.mark.zentao("TC-S0359", domain="server/services", priority="P2")
     def test_utc_aware_datetime_unchanged(self):
         from datetime import datetime, timezone
 
@@ -596,6 +637,7 @@ class TestEnsureUTC:
         result = _ensure_utc(aware)
         assert result is aware
 
+    @pytest.mark.zentao("TC-S0360", domain="server/services", priority="P2")
     def test_none_returns_none(self):
         from taskpps.services.pipeline_service import _ensure_utc
 
@@ -610,15 +652,18 @@ class TestExtractEnvOverrides:
         with pytest.raises(AttributeError):
             _extract_env_overrides(None)
 
+    @pytest.mark.zentao("TC-S0361", domain="server/services", priority="P1")
     def test_nested_config_env(self):
         result = _extract_env_overrides({"config": {"env": {"K": "V"}}})
         assert result == {"K": "V"}
 
+    @pytest.mark.zentao("TC-S0362", domain="server/services", priority="P1")
     def test_dotpath_config_env(self):
         """#54: dot-path格式必须正确提取"""
         result = _extract_env_overrides({"config.env": {"K": "V"}})
         assert result == {"K": "V"}
 
+    @pytest.mark.zentao("TC-S0363", domain="server/services", priority="P2")
     def test_dotpath_overrides_nested(self):
         """dot-path 优先级高于 nested（后 update 覆盖）"""
         result = _extract_env_overrides(
@@ -629,6 +674,7 @@ class TestExtractEnvOverrides:
         )
         assert result == {"K": "new"}
 
+    @pytest.mark.zentao("TC-S0364", domain="server/services", priority="P1")
     def test_task_env_dotpath(self):
         """task 级别 env override"""
         result = _extract_env_overrides(
@@ -638,6 +684,7 @@ class TestExtractEnvOverrides:
         )
         assert result == {"TASK_KEY": "val"}
 
+    @pytest.mark.zentao("TC-S0365", domain="server/services", priority="P1")
     def test_config_and_task_env_merged(self):
         """config env + task env 合并"""
         result = _extract_env_overrides(
@@ -648,6 +695,7 @@ class TestExtractEnvOverrides:
         )
         assert result == {"GLOBAL": "g", "TASK": "t"}
 
+    @pytest.mark.zentao("TC-S0366", domain="server/services", priority="P1")
     def test_task_env_overrides_config(self):
         """task env 覆盖同名 config env"""
         result = _extract_env_overrides(
@@ -658,14 +706,17 @@ class TestExtractEnvOverrides:
         )
         assert result == {"K": "task_val"}
 
+    @pytest.mark.zentao("TC-S0367", domain="server/services", priority="P1")
     def test_nested_config_not_dict(self):
         result = _extract_env_overrides({"config": "not_dict"})
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0368", domain="server/services", priority="P1")
     def test_config_env_not_dict_in_dotpath(self):
         result = _extract_env_overrides({"config.env": "not_dict"})
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0369", domain="server/services", priority="P1")
     def test_ignores_non_env_dotpath_keys(self):
         result = _extract_env_overrides(
             {
@@ -677,11 +728,13 @@ class TestExtractEnvOverrides:
 
 
 class TestComputeDurationMs:
+    @pytest.mark.zentao("TC-S0370", domain="server/services", priority="P2")
     def test_no_start_time_returns_none(self):
         from taskpps.services.pipeline_service import _compute_duration_ms
 
         assert _compute_duration_ms(None, None) is None
 
+    @pytest.mark.zentao("TC-S0371", domain="server/services", priority="P2")
     def test_completed_run_uses_finished_at(self):
         from taskpps.services.pipeline_service import _compute_duration_ms
 
@@ -689,6 +742,7 @@ class TestComputeDurationMs:
         end = start + timedelta(seconds=42, milliseconds=500)
         assert _compute_duration_ms(start, end) == 42500
 
+    @pytest.mark.zentao("TC-S0372", domain="server/services", priority="P2")
     def test_running_run_uses_server_now(self):
         from taskpps.services.pipeline_service import _compute_duration_ms
 
@@ -696,6 +750,7 @@ class TestComputeDurationMs:
         start = datetime(2026, 6, 23, 14, 52, 59, tzinfo=timezone.utc)
         assert _compute_duration_ms(start, None, server_now) == 11000
 
+    @pytest.mark.zentao("TC-S0373", domain="server/services", priority="P2")
     def test_naive_start_time_treated_as_utc(self):
         from taskpps.services.pipeline_service import _compute_duration_ms
 
@@ -703,6 +758,7 @@ class TestComputeDurationMs:
         end = datetime(2026, 6, 23, 14, 53, 10, tzinfo=timezone.utc)
         assert _compute_duration_ms(start, end) == 11000
 
+    @pytest.mark.zentao("TC-S0374", domain="server/services", priority="P2")
     def test_negative_duration_clamped_to_zero(self):
         from taskpps.services.pipeline_service import _compute_duration_ms
 
@@ -710,6 +766,7 @@ class TestComputeDurationMs:
         end = datetime(2026, 6, 23, 14, 52, 59, tzinfo=timezone.utc)
         assert _compute_duration_ms(start, end) == 0
 
+    @pytest.mark.zentao("TC-S0375", domain="server/services", priority="P2")
     def test_microsecond_precision(self):
         from taskpps.services.pipeline_service import _compute_duration_ms
 
@@ -720,6 +777,7 @@ class TestComputeDurationMs:
 
 class TestRunDurationResponse:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0376", domain="server/services", priority="P1")
     async def test_get_run_includes_duration_ms(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         from taskpps.db.engine import get_session_factory
@@ -766,6 +824,7 @@ class TestRunDurationResponse:
             assert task["duration_ms"] >= 3000
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0377", domain="server/services", priority="P1")
     async def test_list_runs_includes_duration_ms(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         from taskpps.db.engine import get_session_factory
@@ -797,6 +856,7 @@ class TestRunDurationResponse:
         assert run["duration_ms"] >= 3000
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0378", domain="server/services", priority="P1")
     async def test_get_run_running_duration_ms_positive(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         from taskpps.db.engine import get_session_factory
@@ -824,3 +884,4 @@ class TestRunDurationResponse:
         assert fetched is not None
         assert fetched["duration_ms"] is not None
         assert fetched["duration_ms"] >= 2000
+

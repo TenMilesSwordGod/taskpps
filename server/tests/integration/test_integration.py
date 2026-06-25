@@ -25,6 +25,7 @@ def make_pipeline(name="test", tasks=None, options=None):
 
 
 class TestPipelineTraversal:
+    @pytest.mark.zentao("TC-S0075", domain="server/integration", priority="P1")
     def test_sequential_tasks(self):
         tasks = [
             ResolvedTask(name="clone", task_type="command", command="git clone"),
@@ -36,6 +37,7 @@ class TestPipelineTraversal:
         runner = PipelineRunner(run_id="traversal-1", pipeline=pipeline, context=ctx)
         assert runner.run_id == "traversal-1"
 
+    @pytest.mark.zentao("TC-S0076", domain="server/integration", priority="P0")
     def test_dag_traversal(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
@@ -48,6 +50,7 @@ class TestPipelineTraversal:
         runner = PipelineRunner(run_id="dag-1", pipeline=pipeline, context=ctx)
         assert runner.run_id == "dag-1"
 
+    @pytest.mark.zentao("TC-S0077", domain="server/integration", priority="P0")
     def test_on_failure_fail(self):
         tasks = [
             ResolvedTask(name="step1", task_type="command", command="echo step1"),
@@ -56,6 +59,7 @@ class TestPipelineTraversal:
         pipeline = ResolvedPipeline(name="halt-test", tasks=tasks, options=OptionsYAML(on_failure="fail"))
         assert pipeline.options.on_failure == "fail"
 
+    @pytest.mark.zentao("TC-S0078", domain="server/integration", priority="P0")
     def test_on_failure_continue(self):
         tasks = [
             ResolvedTask(name="step1", task_type="command", command="echo step1"),
@@ -66,6 +70,7 @@ class TestPipelineTraversal:
 
 
 class TestWorkspacePropagation:
+    @pytest.mark.zentao("TC-S0079", domain="server/integration", priority="P1")
     def test_workspace_env(self):
         pipeline = ResolvedPipeline(
             name="test",
@@ -79,6 +84,7 @@ class TestWorkspacePropagation:
         assert task_env.get("GLOBAL") == "1"
         assert task_env.get("CLI") == "2"
 
+    @pytest.mark.zentao("TC-S0080", domain="server/integration", priority="P2")
     def test_workspace_priority(self):
         pipeline = ResolvedPipeline(
             name="test",
@@ -92,6 +98,7 @@ class TestWorkspacePropagation:
 
 
 class TestPipelineLoading:
+    @pytest.mark.zentao("TC-S0081", domain="server/integration", priority="P2")
     def test_load_and_resolve_pipeline(self, setup_project, tmp_project):
         _setup_config(tmp_project)
         from taskpps.domain.pipeline import ResolvedPipeline
@@ -105,6 +112,7 @@ class TestPipelineLoading:
         assert pipeline.tasks[0].name == "step1"
         assert pipeline.tasks[1].depends_on == ["step1"]
 
+    @pytest.mark.zentao("TC-S0082", domain="server/integration", priority="P2")
     def test_load_with_agent_resolution(self, setup_project, tmp_project):
         from taskpps.loaders.agent_loader import AgentLoader
         from taskpps.loaders.pipeline_loader import PipelineLoader
@@ -118,6 +126,7 @@ class TestPipelineLoading:
         agent = agent_loader.load("staging-server")
         assert agent["host"] == "127.0.0.1"
 
+    @pytest.mark.zentao("TC-S0083", domain="server/integration", priority="P2")
     def test_credential_loading(self, setup_project, tmp_project):
         from taskpps.loaders.credential_loader import CredentialLoader
 
@@ -128,6 +137,7 @@ class TestPipelineLoading:
 
 class TestIntegrationEndToEnd:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0084", domain="server/integration", priority="P0")
     async def test_full_run_flow(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         transport = ASGITransport(app=_app)
@@ -152,6 +162,7 @@ class TestIntegrationEndToEnd:
             assert list_data["total"] >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0085", domain="server/integration", priority="P2")
     async def test_triggers_endpoint(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         transport = ASGITransport(app=_app)
@@ -171,6 +182,7 @@ class TestIntegrationEndToEnd:
 
 class TestCoverageGaps:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0086", domain="server/integration", priority="P2")
     async def test_main_app_startup(self, setup_project, tmp_project):
         _setup_config(tmp_project)
         transport = ASGITransport(app=_app)
@@ -178,6 +190,7 @@ class TestCoverageGaps:
             resp = await client.get("/api/health")
             assert resp.status_code == 200
 
+    @pytest.mark.zentao("TC-S0087", domain="server/integration", priority="P2")
     def test_event_bus_singleton(self):
         from taskpps.events.bus import get_event_bus
 
@@ -185,6 +198,7 @@ class TestCoverageGaps:
         bus2 = get_event_bus()
         assert bus1 is bus2
 
+    @pytest.mark.zentao("TC-S0088", domain="server/integration", priority="P2")
     def test_event_bus_subscribe_and_emit(self):
         from taskpps.events.bus import get_event_bus
 
@@ -199,6 +213,7 @@ class TestCoverageGaps:
         assert len(called) == 1
         bus.off("test_event", handler)
 
+    @pytest.mark.zentao("TC-S0089", domain="server/integration", priority="P2")
     def test_event_bus_unsubscribe(self):
         from taskpps.events.bus import get_event_bus
 
@@ -214,6 +229,7 @@ class TestCoverageGaps:
         assert len(called) == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0090", domain="server/integration", priority="P1")
     async def test_create_run_pipeline_not_found(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         transport = ASGITransport(app=_app)
@@ -225,6 +241,7 @@ class TestCoverageGaps:
             assert resp.status_code in (400, 404, 422)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0091", domain="server/integration", priority="P1")
     async def test_cancel_run_not_found(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
         transport = ASGITransport(app=_app)
@@ -232,6 +249,7 @@ class TestCoverageGaps:
             resp = await client.post("/api/runs/nonexistent/cancel")
             assert resp.status_code in (400, 404)
 
+    @pytest.mark.zentao("TC-S0092", domain="server/integration", priority="P2")
     def test_events_bus_emit(self):
         from taskpps.events.bus import get_event_bus
 
@@ -246,6 +264,7 @@ class TestCoverageGaps:
         assert caught.get("data") == {"data": {"key": "value"}}
         bus.off("test_event", handler)
 
+    @pytest.mark.zentao("TC-S0093", domain="server/integration", priority="P2")
     def test_events_bus_multiple_handlers(self):
         from taskpps.events.bus import get_event_bus
 
@@ -264,3 +283,4 @@ class TestCoverageGaps:
         assert len(results) == 2
         bus.off("test_event", handler1)
         bus.off("test_event", handler2)
+

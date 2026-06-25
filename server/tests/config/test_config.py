@@ -34,6 +34,7 @@ class TestSettings:
         assert s.env == {}
         assert s.triggers == []
 
+    @pytest.mark.zentao("TC-S0858", domain="server/config", priority="P2")
     def test_get_settings_defaults(self):
         import taskpps.config as cfg
 
@@ -63,6 +64,7 @@ class TestSettings:
             if original_env is not None:
                 os.environ["TASKPPS_CONFIG_PATH"] = original_env
 
+    @pytest.mark.zentao("TC-S0859", domain="server/config", priority="P2")
     def test_custom_values(self):
         s = Settings(
             server=ServerConfig(host="0.0.0.0", port=8080),
@@ -74,10 +76,12 @@ class TestSettings:
         assert s.executor.default_timeout == 120
         assert s.env["KEY"] == "VAL"
 
+    @pytest.mark.zentao("TC-S0860", domain="server/config", priority="P2")
     def test_extra_fields(self):
         s = Settings(custom_field="test", **{"server": ServerConfig()})
         assert s.model_config.get("extra") == "allow" or True
 
+    @pytest.mark.zentao("TC-S0861", domain="server/config", priority="P2")
     def test_load_from_file(self, setup_project, tmp_path):
         import taskpps.config as cfg
 
@@ -128,6 +132,7 @@ class TestExecutorConfig:
 
 
 class TestProjectRoot:
+    @pytest.mark.zentao("TC-S0862", domain="server/config", priority="P2")
     def test_find_cached(self):
         import taskpps.config as cfg
 
@@ -139,6 +144,7 @@ class TestProjectRoot:
         finally:
             cfg._project_root = old
 
+    @pytest.mark.zentao("TC-S0863", domain="server/config", priority="P1")
     def test_find_no_config(self, tmp_path):
         import taskpps.config as cfg
 
@@ -150,6 +156,7 @@ class TestProjectRoot:
         finally:
             cfg._project_root = old
 
+    @pytest.mark.zentao("TC-S0864", domain="server/config", priority="P2")
     def test_set(self, tmp_path):
         import taskpps.config as cfg
 
@@ -162,6 +169,7 @@ class TestProjectRoot:
 
 
 class TestLoadSettings:
+    @pytest.mark.zentao("TC-S0865", domain="server/config", priority="P2")
     def test_with_path(self, tmp_path):
         config_file = tmp_path / "custom.yaml"
         config_file.write_text("server:\n  host: 0.0.0.0\n  port: 9999\n")
@@ -169,10 +177,12 @@ class TestLoadSettings:
         assert s.server.host == "0.0.0.0"
         assert s.server.port == 9999
 
+    @pytest.mark.zentao("TC-S0866", domain="server/config", priority="P2")
     def test_nonexistent_path(self, tmp_path):
         s = load_settings(str(tmp_path / "nonexistent.yaml"))
         assert isinstance(s, Settings)
 
+    @pytest.mark.zentao("TC-S0867", domain="server/config", priority="P2")
     def test_get_settings_auto_load(self):
         import taskpps.config as cfg
 
@@ -186,22 +196,26 @@ class TestLoadSettings:
 
 
 class TestDirectories:
+    @pytest.mark.zentao("TC-S0868", domain="server/config", priority="P2")
     def test_data_dir(self, setup_project, tmp_project):
         d = get_data_dir()
         assert d.exists()
         # data_dir 基于 server 安装目录，不是项目 workdir
         assert ".taskpps" in str(d)
 
+    @pytest.mark.zentao("TC-S0869", domain="server/config", priority="P2")
     def test_data_dir_creates(self, tmp_path, setup_project):
         # data_dir 由 server_home 决定，不受 _project_workdir 影响
         d = get_data_dir()
         assert d.exists()
 
+    @pytest.mark.zentao("TC-S0870", domain="server/config", priority="P2")
     def test_db_path(self, setup_project, tmp_project):
         p = get_db_path()
         assert p.name == "state.db"
         assert ".taskpps" in str(p)
 
+    @pytest.mark.zentao("TC-S0871", domain="server/config", priority="P2")
     def test_db_path_uses_data_dir(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
@@ -215,10 +229,12 @@ class TestDirectories:
         finally:
             cfg._project_workdir = old_workdir
 
+    @pytest.mark.zentao("TC-S0872", domain="server/config", priority="P1")
     def test_logs_dir(self, setup_project):
         d = get_logs_dir()
         assert d.exists()
 
+    @pytest.mark.zentao("TC-S0873", domain="server/config", priority="P1")
     def test_logs_dir_creates(self, tmp_path, setup_project):
         # logs_dir 由 server_home 决定，不受 _project_workdir 影响
         import taskpps.config as cfg
@@ -233,10 +249,12 @@ class TestDirectories:
         finally:
             cfg._project_workdir = old_workdir
 
+    @pytest.mark.zentao("TC-S0874", domain="server/config", priority="P2")
     def test_pipelines_dir(self, setup_project, tmp_project):
         d = get_pipelines_dir()
         assert d == tmp_project / "pipelines"
 
+    @pytest.mark.zentao("TC-S0875", domain="server/config", priority="P2")
     def test_pipelines_dir_no_trailing_slash(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
@@ -248,10 +266,12 @@ class TestDirectories:
         finally:
             cfg._project_workdir = old_workdir
 
+    @pytest.mark.zentao("TC-S0876", domain="server/config", priority="P2")
     def test_agents_dir(self, setup_project, tmp_project):
         d = get_agents_dir()
         assert d == tmp_project / "agents"
 
+    @pytest.mark.zentao("TC-S0877", domain="server/config", priority="P2")
     def test_agents_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
@@ -263,10 +283,12 @@ class TestDirectories:
         finally:
             cfg._project_workdir = old_workdir
 
+    @pytest.mark.zentao("TC-S0878", domain="server/config", priority="P2")
     def test_credentials_dir(self, setup_project, tmp_project):
         d = get_credentials_dir()
         assert d == tmp_project / "credentials"
 
+    @pytest.mark.zentao("TC-S0879", domain="server/config", priority="P2")
     def test_credentials_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
@@ -278,10 +300,12 @@ class TestDirectories:
         finally:
             cfg._project_workdir = old_workdir
 
+    @pytest.mark.zentao("TC-S0880", domain="server/config", priority="P2")
     def test_tasks_dir(self, setup_project, tmp_project):
         d = get_tasks_dir()
         assert d == tmp_project / "tasks"
 
+    @pytest.mark.zentao("TC-S0881", domain="server/config", priority="P2")
     def test_tasks_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
@@ -293,10 +317,12 @@ class TestDirectories:
         finally:
             cfg._project_workdir = old_workdir
 
+    @pytest.mark.zentao("TC-S0882", domain="server/config", priority="P2")
     def test_plugins_dir(self, setup_project, tmp_project):
         d = get_plugins_dir()
         assert d == tmp_project / "plugins"
 
+    @pytest.mark.zentao("TC-S0883", domain="server/config", priority="P2")
     def test_plugins_dir_custom(self, tmp_path, setup_project):
         import taskpps.config as cfg
 
@@ -310,6 +336,7 @@ class TestDirectories:
 
 
 class TestServerHome:
+    @pytest.mark.zentao("TC-S0884", domain="server/config", priority="P2")
     def test_data_dir_uses_server_home(self, tmp_path):
         """get_data_dir 应使用 get_server_home() 而非硬编码路径。"""
         import taskpps.config as cfg
@@ -325,6 +352,7 @@ class TestServerHome:
         finally:
             cfg._server_home = old_home
 
+    @pytest.mark.zentao("TC-S0885", domain="server/config", priority="P1")
     def test_logs_dir_uses_server_home(self, tmp_path):
         """get_logs_dir 应使用 get_server_home() 而非硬编码路径。"""
         import taskpps.config as cfg
@@ -340,6 +368,7 @@ class TestServerHome:
         finally:
             cfg._server_home = old_home
 
+    @pytest.mark.zentao("TC-S0886", domain="server/config", priority="P1")
     def test_logs_dir_respects_env_var(self, tmp_path, monkeypatch):
         """get_logs_dir 应尊重 TASKPPS_SERVER_HOME 环境变量。"""
         import taskpps.config as cfg
@@ -355,3 +384,4 @@ class TestServerHome:
             assert d.exists()
         finally:
             cfg._server_home = old_home
+

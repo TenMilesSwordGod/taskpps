@@ -21,6 +21,7 @@ from taskpps.models.run import RunStatus, TaskStatus, TaskType
 
 
 class TestDBEngine:
+    @pytest.mark.zentao("TC-S0745", domain="server/db", priority="P2")
     def test_reset_engine(self):
         reset_engine()
         from taskpps.db import engine as eng
@@ -29,6 +30,7 @@ class TestDBEngine:
         assert eng._session_factory is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0746", domain="server/db", priority="P2")
     async def test_set_engine(self, tmp_path):
         db_file = tmp_path / "custom.db"
         engine = create_async_engine(
@@ -44,6 +46,7 @@ class TestDBEngine:
         reset_engine()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0747", domain="server/db", priority="P2")
     async def test_get_engine_reuses(self):
         reset_engine()
         from taskpps.config import _project_root
@@ -60,6 +63,7 @@ class TestDBEngine:
             reset_engine()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0748", domain="server/db", priority="P2")
     async def test_get_engine_creates_new(self, tmp_path):
         reset_engine()
         from taskpps.config import _project_root
@@ -75,6 +79,7 @@ class TestDBEngine:
             reset_engine()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0749", domain="server/db", priority="P0")
     async def test_init_db(self, tmp_path):
         reset_engine()
         db_file = tmp_path / "test_init.db"
@@ -89,6 +94,7 @@ class TestDBEngine:
         reset_engine()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0750", domain="server/db", priority="P0")
     async def test_init_db_concurrent(self, tmp_path, monkeypatch):
         """回归测试:多 task 并发调 init_db 不能炸出 'table already exists'。
 
@@ -127,6 +133,7 @@ class TestDBEngine:
             reset_engine()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0751", domain="server/db", priority="P1")
     async def test_close_db(self, tmp_path):
         reset_engine()
         db_file = tmp_path / "test_close.db"
@@ -142,11 +149,13 @@ class TestDBEngine:
         assert _session_factory is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0752", domain="server/db", priority="P1")
     async def test_close_db_no_engine(self):
         reset_engine()
         await close_db()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0753", domain="server/db", priority="P0")
     async def test_get_session(self, tmp_path):
         reset_engine()
         db_file = tmp_path / "test_session.db"
@@ -165,6 +174,7 @@ class TestDBEngine:
         await engine.dispose()
         reset_engine()
 
+    @pytest.mark.zentao("TC-S0754", domain="server/db", priority="P2")
     def test_get_repos(self):
         repos = _get_repos()
         assert repos == (RunRepository, TaskRunRepository, TriggerRepository)
@@ -172,6 +182,7 @@ class TestDBEngine:
 
 class TestProjectRepository:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0755", domain="server/db", priority="P2")
     async def test_create_project(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -183,6 +194,7 @@ class TestProjectRepository:
             assert project.active is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0756", domain="server/db", priority="P2")
     async def test_get_project(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -193,6 +205,7 @@ class TestProjectRepository:
             assert fetched.workdir == "/opt/project-b"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0757", domain="server/db", priority="P1")
     async def test_get_project_not_found(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -200,6 +213,7 @@ class TestProjectRepository:
             assert fetched is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0758", domain="server/db", priority="P2")
     async def test_get_project_by_workdir(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -209,6 +223,7 @@ class TestProjectRepository:
             assert found.name == "project-c"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0759", domain="server/db", priority="P1")
     async def test_get_project_by_workdir_not_found(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -216,6 +231,7 @@ class TestProjectRepository:
             assert found is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0760", domain="server/db", priority="P2")
     async def test_list_projects(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -225,6 +241,7 @@ class TestProjectRepository:
             assert len(projects) == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0761", domain="server/db", priority="P2")
     async def test_list_projects_active_only(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -238,6 +255,7 @@ class TestProjectRepository:
             assert len(all_projects) == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0762", domain="server/db", priority="P2")
     async def test_update_project(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -248,6 +266,7 @@ class TestProjectRepository:
             assert updated.active is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0763", domain="server/db", priority="P2")
     async def test_delete_project(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -258,6 +277,7 @@ class TestProjectRepository:
             assert fetched is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0764", domain="server/db", priority="P1")
     async def test_delete_project_not_found(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -265,6 +285,7 @@ class TestProjectRepository:
             assert deleted is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0765", domain="server/db", priority="P2")
     async def test_count_projects(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = ProjectRepository(session)
@@ -274,6 +295,7 @@ class TestProjectRepository:
             assert await repo.count_projects() == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0766", domain="server/db", priority="P2")
     async def test_create_run_with_project_id(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             proj_repo = ProjectRepository(session)
@@ -283,6 +305,7 @@ class TestProjectRepository:
             assert run.project_id == project.id
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0767", domain="server/db", priority="P1")
     async def test_list_runs_by_project_id(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             proj_repo = ProjectRepository(session)
@@ -300,6 +323,7 @@ class TestProjectRepository:
 
 class TestRunRepository:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0768", domain="server/db", priority="P2")
     async def test_create_run(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -310,6 +334,7 @@ class TestRunRepository:
             assert run.pipeline_file == "test.yaml"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0769", domain="server/db", priority="P1")
     async def test_get_run(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -319,6 +344,7 @@ class TestRunRepository:
             assert fetched.id == created.id
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0770", domain="server/db", priority="P1")
     async def test_list_runs(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -328,6 +354,7 @@ class TestRunRepository:
             assert len(runs) == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0771", domain="server/db", priority="P1")
     async def test_list_runs_filter(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -338,6 +365,7 @@ class TestRunRepository:
             assert runs[0].pipeline_name == "pipeline-1"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0772", domain="server/db", priority="P1")
     async def test_list_runs_filter_by_file(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -348,6 +376,7 @@ class TestRunRepository:
             assert runs[0].pipeline_file == "proj1/deploy.yaml"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0773", domain="server/db", priority="P1")
     async def test_list_runs_same_name_different_file(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -363,6 +392,7 @@ class TestRunRepository:
             assert proj2_runs[0].status == RunStatus.PENDING
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0774", domain="server/db", priority="P2")
     async def test_update_run_status(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -376,6 +406,7 @@ class TestRunRepository:
             assert updated.started_at is not None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0775", domain="server/db", priority="P2")
     async def test_delete_all_runs(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -389,6 +420,7 @@ class TestRunRepository:
 
 class TestTaskRunRepository:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0776", domain="server/db", priority="P2")
     async def test_create_task_run(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -402,6 +434,7 @@ class TestTaskRunRepository:
             assert task.status == TaskStatus.PENDING
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0777", domain="server/db", priority="P2")
     async def test_update_task_status(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -418,6 +451,7 @@ class TestTaskRunRepository:
             assert updated.exit_code == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0778", domain="server/db", priority="P1")
     async def test_cancel_pending_tasks(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -431,6 +465,7 @@ class TestTaskRunRepository:
             assert updated1.status == TaskStatus.CANCELLED
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0779", domain="server/db", priority="P2")
     async def test_list_task_runs(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -444,6 +479,7 @@ class TestTaskRunRepository:
 
 class TestTriggerRepository:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0780", domain="server/db", priority="P0")
     async def test_trigger_crud(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = TriggerRepository(session)
@@ -466,6 +502,7 @@ class TestTriggerRepository:
 
 class TestRunRepositoryMore:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0781", domain="server/db", priority="P2")
     async def test_get_last_run_by_pipeline(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -477,6 +514,7 @@ class TestRunRepositoryMore:
             assert last.pipeline_version == "v2"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0782", domain="server/db", priority="P2")
     async def test_get_last_run_by_pipeline_none(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -484,6 +522,7 @@ class TestRunRepositoryMore:
             assert result is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0783", domain="server/db", priority="P2")
     async def test_list_versions(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -494,6 +533,7 @@ class TestRunRepositoryMore:
             assert versions == ["v1", "v2"]  # ordered by created_at desc
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0784", domain="server/db", priority="P2")
     async def test_list_versions_empty(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -501,6 +541,7 @@ class TestRunRepositoryMore:
             assert versions == []
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0785", domain="server/db", priority="P2")
     async def test_delete_runs_by_version(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -511,6 +552,7 @@ class TestRunRepositoryMore:
             assert count == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0786", domain="server/db", priority="P2")
     async def test_count_runs(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -522,6 +564,7 @@ class TestRunRepositoryMore:
             assert await repo.count_runs(status="pending") == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0787", domain="server/db", priority="P2")
     async def test_count_runs_by_file(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -532,6 +575,7 @@ class TestRunRepositoryMore:
             assert await repo.count_runs(pipeline_file="proj1/deploy.yaml", status="pending") == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0788", domain="server/db", priority="P2")
     async def test_delete_runs_older_than(self, db_engine, clean_db):
         from datetime import datetime, timedelta, timezone
 
@@ -546,6 +590,7 @@ class TestRunRepositoryMore:
             assert count == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0789", domain="server/db", priority="P2")
     async def test_delete_runs_keep(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -557,6 +602,7 @@ class TestRunRepositoryMore:
             assert count == 1  # 3 - 2 = 1 deleted
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0790", domain="server/db", priority="P2")
     async def test_delete_runs_keep_zero(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -567,6 +613,7 @@ class TestRunRepositoryMore:
             assert count == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0791", domain="server/db", priority="P2")
     async def test_delete_runs_keep_negative(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             repo = RunRepository(session)
@@ -574,6 +621,7 @@ class TestRunRepositoryMore:
                 await repo.delete_runs_keep(-1)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0792", domain="server/db", priority="P2")
     async def test_update_run_status_finished_at(self, db_engine, clean_db):
         from datetime import datetime, timezone
 
@@ -589,6 +637,7 @@ class TestRunRepositoryMore:
 
 class TestTaskRunRepositoryMore:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0793", domain="server/db", priority="P1")
     async def test_get_running_tasks(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -603,6 +652,7 @@ class TestTaskRunRepositoryMore:
             assert running[0].task_name == "task-1"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0794", domain="server/db", priority="P1")
     async def test_get_running_tasks_none(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -614,6 +664,7 @@ class TestTaskRunRepositoryMore:
             assert len(running) == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0795", domain="server/db", priority="P2")
     async def test_delete_tasks_for_run(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -629,6 +680,7 @@ class TestTaskRunRepositoryMore:
             assert len(tasks) == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0796", domain="server/db", priority="P2")
     async def test_update_task_status_started_finished_at(self, db_engine, clean_db):
         from datetime import datetime, timezone
 
@@ -647,6 +699,7 @@ class TestTaskRunRepositoryMore:
             assert updated.finished_at is not None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0797", domain="server/db", priority="P2")
     async def test_update_stuck_tasks(self, db_engine, clean_db):
         """Issue #68: update_stuck_tasks 应将 RUNNING/PENDING 的 task 批量更新为终态。"""
         from datetime import datetime, timezone
@@ -674,6 +727,7 @@ class TestTaskRunRepositoryMore:
             assert updated_t3.status == TaskStatus.SUCCESS  # 未被修改
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0798", domain="server/db", priority="P2")
     async def test_update_stuck_tasks_no_stuck(self, db_engine, clean_db):
         """没有卡住的 task 时，update_stuck_tasks 应返回 0。"""
         async with get_session_factory()() as session:
@@ -688,3 +742,4 @@ class TestTaskRunRepositoryMore:
                 run.id, TaskStatus.FAILED, finished_at=datetime.now(timezone.utc)
             )
             assert count == 0
+

@@ -16,17 +16,20 @@ def _make_task(name: str, depends_on: list[str] | None = None) -> ResolvedTask:
 
 
 class TestDAGBoundary:
+    @pytest.mark.zentao("TC-S1059", domain="server/domain", priority="P2")
     def test_empty_dag(self):
         dag = DAG([])
         assert len(dag.tasks) == 0
         assert dag.topological_sort() == []
         assert dag.get_execution_levels() == []
 
+    @pytest.mark.zentao("TC-S1060", domain="server/domain", priority="P2")
     def test_single_node(self):
         dag = DAG([_make_task("a")])
         assert len(dag.tasks) == 1
         assert dag.topological_sort() == ["a"]
 
+    @pytest.mark.zentao("TC-S1061", domain="server/domain", priority="P2")
     def test_two_nodes_with_dependency(self):
         dag = DAG(
             [
@@ -37,6 +40,7 @@ class TestDAGBoundary:
         order = dag.topological_sort()
         assert order.index("a") < order.index("b")
 
+    @pytest.mark.zentao("TC-S1062", domain="server/domain", priority="P1")
     def test_two_nodes_no_dependency_implicit_sequential(self):
         dag = DAG(
             [
@@ -47,6 +51,7 @@ class TestDAGBoundary:
         order = dag.topological_sort()
         assert order.index("a") < order.index("b")
 
+    @pytest.mark.zentao("TC-S1063", domain="server/domain", priority="P2")
     def test_two_nodes_no_dependency_explicit(self):
         dag = DAG(
             [
@@ -60,6 +65,7 @@ class TestDAGBoundary:
         assert "a" in order
         assert "b" in order
 
+    @pytest.mark.zentao("TC-S1064", domain="server/domain", priority="P0")
     def test_cycle_detection_two_nodes(self):
         with pytest.raises(DAGCycleError):
             dag = DAG(
@@ -70,6 +76,7 @@ class TestDAGBoundary:
             )
             dag.topological_sort()
 
+    @pytest.mark.zentao("TC-S1065", domain="server/domain", priority="P0")
     def test_cycle_detection_three_nodes(self):
         with pytest.raises(DAGCycleError):
             dag = DAG(
@@ -81,6 +88,7 @@ class TestDAGBoundary:
             )
             dag.topological_sort()
 
+    @pytest.mark.zentao("TC-S1066", domain="server/domain", priority="P2")
     def test_unknown_dependency(self):
         with pytest.raises(ValueError):
             DAG(
@@ -89,6 +97,7 @@ class TestDAGBoundary:
                 ]
             )
 
+    @pytest.mark.zentao("TC-S1067", domain="server/domain", priority="P2")
     def test_get_dependents(self):
         dag = DAG(
             [
@@ -100,6 +109,7 @@ class TestDAGBoundary:
         assert dag.get_dependents("a") == {"b", "c"}
         assert dag.get_dependents("b") == set()
 
+    @pytest.mark.zentao("TC-S1068", domain="server/domain", priority="P2")
     def test_get_dependencies(self):
         dag = DAG(
             [
@@ -111,6 +121,7 @@ class TestDAGBoundary:
         assert dag.get_dependencies("c") == {"a", "b"}
         assert dag.get_dependencies("a") == set()
 
+    @pytest.mark.zentao("TC-S1069", domain="server/domain", priority="P2")
     def test_execution_levels(self):
         dag = DAG(
             [
@@ -127,6 +138,7 @@ class TestDAGBoundary:
         assert set(levels[1]) == {"c"}
         assert set(levels[2]) == {"d"}
 
+    @pytest.mark.zentao("TC-S1070", domain="server/domain", priority="P2")
     def test_diamond_structure(self):
         dag = DAG(
             [
@@ -140,6 +152,7 @@ class TestDAGBoundary:
         assert len(order) == 4
         assert order.index("a") < order.index("d")
 
+    @pytest.mark.zentao("TC-S1071", domain="server/domain", priority="P2")
     def test_linear_chain(self):
         tasks = [_make_task("step0")]
         for i in range(1, 10):
@@ -149,6 +162,7 @@ class TestDAGBoundary:
         for i in range(9):
             assert order.index(f"step{i}") < order.index(f"step{i + 1}")
 
+    @pytest.mark.zentao("TC-S1072", domain="server/domain", priority="P1")
     def test_disconnected_graph(self):
         dag = DAG(
             [
@@ -164,6 +178,7 @@ class TestDAGBoundary:
         assert order.index("a") < order.index("b")
         assert order.index("c") < order.index("d")
 
+    @pytest.mark.zentao("TC-S1073", domain="server/domain", priority="P2")
     def test_large_dag(self):
         tasks = [_make_task("step0")]
         for i in range(1, 100):
@@ -174,6 +189,7 @@ class TestDAGBoundary:
         assert order[0] == "step0"
         assert order[-1] == "step99"
 
+    @pytest.mark.zentao("TC-S1074", domain="server/domain", priority="P2")
     def test_single_level(self):
         dag = DAG(
             [
@@ -187,14 +203,17 @@ class TestDAGBoundary:
         assert len(levels) == 1
         assert set(levels[0]) == {"a", "b", "c"}
 
+    @pytest.mark.zentao("TC-S1075", domain="server/domain", priority="P2")
     def test_get_dependencies_nonexistent(self):
         dag = DAG([_make_task("a")])
         assert dag.get_dependencies("nonexistent") == set()
 
+    @pytest.mark.zentao("TC-S1076", domain="server/domain", priority="P2")
     def test_get_dependents_nonexistent(self):
         dag = DAG([_make_task("a")])
         assert dag.get_dependents("nonexistent") == set()
 
+    @pytest.mark.zentao("TC-S1077", domain="server/domain", priority="P2")
     def test_execution_levels_preserve_yaml_order(self):
         """Issue #85: 同层级任务应按 YAML 声明顺序排列"""
         dag = DAG(
@@ -215,3 +234,4 @@ class TestDAGBoundary:
         # smoke-test 在 perf-test 之前声明, 应排在前面
         assert levels[1] == ["smoke-test", "perf-test"]
         assert levels[2] == ["final"]
+

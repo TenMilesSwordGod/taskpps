@@ -31,6 +31,7 @@ def agent_data():
 
 class TestAgentExecutorExecute:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0481", domain="server/executors", priority="P0")
     async def test_execute_success(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_exec.log"
         fut = asyncio.get_event_loop().create_future()
@@ -46,6 +47,7 @@ class TestAgentExecutorExecute:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0482", domain="server/executors", priority="P1")
     async def test_execute_not_connected_no_bootstrap(self, tmp_path, mock_manager):
         log_path = tmp_path / "agent_no_bootstrap.log"
         mock_manager.is_connected.return_value = False
@@ -57,6 +59,7 @@ class TestAgentExecutorExecute:
         assert "not connected" in result.stderr
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0483", domain="server/executors", priority="P1")
     async def test_execute_not_connected_auto_bootstrap_false(self, tmp_path, mock_manager):
         log_path = tmp_path / "agent_no_auto.log"
         mock_manager.is_connected.return_value = False
@@ -69,6 +72,7 @@ class TestAgentExecutorExecute:
         assert "not connected" in result.stderr
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0484", domain="server/executors", priority="P1")
     async def test_execute_timeout(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_timeout.log"
         fut = asyncio.get_event_loop().create_future()
@@ -90,6 +94,7 @@ class TestAgentExecutorExecute:
             pass
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0485", domain="server/executors", priority="P1")
     async def test_execute_timeout_direct(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_timeout2.log"
         fut = asyncio.get_event_loop().create_future()
@@ -107,6 +112,7 @@ class TestAgentExecutorExecute:
         mock_manager.cleanup_command.assert_called_once_with("agent-1", executor._command_id)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0486", domain="server/executors", priority="P1")
     async def test_execute_cancelled_error(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_cancel.log"
         fut = asyncio.get_event_loop().create_future()
@@ -123,6 +129,7 @@ class TestAgentExecutorExecute:
         mock_manager.cleanup_command.assert_called_once_with("agent-1", executor._command_id)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0487", domain="server/executors", priority="P1")
     async def test_execute_send_command_exception(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_send_err.log"
         mock_manager.send_command.side_effect = RuntimeError("connection lost")
@@ -136,6 +143,7 @@ class TestAgentExecutorExecute:
         mock_manager.cleanup_command.assert_called_once_with("agent-1", executor._command_id)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0488", domain="server/executors", priority="P1")
     async def test_execute_with_signal(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_signal.log"
         fut = asyncio.get_event_loop().create_future()
@@ -148,6 +156,7 @@ class TestAgentExecutorExecute:
         assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0489", domain="server/executors", priority="P1")
     async def test_execute_with_error(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_error.log"
         fut = asyncio.get_event_loop().create_future()
@@ -161,6 +170,7 @@ class TestAgentExecutorExecute:
         assert "command not found" in result.stderr
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0490", domain="server/executors", priority="P1")
     async def test_execute_cwd_fallback_to_agent_work_dir(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_cwd.log"
         fut = asyncio.get_event_loop().create_future()
@@ -176,6 +186,7 @@ class TestAgentExecutorExecute:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0491", domain="server/executors", priority="P1")
     async def test_execute_cwd_empty_when_no_data(self, tmp_path, mock_manager):
         log_path = tmp_path / "agent_no_cwd.log"
         fut = asyncio.get_event_loop().create_future()
@@ -189,6 +200,7 @@ class TestAgentExecutorExecute:
         mock_manager.send_command.assert_called_once_with("agent-1", executor._command_id, "echo hello", {}, "", 30)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0492", domain="server/executors", priority="P1")
     async def test_execute_default_timeout_from_settings(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "agent_def_timeout.log"
         fut = asyncio.get_event_loop().create_future()
@@ -210,6 +222,7 @@ class TestAgentExecutorExecute:
 
 class TestAgentExecutorCancel:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0493", domain="server/executors", priority="P1")
     async def test_cancel_with_command_id(self, mock_manager, agent_data):
         executor = AgentExecutor("agent-1", mock_manager, agent_data)
         executor._command_id = "cmd-123"
@@ -222,6 +235,7 @@ class TestAgentExecutorCancel:
         mock_manager.cleanup_command.assert_called_once_with("agent-1", "cmd-123")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0494", domain="server/executors", priority="P1")
     async def test_cancel_without_command_id(self, mock_manager, agent_data):
         executor = AgentExecutor("agent-1", mock_manager, agent_data)
         executor._command_id = None
@@ -235,6 +249,7 @@ class TestAgentExecutorCancel:
 
 class TestAgentExecutorEnsureConnected:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0495", domain="server/executors", priority="P2")
     async def test_already_connected(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "ensure.log"
         mock_manager.is_connected.return_value = True
@@ -245,6 +260,7 @@ class TestAgentExecutorEnsureConnected:
         assert result is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0496", domain="server/executors", priority="P1")
     async def test_not_connected_no_agent_data(self, tmp_path, mock_manager):
         log_path = tmp_path / "ensure_no_data.log"
         mock_manager.is_connected.return_value = False
@@ -255,6 +271,7 @@ class TestAgentExecutorEnsureConnected:
         assert result is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0497", domain="server/executors", priority="P1")
     async def test_not_connected_auto_bootstrap_false(self, tmp_path, mock_manager):
         log_path = tmp_path / "ensure_auto_false.log"
         mock_manager.is_connected.return_value = False
@@ -266,6 +283,7 @@ class TestAgentExecutorEnsureConnected:
         assert result is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0498", domain="server/executors", priority="P1")
     async def test_bootstrap_success(self, tmp_path, mock_manager):
         log_path = tmp_path / "ensure_bootstrap.log"
         mock_manager.is_connected.return_value = False
@@ -283,6 +301,7 @@ class TestAgentExecutorEnsureConnected:
             assert result is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0499", domain="server/executors", priority="P1")
     async def test_bootstrap_failure(self, tmp_path, mock_manager):
         log_path = tmp_path / "ensure_bootstrap_fail.log"
         mock_manager.is_connected.return_value = False
@@ -300,6 +319,7 @@ class TestAgentExecutorEnsureConnected:
             assert result is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0500", domain="server/executors", priority="P1")
     async def test_bootstrap_exception(self, tmp_path, mock_manager):
         log_path = tmp_path / "ensure_bootstrap_exc.log"
         mock_manager.is_connected.return_value = False
@@ -318,6 +338,7 @@ class TestAgentExecutorEnsureConnected:
 
 
 class TestAgentExecutorLog:
+    @pytest.mark.zentao("TC-S0501", domain="server/executors", priority="P1")
     def test_log_creates_parent_dir(self, tmp_path):
         mock_manager = MagicMock()
         executor = AgentExecutor("agent-1", mock_manager, None)
@@ -328,6 +349,7 @@ class TestAgentExecutorLog:
         assert log_path.exists()
         assert "test message" in log_path.read_text()
 
+    @pytest.mark.zentao("TC-S0502", domain="server/executors", priority="P1")
     def test_log_swallows_exception(self, tmp_path):
         mock_manager = MagicMock()
         executor = AgentExecutor("agent-1", mock_manager, None)
@@ -349,6 +371,7 @@ class TestAgentExecutorOutputCallback:
     """
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0503", domain="server/executors", priority="P1")
     async def test_on_output_writes_off_event_loop(self, tmp_path, mock_manager, agent_data):
         log_path = tmp_path / "off_loop.log"
         fut = asyncio.get_event_loop().create_future()
@@ -394,6 +417,7 @@ class TestAgentExecutorOutputCallback:
         assert "chunk-1" in log_path.read_text()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0504", domain="server/executors", priority="P1")
     async def test_on_output_no_running_loop_falls_back(self, tmp_path):
         """If on_output is somehow invoked without a running loop (e.g. in
         a test or sync context), it must still write the chunk instead of
@@ -421,3 +445,4 @@ class TestAgentExecutorOutputCallback:
             callback("fallback-chunk\n")
 
         assert "fallback-chunk" in log_path.read_text()
+

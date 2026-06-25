@@ -13,6 +13,7 @@ def app():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0928", domain="server/api", priority="P0")
 async def test_health_check_returns_ok(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -24,6 +25,7 @@ async def test_health_check_returns_ok(app):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0929", domain="server/api", priority="P0")
 async def test_health_check_response_headers(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -32,6 +34,7 @@ async def test_health_check_response_headers(app):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0930", domain="server/api", priority="P0")
 async def test_health_check_multiple_requests(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -42,6 +45,7 @@ async def test_health_check_multiple_requests(app):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0931", domain="server/api", priority="P0")
 async def test_health_check_no_auth_required(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -50,8 +54,10 @@ async def test_health_check_no_auth_required(app):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0932", domain="server/api", priority="P0")
 async def test_health_check_not_found_on_wrong_path(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/healthzzz")
         assert response.status_code in (404, 401)
+

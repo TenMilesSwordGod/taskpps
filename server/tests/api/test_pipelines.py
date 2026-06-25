@@ -12,6 +12,7 @@ def app():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0933", domain="server/api", priority="P0")
 async def test_list_pipelines_returns_project_name(app, setup_project, tmp_project, db_engine, clean_db):
     """Issue #91: 流水线列表应返回 project_name 而非仅 project_id"""
     transport = ASGITransport(app=app)
@@ -38,6 +39,7 @@ async def test_list_pipelines_returns_project_name(app, setup_project, tmp_proje
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0934", domain="server/api", priority="P0")
 async def test_list_pipelines_project_name_fallback_to_workdir(app, setup_project, tmp_project, db_engine, clean_db):
     """Issue #91: 项目 name 为空时，project_name 应回退到 workdir 最后一段路径"""
     transport = ASGITransport(app=app)
@@ -60,3 +62,4 @@ async def test_list_pipelines_project_name_fallback_to_workdir(app, setup_projec
                 assert "project_name" in item
                 # name 为空时应回退到 workdir 路径名
                 assert item["project_name"] is not None
+

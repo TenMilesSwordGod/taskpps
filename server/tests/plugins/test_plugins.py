@@ -101,14 +101,17 @@ class TestExecutorPlugin:
 
 
 class TestCronTrigger:
+    @pytest.mark.zentao("TC-S0462", domain="server/plugins", priority="P2")
     def test_name(self):
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
         assert trigger.name == "cron:0 * * * *:deploy.yaml"
 
+    @pytest.mark.zentao("TC-S0463", domain="server/plugins", priority="P2")
     def test_type(self):
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
         assert trigger.get_type() == "cron"
 
+    @pytest.mark.zentao("TC-S0464", domain="server/plugins", priority="P1")
     def test_start_stop(self):
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
         trigger.start()
@@ -116,6 +119,7 @@ class TestCronTrigger:
         trigger.stop()
         assert trigger._running is False
 
+    @pytest.mark.zentao("TC-S0465", domain="server/plugins", priority="P2")
     def test_start_twice(self):
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
         trigger.start()
@@ -124,6 +128,7 @@ class TestCronTrigger:
         assert trigger._running is True
         trigger.stop()
 
+    @pytest.mark.zentao("TC-S0466", domain="server/plugins", priority="P2")
     def test_run_loop_with_callback(self, tmp_path):
         callback = MagicMock()
         trigger = CronTrigger(expression="* * * * *", pipeline_file="deploy.yaml", callback=callback)
@@ -132,6 +137,7 @@ class TestCronTrigger:
         trigger._run_loop()
         assert trigger._running is True
 
+    @pytest.mark.zentao("TC-S0467", domain="server/plugins", priority="P1")
     def test_run_loop_callback_exception(self, tmp_path):
         callback = MagicMock(side_effect=Exception("callback error"))
         trigger = CronTrigger(expression="* * * * *", pipeline_file="deploy.yaml", callback=callback)
@@ -141,10 +147,12 @@ class TestCronTrigger:
 
 
 class TestPluginManagerPlugins:
+    @pytest.mark.zentao("TC-S0468", domain="server/plugins", priority="P2")
     def test_default_empty(self):
         pm = PluginManager()
         assert pm.list_plugins() == []
 
+    @pytest.mark.zentao("TC-S0469", domain="server/plugins", priority="P2")
     def test_register(self):
         pm = PluginManager()
         plugin = MockPlugin()
@@ -152,12 +160,14 @@ class TestPluginManagerPlugins:
         assert "mock" in pm.list_plugins()
         assert pm.get("mock") is plugin
 
+    @pytest.mark.zentao("TC-S0470", domain="server/plugins", priority="P2")
     def test_discover_no_dir(self, tmp_path):
         pm = PluginManager()
         with patch("taskpps.services.plugin_manager.get_plugins_dir", return_value=tmp_path / "nonexistent"):
             pm.discover_plugins()
             assert pm.list_plugins() == []
 
+    @pytest.mark.zentao("TC-S0471", domain="server/plugins", priority="P2")
     def test_discover_with_plugin_dir(self, tmp_path):
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
@@ -170,6 +180,7 @@ class TestPluginManagerPlugins:
         with patch("taskpps.services.plugin_manager.get_plugins_dir", return_value=plugins_dir):
             pm.discover_plugins()
 
+    @pytest.mark.zentao("TC-S0472", domain="server/plugins", priority="P2")
     def test_discover_with_py_file(self, tmp_path):
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
@@ -194,6 +205,7 @@ class SimplePlugin(BasePlugin):
             pm.discover_plugins()
             assert "simple" in pm.list_plugins()
 
+    @pytest.mark.zentao("TC-S0473", domain="server/plugins", priority="P2")
     def test_discover_bad_plugin(self, tmp_path):
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
@@ -204,6 +216,7 @@ class SimplePlugin(BasePlugin):
         with patch("taskpps.services.plugin_manager.get_plugins_dir", return_value=plugins_dir):
             pm.discover_plugins()
 
+    @pytest.mark.zentao("TC-S0474", domain="server/plugins", priority="P1")
     def test_start_triggers_from_config(self, tmp_path):
         config_file = tmp_path / "taskpps.yaml"
         config_file.write_text(
@@ -220,6 +233,7 @@ class SimplePlugin(BasePlugin):
             mock_settings.return_value.triggers = []
             pm.start_triggers()
 
+    @pytest.mark.zentao("TC-S0475", domain="server/plugins", priority="P2")
     def test_start_triggers_with_cron(self, tmp_path):
         from taskpps.config import Settings, TriggerConfig
 
@@ -231,10 +245,12 @@ class SimplePlugin(BasePlugin):
             assert len(pm._triggers) > 0
         pm.stop_all()
 
+    @pytest.mark.zentao("TC-S0476", domain="server/plugins", priority="P1")
     def test_stop_all(self):
         pm = PluginManager()
         pm.stop_all()
 
+    @pytest.mark.zentao("TC-S0477", domain="server/plugins", priority="P1")
     def test_stop_all_with_error(self):
         class BadPlugin(BasePlugin):
             @property
@@ -251,6 +267,7 @@ class SimplePlugin(BasePlugin):
         pm.register("bad", BadPlugin())
         pm.stop_all()
 
+    @pytest.mark.zentao("TC-S0478", domain="server/plugins", priority="P2")
     def test_try_load_plugin_no_init(self, tmp_path):
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
@@ -260,6 +277,7 @@ class SimplePlugin(BasePlugin):
         pm = PluginManager()
         pm._try_load_plugin(plugin_dir)
 
+    @pytest.mark.zentao("TC-S0479", domain="server/plugins", priority="P2")
     def test_try_load_plugin_dir_with_init(self, tmp_path):
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
@@ -270,6 +288,7 @@ class SimplePlugin(BasePlugin):
         pm = PluginManager()
         pm._try_load_plugin(plugin_dir)
 
+    @pytest.mark.zentao("TC-S0480", domain="server/plugins", priority="P1")
     def test_try_load_plugin_module_error(self, tmp_path):
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
@@ -291,3 +310,4 @@ class MockPlugin(BasePlugin):
 
     def stop(self):
         pass
+

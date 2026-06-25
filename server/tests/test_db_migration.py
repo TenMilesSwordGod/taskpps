@@ -91,6 +91,7 @@ async def old_db_engine():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0022", domain="server/root", priority="P2")
 async def test_migrate_adds_display_name(old_db_engine):
     """迁移应添加 display_name 列到 runs 表。"""
     # 验证迁移前 display_name 不存在
@@ -116,6 +117,7 @@ async def test_migrate_adds_display_name(old_db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0023", domain="server/root", priority="P2")
 async def test_migrate_adds_all_missing_columns(old_db_engine):
     """迁移应添加 _MIGRATIONS 中定义的所有缺失列。"""
     from taskpps.db import engine as engine_mod
@@ -135,6 +137,7 @@ async def test_migrate_adds_all_missing_columns(old_db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0024", domain="server/root", priority="P2")
 async def test_migrate_idempotent(old_db_engine):
     """多次执行迁移不应报错。"""
     from taskpps.db import engine as engine_mod
@@ -154,6 +157,7 @@ async def test_migrate_idempotent(old_db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0025", domain="server/root", priority="P2")
 async def test_migrate_preserves_existing_data(old_db_engine):
     """迁移不应丢失已有数据。"""
     # 插入一条旧数据
@@ -180,3 +184,4 @@ async def test_migrate_preserves_existing_data(old_db_engine):
         assert row[1] == 'test-pipeline'
         assert row[2] == 'success'
         assert row[3] == ''  # display_name 默认空字符串
+

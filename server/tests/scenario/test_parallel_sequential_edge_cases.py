@@ -32,6 +32,7 @@ class TestMaxConcurrentTasksEnforcement:
     """
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0152", domain="server/scenario", priority="P2")
     async def test_max_concurrent_tasks_1_forces_serial(self, db_engine, clean_db):
         """max_concurrent_tasks=1 时,parallel 策略的 task 实际仍串行执行"""
         _setup_config()
@@ -68,6 +69,7 @@ class TestMaxConcurrentTasksEnforcement:
         assert max_inflight == 1, f"max_concurrent_tasks=1 下并发数不应超过1,实际={max_inflight}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0153", domain="server/scenario", priority="P1")
     async def test_max_concurrent_tasks_2_allows_two_parallel(self, db_engine, clean_db):
         """max_concurrent_tasks=2 时,4 个 task 最多 2 个并发"""
         _setup_config()
@@ -104,6 +106,7 @@ class TestMaxConcurrentTasksEnforcement:
         assert max_inflight == 2, f"max_concurrent_tasks=2 下并发数应为2,实际={max_inflight}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0154", domain="server/scenario", priority="P2")
     async def test_max_concurrent_tasks_3_with_6_tasks(self, db_engine, clean_db):
         """max_concurrent_tasks=3 时,6 个 task 最多 3 个并发"""
         _setup_config()
@@ -140,6 +143,7 @@ class TestMaxConcurrentTasksEnforcement:
         assert max_inflight == 3, f"max_concurrent_tasks=3 下并发数应为3,实际={max_inflight}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0155", domain="server/scenario", priority="P2")
     async def test_all_tasks_eventually_complete_with_queue(self, db_engine, clean_db):
         """max_concurrent_tasks=1 时,所有 task 最终都完成(队列不丢失任务)"""
         _setup_config()
@@ -180,6 +184,7 @@ class TestTaskQueueWaitBehavior:
     """
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0156", domain="server/scenario", priority="P2")
     async def test_queued_tasks_start_after_earlier_completes(self, db_engine, clean_db):
         """排队的 task 在前面的 task 完成后才启动"""
         _setup_config()
@@ -215,6 +220,7 @@ class TestTaskQueueWaitBehavior:
         assert end_times["t1"] <= start_times["t2"], "t1 结束后 t2 才应开始"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0157", domain="server/scenario", priority="P1")
     async def test_semaphore_releases_on_failure(self, db_engine, clean_db):
         """task 失败后信号量应释放,后续排队 task 不被永久阻塞"""
         _setup_config()
@@ -256,6 +262,7 @@ class TestTaskQueueWaitBehavior:
         assert "t2" in executed_tasks, "t0 失败后 t2 不应被永久阻塞"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0158", domain="server/scenario", priority="P1")
     async def test_all_tasks_complete_same_timestamp_in_unlimited_parallel(self, db_engine, clean_db):
         """无 max_concurrent_tasks 限制时,所有 task 应同时启动"""
         _setup_config()
@@ -298,6 +305,7 @@ class TestMixedParallelSequentialSubpipelines:
     """
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0159", domain="server/scenario", priority="P1")
     async def test_parallel_sub_then_sequential_sub(self, db_engine, clean_db):
         """parallel subpipeline 完成后 sequential subpipeline 开始执行"""
         _setup_config()
@@ -351,6 +359,7 @@ class TestMixedParallelSequentialSubpipelines:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0160", domain="server/scenario", priority="P1")
     async def test_sequential_sub_then_parallel_sub(self, db_engine, clean_db):
         """sequential subpipeline 完成后 parallel subpipeline 开始执行"""
         _setup_config()
@@ -395,6 +404,7 @@ class TestMixedParallelSequentialSubpipelines:
         assert sub_start_order.index("seq-sub") < sub_start_order.index("par-sub"), "seq-sub 应先于 par-sub 执行"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0161", domain="server/scenario", priority="P1")
     async def test_parallel_sub_failure_skips_dependent_sequential_sub(self, db_engine, clean_db):
         """parallel subpipeline 失败后,依赖它的 sequential subpipeline 应被跳过"""
         _setup_config()
@@ -437,6 +447,7 @@ class TestMixedParallelSequentialSubpipelines:
         assert "seq-dep.s" not in executed_tasks, "par-fail 失败后 seq-dep.s 不应执行"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0162", domain="server/scenario", priority="P1")
     async def test_parallel_sub_failure_continue_runs_dependent(self, db_engine, clean_db):
         """parallel subpipeline on_failure=continue 时,依赖它的 subpipeline 仍应执行"""
         _setup_config()
@@ -483,6 +494,7 @@ class TestDiamondDependencyInParallel:
     """测试 parallel 模式下的菱形依赖(a->b, a->c, b->d, c->d)"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0163", domain="server/scenario", priority="P1")
     async def test_diamond_parallel_respects_depends_on(self, db_engine, clean_db):
         """parallel 模式下菱形依赖仍应按 DAG 层级执行"""
         _setup_config()
@@ -521,6 +533,7 @@ class TestDiamondDependencyInParallel:
         assert idx["c"] < idx["d"], "c 应在 d 之前"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0164", domain="server/scenario", priority="P1")
     async def test_diamond_parallel_b_and_c_concurrent(self, db_engine, clean_db):
         """菱形中 b 和 c 无互相依赖,parallel 模式下应并发"""
         _setup_config()
@@ -567,6 +580,7 @@ class TestSequentialWithinLevel:
     """测试 sequential 策略下同一 level 内 task 的串行行为"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0165", domain="server/scenario", priority="P1")
     async def test_sequential_tasks_run_one_by_one(self, db_engine, clean_db):
         """sequential 模式下,无 depends_on 的 task 也应串行执行"""
         _setup_config()
@@ -602,6 +616,7 @@ class TestSequentialWithinLevel:
             assert execution_end[f"t{i}"] <= execution_start[f"t{i + 1}"], f"t{i} 应在 t{i + 1} 之前完成"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0166", domain="server/scenario", priority="P1")
     async def test_sequential_failure_stops_subsequent(self, db_engine, clean_db):
         """sequential 模式下,on_failure=fail 时 task 失败后后续 task 不执行"""
         _setup_config()
@@ -644,6 +659,7 @@ class TestParallelWithMaxConcurrentTasksAndDependencies:
     """测试 parallel + max_concurrent_tasks + depends_on 三者混合的边缘场景"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0167", domain="server/scenario", priority="P1")
     async def test_parallel_with_limit_and_depends_on(self, db_engine, clean_db):
         """parallel + max_concurrent_tasks=2 + depends_on 时,排队等待 + 依赖都生效"""
         _setup_config()
@@ -689,6 +705,7 @@ class TestParallelWithMaxConcurrentTasksAndDependencies:
         assert idx["b"] < idx["d"], "d 应在 b 之后"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0168", domain="server/scenario", priority="P1")
     async def test_parallel_limit_with_many_tasks_all_complete(self, db_engine, clean_db):
         """parallel + max_concurrent_tasks=2 + 8 个 task,全部完成不丢失"""
         _setup_config()
@@ -725,6 +742,7 @@ class TestCancelDuringQueueWait:
     """测试取消信号在 task 排队等待期间的行为"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0169", domain="server/scenario", priority="P1")
     async def test_cancel_stops_queued_tasks(self, db_engine, clean_db):
         """max_concurrent_tasks=1 时,取消后排队的 task 不应执行"""
         _setup_config()
@@ -762,6 +780,7 @@ class TestCancelDuringParallelExecution:
     """测试取消信号在 parallel 任务并发执行时的行为"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0170", domain="server/scenario", priority="P1")
     async def test_cancel_during_concurrent_tasks(self, db_engine, clean_db):
         """max_concurrent_tasks=2 时,取消后排队的 task 不应启动"""
         _setup_config()
@@ -795,6 +814,7 @@ class TestCancelDuringParallelExecution:
         assert len(executed_tasks) <= 3, f"取消后不应启动所有 task,实际执行了 {len(executed_tasks)} 个"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0171", domain="server/scenario", priority="P1")
     async def test_cancel_preserves_completed_task_results(self, db_engine, clean_db):
         """取消后已完成的 task 结果应被保留"""
         _setup_config()
@@ -827,6 +847,7 @@ class TestCancelDuringParallelExecution:
         assert "t0" in completed_tasks, "t0 应完成并返回结果"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0172", domain="server/scenario", priority="P1")
     async def test_cancel_before_first_task(self, db_engine, clean_db):
         """在第一个 task 启动前就设置取消信号"""
         _setup_config()
@@ -858,6 +879,7 @@ class TestCancelDuringParallelExecution:
         assert len(executed_tasks) == 0, f"取消前不应有 task 执行,实际执行了 {len(executed_tasks)} 个"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0173", domain="server/scenario", priority="P1")
     async def test_cancel_stops_new_tasks_after_first_batch(self, db_engine, clean_db):
         """取消后不启动新 task,但已启动的 task 继续完成"""
         _setup_config()
@@ -898,6 +920,7 @@ class TestEdgeCasesMaxConcurrentTasks:
     """测试 max_concurrent_tasks 的边界值"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0174", domain="server/scenario", priority="P2")
     async def test_max_concurrent_tasks_zero_falls_back_to_default(self, db_engine, clean_db):
         """max_concurrent_tasks=0 时应使用默认值 5"""
         _setup_config()
@@ -935,6 +958,7 @@ class TestEdgeCasesMaxConcurrentTasks:
         assert max_inflight <= 5, f"默认并发限制应为5,实际={max_inflight}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0175", domain="server/scenario", priority="P2")
     async def test_max_concurrent_tasks_none_falls_back_to_default(self, db_engine, clean_db):
         """max_concurrent_tasks=None 时应使用默认值 5"""
         _setup_config()
@@ -969,3 +993,4 @@ class TestEdgeCasesMaxConcurrentTasks:
             await runner.run()
 
         assert max_inflight <= 5, f"None 时默认并发限制应为5,实际={max_inflight}"
+

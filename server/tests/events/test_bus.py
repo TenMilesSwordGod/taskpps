@@ -12,28 +12,33 @@ from taskpps.events.bus import (
 
 
 class TestEventBus:
+    @pytest.mark.zentao("TC-S0724", domain="server/events", priority="P0")
     def test_singleton_instance(self):
         bus1 = EventBus.get_instance()
         bus2 = EventBus.get_instance()
         assert bus1 is bus2
 
+    @pytest.mark.zentao("TC-S0725", domain="server/events", priority="P2")
     def test_get_event_bus_function(self):
         bus1 = get_event_bus()
         bus2 = get_event_bus()
         assert bus1 is bus2
 
+    @pytest.mark.zentao("TC-S0726", domain="server/events", priority="P1")
     def test_get_signal_creates_new(self):
         bus = EventBus()
         signal = bus._get_signal("test_event")
         assert signal is not None
         assert "test_event" in bus._signals
 
+    @pytest.mark.zentao("TC-S0727", domain="server/events", priority="P1")
     def test_get_signal_reuses_existing(self):
         bus = EventBus()
         signal1 = bus._get_signal("test_event")
         signal2 = bus._get_signal("test_event")
         assert signal1 is signal2
 
+    @pytest.mark.zentao("TC-S0728", domain="server/events", priority="P0")
     def test_on_and_emit(self):
         bus = EventBus()
         received = []
@@ -48,6 +53,7 @@ class TestEventBus:
         assert received[0][0] == self
         assert received[0][1]["data"] == 42
 
+    @pytest.mark.zentao("TC-S0729", domain="server/events", priority="P2")
     def test_on_multiple_handlers(self):
         bus = EventBus()
         count1 = 0
@@ -68,6 +74,7 @@ class TestEventBus:
         assert count1 == 1
         assert count2 == 1
 
+    @pytest.mark.zentao("TC-S0730", domain="server/events", priority="P2")
     def test_off_remove_handler(self):
         bus = EventBus()
         count = 0
@@ -84,6 +91,7 @@ class TestEventBus:
         bus.emit("test")
         assert count == 1
 
+    @pytest.mark.zentao("TC-S0731", domain="server/events", priority="P2")
     def test_off_nonexistent_event(self):
         bus = EventBus()
 
@@ -92,6 +100,7 @@ class TestEventBus:
 
         bus.off("nonexistent", handler)
 
+    @pytest.mark.zentao("TC-S0732", domain="server/events", priority="P2")
     def test_off_handler_not_in_event(self):
         bus = EventBus()
         count = 0
@@ -108,6 +117,7 @@ class TestEventBus:
         bus.emit("test")
         assert count == 1
 
+    @pytest.mark.zentao("TC-S0733", domain="server/events", priority="P2")
     def test_emit_without_sender(self):
         bus = EventBus()
         received_sender = None
@@ -120,6 +130,7 @@ class TestEventBus:
         bus.emit("test")
         assert received_sender is None
 
+    @pytest.mark.zentao("TC-S0734", domain="server/events", priority="P2")
     def test_emit_without_kwargs(self):
         bus = EventBus()
         received = None
@@ -132,6 +143,7 @@ class TestEventBus:
         bus.emit("test")
         assert received == {}
 
+    @pytest.mark.zentao("TC-S0735", domain="server/events", priority="P1")
     def test_signal_constants_defined(self):
         assert SIGNAL_PIPELINE_STARTED == "pipeline_started"
         assert SIGNAL_TASK_STARTED == "task_started"
@@ -139,6 +151,7 @@ class TestEventBus:
         assert SIGNAL_RUN_COMPLETED == "run_completed"
         assert SIGNAL_RUN_CANCELLED == "run_cancelled"
 
+    @pytest.mark.zentao("TC-S0736", domain="server/events", priority="P2")
     def test_multiple_events_independent(self):
         bus = EventBus()
         event1_fired = False
@@ -159,12 +172,14 @@ class TestEventBus:
         assert event1_fired is True
         assert event2_fired is False
 
+    @pytest.mark.zentao("TC-S0737", domain="server/events", priority="P2")
     def test_empty_event_name(self):
         bus = EventBus()
         signal = bus._get_signal("")
         assert signal is not None
         assert "" in bus._signals
 
+    @pytest.mark.zentao("TC-S0738", domain="server/events", priority="P2")
     def test_special_char_event_name(self):
         bus = EventBus()
         received = False
@@ -177,6 +192,7 @@ class TestEventBus:
         bus.emit("event-with-dashes_underscores")
         assert received is True
 
+    @pytest.mark.zentao("TC-S0739", domain="server/events", priority="P2")
     def test_multiple_emit_same_event(self):
         bus = EventBus()
         count = 0
@@ -192,6 +208,7 @@ class TestEventBus:
 
 
 class TestEventBusBoundary:
+    @pytest.mark.zentao("TC-S0740", domain="server/events", priority="P2")
     def test_large_number_of_events(self):
         bus = EventBus()
         counts = {}
@@ -212,6 +229,7 @@ class TestEventBusBoundary:
         assert all(count == 1 for count in counts.values())
         assert len(bus._signals) == 100
 
+    @pytest.mark.zentao("TC-S0741", domain="server/events", priority="P2")
     def test_same_handler_multiple_events(self):
         bus = EventBus()
         total_count = 0
@@ -228,6 +246,7 @@ class TestEventBusBoundary:
 
         assert total_count == 10
 
+    @pytest.mark.zentao("TC-S0742", domain="server/events", priority="P2")
     def test_emit_with_large_payload(self):
         bus = EventBus()
         received_data = None
@@ -242,6 +261,7 @@ class TestEventBusBoundary:
 
         assert received_data == large_data
 
+    @pytest.mark.zentao("TC-S0743", domain="server/events", priority="P2")
     def test_concurrent_emit(self):
         import threading
 
@@ -267,6 +287,8 @@ class TestEventBusBoundary:
 
         assert counter == 10
 
+    @pytest.mark.zentao("TC-S0744", domain="server/events", priority="P1")
     def test_init_empty_signals(self):
         bus = EventBus()
         assert bus._signals == {}
+

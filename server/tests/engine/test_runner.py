@@ -56,6 +56,7 @@ def mock_session_factory(mock_repos):
 
 
 class TestPipelineRunnerInit:
+    @pytest.mark.zentao("TC-S0225", domain="server/engine", priority="P2")
     def test_init(self):
         pipeline = ResolvedPipeline(
             name="test",
@@ -68,14 +69,17 @@ class TestPipelineRunnerInit:
         assert runner._cancelled is False
         assert runner._task_run_ids == {}
 
+    @pytest.mark.zentao("TC-S0226", domain="server/engine", priority="P2")
     def test_get_active_runner_empty(self):
         result = get_active_runner("nonexistent")
         assert result is None
 
+    @pytest.mark.zentao("TC-S0227", domain="server/engine", priority="P2")
     def test_get_active_runner_returns_none(self):
         assert get_active_runner("nonexistent") is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0228", domain="server/engine", priority="P1")
     async def test_unexpected_error_init(self, mock_session_factory):
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
         pipeline = make_pipeline(tasks=tasks)
@@ -86,6 +90,7 @@ class TestPipelineRunnerInit:
 
 class TestPipelineRunnerRun:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0229", domain="server/engine", priority="P2")
     async def test_unknown_dependency(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [
@@ -100,6 +105,7 @@ class TestPipelineRunnerRun:
         assert "failed" in calls
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0230", domain="server/engine", priority="P0")
     async def test_success(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -122,6 +128,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0231", domain="server/engine", priority="P1")
     async def test_console_log_contains_header_after_run(self, mock_session_factory, tmp_path):
         # Issue #15: after a single task runs, console.log must already
         # contain the header (and the [PIPELINE] subpipelines block).
@@ -164,6 +171,7 @@ class TestPipelineRunnerRun:
         assert content.index("Pipeline Execution Log") < content.index("SUCCESS")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0232", domain="server/engine", priority="P2")
     async def test_subpipeline_levels_in_yaml_order(self):
         # Subpipelines at the same level (no inter-dependency) must be
         # ordered in YAML declaration order, so that the level list in
@@ -185,6 +193,7 @@ class TestPipelineRunnerRun:
         assert levels == [["sync", "tests"]]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0233", domain="server/engine", priority="P2")
     async def test_subpipeline_levels_with_dependency(self):
         # An explicit depends_on must still put the dependent in a later
         # level regardless of YAML order. See issue #13.
@@ -204,6 +213,7 @@ class TestPipelineRunnerRun:
         assert levels == [["sync"], ["tests"]]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0234", domain="server/engine", priority="P1")
     async def test_unrelated_subpipelines_run_sequentially(self, mock_session_factory):
         # Two subpipelines with no inter-dependency should still run one
         # after the other (not concurrently), so that console.log writes
@@ -248,6 +258,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0235", domain="server/engine", priority="P1")
     async def test_parallel_strategy_executes_tasks_concurrently(self, mock_session_factory):
         # Issue #83: execution_strategy=parallel 时,同一 subpipeline 内无依赖的
         # task 必须并发执行,而不是被 implicit_sequential 拆成多个 level 顺序执行。
@@ -300,6 +311,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0236", domain="server/engine", priority="P1")
     async def test_inherited_cwd_reaches_executor(self, mock_session_factory):
         # Issue #9: top-level / subpipeline / task cwd should all propagate
         # to the executor via the resolved task's cwd field.
@@ -350,6 +362,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0237", domain="server/engine", priority="P1")
     async def test_with_executor_exception(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -371,6 +384,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_count >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0238", domain="server/engine", priority="P1")
     async def test_dependency_failure(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [
@@ -395,6 +409,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0239", domain="server/engine", priority="P1")
     async def test_skip_dependency_failed(self, mock_session_factory):
         _run_repo, task_repo = mock_session_factory
         tasks = [
@@ -420,6 +435,7 @@ class TestPipelineRunnerRun:
         assert task_repo.update_task_status.call_count >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0240", domain="server/engine", priority="P1")
     async def test_cancelled_during_execution(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [
@@ -437,6 +453,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "cancelled"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0241", domain="server/engine", priority="P1")
     async def test_unexpected_error_sets_failed(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -457,6 +474,7 @@ class TestPipelineRunnerRun:
         assert run_repo.update_run_status.call_args[0][1] == "failed"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0242", domain="server/engine", priority="P1")
     async def test_cancelled_error_sets_terminal_status(self, mock_session_factory):
         """Issue #66: asyncio.CancelledError (BaseException) 跳过最终状态更新,
         导致 run 永远停在 RUNNING。修复后 finally 块应兜底设置终态。"""
@@ -482,6 +500,7 @@ class TestPipelineRunnerRun:
 
 class TestPipelineRunnerCancel:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0243", domain="server/engine", priority="P1")
     async def test_cancel(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -495,6 +514,7 @@ class TestPipelineRunnerCancel:
         assert runner._cancelled is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0244", domain="server/engine", priority="P1")
     async def test_cancel_updates_run_status_to_cancelled(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -517,6 +537,7 @@ class TestPipelineRunnerCancel:
 
 class TestPipelineRunnerBoundary:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0245", domain="server/engine", priority="P2")
     async def test_empty_command_succeeds(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="")]
@@ -538,6 +559,7 @@ class TestPipelineRunnerBoundary:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0246", domain="server/engine", priority="P2")
     async def test_command_with_exit_code_127(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="nonexistent_cmd_xyz")]
@@ -559,6 +581,7 @@ class TestPipelineRunnerBoundary:
         assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0247", domain="server/engine", priority="P1")
     async def test_task_with_signal_exit_code_neg1(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="kill -9 $$")]
@@ -580,6 +603,7 @@ class TestPipelineRunnerBoundary:
         assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0248", domain="server/engine", priority="P2")
     async def test_task_with_exit_code_neg9(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="kill -9 $$")]
@@ -601,6 +625,7 @@ class TestPipelineRunnerBoundary:
         assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0249", domain="server/engine", priority="P1")
     async def test_negative_exit_code_logs_signal_message(self, mock_session_factory):
         tasks = [ResolvedTask(name="t1", task_type="command", command="kill -9 $$")]
         pipeline = make_pipeline(tasks=tasks)
@@ -625,6 +650,7 @@ class TestPipelineRunnerBoundary:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0250", domain="server/engine", priority="P1")
     async def test_multiple_tasks_sequential_all_succeed(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [
@@ -685,6 +711,7 @@ class TestPipelineRunnerBoundary:
         assert mock_executor.execute.call_count == 1, "sequential 下 t1 失败后: 隐式依赖 t1 的 t2 应被跳过"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0252", domain="server/engine", priority="P1")
     async def test_retry_on_failure(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="exit 1", retry=2)]
@@ -707,6 +734,7 @@ class TestPipelineRunnerBoundary:
         assert mock_executor.execute.call_count == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0253", domain="server/engine", priority="P1")
     async def test_retry_eventually_succeeds(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo ok", retry=2)]
@@ -739,6 +767,7 @@ class TestPipelineRunnerBoundary:
         assert mock_executor.execute.call_count == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0254", domain="server/engine", priority="P1")
     async def test_task_timeout_produces_exit_code_neg1(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="sleep 999", timeout=1)]
@@ -760,6 +789,7 @@ class TestPipelineRunnerBoundary:
         assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0255", domain="server/engine", priority="P1")
     async def test_execute_task_with_cwd_validation(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd="/nonexistent/path/xyz")]
@@ -781,6 +811,7 @@ class TestPipelineRunnerBoundary:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0256", domain="server/engine", priority="P1")
     async def test_cwd_not_overridden_for_non_local_executor(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd="/nonexistent/path/xyz")]
@@ -804,6 +835,7 @@ class TestPipelineRunnerBoundary:
         assert call_kwargs.get("cwd") == "/nonexistent/path/xyz"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0257", domain="server/engine", priority="P1")
     async def test_cwd_overridden_for_local_executor(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi", cwd="/nonexistent/path/xyz")]
@@ -827,6 +859,7 @@ class TestPipelineRunnerBoundary:
         assert call_kwargs.get("cwd") == os.getcwd()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0258", domain="server/engine", priority="P1")
     async def test_cwd_preserved_when_valid_for_local_executor(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         valid_cwd = str(tmp_path)
@@ -851,6 +884,7 @@ class TestPipelineRunnerBoundary:
         assert call_kwargs.get("cwd") == valid_cwd
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0259", domain="server/engine", priority="P1")
     async def test_ssh_executor_with_remote_cwd_not_overridden(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         remote_cwd = "/home/auto/heng"
@@ -875,6 +909,7 @@ class TestPipelineRunnerBoundary:
         assert call_kwargs.get("cwd") == remote_cwd
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0260", domain="server/engine", priority="P1")
     async def test_ssh_executor_with_nonexistent_local_path_preserved(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         remote_only_cwd = "/remote/machine/only/path"
@@ -902,6 +937,7 @@ class TestPipelineRunnerBoundary:
         assert call_kwargs.get("cwd") != os.getcwd()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0261", domain="server/engine", priority="P2")
     async def test_task_with_commands_list(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", commands=["echo step1", "echo step2"])]
@@ -931,6 +967,7 @@ class TestPipelineRunnerBoundary:
         assert mock_executor.execute.call_count >= 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0262", domain="server/engine", priority="P2")
     async def test_empty_pipeline_returns_immediately(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         pipeline = ResolvedPipeline(name="test", subpipelines=[])
@@ -946,6 +983,7 @@ class TestPipelineRunnerBoundary:
 
 class TestPipelineRunnerExitCodeCoverage:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0263", domain="server/engine", priority="P1")
     async def test_asyncio_gather_exception_produces_exit_code_neg1(self, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [
@@ -971,6 +1009,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert run_repo.update_run_status.call_args[0][1] in ("failed", "partial")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0264", domain="server/engine", priority="P2")
     async def test_evaluate_when_expression(self, mock_session_factory):
         from taskpps.engine.runner import _evaluate_when
 
@@ -981,6 +1020,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert _evaluate_when("invalid expr", {}) is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0265", domain="server/engine", priority="P1")
     async def test_evaluate_when_without_env_prefix(self, mock_session_factory):
         """Issue #85: when 条件支持 ${VAR} 格式(无 env. 前缀)"""
         from taskpps.engine.runner import _evaluate_when
@@ -992,6 +1032,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert _evaluate_when('${RUN_PERF} != "true"', {"RUN_PERF": "false"}) is True
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0266", domain="server/engine", priority="P2")
     async def test_evaluate_when_without_quotes(self, mock_session_factory):
         """Issue #85: when 条件支持无引号值(如 ${VAR} == true)"""
         from taskpps.engine.runner import _evaluate_when
@@ -1007,6 +1048,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert _evaluate_when("${env.RUN_PERF} == true", {"RUN_PERF": "false"}) is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0267", domain="server/engine", priority="P1")
     async def test_when_condition_skips_task(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         tasks = [
@@ -1029,6 +1071,7 @@ class TestPipelineRunnerExitCodeCoverage:
         mock_executor.execute.assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0268", domain="server/engine", priority="P1")
     async def test_subpipeline_not_found_produces_failure(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
@@ -1052,6 +1095,7 @@ class TestPipelineRunnerExitCodeCoverage:
             await runner.run()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0269", domain="server/engine", priority="P1")
     async def test_subpipeline_dag_error_produces_failure(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
@@ -1075,6 +1119,7 @@ class TestPipelineRunnerExitCodeCoverage:
             await runner.run()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0270", domain="server/engine", priority="P1")
     async def test_subpipeline_with_depends_on_skip(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         sub1 = MagicMock()
@@ -1112,6 +1157,7 @@ class TestPipelineRunnerExitCodeCoverage:
             await runner.run()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0271", domain="server/engine", priority="P2")
     async def test_pipeline_with_multiple_levels(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         sub1 = ResolvedSubPipeline(
@@ -1149,6 +1195,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert mock_executor.execute.call_count >= 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0272", domain="server/engine", priority="P2")
     async def test_task_with_exit_code_neg1_in_subpipeline(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
@@ -1179,6 +1226,7 @@ class TestPipelineRunnerExitCodeCoverage:
             await runner.run()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0273", domain="server/engine", priority="P1")
     async def test_pipeline_logging_initialized(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -1204,6 +1252,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0274", domain="server/engine", priority="P1")
     async def test_pipeline_log_write_resilient(self, tmp_path, mock_session_factory):
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -1235,6 +1284,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert run_repo.update_run_status.call_args[0][1] == "success"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0275", domain="server/engine", priority="P1")
     async def test_write_pipeline_log_handles_oserror(self, tmp_path):
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
         pipeline = make_pipeline(tasks=tasks)
@@ -1248,6 +1298,7 @@ class TestPipelineRunnerExitCodeCoverage:
         assert not tmp_path.joinpath("broken.log").exists()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0276", domain="server/engine", priority="P1")
     async def test_top_level_runner_exception_handled(self, mock_session_factory):
         _run_repo, _task_repo = mock_session_factory
         sub = ResolvedSubPipeline(
@@ -1271,3 +1322,4 @@ class TestPipelineRunnerExitCodeCoverage:
             await runner.run()
 
         assert runner._unexpected_error is True
+

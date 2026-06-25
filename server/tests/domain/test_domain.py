@@ -16,6 +16,7 @@ from taskpps.services.pipeline_service import _extract_env_overrides
 
 
 class TestResolvedTask:
+    @pytest.mark.zentao("TC-S1078", domain="server/domain", priority="P2")
     def test_from_yaml_command(self):
         task_yaml = TaskYAML(name="test", command="echo hi", env={"K": "V"}, timeout=30)
         options = OptionsYAML(env={"GLOBAL": "1"}, host="my-host", timeout=600)
@@ -26,6 +27,7 @@ class TestResolvedTask:
         assert resolved.env == {"GLOBAL": "1", "K": "V"}
         assert resolved.timeout == 30
 
+    @pytest.mark.zentao("TC-S1079", domain="server/domain", priority="P1")
     def test_from_yaml_invoke(self):
         task_yaml = TaskYAML(name="test", invoke=InvokeSpec(task="mod.fn", kwargs={"x": "1"}))
         options = OptionsYAML()
@@ -36,6 +38,7 @@ class TestResolvedTask:
 
 
 class TestResolvedPipeline:
+    @pytest.mark.zentao("TC-S1080", domain="server/domain", priority="P2")
     def test_from_yaml(self):
         spec = PipelineYAML(
             name="test",
@@ -53,6 +56,7 @@ class TestResolvedPipeline:
 
 
 class TestDAG:
+    @pytest.mark.zentao("TC-S1081", domain="server/domain", priority="P0")
     def test_topological_sort(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
@@ -67,6 +71,7 @@ class TestDAG:
         assert order.index("b") < order.index("d")
         assert order.index("c") < order.index("d")
 
+    @pytest.mark.zentao("TC-S1082", domain="server/domain", priority="P2")
     def test_execution_levels(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
@@ -79,6 +84,7 @@ class TestDAG:
         assert "a" in levels[0]
         assert set(levels[1]) == {"b", "c"}
 
+    @pytest.mark.zentao("TC-S1083", domain="server/domain", priority="P0")
     def test_cycle_detection(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a", depends_on=["b"]),
@@ -88,6 +94,7 @@ class TestDAG:
             dag = DAG(tasks)
             dag.topological_sort()
 
+    @pytest.mark.zentao("TC-S1084", domain="server/domain", priority="P2")
     def test_unknown_dependency(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a", depends_on=["unknown"]),
@@ -95,6 +102,7 @@ class TestDAG:
         with pytest.raises(ValueError):
             DAG(tasks)
 
+    @pytest.mark.zentao("TC-S1085", domain="server/domain", priority="P2")
     def test_get_dependents(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
@@ -105,6 +113,7 @@ class TestDAG:
         dependents = dag.get_dependents("a")
         assert dependents == {"b", "c"}
 
+    @pytest.mark.zentao("TC-S1086", domain="server/domain", priority="P2")
     def test_get_dependencies(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
@@ -115,6 +124,7 @@ class TestDAG:
         deps = dag.get_dependencies("c")
         assert deps == {"a", "b"}
 
+    @pytest.mark.zentao("TC-S1087", domain="server/domain", priority="P1")
     def test_implicit_sequential_ordering(self):
         tasks = [
             ResolvedTask(name="clone-repo", task_type="git", git={"repo": "http://example.com/repo.git"}),
@@ -128,6 +138,7 @@ class TestDAG:
         assert levels[1] == ["list-files"]
         assert levels[2] == ["build"]
 
+    @pytest.mark.zentao("TC-S1088", domain="server/domain", priority="P1")
     def test_implicit_sequential_with_explicit_dep(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
@@ -141,6 +152,7 @@ class TestDAG:
         assert levels[1] == ["b"]
         assert levels[2] == ["c"]
 
+    @pytest.mark.zentao("TC-S1089", domain="server/domain", priority="P1")
     def test_no_implicit_sequential(self):
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a"),
@@ -153,135 +165,162 @@ class TestDAG:
 
 
 class TestDotPath:
+    @pytest.mark.zentao("TC-S1090", domain="server/domain", priority="P2")
     def test_navigate_to_key_dict(self):
         data = {"a": {"b": 1}}
         result = _navigate_to_key(data, "a")
         assert result == {"b": 1}
 
+    @pytest.mark.zentao("TC-S1091", domain="server/domain", priority="P2")
     def test_navigate_to_key_current_dict(self):
         data = {"a": 1}
         result = _navigate_to_key(data, "a")
         assert result == 1
 
+    @pytest.mark.zentao("TC-S1092", domain="server/domain", priority="P2")
     def test_navigate_to_key_current_list(self):
         data = [10, 20, 30]
         result = _navigate_to_key(data, "1")
         assert result == 20
 
+    @pytest.mark.zentao("TC-S1093", domain="server/domain", priority="P2")
     def test_navigate_to_key_current_other(self):
         with pytest.raises(KeyError):
             _navigate_to_key("string", "key")
 
+    @pytest.mark.zentao("TC-S1094", domain="server/domain", priority="P2")
     def test_navigate_to_key_non_dict_non_list(self):
         current = "hello"
         with pytest.raises(KeyError):
             _navigate_to_key(current, "key")
 
+    @pytest.mark.zentao("TC-S1095", domain="server/domain", priority="P2")
     def test_navigate_to_key_name_index(self):
         data = {"tasks": [{"name": "foo", "val": 1}, {"name": "bar", "val": 2}]}
         result = _navigate_to_key(data, 'tasks["bar"]')
         assert result == {"name": "bar", "val": 2}
 
+    @pytest.mark.zentao("TC-S1096", domain="server/domain", priority="P1")
     def test_navigate_to_key_name_index_not_found(self):
         data = {"tasks": [{"name": "foo"}]}
         with pytest.raises(KeyError):
             _navigate_to_key(data, 'tasks["missing"]')
 
+    @pytest.mark.zentao("TC-S1097", domain="server/domain", priority="P2")
     def test_navigate_to_key_name_index_not_dict(self):
         data = [{"name": "foo", "val": 1}]
         result = _navigate_to_key(data, 'tasks["foo"]')
         assert result == {"name": "foo", "val": 1}
 
+    @pytest.mark.zentao("TC-S1098", domain="server/domain", priority="P2")
     def test_navigate_to_key_numeric_index(self):
         data = {"items": [10, 20, 30]}
         result = _navigate_to_key(data, "items[1]")
         assert result == 20
 
+    @pytest.mark.zentao("TC-S1099", domain="server/domain", priority="P2")
     def test_navigate_to_key_numeric_index_list(self):
         data = {"items": [10, 20, 30]}
         result = _navigate_to_key(data, "items[2]")
         assert result == 30
 
+    @pytest.mark.zentao("TC-S1100", domain="server/domain", priority="P2")
     def test_resolve_dot_path(self):
         data = {"options": {"host": "prod"}}
         result = resolve_dot_path(data, "options.host")
         assert result == "prod"
 
+    @pytest.mark.zentao("TC-S1101", domain="server/domain", priority="P2")
     def test_resolve_dot_path_deep(self):
         data = {"a": {"b": {"c": 42}}}
         result = resolve_dot_path(data, "a.b.c")
         assert result == 42
 
+    @pytest.mark.zentao("TC-S1102", domain="server/domain", priority="P2")
     def test_resolve_dot_path_deep_nested(self):
         data = {"a": {"b": {"c": [1, 2, {"d": 42}]}}}
         result = resolve_dot_path(data, "a.b.c.2.d")
         assert result == 42
 
+    @pytest.mark.zentao("TC-S1103", domain="server/domain", priority="P2")
     def test_set_dot_path(self):
         data = {"options": {"host": "staging"}}
         set_dot_path(data, "options.host", "prod")
         assert data["options"]["host"] == "prod"
 
+    @pytest.mark.zentao("TC-S1104", domain="server/domain", priority="P2")
     def test_set_dot_path_simple(self):
         data = {"x": 1}
         set_dot_path(data, "x", 2)
         assert data["x"] == 2
 
+    @pytest.mark.zentao("TC-S1105", domain="server/domain", priority="P2")
     def test_set_dot_path_nested(self):
         data = {"a": {"b": 1}}
         set_dot_path(data, "a.b", 99)
         assert data["a"]["b"] == 99
 
+    @pytest.mark.zentao("TC-S1106", domain="server/domain", priority="P2")
     def test_set_dot_path_numeric_index(self):
         data = {"items": [1, 2, 3]}
         set_dot_path(data, "items[1]", 99)
         assert data["items"][1] == 99
 
+    @pytest.mark.zentao("TC-S1107", domain="server/domain", priority="P2")
     def test_set_dot_path_numeric_index_set_value(self):
         data = {"items": [1, 2, 3]}
         set_dot_path(data, "items[2]", 999)
         assert data["items"][2] == 999
 
+    @pytest.mark.zentao("TC-S1108", domain="server/domain", priority="P2")
     def test_set_dot_path_list_last_key(self):
         data = [1, 2, 3]
         set_dot_path(data, "1", 999)
         assert data[1] == 999
 
+    @pytest.mark.zentao("TC-S1109", domain="server/domain", priority="P2")
     def test_set_dot_path_name_index(self):
         data = {"tasks": [{"name": "foo", "timeout": 100}]}
         set_dot_path(data, 'tasks["foo"].timeout', 200)
         assert data["tasks"][0]["timeout"] == 200
 
+    @pytest.mark.zentao("TC-S1110", domain="server/domain", priority="P1")
     def test_set_dot_path_name_index_not_found(self):
         data = {"tasks": [{"name": "foo"}]}
         with pytest.raises(KeyError):
             set_dot_path(data, 'tasks["missing"].timeout', 200)
 
+    @pytest.mark.zentao("TC-S1111", domain="server/domain", priority="P2")
     def test_set_dot_path_name_index_missing_container(self):
         data = {"tasks": [{"name": "foo", "timeout": 100}]}
         with pytest.raises(KeyError):
             set_dot_path(data, 'tasks["missing"].timeout', 200)
 
+    @pytest.mark.zentao("TC-S1112", domain="server/domain", priority="P1")
     def test_set_key_name_index_not_found(self):
         data = {"tasks": [{"name": "foo"}]}
         with pytest.raises(KeyError):
             _set_key(data, 'tasks["missing"]', "val")
 
+    @pytest.mark.zentao("TC-S1113", domain="server/domain", priority="P2")
     def test_set_key_numeric_index(self):
         data = {"items": [1, 2, 3]}
         _set_key(data, "items[1]", 99)
         assert data["items"][1] == 99
 
+    @pytest.mark.zentao("TC-S1114", domain="server/domain", priority="P2")
     def test_set_key_numeric_index_container(self):
         data = {"items": [{"name": "a"}, {"name": "b"}]}
         _set_key(data, "items[0]", {"name": "modified"})
         assert data["items"][0]["name"] == "modified"
 
+    @pytest.mark.zentao("TC-S1115", domain="server/domain", priority="P2")
     def test_set_key_current_dict(self):
         data = {}
         _set_key(data, "x", 1)
         assert data["x"] == 1
 
+    @pytest.mark.zentao("TC-S1116", domain="server/domain", priority="P2")
     def test_set_key_current_list(self):
         data = [0, 0, 0]
         _set_key(data, "1", 99)
@@ -289,46 +328,54 @@ class TestDotPath:
 
 
 class TestApplyOverrides:
+    @pytest.mark.zentao("TC-S1117", domain="server/domain", priority="P2")
     def test_simple(self):
         data = {"options": {"host": "staging"}, "tasks": [{"name": "t1", "command": "echo"}]}
         overrides = {"options.host": "prod"}
         result = apply_overrides(data, overrides)
         assert result["options"]["host"] == "prod"
 
+    @pytest.mark.zentao("TC-S1118", domain="server/domain", priority="P2")
     def test_task_name_index(self):
         data = {"tasks": [{"name": "migrate", "timeout": 100}]}
         overrides = {'tasks["migrate"].timeout': 300}
         result = apply_overrides(data, overrides)
         assert result["tasks"][0]["timeout"] == 300
 
+    @pytest.mark.zentao("TC-S1119", domain="server/domain", priority="P2")
     def test_numeric_index(self):
         data = {"tasks": [{"name": "t1"}, {"name": "t2"}]}
         overrides = {"tasks[0].name": "renamed"}
         result = apply_overrides(data, overrides)
         assert result["tasks"][0]["name"] == "renamed"
 
+    @pytest.mark.zentao("TC-S1120", domain="server/domain", priority="P2")
     def test_deep(self):
         data = {"a": {"b": 1, "c": 2}}
         result = apply_overrides(data, {"a.b": 99})
         assert result["a"]["b"] == 99
         assert result["a"]["c"] == 2
 
+    @pytest.mark.zentao("TC-S1121", domain="server/domain", priority="P2")
     def test_does_not_mutate(self):
         data = {"x": 1}
         result = apply_overrides(data, {"x": 2})
         assert data["x"] == 1
         assert result["x"] == 2
 
+    @pytest.mark.zentao("TC-S1122", domain="server/domain", priority="P2")
     def test_with_name_index(self):
         data = {"tasks": [{"name": "migrate", "timeout": 100, "command": "echo"}]}
         result = apply_overrides(data, {'tasks["migrate"].timeout': 300})
         assert result["tasks"][0]["timeout"] == 300
 
+    @pytest.mark.zentao("TC-S1123", domain="server/domain", priority="P2")
     def test_with_numeric_index(self):
         data = {"tasks": [{"name": "t1"}, {"name": "t2"}]}
         result = apply_overrides(data, {"tasks[0].name": "renamed"})
         assert result["tasks"][0]["name"] == "renamed"
 
+    @pytest.mark.zentao("TC-S1124", domain="server/domain", priority="P2")
     def test_list_current(self):
         data = [{"name": "t1"}, {"name": "t2"}]
         result = apply_overrides(data, {"0.name": "renamed"})
@@ -336,6 +383,7 @@ class TestApplyOverrides:
 
 
 class TestBuildEnv:
+    @pytest.mark.zentao("TC-S1125", domain="server/domain", priority="P2")
     def test_all_sources(self):
         env = build_env(
             system_env={"SYS": "1"},
@@ -350,6 +398,7 @@ class TestBuildEnv:
         assert env["TASK"] == "4"
         assert env["CLI"] == "5"
 
+    @pytest.mark.zentao("TC-S1126", domain="server/domain", priority="P2")
     def test_priority(self):
         env = build_env(
             system_env={"KEY": "low"},
@@ -358,16 +407,19 @@ class TestBuildEnv:
         )
         assert env["KEY"] == "high"
 
+    @pytest.mark.zentao("TC-S1127", domain="server/domain", priority="P2")
     def test_none_defaults(self):
         result = build_env()
         assert result == {}
 
+    @pytest.mark.zentao("TC-S1128", domain="server/domain", priority="P2")
     def test_all_none(self):
         result = build_env(system_env={"X": "1"}, global_env=None, pipeline_env=None, task_env=None, cli_env=None)
         assert result["X"] == "1"
 
 
 class TestExecutionContext:
+    @pytest.mark.zentao("TC-S1129", domain="server/domain", priority="P2")
     def test_basic(self):
         pipeline = ResolvedPipeline(
             name="test",
@@ -381,6 +433,7 @@ class TestExecutionContext:
         assert task_env.get("K") == "V"
         assert task_env.get("CLI") == "2"
 
+    @pytest.mark.zentao("TC-S1130", domain="server/domain", priority="P1")
     def test_get_task_env_with_global(self, setup_project, tmp_project):
         import taskpps.config as cfg
 
@@ -406,6 +459,7 @@ class TestExecutionContext:
             cfg._settings = old_settings
             cfg._project_root = old_root
 
+    @pytest.mark.zentao("TC-S1131", domain="server/domain", priority="P1")
     def test_env_from_dotpath_params_is_flat(self):
         """#54 regression: context.env 必须是扁平 dict，不能含 config.env 等嵌套键"""
         pipeline = ResolvedPipeline(
@@ -429,6 +483,7 @@ class TestExecutionContext:
 
 
 class TestDomainExports:
+    @pytest.mark.zentao("TC-S1132", domain="server/domain", priority="P2")
     def test_task_exports(self):
         from taskpps.domain import task as domain_task_module
 
@@ -437,3 +492,4 @@ class TestDomainExports:
         assert "__all__" in dir(domain_task_module)
         assert "ResolvedPipeline" in domain_task_module.__all__
         assert "ResolvedTask" in domain_task_module.__all__
+

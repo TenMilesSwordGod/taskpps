@@ -42,6 +42,7 @@ def _patch_paramiko():
 
 
 class TestCheckOne:
+    @pytest.mark.zentao("TC-S0438", domain="server/agent", priority="P2")
     def test_local_agent_ready(self):
         svc = AgentService()
         agent = _make_agent_data(host="localhost")
@@ -49,18 +50,21 @@ class TestCheckOne:
         assert result.status == "ready"
         assert result.agent_id == "test-agent"
 
+    @pytest.mark.zentao("TC-S0439", domain="server/agent", priority="P2")
     def test_local_agent_127(self):
         svc = AgentService()
         agent = _make_agent_data(host="127.0.0.1")
         result = svc._check_one(agent, 5)
         assert result.status == "ready"
 
+    @pytest.mark.zentao("TC-S0440", domain="server/agent", priority="P2")
     def test_local_agent_empty_host(self):
         svc = AgentService()
         agent = _make_agent_data(host="")
         result = svc._check_one(agent, 5)
         assert result.status == "ready"
 
+    @pytest.mark.zentao("TC-S0441", domain="server/agent", priority="P2")
     def test_tcp_connected_no_credential(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id=None)
@@ -71,6 +75,7 @@ class TestCheckOne:
         assert result.status == "connected"
         assert result.agent_id == "test-agent"
 
+    @pytest.mark.zentao("TC-S0442", domain="server/agent", priority="P1")
     def test_tcp_timeout(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1")
@@ -80,6 +85,7 @@ class TestCheckOne:
         assert result.status == "failed"
         assert "timed out" in result.error
 
+    @pytest.mark.zentao("TC-S0443", domain="server/agent", priority="P2")
     def test_tcp_connection_refused(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1")
@@ -91,6 +97,7 @@ class TestCheckOne:
 
 
 class TestCheckSshAuth:
+    @pytest.mark.zentao("TC-S0444", domain="server/agent", priority="P1")
     def test_credential_not_found(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="nonexistent-cred")
@@ -100,6 +107,7 @@ class TestCheckSshAuth:
         assert result.status == "failed"
         assert "nonexistent-cred" in result.error
 
+    @pytest.mark.zentao("TC-S0445", domain="server/agent", priority="P2")
     def test_credential_no_password_no_key(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="bad-cred")
@@ -110,6 +118,7 @@ class TestCheckSshAuth:
         assert result.status == "failed"
         assert "no password or key_path" in result.error
 
+    @pytest.mark.zentao("TC-S0446", domain="server/agent", priority="P2")
     def test_auth_success_with_password(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="test-cred")
@@ -122,6 +131,7 @@ class TestCheckSshAuth:
             result = svc._check_ssh_auth(agent, 5)
         assert result is None
 
+    @pytest.mark.zentao("TC-S0447", domain="server/agent", priority="P2")
     def test_auth_success_with_key(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="test-cred")
@@ -134,6 +144,7 @@ class TestCheckSshAuth:
             result = svc._check_ssh_auth(agent, 5)
         assert result is None
 
+    @pytest.mark.zentao("TC-S0448", domain="server/agent", priority="P1")
     def test_auth_failure_wrong_password(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="wrong-cred")
@@ -149,6 +160,7 @@ class TestCheckSshAuth:
         assert result.status == "failed"
         assert "Authentication failed" in result.error
 
+    @pytest.mark.zentao("TC-S0449", domain="server/agent", priority="P1")
     def test_auth_failure_wrong_key(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="wrong-key-cred")
@@ -164,6 +176,7 @@ class TestCheckSshAuth:
         assert result.status == "failed"
         assert "Authentication failed" in result.error
 
+    @pytest.mark.zentao("TC-S0450", domain="server/agent", priority="P1")
     def test_ssh_connection_error(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="test-cred")
@@ -181,6 +194,7 @@ class TestCheckSshAuth:
 
 
 class TestCheckOneWithCredential:
+    @pytest.mark.zentao("TC-S0451", domain="server/agent", priority="P1")
     def test_tcp_ok_but_auth_fails(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="wrong-cred")
@@ -198,6 +212,7 @@ class TestCheckOneWithCredential:
         assert result.status == "failed"
         assert "Authentication failed" in result.error
 
+    @pytest.mark.zentao("TC-S0452", domain="server/agent", priority="P2")
     def test_tcp_ok_and_auth_ok(self):
         svc = AgentService()
         agent = _make_agent_data(host="10.0.0.1", credential_id="good-cred")
@@ -215,18 +230,23 @@ class TestCheckOneWithCredential:
 
 
 class TestMatchFileFilter:
+    @pytest.mark.zentao("TC-S0453", domain="server/agent", priority="P2")
     def test_exact_match(self):
         assert _match_file_filter("agents/staging.yaml", "staging") is True
 
+    @pytest.mark.zentao("TC-S0454", domain="server/agent", priority="P2")
     def test_yml_extension(self):
         assert _match_file_filter("agents/staging.yml", "staging") is True
 
+    @pytest.mark.zentao("TC-S0455", domain="server/agent", priority="P2")
     def test_no_match(self):
         assert _match_file_filter("agents/prod.yaml", "staging") is False
 
+    @pytest.mark.zentao("TC-S0456", domain="server/agent", priority="P2")
     def test_partial_no_match(self):
         assert _match_file_filter("agents/staging-server.yaml", "staging") is False
 
+    @pytest.mark.zentao("TC-S0457", domain="server/agent", priority="P2")
     def test_case_insensitive(self):
         assert _match_file_filter("agents/Staging.yaml", "staging") is True
 
@@ -257,6 +277,7 @@ class TestProbeRemoteHostInfo:
         client.exec_command.side_effect = lambda cmd, timeout=None: exec_command(cmd, timeout)
         return client
 
+    @pytest.mark.zentao("TC-S0458", domain="server/agent", priority="P2")
     def test_parses_lscpu_cores_threads(self):
         svc = AgentService()
         client = self._make_ssh_client(
@@ -302,6 +323,7 @@ class TestProbeRemoteHostInfo:
         assert data["disks"][1]["mount"] == "/var"
         assert data["disks"][1]["percent"] == 79
 
+    @pytest.mark.zentao("TC-S0459", domain="server/agent", priority="P2")
     def test_handles_missing_commands(self):
         """lscpu / free / df 都不存在时，返回全空 dict 不抛异常"""
         svc = AgentService()
@@ -312,6 +334,7 @@ class TestProbeRemoteHostInfo:
         assert data["memory"] == {"total": "", "used": "", "free": "", "percent": -1}
         assert data["disks"] == []
 
+    @pytest.mark.zentao("TC-S0460", domain="server/agent", priority="P2")
     def test_handles_malformed_lscpu(self):
         """lscpu 输出乱码也不应该崩"""
         svc = AgentService()
@@ -325,6 +348,7 @@ class TestProbeRemoteHostInfo:
         assert isinstance(data["cpu"]["threads"], int)
         assert isinstance(data["cpu"]["cores"], int)
 
+    @pytest.mark.zentao("TC-S0461", domain="server/agent", priority="P2")
     def test_disk_dedupes_by_device_shows_disk_usage(self):
         """issue #64: 按设备去重, 展示磁盘 usage 而非每个挂载点(分区)"""
         svc = AgentService()
@@ -354,3 +378,4 @@ class TestProbeRemoteHostInfo:
         # 其余设备正常展示
         assert "/vol02/1000-0-50fff9e9" in mounts
         assert "/vol02/1000-1-d7502eb3" in mounts
+

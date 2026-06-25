@@ -12,6 +12,7 @@ from taskpps.executors.local import LocalExecutor
 
 class TestLocalExecutor:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0557", domain="server/executors", priority="P0")
     async def test_echo(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "test.log"
@@ -21,6 +22,7 @@ class TestLocalExecutor:
         assert log_path.exists()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0558", domain="server/executors", priority="P0")
     async def test_failure(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "test.log"
@@ -29,6 +31,7 @@ class TestLocalExecutor:
         assert result.exit_code == 42
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0559", domain="server/executors", priority="P1")
     async def test_env(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "test.log"
@@ -37,6 +40,7 @@ class TestLocalExecutor:
         assert "test_value" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0560", domain="server/executors", priority="P1")
     async def test_timeout(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "test.log"
@@ -45,6 +49,7 @@ class TestLocalExecutor:
         assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0561", domain="server/executors", priority="P1")
     async def test_cancel(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "cancel_test.log"
@@ -62,6 +67,7 @@ class TestLocalExecutor:
 
 class TestLocalExecutorDangerous:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0562", domain="server/executors", priority="P2")
     async def test_rm_rf(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "danger.log"
@@ -70,6 +76,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0563", domain="server/executors", priority="P2")
     async def test_rm_rf_with_flags(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "danger2.log"
@@ -78,6 +85,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0564", domain="server/executors", priority="P2")
     async def test_fork_bomb(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "fork.log"
@@ -86,6 +94,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0565", domain="server/executors", priority="P2")
     async def test_backtick(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "btick.log"
@@ -94,6 +103,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0566", domain="server/executors", priority="P2")
     async def test_subshell(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "sub.log"
@@ -102,6 +112,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0567", domain="server/executors", priority="P2")
     async def test_dd(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "dd.log"
@@ -110,6 +121,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0568", domain="server/executors", priority="P2")
     async def test_mkfs(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "mkfs.log"
@@ -118,6 +130,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0569", domain="server/executors", priority="P2")
     async def test_chmod(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "chmod.log"
@@ -126,6 +139,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0570", domain="server/executors", priority="P2")
     async def test_shutdown(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "shutdown.log"
@@ -134,6 +148,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0571", domain="server/executors", priority="P2")
     async def test_curl_pipe_bash(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "curl_pipe.log"
@@ -142,6 +157,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0572", domain="server/executors", priority="P2")
     async def test_reboot(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "reboot.log"
@@ -150,6 +166,7 @@ class TestLocalExecutorDangerous:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0573", domain="server/executors", priority="P2")
     async def test_safe_command_passes(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "safe.log"
@@ -159,6 +176,7 @@ class TestLocalExecutorDangerous:
 
 class TestLocalExecutorDaemon:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0574", domain="server/executors", priority="P2")
     async def test_daemon_fork_parent_exits(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "daemon.log"
@@ -169,6 +187,7 @@ class TestLocalExecutorDaemon:
         assert "ALL_DONE" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0575", domain="server/executors", priority="P2")
     async def test_nohup_background_process(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "nohup.log"
@@ -179,6 +198,7 @@ class TestLocalExecutorDaemon:
         assert "PARENT_DONE" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0576", domain="server/executors", priority="P2")
     async def test_multiple_daemon_forks(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "multi.log"
@@ -196,6 +216,7 @@ echo "all_done"
         assert "all_done" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0577", domain="server/executors", priority="P2")
     async def test_python_subprocess_popen_fork(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "popen.log"
@@ -212,6 +233,7 @@ echo "all_done"
         assert "parent: done" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0578", domain="server/executors", priority="P2")
     async def test_python_thread_subprocess(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "thread.log"
@@ -233,6 +255,7 @@ echo "all_done"
         assert "main: done" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0579", domain="server/executors", priority="P2")
     async def test_python_asyncio_subprocess(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "async.log"
@@ -250,6 +273,7 @@ echo "all_done"
         assert "async: completed" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0580", domain="server/executors", priority="P2")
     async def test_daemon_with_pid_file(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "pidfile.log"
@@ -262,6 +286,7 @@ echo "all_done"
         assert "PIDFILE_DONE" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0581", domain="server/executors", priority="P2")
     async def test_sighup_daemon_survives(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "sighup.log"
@@ -272,6 +297,7 @@ echo "all_done"
         assert "parent_exit" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0582", domain="server/executors", priority="P2")
     async def test_collect_descendants(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "desc.log"
@@ -289,6 +315,7 @@ echo "all_done"
         assert "DONE" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0583", domain="server/executors", priority="P1")
     async def test_version_marker_in_log(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "debug.log"
@@ -300,6 +327,7 @@ echo "all_done"
         assert "[INFO] Exit code: 0" in log_content
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0584", domain="server/executors", priority="P1")
     async def test_logs_written_for_daemon(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "daemon_debug.log"
@@ -313,6 +341,7 @@ echo "all_done"
         assert "DONE" in log_content
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0585", domain="server/executors", priority="P1")
     async def test_log_direct_creates_file(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "subdir" / "test.log"
@@ -322,6 +351,7 @@ echo "all_done"
         assert "test message" in log_path.read_text()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0586", domain="server/executors", priority="P1")
     async def test_log_direct_appends(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "append.log"
@@ -334,6 +364,7 @@ echo "all_done"
 
 class TestLocalExecutorBoundary:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0587", domain="server/executors", priority="P2")
     async def test_empty_command(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "empty.log"
@@ -342,6 +373,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0588", domain="server/executors", priority="P2")
     async def test_whitespace_only_command(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "ws.log"
@@ -350,6 +382,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0589", domain="server/executors", priority="P1")
     async def test_command_not_found(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "nf.log"
@@ -358,6 +391,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code == 127
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0590", domain="server/executors", priority="P2")
     async def test_nonzero_exit_code(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "nz.log"
@@ -366,6 +400,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code == 99
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0591", domain="server/executors", priority="P1")
     async def test_process_self_kill(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "selfkill.log"
@@ -374,6 +409,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code < 0 or result.exit_code > 128
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0592", domain="server/executors", priority="P1")
     async def test_nonexistent_cwd(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "badcwd.log"
@@ -382,6 +418,7 @@ class TestLocalExecutorBoundary:
         assert not result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0593", domain="server/executors", priority="P2")
     async def test_command_with_special_characters(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "special.log"
@@ -390,6 +427,7 @@ class TestLocalExecutorBoundary:
         assert "hello" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0594", domain="server/executors", priority="P2")
     async def test_command_with_pipes(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "pipe.log"
@@ -398,6 +436,7 @@ class TestLocalExecutorBoundary:
         assert "hello" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0595", domain="server/executors", priority="P2")
     async def test_rapid_exit_process(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "rapid.log"
@@ -406,6 +445,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0596", domain="server/executors", priority="P1")
     async def test_rapid_fail_process(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "rapid_fail.log"
@@ -414,6 +454,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0597", domain="server/executors", priority="P1")
     async def test_large_output(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "large.log"
@@ -425,6 +466,7 @@ class TestLocalExecutorBoundary:
         assert "line_20" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0598", domain="server/executors", priority="P1")
     async def test_stderr_output(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "stderr.log"
@@ -433,6 +475,7 @@ class TestLocalExecutorBoundary:
         assert "stderr_msg" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0599", domain="server/executors", priority="P2")
     async def test_command_with_variable_expansion(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "expand.log"
@@ -441,6 +484,7 @@ class TestLocalExecutorBoundary:
         assert len(result.stdout.strip()) > 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0600", domain="server/executors", priority="P1")
     async def test_command_with_env_override(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "envovr.log"
@@ -450,6 +494,7 @@ class TestLocalExecutorBoundary:
         assert "custom_value" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0601", domain="server/executors", priority="P2")
     async def test_multiline_command(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "multi.log"
@@ -461,6 +506,7 @@ class TestLocalExecutorBoundary:
         assert "line3" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0602", domain="server/executors", priority="P2")
     async def test_command_with_cd_and_run(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "cd_run.log"
@@ -471,6 +517,7 @@ class TestLocalExecutorBoundary:
         assert str(subdir) in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0603", domain="server/executors", priority="P2")
     async def test_command_exit_code_propagates_correctly(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "exit_prop.log"
@@ -480,6 +527,7 @@ class TestLocalExecutorBoundary:
             assert result.success == (code == 0)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0604", domain="server/executors", priority="P1")
     async def test_timeout_with_fast_command(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "fast_timeout.log"
@@ -489,6 +537,7 @@ class TestLocalExecutorBoundary:
         assert "fast" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0605", domain="server/executors", priority="P2")
     async def test_multiple_rapid_commands(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "multi_rapid.log"
@@ -498,6 +547,7 @@ class TestLocalExecutorBoundary:
             assert f"cmd_{i}" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0606", domain="server/executors", priority="P2")
     async def test_interrupted_sleep(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "intsleep.log"
@@ -512,6 +562,7 @@ class TestLocalExecutorBoundary:
         assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0607", domain="server/executors", priority="P2")
     async def test_shell_trap_hup_works(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "traphup.log"
@@ -521,6 +572,7 @@ class TestLocalExecutorBoundary:
         assert "AFTER_HUP" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0608", domain="server/executors", priority="P1")
     async def test_command_with_null_bytes_in_output(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "nullbyte.log"
@@ -529,6 +581,7 @@ class TestLocalExecutorBoundary:
         assert "before" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0609", domain="server/executors", priority="P1")
     async def test_executor_version_in_log(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "ver.log"
@@ -542,6 +595,7 @@ class TestLocalExecutorBoundary:
 
 class TestLocalExecutorExitCodeCoverage:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0610", domain="server/executors", priority="P1")
     async def test_timeout_produces_exit_code_neg1(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "timeout.log"
@@ -550,6 +604,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0611", domain="server/executors", priority="P1")
     async def test_cancel_produces_exit_code_neg1(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "canceled.log"
@@ -565,6 +620,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0612", domain="server/executors", priority="P1")
     async def test_cancel_no_timeout_produces_exit_code_neg1(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "cancel_no_t.log"
@@ -580,6 +636,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0613", domain="server/executors", priority="P1")
     async def test_process_killed_by_signal_yields_negative_exit(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "sigkill.log"
@@ -588,6 +645,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert result.exit_code < 0 or result.exit_code > 128
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0614", domain="server/executors", priority="P1")
     async def test_signal_death_logs_signal_name(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "sig_log.log"
@@ -596,6 +654,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert "SIGKILL" in content or "exit_code=-9" in content
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0615", domain="server/executors", priority="P1")
     async def test_subprocess_creation_failure(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "spawn_fail.log"
@@ -606,6 +665,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert "cannot spawn" in result.stderr
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0616", domain="server/executors", priority="P1")
     async def test_executor_cancel_kills_process_tree(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "kill_tree.log"
@@ -624,6 +684,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert not result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0617", domain="server/executors", priority="P1")
     async def test_cancel_with_already_finished_process(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "cancel_fin.log"
@@ -632,6 +693,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert executor._process is None
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0618", domain="server/executors", priority="P1")
     async def test_kill_process_tree_handles_permission_error(self, tmp_path):
         executor = LocalExecutor()
 
@@ -642,6 +704,7 @@ class TestLocalExecutorExitCodeCoverage:
             executor._kill_process_tree(99999, signal.SIGTERM)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0619", domain="server/executors", priority="P1")
     async def test_collect_descendants_handles_oserror(self, tmp_path):
         from taskpps.executors.local import _collect_descendants
 
@@ -650,6 +713,7 @@ class TestLocalExecutorExitCodeCoverage:
             assert result == []
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0620", domain="server/executors", priority="P2")
     async def test_collect_descendants_handles_bad_stat(self, tmp_path):
         from taskpps.executors.local import _collect_descendants
 
@@ -665,6 +729,7 @@ class TestLocalExecutorExitCodeCoverage:
             assert result == []
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0621", domain="server/executors", priority="P1")
     async def test_log_direct_handles_exception(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "log_err.log"
@@ -672,6 +737,7 @@ class TestLocalExecutorExitCodeCoverage:
             executor._log_direct(log_path, "test message\n")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0622", domain="server/executors", priority="P1")
     async def test_read_and_write_handles_exception(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "rw_err.log"
@@ -686,6 +752,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert not result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0623", domain="server/executors", priority="P1")
     async def test_timeout_wait_for_exception_caught(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "twait.log"
@@ -699,6 +766,7 @@ class TestLocalExecutorExitCodeCoverage:
             assert result.exit_code == -1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0624", domain="server/executors", priority="P1")
     async def test_cancelled_error_sigterm_then_sigkill(self, tmp_path):
         executor = LocalExecutor()
         log_path = tmp_path / "sigterm_kill.log"
@@ -717,6 +785,7 @@ class TestLocalExecutorExitCodeCoverage:
         assert not result.success
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0625", domain="server/executors", priority="P1")
     async def test_subprocess_fails_with_nonexistent_shell(self, tmp_path):
         with patch("taskpps.executors.local.get_settings") as mock_settings:
             mock_settings.return_value.executor.shell = "/nonexistent/shell"
@@ -729,6 +798,7 @@ class TestLocalExecutorExitCodeCoverage:
 
 class TestLocalExecutorProductionScenario:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0626", domain="server/executors", priority="P1")
     async def test_auto_robot_daemon_with_env_and_cwd(self, tmp_path):
         script = tmp_path / "auto_robot.py"
         script.write_text(
@@ -753,6 +823,7 @@ class TestLocalExecutorProductionScenario:
         assert "device_monitor successfully" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0627", domain="server/executors", priority="P2")
     async def test_auto_robot_fork_bomb_pattern(self, tmp_path):
         script = tmp_path / "auto_robot_fork.py"
         script.write_text(
@@ -776,6 +847,7 @@ class TestLocalExecutorProductionScenario:
         assert "auto-robot parent exiting" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0628", domain="server/executors", priority="P1")
     async def test_auto_robot_with_pipeline_env_vars(self, tmp_path):
         script = tmp_path / "env_check.py"
         script.write_text(
@@ -797,6 +869,7 @@ class TestLocalExecutorProductionScenario:
         assert "TASK_ID=Automation Weekly Tests.AOSP" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0629", domain="server/executors", priority="P2")
     async def test_auto_robot_rapid_start_exit(self, tmp_path):
         script = tmp_path / "rapid.py"
         script.write_text(
@@ -814,6 +887,7 @@ class TestLocalExecutorProductionScenario:
         assert result.exit_code == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0630", domain="server/executors", priority="P2")
     async def test_auto_robot_multiline_command_with_cd(self, tmp_path):
         report_dir = tmp_path / "report"
         report_dir.mkdir()
@@ -832,6 +906,7 @@ class TestLocalExecutorProductionScenario:
         assert "done" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0631", domain="server/executors", priority="P2")
     async def test_auto_robot_long_running_with_daemon(self, tmp_path):
         script = tmp_path / "long_run.py"
         script.write_text(
@@ -860,6 +935,7 @@ class TestLocalExecutorProductionScenario:
         assert "All tests passed" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0632", domain="server/executors", priority="P2")
     async def test_auto_robot_long_running_with_multiple_daemons(self, tmp_path):
         script = tmp_path / "multi_long.py"
         script.write_text(
@@ -893,6 +969,7 @@ class TestLocalExecutorProductionScenario:
         assert "AOSP test suite complete" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0633", domain="server/executors", priority="P1")
     async def test_auto_robot_realistic_output_matches_production(self, tmp_path):
         script = tmp_path / "real_prod.py"
         script.write_text(
@@ -927,6 +1004,7 @@ class TestLocalExecutorProductionScenario:
         assert "All 3 tests passed" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0634", domain="server/executors", priority="P1")
     async def test_debug_logs_present_for_production_scenario(self, tmp_path):
         script = tmp_path / "prod.py"
         script.write_text(
@@ -948,3 +1026,4 @@ class TestLocalExecutorProductionScenario:
         assert "[INFO] Exit code: 0" in log_content
         assert "start to run auto-robot" in log_content
         assert "device_monitor successfully" in log_content
+

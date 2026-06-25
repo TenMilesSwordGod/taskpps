@@ -30,6 +30,7 @@ def _setup_config():
 
 class TestPipelineExecution:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0201", domain="server/scenario", priority="P2")
     async def test_single_successful_task(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(name="build", task_type="command", command="echo hello")
@@ -51,6 +52,7 @@ class TestPipelineExecution:
         assert mock_executor.execute.call_count == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0202", domain="server/scenario", priority="P1")
     async def test_task_failure_on_fail_mode(self, db_engine, clean_db):
         _setup_config()
         tasks = [
@@ -87,6 +89,7 @@ class TestPipelineExecution:
         assert call_count == 1, "flaky 失败后依赖它的 next 应被跳过"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0203", domain="server/scenario", priority="P0")
     async def test_on_failure_continue(self, db_engine, clean_db):
         _setup_config()
         tasks = [
@@ -125,6 +128,7 @@ class TestPipelineExecution:
         assert call_count == 1, "flaky 失败后依赖它的 reliable 应被跳过"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0204", domain="server/scenario", priority="P2")
     async def test_task_dag_execution_order(self, db_engine, clean_db):
         _setup_config()
         tasks = [
@@ -161,6 +165,7 @@ class TestPipelineExecution:
         assert executed.index("dag.d") > max(executed.index("dag.b"), executed.index("dag.c"))
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0205", domain="server/scenario", priority="P1")
     async def test_task_cancellation(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(name="build", task_type="command", command="sleep 999")
@@ -197,6 +202,7 @@ class TestPipelineExecution:
         assert mock_executor.cancel.called
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0206", domain="server/scenario", priority="P1")
     async def test_retry_on_failure(self, db_engine, clean_db):
         _setup_config()
         tasks = [ResolvedTask(name="t1", task_type="command", command="exit 1", retry=2)]
@@ -219,6 +225,7 @@ class TestPipelineExecution:
         assert mock_executor.execute.call_count == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0207", domain="server/scenario", priority="P1")
     async def test_when_condition_skips_task(self, db_engine, clean_db):
         _setup_config()
         tasks = [
@@ -246,6 +253,7 @@ class TestPipelineExecution:
         mock_executor.execute.assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0208", domain="server/scenario", priority="P2")
     async def test_multiple_commands_execution(self, db_engine, clean_db):
         _setup_config()
         tasks = [ResolvedTask(name="multi", task_type="command", commands=["echo step1", "echo step2", "echo step3"])]
@@ -267,6 +275,7 @@ class TestPipelineExecution:
         assert mock_executor.execute.call_count == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0209", domain="server/scenario", priority="P2")
     async def test_empty_pipeline_returns_immediately(self, db_engine, clean_db):
         _setup_config()
         pipeline = ResolvedPipeline(name="empty", subpipelines=[])
@@ -275,3 +284,4 @@ class TestPipelineExecution:
 
         with patch("taskpps.engine.runner.get_event_bus"):
             await runner.run()
+

@@ -15,6 +15,7 @@ def _setup_config(tmp_project):
 
 class TestTriggerService:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0413", domain="server/services", priority="P2")
     async def test_create_and_list(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = TriggerService()
@@ -25,8 +26,10 @@ class TestTriggerService:
         assert len(triggers) >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0414", domain="server/services", priority="P2")
     async def test_delete_nonexistent(self, tmp_project, db_engine):
         _setup_config(tmp_project)
         svc = TriggerService()
         result = await svc.delete_trigger("nonexistent")
         assert result is False
+

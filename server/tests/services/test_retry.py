@@ -28,6 +28,7 @@ def _mock_session_factory():
 
 @pytest.mark.asyncio
 class TestRetryRecordRepository:
+    @pytest.mark.zentao("TC-S0384", domain="server/services", priority="P0")
     async def test_create_and_get_retry_record(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -59,6 +60,7 @@ class TestRetryRecordRepository:
             assert fetched is not None
             assert fetched.command == "echo hello"
 
+    @pytest.mark.zentao("TC-S0385", domain="server/services", priority="P2")
     async def test_list_retries_by_task(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -88,6 +90,7 @@ class TestRetryRecordRepository:
             assert len(records) == 3
             assert [r.retry_version for r in records] == [1, 2, 3]
 
+    @pytest.mark.zentao("TC-S0386", domain="server/services", priority="P1")
     async def test_update_retry_status(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -121,6 +124,7 @@ class TestRetryRecordRepository:
             assert updated.exit_code == 0
             assert updated.finished_at is not None
 
+    @pytest.mark.zentao("TC-S0387", domain="server/services", priority="P1")
     async def test_get_next_retry_version(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -147,6 +151,7 @@ class TestRetryRecordRepository:
             v2 = await repo.get_next_retry_version(run.id, "sub.t1")
             assert v2 == 2
 
+    @pytest.mark.zentao("TC-S0388", domain="server/services", priority="P2")
     async def test_delete_retries_for_run(self, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -184,6 +189,7 @@ class TestRetryRunner:
         sub = ResolvedSubPipeline(name="sub", tasks=tasks, config=config)
         return ResolvedPipeline(name="test", subpipelines=[sub], top_config=config)
 
+    @pytest.mark.zentao("TC-S0389", domain="server/services", priority="P0")
     async def test_retry_single_task_success(self):
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo ok")]
         pipeline = self._make_pipeline(tasks)
@@ -214,6 +220,7 @@ class TestRetryRunner:
         assert "sub.t1" in results
         assert results["sub.t1"].success
 
+    @pytest.mark.zentao("TC-S0390", domain="server/services", priority="P1")
     async def test_retry_single_task_failure(self):
         tasks = [ResolvedTask(name="t1", task_type="command", command="exit 1")]
         pipeline = self._make_pipeline(tasks)
@@ -243,6 +250,7 @@ class TestRetryRunner:
 
         assert not results["sub.t1"].success
 
+    @pytest.mark.zentao("TC-S0391", domain="server/services", priority="P1")
     async def test_retry_custom_command_override(self):
         tasks = [ResolvedTask(name="t1", task_type="command", command="original")]
         pipeline = self._make_pipeline(tasks)
@@ -274,6 +282,7 @@ class TestRetryRunner:
         call_kwargs = mock_executor.execute.call_args[1]
         assert call_kwargs["command"] == "echo custom_command"
 
+    @pytest.mark.zentao("TC-S0392", domain="server/services", priority="P1")
     async def test_retry_task_not_found(self):
         pipeline = self._make_pipeline([])
         ctx = ExecutionContext(pipeline=pipeline, run_id="test_retry")
@@ -302,6 +311,7 @@ class TestRetryRunner:
         assert not results["sub.nonexistent"].success
         assert "not found" in (results["sub.nonexistent"].stderr or "")
 
+    @pytest.mark.zentao("TC-S0393", domain="server/services", priority="P1")
     async def test_retry_cancelled(self):
         tasks = [ResolvedTask(name="t1", task_type="command", command="echo ok")]
         pipeline = self._make_pipeline(tasks)
@@ -328,6 +338,7 @@ class TestRetryRunner:
         assert "sub.t1" in results
         assert not results["sub.t1"].success
 
+    @pytest.mark.zentao("TC-S0394", domain="server/services", priority="P1")
     async def test_retry_cancels_running_executor(self):
         """Issue #102: 取消进行中的重试时应终止正在执行的 executor。"""
         tasks = [ResolvedTask(name="t1", task_type="command", command="sleep 10")]
@@ -377,6 +388,7 @@ class TestRetryRunner:
         assert not results["sub.t1"].success
         mock_executor.cancel.assert_awaited_once()
 
+    @pytest.mark.zentao("TC-S0395", domain="server/services", priority="P1")
     async def test_retry_sequential_strategy_runs_one_at_a_time(self):
         tasks = [
             ResolvedTask(name="t1", task_type="command", command="echo 1"),
@@ -418,6 +430,7 @@ class TestRetryRunner:
         # sequential: t1 start -> t1 end -> t2 start -> t2 end
         assert events == [("t1", "start"), ("t1", "end"), ("t2", "start"), ("t2", "end")]
 
+    @pytest.mark.zentao("TC-S0396", domain="server/services", priority="P1")
     async def test_retry_parallel_strategy_runs_concurrently(self):
         tasks = [
             ResolvedTask(name="t1", task_type="command", command="echo 1"),
@@ -466,6 +479,7 @@ class TestRetryRunner:
         # parallel: both start before either ends
         assert events.index(("t2", "start")) < events.index(("t1", "end"))
 
+    @pytest.mark.zentao("TC-S0397", domain="server/services", priority="P1")
     async def test_retry_parallel_max_parallel_queues_extra_tasks(self):
         """
         Issue #100: RetryRunner 的 max_parallel 限制总并发数。
@@ -539,6 +553,7 @@ class TestRetryRunner:
 
 @pytest.mark.asyncio
 class TestPipelineServiceRetry:
+    @pytest.mark.zentao("TC-S0398", domain="server/services", priority="P1")
     async def test_retry_run_returns_immediately_with_pending_status(self, db_engine, clean_db):
         """Issue #98: retry_run 应立即返回，重试在后台执行，记录状态为 PENDING。"""
         from taskpps.services.pipeline_service import PipelineService
@@ -599,6 +614,7 @@ class TestPipelineServiceRetry:
         # 后台任务应被创建
         mock_runner.retry_tasks.assert_awaited_once()
 
+    @pytest.mark.zentao("TC-S0399", domain="server/services", priority="P1")
     async def test_retry_run_passes_execution_strategy(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -652,6 +668,7 @@ class TestPipelineServiceRetry:
         assert call_kwargs["execution_strategy"] == "sequential"
         mock_runner.retry_tasks.assert_awaited_once()
 
+    @pytest.mark.zentao("TC-S0400", domain="server/services", priority="P1")
     async def test_retry_run_raises_on_running(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -668,6 +685,7 @@ class TestPipelineServiceRetry:
         with pytest.raises(ValueError, match="仍在进行"):
             await service.retry_run(run_id=run2.id, tasks=["sub.t1"])
 
+    @pytest.mark.zentao("TC-S0401", domain="server/services", priority="P1")
     async def test_select_retry_report(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -718,6 +736,7 @@ class TestPipelineServiceRetry:
             assert updated.started_at == record.started_at
             assert updated.finished_at == record.finished_at
 
+    @pytest.mark.zentao("TC-S0402", domain="server/services", priority="P2")
     async def test_select_original_version_as_final(self, db_engine, clean_db):
         """Issue #92: 选择 v0（原始版本）作为最终版本应将 selected_retry_id 设为 null"""
         from taskpps.services.pipeline_service import PipelineService
@@ -770,6 +789,7 @@ class TestPipelineServiceRetry:
             updated = await task_repo.get_task_run(tr.id)
             assert updated.selected_retry_id is None
 
+    @pytest.mark.zentao("TC-S0403", domain="server/services", priority="P1")
     async def test_retry_versions(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -802,6 +822,7 @@ class TestPipelineServiceRetry:
         assert "sub.t1" in result["task_retries"]
         assert len(result["task_retries"]["sub.t1"]) == 4  # v0 + 3 retry versions
 
+    @pytest.mark.zentao("TC-S0404", domain="server/services", priority="P1")
     async def test_cancel_retry_run(self, db_engine, clean_db):
         """Issue #102: cancel_retry_run 应找到并取消活跃的 RetryRunner。"""
         from taskpps.engine.retry_runner import _active_retries
@@ -823,6 +844,7 @@ class TestPipelineServiceRetry:
         finally:
             _active_retries.pop(run.id, None)
 
+    @pytest.mark.zentao("TC-S0405", domain="server/services", priority="P1")
     async def test_cancel_retry_run_not_found(self, db_engine, clean_db):
         """Issue #102: 运行不存在或无活跃重试时 cancel_retry_run 返回 False。"""
         from taskpps.services.pipeline_service import PipelineService
@@ -830,6 +852,7 @@ class TestPipelineServiceRetry:
         service = PipelineService()
         assert await service.cancel_retry_run("nonexistent") is False
 
+    @pytest.mark.zentao("TC-S0406", domain="server/services", priority="P1")
     async def test_retry_command_flow(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -859,6 +882,7 @@ class TestPipelineServiceRetry:
         update_result = await service.update_retry_command(record.id, "new command")
         assert update_result["command"] == "new command"
 
+    @pytest.mark.zentao("TC-S0407", domain="server/services", priority="P2")
     async def test_dependency_tree(self, db_engine, clean_db):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -873,6 +897,7 @@ class TestPipelineServiceRetry:
         with pytest.raises(ValueError, match="not found"):
             await service.get_dependency_tree("nonexistent", "sub.step1")
 
+    @pytest.mark.zentao("TC-S0408", domain="server/services", priority="P2")
     async def test_resolve_template(self):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -888,6 +913,7 @@ class TestPipelineServiceRetry:
         )
         assert result == "/usr/bin/python run.py --testcase a"
 
+    @pytest.mark.zentao("TC-S0409", domain="server/services", priority="P1")
     async def test_build_retry_log_path(self):
         path = build_retry_log_path("p1", "v1", "run1", "sub.t1", 1)
         assert "retries" in str(path)
@@ -896,6 +922,7 @@ class TestPipelineServiceRetry:
 
 @pytest.mark.asyncio
 class TestRetryAPI:
+    @pytest.mark.zentao("TC-S0410", domain="server/services", priority="P1")
     async def test_retry_versions_api(self, client, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -906,6 +933,7 @@ class TestRetryAPI:
         data = resp.json()
         assert "task_retries" in data
 
+    @pytest.mark.zentao("TC-S0411", domain="server/services", priority="P1")
     async def test_retry_command_api_not_found(self, client, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -914,6 +942,7 @@ class TestRetryAPI:
         resp = await client.get(f"/api/runs/{run.id}/retry/nonexistent/command")
         assert resp.status_code == 404
 
+    @pytest.mark.zentao("TC-S0412", domain="server/services", priority="P1")
     async def test_retry_dependency_tree_api(self, client, db_engine, clean_db):
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
@@ -924,3 +953,4 @@ class TestRetryAPI:
 
         resp = await client.get(f"/api/runs/{run.id}/retry/dependency-tree?task=sub.step1")
         assert resp.status_code in (200, 400)
+

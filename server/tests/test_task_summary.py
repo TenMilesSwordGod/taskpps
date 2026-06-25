@@ -25,6 +25,7 @@ async def db_session():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0034", domain="server/root", priority="P2")
 async def test_get_task_summaries_empty(db_session: AsyncSession):
     """空 run_ids 返回空字典"""
     repo = RunRepository(db_session)
@@ -33,6 +34,7 @@ async def test_get_task_summaries_empty(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0035", domain="server/root", priority="P2")
 async def test_get_task_summaries_no_tasks(db_session: AsyncSession):
     """有 run 但无 task 时返回空计数"""
     repo = RunRepository(db_session)
@@ -45,6 +47,7 @@ async def test_get_task_summaries_no_tasks(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0036", domain="server/root", priority="P2")
 async def test_get_task_summaries_with_tasks(db_session: AsyncSession):
     """正确聚合任务状态计数"""
     repo = RunRepository(db_session)
@@ -72,6 +75,7 @@ async def test_get_task_summaries_with_tasks(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0037", domain="server/root", priority="P2")
 async def test_get_task_summaries_multiple_runs(db_session: AsyncSession):
     """多个 run 的批量查询"""
     repo = RunRepository(db_session)
@@ -94,3 +98,4 @@ async def test_get_task_summaries_multiple_runs(db_session: AsyncSession):
     assert result["run-2"]["failed"] == 1
     assert result["run-2"]["pending"] == 1
     assert result["run-3"] == {}  # 不存在的 run
+

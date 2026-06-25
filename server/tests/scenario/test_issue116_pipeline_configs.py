@@ -42,6 +42,7 @@ def _setup_config():
 class TestYAMLParsing:
     """Verify YAML configs from issue #116 parse correctly."""
 
+    @pytest.mark.zentao("TC-S0136", domain="server/scenario", priority="P1")
     def test_test01_sequential_with_host_and_cwd(self):
         yaml_str = """
 name: Test 01
@@ -78,6 +79,7 @@ pipelines:
         assert sub.tasks[0].name == "step1"
         assert sub.tasks[0].command == "echo step1"
 
+    @pytest.mark.zentao("TC-S0137", domain="server/scenario", priority="P1")
     def test_test01_cwd_at_subpipeline_level_ignored(self):
         """cwd at subpipeline level (without config:) is silently ignored."""
         yaml_str = """
@@ -98,6 +100,7 @@ pipelines:
         # cwd at subpipeline level is not parsed, config is None
         assert sub.config is None
 
+    @pytest.mark.zentao("TC-S0138", domain="server/scenario", priority="P1")
     def test_test02_sequential_with_cwd(self):
         yaml_str = """
 name: Test 02
@@ -124,6 +127,7 @@ pipelines:
         assert spec.pipelines[0].config is not None
         assert spec.pipelines[0].config.cwd == "/home/auto/heng/"
 
+    @pytest.mark.zentao("TC-S0139", domain="server/scenario", priority="P1")
     def test_test03_sequential_no_cwd(self):
         yaml_str = """
 name: Test 03
@@ -147,6 +151,7 @@ pipelines:
         assert config.host == "auto-cts"
         assert spec.pipelines[0].config is None or spec.pipelines[0].config.cwd is None
 
+    @pytest.mark.zentao("TC-S0140", domain="server/scenario", priority="P1")
     def test_test04_parallel(self):
         yaml_str = """
 name: Test 04 parallel
@@ -172,6 +177,7 @@ pipelines:
         assert config.execution_strategy == "parallel"
         assert len(spec.pipelines[0].tasks) == 3
 
+    @pytest.mark.zentao("TC-S0141", domain="server/scenario", priority="P1")
     def test_test04_multisub_with_steps_and_parallel(self):
         yaml_str = """
 name: Test 04 multi-sub
@@ -223,6 +229,7 @@ pipelines:
         assert sync_sub.config.execution_strategy == "parallel"
         assert len(sync_sub.tasks) == 3
 
+    @pytest.mark.zentao("TC-S0142", domain="server/scenario", priority="P2")
     def test_test04_execution_strategy_at_subpipeline_level_ignored(self):
         """execution_strategy at subpipeline level (without config:) is ignored."""
         yaml_str = """
@@ -250,6 +257,7 @@ class TestIssue116Execution:
     """Verify various pipeline configs execute correctly (mock executor)."""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0143", domain="server/scenario", priority="P1")
     async def test_sequential_execution_order(self, db_engine, clean_db):
         _setup_config()
         task1 = ResolvedTask(name="step1", task_type="command", command="echo step1")
@@ -283,6 +291,7 @@ class TestIssue116Execution:
         assert executed == ["echo step1", "echo step2"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0144", domain="server/scenario", priority="P1")
     async def test_cwd_passed_to_executor(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(name="t1", task_type="command", command="pwd", cwd="/home/auto/heng/")
@@ -311,6 +320,7 @@ class TestIssue116Execution:
         assert captured_cwd == ["/home/auto/heng/"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0145", domain="server/scenario", priority="P1")
     async def test_host_from_config_applied(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(name="t1", task_type="command", command="echo hi", host="auto-cts")
@@ -333,6 +343,7 @@ class TestIssue116Execution:
         mock_executor.execute.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0146", domain="server/scenario", priority="P1")
     async def test_parallel_execution(self, db_engine, clean_db):
         _setup_config()
         tasks = [
@@ -374,6 +385,7 @@ class TestIssue116Execution:
         assert set(executed) == {"echo s3", "echo s4", "echo s5"}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0147", domain="server/scenario", priority="P2")
     async def test_steps_with_cd(self, db_engine, clean_db):
         _setup_config()
         task = ResolvedTask(
@@ -416,6 +428,7 @@ class TestIssue116Execution:
         ]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0148", domain="server/scenario", priority="P1")
     async def test_multi_subpipeline_sequential_outer(self, db_engine, clean_db):
         _setup_config()
         setup_task = ResolvedTask(
@@ -471,6 +484,7 @@ class TestIssue116Execution:
         assert set(executed[1:]) == {"echo s3", "echo s4", "echo s5"}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0149", domain="server/scenario", priority="P0")
     async def test_on_failure_continue_parallel_independent_runs(self, db_engine, clean_db):
         """on_failure=continue + parallel: failed task does not block independent task."""
         _setup_config()
@@ -509,6 +523,7 @@ class TestIssue116Execution:
         assert "echo ok" in executed
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0150", domain="server/scenario", priority="P0")
     async def test_on_failure_continue_with_depends_on_still_runs(self, db_engine, clean_db):
         """on_failure=continue: task with depends_on still runs even if dependency failed."""
         _setup_config()
@@ -555,6 +570,7 @@ class TestIssue116Execution:
         assert "echo runs-anyway" in executed
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0151", domain="server/scenario", priority="P0")
     async def test_on_failure_fail_with_depends_on_skips(self, db_engine, clean_db):
         """on_failure=fail: task with depends_on is skipped when dependency failed."""
         _setup_config()
@@ -599,3 +615,4 @@ class TestIssue116Execution:
             await runner.run()
 
         assert "echo should-skip" not in executed
+

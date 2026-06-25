@@ -32,6 +32,7 @@ def _setup_config():
 
 class TestAgentConcurrency:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0107", domain="server/scenario", priority="P2")
     async def test_multiple_agents_concurrent_execution(self, db_engine, clean_db):
         """
         测试场景:多个 agent 并发执行
@@ -91,6 +92,7 @@ class TestAgentConcurrency:
         assert last_start < first_end, f"Tasks not concurrent: {execution_order}"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0108", domain="server/scenario", priority="P1")
     async def test_single_agent_sequential_execution(self, db_engine, clean_db):
         """
         测试场景:单个 agent 内顺序执行
@@ -160,6 +162,7 @@ class TestAgentConcurrency:
         assert execution_order == expected_order
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0109", domain="server/scenario", priority="P1")
     async def test_mixed_concurrent_and_sequential(self, db_engine, clean_db):
         """
         测试场景:混合并发和顺序执行
@@ -265,6 +268,7 @@ class TestAgentConcurrency:
         assert sub_b_ends[0] < sub_b_starts[1]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0110", domain="server/scenario", priority="P1")
     async def test_agent_semaphore_enforces_sequential(self, db_engine, clean_db):
         """
         测试场景:Agent 信号量强制顺序执行
@@ -327,6 +331,7 @@ class TestAgentConcurrency:
 
 class TestAgentSemaphoreBehavior:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0111", domain="server/scenario", priority="P2")
     async def test_agent_semaphore_limits_concurrent_commands(self, db_engine, clean_db):
         """
         测试场景:Agent 信号量限制并发命令数
@@ -393,6 +398,7 @@ class TestAgentSemaphoreBehavior:
         assert acquire_calls[1] == "agent1"
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0112", domain="server/scenario", priority="P2")
     async def test_different_agents_can_run_concurrently(self, db_engine, clean_db):
         """
         测试场景:不同 agent 可以并发执行
@@ -457,6 +463,7 @@ class TestMaxConcurrentTasks:
     """Issue #106: max_concurrent_tasks per-pipeline 并发任务数限制"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0113", domain="server/scenario", priority="P1")
     async def test_max_concurrent_tasks_limits_parallel_execution(self, db_engine, clean_db):
         """max_concurrent_tasks=1 时,parallel 策略下同一 pipeline 的 task 应顺序执行"""
         _setup_config()
@@ -505,6 +512,7 @@ class TestMaxConcurrentTasks:
         assert execution_order == expected_order
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0114", domain="server/scenario", priority="P1")
     async def test_max_concurrent_tasks_allows_parallel_within_limit(self, db_engine, clean_db):
         """max_concurrent_tasks=2 时,parallel 策略下最多2个 task 并发执行"""
         _setup_config()
@@ -554,6 +562,7 @@ class TestGlobalMaxConcurrent:
     """Issue #106: 跨 pipeline 全局并发限制"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0115", domain="server/scenario", priority="P2")
     async def test_global_semaphore_enforces_limit(self, db_engine, clean_db):
         """全局信号量限制跨 pipeline 的并发任务数"""
         _setup_config()
@@ -589,6 +598,7 @@ class TestMaxConcurrentTasksDefault:
     """Issue #106: max_concurrent_tasks 默认值为5"""
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0116", domain="server/scenario", priority="P2")
     async def test_default_max_concurrent_tasks_is_5(self, db_engine, clean_db):
         """未配置 max_concurrent_tasks 时,默认允许5个任务并发"""
         _setup_config()
@@ -631,6 +641,7 @@ class TestMaxConcurrentTasksDefault:
 class TestAgentParallelDefaultMaxParallel:
     """Issue #115: execution_strategy=parallel 时,agent 默认 max_parallel 应允许并发。"""
 
+    @pytest.mark.zentao("TC-S0117", domain="server/scenario", priority="P1")
     def test_create_executor_uses_default_max_parallel_for_agent(self):
         """agent 未配置 max_parallel 时,create_executor 应使用传入的 default_max_parallel。"""
         task = ResolvedTask(name="t1", task_type="command", command="echo hi", host="auto-cts")
@@ -648,6 +659,7 @@ class TestAgentParallelDefaultMaxParallel:
             assert isinstance(executor, AgentExecutor)
             assert executor._agent_data["max_parallel"] == 5
 
+    @pytest.mark.zentao("TC-S0118", domain="server/scenario", priority="P1")
     def test_create_executor_respects_agent_configured_max_parallel(self):
         """agent 显式配置 max_parallel 时,应优先使用配置值。"""
         task = ResolvedTask(name="t1", task_type="command", command="echo hi", host="auto-cts")
@@ -670,6 +682,7 @@ class TestAgentParallelDefaultMaxParallel:
             assert executor._agent_data["max_parallel"] == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0119", domain="server/scenario", priority="P1")
     async def test_parallel_pipeline_passes_max_parallel_to_agent_executor(self, db_engine, clean_db):
         """parallel 策略下,runner 应将 pipeline 的 max_concurrent_tasks 传给 create_executor。"""
         _setup_config()
@@ -713,6 +726,7 @@ class TestAgentParallelDefaultMaxParallel:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0120", domain="server/scenario", priority="P1")
     async def test_sequential_pipeline_keeps_default_max_parallel_for_agent(self, db_engine, clean_db):
         """sequential 策略下,runner 不应向 create_executor 传递较大的 max_parallel。"""
         _setup_config()
@@ -923,3 +937,4 @@ class TestAgentParallelDefaultMaxParallel:
         from taskpps.executors.local import LocalExecutor
 
         assert isinstance(executor, LocalExecutor)
+

@@ -12,6 +12,7 @@ def app():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0935", domain="server/api", priority="P2")
 async def test_register_project(app, setup_project, tmp_project, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -28,6 +29,7 @@ async def test_register_project(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0936", domain="server/api", priority="P2")
 async def test_register_project_duplicate_workdir(app, setup_project, tmp_project, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -43,6 +45,7 @@ async def test_register_project_duplicate_workdir(app, setup_project, tmp_projec
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0937", domain="server/api", priority="P2")
 async def test_list_projects(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -61,6 +64,7 @@ async def test_list_projects(app, setup_project, tmp_project, db_engine, clean_d
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0938", domain="server/api", priority="P2")
 async def test_get_project(app, setup_project, tmp_project, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -78,6 +82,7 @@ async def test_get_project(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0939", domain="server/api", priority="P1")
 async def test_get_project_not_found(app, setup_project, tmp_project, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -86,6 +91,7 @@ async def test_get_project_not_found(app, setup_project, tmp_project, db_engine)
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0940", domain="server/api", priority="P2")
 async def test_unregister_project(app, setup_project, tmp_project, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -103,8 +109,10 @@ async def test_unregister_project(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0941", domain="server/api", priority="P1")
 async def test_unregister_project_not_found(app, setup_project, tmp_project, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.delete("/api/projects/nonexistent")
         assert response.status_code == 404
+

@@ -33,6 +33,7 @@ def _restore_config(tmp_project, original):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1023", domain="server/auth", priority="P2")
 async def test_missing_api_key_header(app, setup_project, tmp_project, db_engine):
     """api_key 认证已废弃，无 X-API-Key 头也应放行。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
@@ -46,6 +47,7 @@ async def test_missing_api_key_header(app, setup_project, tmp_project, db_engine
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1024", domain="server/auth", priority="P2")
 async def test_invalid_api_key(app, setup_project, tmp_project, db_engine):
     """api_key 认证已废弃，错误 key 也不拒绝。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
@@ -59,6 +61,7 @@ async def test_invalid_api_key(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1025", domain="server/auth", priority="P2")
 async def test_valid_api_key(app, setup_project, tmp_project, db_engine):
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
     try:
@@ -71,6 +74,7 @@ async def test_valid_api_key(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1026", domain="server/auth", priority="P2")
 async def test_options_request_bypasses_auth(app, setup_project, tmp_project):
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
     try:
@@ -83,6 +87,7 @@ async def test_options_request_bypasses_auth(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1027", domain="server/auth", priority="P2")
 async def test_no_auth_when_api_key_none(app, setup_project, tmp_project, db_engine):
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n")
     try:
@@ -95,6 +100,7 @@ async def test_no_auth_when_api_key_none(app, setup_project, tmp_project, db_eng
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1028", domain="server/auth", priority="P2")
 async def test_health_bypasses_auth_with_key(app, setup_project, tmp_project):
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
     try:
@@ -107,6 +113,7 @@ async def test_health_bypasses_auth_with_key(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1029", domain="server/auth", priority="P2")
 async def test_ws_path_bypasses_auth(app, setup_project, tmp_project):
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
     try:
@@ -119,6 +126,7 @@ async def test_ws_path_bypasses_auth(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1030", domain="server/auth", priority="P2")
 async def test_empty_api_key(app, setup_project, tmp_project, db_engine):
     """api_key 认证已废弃，空 key 也不拒绝。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
@@ -132,6 +140,7 @@ async def test_empty_api_key(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1031", domain="server/auth", priority="P2")
 async def test_root_path_not_blocked_by_auth(app, setup_project, tmp_project):
     """GET / 不应被 API key 拦截返回 401，应透传到静态文件处理（200 或 404）。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
@@ -146,6 +155,7 @@ async def test_root_path_not_blocked_by_auth(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1032", domain="server/auth", priority="P2")
 async def test_favicon_not_blocked_by_auth(app, setup_project, tmp_project):
     """GET /favicon.ico 不应被 API key 拦截返回 401。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
@@ -159,6 +169,7 @@ async def test_favicon_not_blocked_by_auth(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1033", domain="server/auth", priority="P2")
 async def test_assets_path_not_blocked_by_auth(app, setup_project, tmp_project):
     """GET /assets/... 不应被 API key 拦截返回 401。"""
     original = _setup_auth_config(tmp_project, "server:\n  host: 127.0.0.1\n  port: 26521\n  api_key: secret123\n")
@@ -169,3 +180,4 @@ async def test_assets_path_not_blocked_by_auth(app, setup_project, tmp_project):
             assert response.status_code != 401
     finally:
         _restore_config(tmp_project, original)
+

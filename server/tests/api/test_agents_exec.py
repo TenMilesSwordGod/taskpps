@@ -7,6 +7,7 @@ import pytest
 
 class TestAgentExec:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0918", domain="server/api", priority="P1")
     async def test_agent_exec_not_connected(self, client):
         response = await client.post(
             "/api/agents/nonexistent/exec",
@@ -18,6 +19,7 @@ class TestAgentExec:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0919", domain="server/api", priority="P1")
     async def test_agent_exec_disconnected_agent(self, client):
         """agent 断开后（last_heartbeat=-1），exec 应返回 404 而非 500。"""
         from taskpps.services.agent_manager import AgentConnection, AgentManager
@@ -42,6 +44,7 @@ class TestAgentExec:
         manager._connections.pop("disconnected-agent", None)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0920", domain="server/api", priority="P2")
     async def test_agent_exec_connected(self, client):
         from taskpps.services.agent_manager import AgentConnection, AgentManager
 
@@ -66,6 +69,7 @@ class TestAgentExec:
         manager._connections.pop("test-agent", None)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0921", domain="server/api", priority="P2")
     async def test_agent_exec_rejected_when_pipeline_running(self, client):
         """Issue #68: agent 正在执行 pipeline 任务时，手动 exec 应被拒绝。"""
         from taskpps.services.agent_manager import AgentConnection, AgentManager, PendingCommandInfo
@@ -98,6 +102,7 @@ class TestAgentExec:
         manager._connections.pop("busy-agent", None)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0922", domain="server/api", priority="P2")
     async def test_agent_exec_allowed_when_no_pipeline_task(self, client):
         """Issue #68: agent 只有非 pipeline 命令时，手动 exec 应被允许（不被 409 拒绝）。"""
         from taskpps.services.agent_manager import AgentConnection, AgentManager, PendingCommandInfo
@@ -133,12 +138,14 @@ class TestAgentExec:
 
 class TestAgentList:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0923", domain="server/api", priority="P2")
     async def test_agent_list_empty(self, client):
         response = await client.get("/api/agents/list")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0924", domain="server/api", priority="P2")
     async def test_agent_list_with_connected(self, client):
         from taskpps.services.agent_manager import AgentConnection, AgentManager
 
@@ -163,6 +170,7 @@ class TestAgentList:
 
 class TestAgentStatus:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0925", domain="server/api", priority="P1")
     async def test_agent_status_not_connected(self, client):
         response = await client.get("/api/agents/status/nonexistent")
         assert response.status_code == 200
@@ -170,6 +178,7 @@ class TestAgentStatus:
         assert data["connected"] is False
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0926", domain="server/api", priority="P2")
     async def test_agent_status_connected(self, client):
         from taskpps.services.agent_manager import AgentConnection, AgentManager
 
@@ -199,6 +208,7 @@ class TestAgentStatus:
 
 class TestAgentDeploy:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0927", domain="server/api", priority="P1")
     async def test_deploy_agent_not_found(self, client):
         # Agent not found in config
         with patch("taskpps.api.agents.AgentBootstrap") as mock_bootstrap:
@@ -210,3 +220,4 @@ class TestAgentDeploy:
                 },
             )
             assert response.status_code == 500
+

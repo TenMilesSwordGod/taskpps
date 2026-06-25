@@ -7,6 +7,7 @@ import pytest
 
 
 class TestYieldCompleteLines:
+    @pytest.mark.zentao("TC-S0942", domain="server/api", priority="P2")
     def test_normal_lines(self):
         from taskpps.api.runs import _yield_complete_lines
 
@@ -14,6 +15,7 @@ class TestYieldCompleteLines:
         assert lines == ["line1", "line2"]
         assert advance == 12
 
+    @pytest.mark.zentao("TC-S0943", domain="server/api", priority="P2")
     def test_incomplete_last_line(self):
         """最后一行不完整（无\\n），不应发送"""
         from taskpps.api.runs import _yield_complete_lines
@@ -22,6 +24,7 @@ class TestYieldCompleteLines:
         assert lines == ["line1"]
         assert advance == 6
 
+    @pytest.mark.zentao("TC-S0944", domain="server/api", priority="P2")
     def test_no_newline_at_all(self):
         """完全没有换行符，不发送任何行"""
         from taskpps.api.runs import _yield_complete_lines
@@ -30,6 +33,7 @@ class TestYieldCompleteLines:
         assert lines == []
         assert advance == 0
 
+    @pytest.mark.zentao("TC-S0945", domain="server/api", priority="P2")
     def test_empty_content(self):
         from taskpps.api.runs import _yield_complete_lines
 
@@ -37,6 +41,7 @@ class TestYieldCompleteLines:
         assert lines == []
         assert advance == 0
 
+    @pytest.mark.zentao("TC-S0946", domain="server/api", priority="P2")
     def test_only_newline(self):
         """仅一个换行符，发送空行"""
         from taskpps.api.runs import _yield_complete_lines
@@ -45,6 +50,7 @@ class TestYieldCompleteLines:
         assert lines == [""]
         assert advance == 1
 
+    @pytest.mark.zentao("TC-S0947", domain="server/api", priority="P2")
     def test_crlf_line_endings(self):
         """\\r\\n 换行，\\r 被剥离"""
         from taskpps.api.runs import _yield_complete_lines
@@ -53,6 +59,7 @@ class TestYieldCompleteLines:
         assert lines == ["line1", "line2"]
         assert advance == 14
 
+    @pytest.mark.zentao("TC-S0948", domain="server/api", priority="P2")
     def test_embedded_empty_lines(self):
         """保留中间的空行"""
         from taskpps.api.runs import _yield_complete_lines
@@ -61,6 +68,7 @@ class TestYieldCompleteLines:
         assert lines == ["line1", "", "line3"]
         assert advance == 13
 
+    @pytest.mark.zentao("TC-S0949", domain="server/api", priority="P2")
     def test_multiple_incomplete_reads(self):
         """模拟多次读取：第一次读到不完整行，第二次读到完整"""
         from taskpps.api.runs import _yield_complete_lines
@@ -75,6 +83,7 @@ class TestYieldCompleteLines:
         assert l2 == ["hello"]
         assert a2 == 6
 
+    @pytest.mark.zentao("TC-S0950", domain="server/api", priority="P2")
     def test_carriage_return_midline_preserved(self):
         """行中间的 \\r 不剥离（用于进度条覆盖显示）"""
         from taskpps.api.runs import _yield_complete_lines
@@ -86,6 +95,7 @@ class TestYieldCompleteLines:
 
 class TestRunLogs:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0951", domain="server/api", priority="P1")
     async def test_logs_no_task_filter(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -100,6 +110,7 @@ class TestRunLogs:
         assert len(data["logs"]) >= 1
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0952", domain="server/api", priority="P1")
     async def test_logs_with_task_filter(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -113,6 +124,7 @@ class TestRunLogs:
         assert "logs" in data
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0953", domain="server/api", priority="P1")
     async def test_logs_with_task_filter_no_match(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -126,6 +138,7 @@ class TestRunLogs:
         assert data == {"logs": {}}
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0954", domain="server/api", priority="P1")
     async def test_logs_with_tail(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -139,11 +152,13 @@ class TestRunLogs:
         assert "logs" in data
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0955", domain="server/api", priority="P1")
     async def test_logs_nonexistent_run(self, client):
         response = await client.get("/api/runs/nonexistent/logs")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0956", domain="server/api", priority="P1")
     async def test_logs_with_follow(self, client, db_engine, tmp_path):
         """SSE follow 模式应返回 text/event-stream。
         使用已完成的 run 避免启动后台 runner。
@@ -178,6 +193,7 @@ class TestRunLogs:
         assert "text/event-stream" in response.headers.get("content-type", "")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0957", domain="server/api", priority="P1")
     async def test_logs_follow_emits_status_events(self, client, db_engine, tmp_path):
         """SSE follow 模式应在任务状态变更时推送 status 事件。
         使用已完成的 run 避免启动后台 runner。
@@ -230,6 +246,7 @@ class TestRunLogs:
             assert "status" in evt
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0958", domain="server/api", priority="P1")
     async def test_logs_follow_subscribes_to_event_bus(self, client, db_engine, tmp_path):
         """Issue #65: SSE 应订阅事件总线以即时推送状态变更，而非仅靠 300ms 轮询。
 
@@ -275,6 +292,7 @@ class TestRunLogs:
             assert mock_bus.off.call_count >= 2
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0959", domain="server/api", priority="P1")
     async def test_logs_follow_handles_binary_log(self, client, db_engine, tmp_path):
         """SSE follow 模式读取含非 UTF-8 字节的日志文件时不应崩溃。
 
@@ -315,6 +333,7 @@ class TestRunLogs:
         assert "valid line" in data["logs"]["step1"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0960", domain="server/api", priority="P1")
     async def test_console_handles_binary_log(self, client, db_engine, tmp_path):
         """get_run_console 读取含非 UTF-8 字节的 console.log 时不应崩溃。
 
@@ -346,6 +365,7 @@ class TestRunLogs:
         assert "[INFO] start" in data["content"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0961", domain="server/api", priority="P1")
     async def test_retry_logs_handles_binary_log(self, client, db_engine, tmp_path):
         """get_retry_logs（非 follow 模式）读取含非 UTF-8 字节日志时不应崩溃。"""
         from taskpps.db.engine import get_session_factory
@@ -397,6 +417,7 @@ class TestRunLogs:
         assert "retry start" in data["content"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0962", domain="server/api", priority="P1")
     async def test_retry_logs_follow_handles_binary_log(self, client, db_engine, tmp_path):
         """get_retry_logs 读取含非 UTF-8 字节日志时不应崩溃。
         使用非 follow 模式验证解码，避免 SSE 流挂起。
@@ -451,6 +472,7 @@ class TestRunLogs:
         assert "retry follow" in data["content"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0963", domain="server/api", priority="P1")
     async def test_logs_follow_handles_gbk_log(self, client, db_engine, tmp_path):
         """读取 GBK 编码日志时应正确解码中文，不产生乱码。
         使用非 follow 模式验证解码，避免 SSE 流挂起。
@@ -488,6 +510,7 @@ class TestRunLogs:
         assert "初始化完成" in data["logs"]["step1"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0964", domain="server/api", priority="P1")
     async def test_console_handles_gbk_log(self, client, db_engine, tmp_path):
         """get_run_console 读取 GBK 编码 console.log 时应正确解码中文。"""
         from taskpps.config import build_pipeline_log_path
@@ -516,6 +539,7 @@ class TestRunLogs:
         assert "部署完成" in data["content"]
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0965", domain="server/api", priority="P1")
     async def test_logs_follow_flushes_partial_line_on_completion(self, client, db_engine, tmp_path):
         """Issue #68: 任务结束后应刷新不含换行符的尾部日志行。
         使用非 follow 模式验证 include_partial 解码，避免 SSE 流挂起。
@@ -555,18 +579,21 @@ class TestRunLogs:
 
 
 class TestDecodeLogBytes:
+    @pytest.mark.zentao("TC-S0966", domain="server/api", priority="P2")
     def test_utf8_content(self):
         from taskpps.api.runs import _decode_log_bytes
 
         assert _decode_log_bytes(b"hello") == "hello"
         assert _decode_log_bytes("中文".encode()) == "中文"
 
+    @pytest.mark.zentao("TC-S0967", domain="server/api", priority="P2")
     def test_gbk_content(self):
         from taskpps.api.runs import _decode_log_bytes
 
         assert _decode_log_bytes("中文".encode("gbk")) == "中文"
         assert _decode_log_bytes("开始执行\n".encode("gbk")) == "开始执行\n"
 
+    @pytest.mark.zentao("TC-S0968", domain="server/api", priority="P2")
     def test_mixed_invalid_bytes(self):
         from taskpps.api.runs import _decode_log_bytes
 
@@ -576,6 +603,7 @@ class TestDecodeLogBytes:
 
 
 class TestReadLogLines:
+    @pytest.mark.zentao("TC-S0969", domain="server/api", priority="P2")
     def test_complete_lines_only(self, tmp_path):
         from taskpps.api.runs import _read_log_lines
 
@@ -585,6 +613,7 @@ class TestReadLogLines:
         assert lines == ["line1", "line2"]
         assert pos == 12  # position after "line2\n"
 
+    @pytest.mark.zentao("TC-S0970", domain="server/api", priority="P2")
     def test_include_partial(self, tmp_path):
         from taskpps.api.runs import _read_log_lines
 
@@ -594,6 +623,7 @@ class TestReadLogLines:
         assert lines == ["line1", "line2", "partial"]
         assert pos == len(b"line1\nline2\npartial")
 
+    @pytest.mark.zentao("TC-S0971", domain="server/api", priority="P2")
     def test_gbk_encoded(self, tmp_path):
         from taskpps.api.runs import _read_log_lines
 
@@ -602,6 +632,7 @@ class TestReadLogLines:
         lines, pos = _read_log_lines(log, 0)
         assert lines == ["第一行", "第二行"]
 
+    @pytest.mark.zentao("TC-S0972", domain="server/api", priority="P2")
     def test_empty_file(self, tmp_path):
         from taskpps.api.runs import _read_log_lines
 
@@ -611,6 +642,7 @@ class TestReadLogLines:
         assert lines == []
         assert pos == 0
 
+    @pytest.mark.zentao("TC-S0973", domain="server/api", priority="P2")
     def test_no_newline(self, tmp_path):
         from taskpps.api.runs import _read_log_lines
 
@@ -620,6 +652,7 @@ class TestReadLogLines:
         assert lines == []
         assert pos == 0  # position unchanged, waiting for complete line
 
+    @pytest.mark.zentao("TC-S0974", domain="server/api", priority="P2")
     def test_incremental_read(self, tmp_path):
         """模拟流式读取：先读完整行，再读剩余部分。"""
         from taskpps.api.runs import _read_log_lines
@@ -638,6 +671,7 @@ class TestReadLogLines:
 
 class TestCleanRunsAPI:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0975", domain="server/api", priority="P1")
     async def test_clean_force(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -650,6 +684,7 @@ class TestCleanRunsAPI:
         assert data["deleted_runs"] >= 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0976", domain="server/api", priority="P1")
     async def test_clean_no_params(self, client, db_engine):
         response = await client.delete("/api/runs/")
         assert response.status_code == 200
@@ -657,6 +692,7 @@ class TestCleanRunsAPI:
         assert data["deleted_runs"] == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0977", domain="server/api", priority="P1")
     async def test_clean_older_than(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -667,6 +703,7 @@ class TestCleanRunsAPI:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0978", domain="server/api", priority="P1")
     async def test_clean_keep(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -679,6 +716,7 @@ class TestCleanRunsAPI:
 
 class TestCancelRun:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0979", domain="server/api", priority="P1")
     async def test_cancel_nonexistent(self, client):
         response = await client.post("/api/runs/nonexistent/cancel")
         assert response.status_code == 404
@@ -686,6 +724,7 @@ class TestCancelRun:
 
 class TestListRuns:
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0980", domain="server/api", priority="P1")
     async def test_list_with_status_filter(self, client, db_engine):
         from taskpps.services.pipeline_service import PipelineService
 
@@ -696,3 +735,4 @@ class TestListRuns:
         assert response.status_code == 200
         data = response.json()
         assert data["total"] >= 0
+

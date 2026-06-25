@@ -14,6 +14,7 @@ def app():
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0905", domain="server/api", priority="P2")
 async def test_try_connect(app, setup_project, tmp_project):
     import taskpps.config as cfg
 
@@ -31,6 +32,7 @@ async def test_try_connect(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0906", domain="server/api", priority="P2")
 async def test_check(app, setup_project, tmp_project):
     import taskpps.config as cfg
 
@@ -48,6 +50,7 @@ async def test_check(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0907", domain="server/api", priority="P1")
 async def test_check_agent_not_found(app, setup_project, tmp_project):
     import taskpps.config as cfg
 
@@ -70,6 +73,7 @@ async def test_check_agent_not_found(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0908", domain="server/api", priority="P1")
 async def test_host_info_agent_not_found(app, setup_project, tmp_project, db_engine):
     """不存在的 agent_id → 404"""
     import taskpps.config as cfg
@@ -86,6 +90,7 @@ async def test_host_info_agent_not_found(app, setup_project, tmp_project, db_eng
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0909", domain="server/api", priority="P2")
 async def test_host_info_execution_agent(app, setup_project, tmp_project):
     """execution-agent 类型：返回 source=agent + 错误（待 agent 端实现）"""
     from unittest.mock import MagicMock, patch
@@ -121,6 +126,7 @@ async def test_host_info_execution_agent(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0910", domain="server/api", priority="P1")
 async def test_host_info_ssh_missing_credential(app, setup_project, tmp_project):
     """ssh agent 但 credential 没 key_path / password → 200 + 明确错误信息"""
     from unittest.mock import MagicMock, patch
@@ -157,6 +163,7 @@ async def test_host_info_ssh_missing_credential(app, setup_project, tmp_project)
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0911", domain="server/api", priority="P1")
 async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project, db_engine):
     """SSH 认证失败 → 200 + 错误信息含 username（不发 5xx）"""
     from unittest.mock import MagicMock, patch
@@ -212,6 +219,7 @@ async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project, db_eng
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0912", domain="server/api", priority="P1")
 async def test_host_info_ssh_success(app, setup_project, tmp_project, db_engine):
     """SSH 成功 → 返回真实 host 数据"""
     from unittest.mock import MagicMock, patch
@@ -304,6 +312,7 @@ async def test_host_info_ssh_success(app, setup_project, tmp_project, db_engine)
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0913", domain="server/api", priority="P1")
 async def test_agent_all_includes_max_parallel(app, setup_project, tmp_project):
     """/api/agents/all 返回的 AgentWithConfig 应包含 max_parallel"""
     import taskpps.config as cfg
@@ -348,6 +357,7 @@ async def test_agent_all_includes_max_parallel(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0914", domain="server/api", priority="P2")
 async def test_agent_pending_commands_sorted_by_started_at(app, setup_project, tmp_project):
     """/api/agents/{id}/pending-commands 应按 started_at 排序返回"""
     import taskpps.config as cfg
@@ -395,6 +405,7 @@ async def test_agent_pending_commands_sorted_by_started_at(app, setup_project, t
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0915", domain="server/api", priority="P2")
 async def test_agent_pending_commands_includes_queued_status(app, setup_project, tmp_project):
     """/api/agents/{id}/pending-commands 应返回 running/queued 状态"""
     import taskpps.config as cfg
@@ -444,6 +455,7 @@ async def test_agent_pending_commands_includes_queued_status(app, setup_project,
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0916", domain="server/api", priority="P2")
 async def test_agent_status_counts_running_and_queued(app, setup_project, tmp_project):
     """/api/agents/status/{id} 应分别统计 running 和 queued 命令数"""
     import taskpps.config as cfg
@@ -484,6 +496,7 @@ async def test_agent_status_counts_running_and_queued(app, setup_project, tmp_pr
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0917", domain="server/api", priority="P2")
 async def test_agent_all_counts_running_and_queued(app, setup_project, tmp_project):
     """/api/agents/all 返回的 AgentWithConfig 应包含 queued_commands"""
     import taskpps.config as cfg
@@ -534,3 +547,4 @@ async def test_agent_all_counts_running_and_queued(app, setup_project, tmp_proje
     assert len(data) == 1
     assert data[0]["running_commands"] == 1
     assert data[0]["queued_commands"] == 1
+

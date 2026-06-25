@@ -20,6 +20,7 @@ class TestPipelineLoaderBoundary:
         with pytest.raises(ValueError):
             loader.load("empty.yaml")
 
+    @pytest.mark.zentao("TC-S0799", domain="server/loaders", priority="P2")
     def test_load_minimal_pipeline(self, tmp_path):
         pipeline_file = tmp_path / "minimal.yaml"
         pipeline_file.write_text("name: minimal\n")
@@ -27,6 +28,7 @@ class TestPipelineLoaderBoundary:
         pipeline = loader.load("minimal.yaml")
         assert pipeline.name == "minimal"
 
+    @pytest.mark.zentao("TC-S0800", domain="server/loaders", priority="P2")
     def test_load_pipeline_with_tasks(self, tmp_path):
         pipeline_file = tmp_path / "with_tasks.yaml"
         pipeline_file.write_text(
@@ -36,6 +38,7 @@ class TestPipelineLoaderBoundary:
         pipeline = loader.load("with_tasks.yaml")
         assert len(pipeline.tasks) == 2
 
+    @pytest.mark.zentao("TC-S0801", domain="server/loaders", priority="P1")
     def test_load_pipeline_with_env(self, tmp_path):
         pipeline_file = tmp_path / "with_env.yaml"
         pipeline_file.write_text(
@@ -45,6 +48,7 @@ class TestPipelineLoaderBoundary:
         pipeline = loader.load("with_env.yaml")
         assert pipeline.config.env == {"GLOBAL": "value"}
 
+    @pytest.mark.zentao("TC-S0802", domain="server/loaders", priority="P2")
     def test_load_pipeline_with_options(self, tmp_path):
         pipeline_file = tmp_path / "with_options.yaml"
         pipeline_file.write_text(
@@ -60,6 +64,7 @@ class TestPipelineLoaderBoundary:
         pipeline = loader.load("with_options.yaml")
         assert pipeline.options.on_failure == "continue"
 
+    @pytest.mark.zentao("TC-S0803", domain="server/loaders", priority="P1")
     def test_load_pipeline_with_depends_on(self, tmp_path):
         pipeline_file = tmp_path / "with_deps.yaml"
         pipeline_file.write_text(
@@ -76,6 +81,7 @@ class TestPipelineLoaderBoundary:
         pipeline = loader.load("with_deps.yaml")
         assert pipeline.tasks[1].depends_on == ["step1"]
 
+    @pytest.mark.zentao("TC-S0804", domain="server/loaders", priority="P2")
     def test_load_nested_pipeline(self, tmp_path):
         subdir = tmp_path / "nested"
         subdir.mkdir()
@@ -85,6 +91,7 @@ class TestPipelineLoaderBoundary:
         pipeline = loader.load("nested/deploy.yaml")
         assert pipeline.name == "nested_deploy"
 
+    @pytest.mark.zentao("TC-S0805", domain="server/loaders", priority="P2")
     def test_path_traversal_prevented(self, tmp_path):
         loader = PipelineLoader(base_dir=tmp_path)
         with pytest.raises(FileNotFoundError):
@@ -95,6 +102,7 @@ class TestPipelineLoaderBoundary:
         result = loader.load_all()
         assert result == {}
 
+    @pytest.mark.zentao("TC-S0806", domain="server/loaders", priority="P2")
     def test_load_all_with_files(self, tmp_path):
         (tmp_path / "a.yaml").write_text("name: a\n")
         (tmp_path / "b.yaml").write_text("name: b\n")
@@ -111,6 +119,7 @@ class TestAgentLoaderBoundary:
         with pytest.raises(FileNotFoundError):
             loader.load("nonexistent")
 
+    @pytest.mark.zentao("TC-S0807", domain="server/loaders", priority="P2")
     def test_load_minimal_agent(self, tmp_path):
         agent_file = tmp_path / "test.yaml"
         agent_file.write_text("id: test-agent\nhost: 127.0.0.1\n")
@@ -152,6 +161,7 @@ class TestAgentLoaderBoundary:
         with pytest.raises(KeyError):
             loader.get_field("test-agent", "nonexistent")
 
+    @pytest.mark.zentao("TC-S0808", domain="server/loaders", priority="P1")
     def test_get_field_agent_not_found(self, tmp_path):
         loader = AgentLoader(base_dir=tmp_path)
         with pytest.raises(KeyError):
@@ -177,6 +187,7 @@ class TestCredentialLoaderBoundary:
         with pytest.raises(FileNotFoundError):
             loader.load("nonexistent")
 
+    @pytest.mark.zentao("TC-S0809", domain="server/loaders", priority="P2")
     def test_load_minimal_credential(self, tmp_path):
         cred_file = tmp_path / "test.yaml"
         cred_file.write_text("id: test-cred\ntype: password\n")
@@ -211,6 +222,7 @@ class TestCredentialLoaderBoundary:
         with pytest.raises(KeyError):
             loader.get_field("test-cred", "nonexistent")
 
+    @pytest.mark.zentao("TC-S0810", domain="server/loaders", priority="P1")
     def test_get_field_credential_not_found(self, tmp_path):
         loader = CredentialLoader(base_dir=tmp_path)
         with pytest.raises(KeyError):
@@ -228,3 +240,4 @@ class TestCredentialLoaderBoundary:
         loader = CredentialLoader(base_dir=tmp_path)
         result = loader.load_all()
         assert result == {}
+
