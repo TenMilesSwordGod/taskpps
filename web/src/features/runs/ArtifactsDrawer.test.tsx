@@ -150,6 +150,54 @@ describe('<ArtifactsDrawer /> — Issue #134 artifacts 下载弹窗', () => {
     })
   })
 
+  it('仅 data.default 有值时显示 default 分组', async () => {
+    mockUseArtifacts.mockReturnValue({
+      data: makeResponse({
+        artifacts: [],
+        default: [
+          makeArtifact({ task_name: 'default', path: 'log.txt', size: 100 }),
+          makeArtifact({ task_name: 'default', path: 'meta.json', size: 200 }),
+        ],
+      }),
+      isLoading: false,
+    })
+    render(
+      <Wrapper>
+        <ArtifactsDrawer runId="run-1" open={true} onClose={vi.fn()} />
+      </Wrapper>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('default')).toBeInTheDocument()
+      expect(screen.getByText('log.txt')).toBeInTheDocument()
+      expect(screen.getByText('meta.json')).toBeInTheDocument()
+    })
+  })
+
+  it('data.default 和 data.artifacts 同时存在时合并显示', async () => {
+    mockUseArtifacts.mockReturnValue({
+      data: makeResponse({
+        artifacts: [
+          makeArtifact({ task_name: 'task1', path: 'result.json', size: 500 }),
+        ],
+        default: [
+          makeArtifact({ task_name: 'default', path: 'log.txt', size: 100 }),
+        ],
+      }),
+      isLoading: false,
+    })
+    render(
+      <Wrapper>
+        <ArtifactsDrawer runId="run-1" open={true} onClose={vi.fn()} />
+      </Wrapper>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('default')).toBeInTheDocument()
+      expect(screen.getByText('task1')).toBeInTheDocument()
+      expect(screen.getByText('log.txt')).toBeInTheDocument()
+      expect(screen.getByText('result.json')).toBeInTheDocument()
+    })
+  })
+
   it('树形展示各任务下的 artifact 文件', async () => {
     mockUseArtifacts.mockReturnValue({
       data: makeResponse({
