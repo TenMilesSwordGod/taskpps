@@ -15,7 +15,7 @@ interface ArtifactLeafNode extends DataNode {
   item: ArtifactItem
 }
 
-function buildTree(artifacts: ArtifactItem[], defaultArtifacts: ArtifactItem[]): ArtifactLeafNode[] {
+function buildTree(artifacts: ArtifactItem[], defaultArtifacts: ArtifactItem[]): DataNode[] {
   const groups: Record<string, ArtifactItem[]> = {}
   for (const item of artifacts) {
     if (!groups[item.task_name]) groups[item.task_name] = []
