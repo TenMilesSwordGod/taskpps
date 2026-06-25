@@ -5,10 +5,10 @@ license: MIT
 metadata:
   depends_on: [zentao-cli]
   keywords: [software-team, gitea-issue, zentao, 禅道, role, 团队协作, manager, pm, developer, tester, uiux]
-  version: 1.5.0
+  version: 1.6.0
 ---
 
-# 软件开发团队协作技能（software-team-skill, v1.5）
+# 软件开发团队协作技能（software-team-skill, v1.6）
 
 > **v1.0**：合并 `gitea-issue` 和 `zentao-team-skill` 为统一的 `software-team-skill`。
 > Manager 是 main agent（唯一入口），PM/Developer/Tester/UIUX 是 sub-agent。
@@ -41,6 +41,12 @@ metadata:
 > - **QA/Tester 测试后必须验证 build**：运行 tests 后必须跑 `npm run build` / `npx tsc --noEmit` / 对应语言的构建检查，确认无编译错误才能 finish testtask
 > - **不验证 build = QA/Tester 的失职**：TypeScript 编译错误（如 TS2322）不会被 vitest 捕获，QA 不跑 build 会导致用户部署失败
 > - **所有涉及前端/web 代码变更的 testtask 都必须做 build check**
+>
+> **v1.6（issue #134 实战优化）**：简化 gitea 标签，只保留 Kind + Priority。
+> - **移除项目上下文标签**：不再打 `项目/<name>` / `产品/<name>` / `执行/<name>`（zentao 中已有，gitea 评论含链接即可）
+> - **移除对象 ID 标签**：不再打 `Task/<id>` / `Bug/<id>` / `Story/<id>` / `TestCase/<id>`（zentao 链接已在 gitea 评论中，标签冗余）
+> - **仅保留 Kind + Priority** 为必选标签（由 Manager audit 维护）
+> - **各角色无需调 set_labels**（不再需要打项目/产品/执行/Task/Bug/Story/TestCase 标签）
 >
 > **核心约定**：
 > - **gitea issue 评论 = 极简**（链接 + 1-2 句状态）
@@ -164,7 +170,7 @@ roles/<role>/_base.md
 | 阶段 | 谁 | 做什么 |
 |------|----|--------|
 | 1. 触发 + 优先级 | **Manager** | 读 issue → 判断类型 → 打 `Priority/*` 标签 → 读 zentao execution/product 上下文 |
-| 2. 建 task | **Manager** | **创建 4 种 zentao task**：`req task` (affair, →aipm) / `dev task` (devel, →aidev) / `testtask` (affair, →aitester) / `uiux design task` (design, →designer，按需) → gitea 打 项目/产品/执行/Task 标签 |
+| 2. 建 task | **Manager** | **创建 4 种 zentao task**：`req task` (affair, →aipm) / `dev task` (devel, →aidev) / `testtask` (affair, →aitester) / `uiux design task` (design, →designer，按需) |
 | 3. 写规划 | **PM** (sub) | 用 `create_story_for_review.py` 建 story（自动设 reviewer=admin）→ 写 spec/verify/comment（**v2 REST API PUT + reviewer=admin**）→ 发 gitea 极简评论通知 admin → **finish 自己的 req task**（`zentao task finish $REQ_TASK_ID --consumed=N`） |
 | 4. 设计（按需）| **UIUX** (sub) | issue 含 `UI/Frontend`/`Kind/UI` label → 出设计稿 → PM 评审 → **finish 自己的 uiux design task** |
 | 5. 实现 | **Developer** (sub) | TDD 实现 → commit → gitea 极简报告 → **finish 自己的 dev task** |
@@ -218,8 +224,8 @@ roles/<role>/_base.md
 | 阶段 | 谁 | 做什么 |
 |------|----|--------|
 | 1. 触发 + 优先级 | **Manager** | 读 issue → bug 默认 `Priority/High` → 准备 product/execution 上下文 |
-| 2. 建 task | **Manager** | **创建 3 种 zentao task**：`testtask #1 调查` (affair, →aitester) / `dev task` (devel, →aidev) / `testtask #2 验证` (affair, →aitester) → gitea 打 项目/产品/执行/Task 标签 |
-| 3. 建 bug + 写测试 | **Tester** (sub) | 复现 → `zentao bug create` → **写 `tests/` 自动化测试覆盖 bug 场景** → `zentao bug assign --assignedTo=aidev` → gitea 打 `Bug/<id>` → **finish 自己的 testtask #1（调查）** |
+| 2. 建 task | **Manager** | **创建 3 种 zentao task**：`testtask #1 调查` (affair, →aitester) / `dev task` (devel, →aidev) / `testtask #2 验证` (affair, →aitester) |
+| 3. 建 bug + 写测试 | **Tester** (sub) | 复现 → `zentao bug create` → **写 `tests/` 自动化测试覆盖 bug 场景** → `zentao bug assign --assignedTo=aidev` → **finish 自己的 testtask #1（调查）** |
 | 4. 修复 + 根因 | **Developer** (sub) | 读 zentao bug + tester 测试 → TDD 修复 → **在 zentao bug comment 写根因分析 + 修复方案 + commit** → **finish 自己的 dev task** |
 | 5. Tester 验证 | **Tester** (sub) | 跑 `tests/` 确认 bug 修复 → **必须跑 build 检查**（`npm run build` / `npx tsc --noEmit`）→ 验证测试覆盖 → gitea 极简验证报告 → **finish 自己的 testtask #2（验证）** |
 | 6. 创建 PR | **Manager** | Tester 验证通过后 → 创建 PR → gitea 极简评论通知用户审查 |
@@ -257,7 +263,7 @@ Manager (main)
 | 阶段 | 谁 | 做什么 |
 |------|----|--------|
 | 1. 触发 + 优先级 | **Manager** | 读 issue → 默认 `Priority/Medium` → 准备 context |
-| 2. 建 task | **Manager** | **创建 2 种 zentao task**：`req task` (affair, →aipm) / `dev task` (devel, →aidev) → gitea 打 项目/产品/执行/Task 标签 |
+| 2. 建 task | **Manager** | **创建 2 种 zentao task**：`req task` (affair, →aipm) / `dev task` (devel, →aidev) |
 | 3. 写规划 | **PM** (sub) | 读 zentao req task → 写 task desc（现状问题 + 优化目标 + 预期效果 + 验收标准） + comment → gitea 极简评论 → **finish 自己的 req task** |
 | 4. 实现 | **Developer** (sub) | 读 zentao dev task → TDD 实现 → commit → zentao task comment 写实现思路 + commit → gitea 极简报告 → **finish 自己的 dev task** |
 | 5. 创建 PR | **Manager** | Dev 完成后 → 创建 PR → gitea 极简评论通知用户审查 |
@@ -287,7 +293,7 @@ Manager (main)
 | 阶段 | 谁 | 做什么 |
 |------|----|--------|
 | 1. 触发 + 优先级 | **Manager** | 读 issue → 默认 `Priority/Medium` |
-| 2. 建 task | **Manager** | **创建 2 种 zentao task**：`req task` (affair, →aipm) / `dev task` (devel, →aidev) → gitea 打 项目/产品/执行/Task 标签 |
+| 2. 建 task | **Manager** | **创建 2 种 zentao task**：`req task` (affair, →aipm) / `dev task` (devel, →aidev) |
 | 3. 写规划 | **PM** (sub) | 读 zentao req task → 写 task desc（任务说明 + 预期产出 + 验收条件） + comment → gitea 极简评论 → **finish 自己的 req task** |
 | 4. 实现 | **Developer** (sub) | 读 zentao dev task → 执行 → commit → zentao task comment 写完成说明 + commit → gitea 极简报告 → **finish 自己的 dev task** |
 | 5. 创建 PR | **Manager** | Dev 完成后 → 创建 PR → gitea 极简评论通知用户审查 |
@@ -317,7 +323,7 @@ Manager (main)
 | 阶段 | 谁 | 做什么 |
 |------|----|--------|
 | 1. 触发 + 优先级 + 复杂度评估 | **Manager** | Tag audit → 识别类型 → **复杂度评估（写 status.json: complexity/reason）** → 打 `Priority/*` 标签 |
-| 2. 建 task | **Manager** | **只建 1 种 zentao task**：`dev task` (devel, →aidev) → gitea 打 项目/产品/执行/Task 标签 → **不打** Story / Bug / TestCase 标签 |
+| 2. 建 task | **Manager** | **只建 1 种 zentao task**：`dev task` (devel, →aidev) |
 | 3. 直接实现 | **Developer** (sub) | 直接读 issue + dev task（无 story、无 bug 对象）→ 在 `.debug/issue_<num>/` 写最小 TDD 验证（不写 `tests/`）→ commit → zentao task comment 写实现说明 → gitea 极简报告 → **finish 自己的 dev task** |
 | 4. 创建 PR | **Manager** | Dev 完成后 → 创建 PR → gitea 极简评论通知用户审查 |
 | 5. 汇总验收 | **Manager** | 用户审查通过、PR 合并 → `git push github main` 推送到 GitHub → Manager close gitea issue（**无 zentao story/bug 需 close**） |
@@ -454,30 +460,20 @@ password = CHANGE-ME   ; 占位，待用户填
 
 ## Gitea 标签约定
 
-> **目标**：让 issue 一眼看到关联的 zentao 对象 + 项目上下文。
+> **v1.6 简化**：只保留 Kind + Priority 为必选标签。zentao 对象链接已在 gitea 评论中，不再打项目/产品/执行/Task/Bug/Story/TestCase 标签。
 
 | 命名空间 | 含义 | **必选?** | 谁打 | 何时打 |
 |---------|------|----------|------|--------|
 | `Kind/Requirement` / `Kind/Bug` / `Kind/Optimize` / `Kind/Task` | issue 类型（4 选 1） | **✅ 必选** | Manager（接手时 audit 补打） | Step 1.0 Tag Audit |
 | `Priority/Critical` / `Priority/High` / `Priority/Medium` / `Priority/Low` | 优先级（4 选 1） | **✅ 必选** | Manager（接手时 audit 补打） | Step 1.0 Tag Audit |
-| `项目/<name>` | zentao project | 必选 | **Manager** | Step 2 Manager 建 task 后 |
-| `产品/<name>` | zentao product | 必选 | **Manager** | Step 2 Manager 建 task 后 |
-| `执行/<name>` | zentao execution | 必选 | **Manager** | Step 2 Manager 建 task 后 |
-| `Story/<id>` | zentao story | 必选（如有 story） | PM | Step A.3 PM 建 story 后 |
-| `Task/<id>` | zentao task（req/dev/test/uiux） | 必选（如有 task） | **Manager** | Step 2 Manager 建 task 后 |
-| `Bug/<id>` | zentao bug | 必选（仅 bug 类型） | Tester | Step 5 B.3 Tester 建 bug 后 |
-| `TestCase/<id>` | zentao testcase | 可选 | QA | Step 5 A.5 QA 推 testcase 后 |
 | `UI/Frontend` / `UI/Design` | UI 相关 | 可选 | issue 报告者 | issue 创建时 |
 | `Status/Blocked` | 被阻塞 | 可选 | 报告者/Manager | 任何阶段 |
-| `Test/Ready` | 实现 + testcase 就绪 | 可选 | Manager | 验收前 |
-| `Reviewed/Confirmed` / `Reviewed/Invalid` / `Reviewed/Duplicate` / `Reviewed/Won't Fix` | 关闭原因 | **✅ 必选（关闭时）** | Manager | Step 8 关闭 issue |
+| `Reviewed/Confirmed` / `Reviewed/Invalid` / `Reviewed/Duplicate` / `Reviewed/Won't Fix` | 关闭原因 | **✅ 必选（关闭时）** | Manager | 关闭 issue 时 |
+
+> **不再使用的标签**（v1.6 移除）：`项目/<name>` / `产品/<name>` / `执行/<name>` / `Task/<id>` / `Bug/<id>` / `Story/<id>` / `TestCase/<id>` / `Test/Ready`。zentao 对象链接通过 gitea 评论中的 URL 即可定位。
 
 ```bash
-# 打标签
-python3 scripts/gitea/set_labels.py <issue_url> --add <label> --role <role>
-# 读标签
-python3 scripts/gitea/get_labels.py <issue_url> --names-only --role <role>
-# ⚡ Tag Audit（Manager 接手时必跑）
+# Tag Audit（Manager 接手时必跑 — 只涉及 Kind + Priority）
 python3 scripts/gitea/audit_labels.py <issue_url> --role manager [--auto-fix]
 ```
 

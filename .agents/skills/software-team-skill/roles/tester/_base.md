@@ -132,21 +132,13 @@ if [ $FAILED_COUNT -gt 0 ]; then
   
   # 指派给 Dev
   zentao bug assign $BUG_ID --assignedTo=aidev
-  
-  # gitea 打 Bug/<id> 标签
-  python3 scripts/gitea/set_labels.py "$ISSUE_URL" --add "Bug/$BUG_ID" --role tester
 fi
 
-# 8. gitea 打 TestCase/<id> 标签
-for tc_id in "${TC_IDS[@]}"; do
-  python3 scripts/gitea/set_labels.py "$ISSUE_URL" --add "TestCase/$tc_id" --role tester
-done
-
-# 9. gitea 极简主描述
+# 8. gitea 极简主描述
 python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
   "[QA Testcase 就绪] zentao testcase: ${TC_IDS[*]}。测试代码: tests/<模块>/test_*.py。维度: 边界/异常/并发/环境。" --role tester
 
-# 10. 写 status.json
+# 9. 写 status.json
 python3 -c "
 import json
 s = json.load(open('$DEBUG_DIR/status.json'))
@@ -205,8 +197,6 @@ else
   
   zentao bug update $NEW_BUG_ID --comment="## 修复后仍有失败\n- 原 Bug: #${BUG_ID}\n- 失败测试: <测试文件>::<测试函数>\n- 错误信息: <错误信息>"
   zentao bug assign $NEW_BUG_ID --assignedTo=aidev
-  
-  python3 scripts/gitea/set_labels.py "$ISSUE_URL" --add "Bug/$NEW_BUG_ID" --role tester
 fi
 ```
 
@@ -258,8 +248,7 @@ zentao bug update $BUG_ID --data "$(cat bug_report.json)"
 #   "comment": "## Bug 报告\n- 复现路径: ...\n- 期望: ...\n- 实际: ...\n- 测试文件: tests/<模块>/test_bug_${ISSUE_NUM}.py"
 # }
 
-# 6. gitea 打 Bug/<id> + 极简报告
-python3 scripts/gitea/set_labels.py "$ISSUE_URL" --add "Bug/$BUG_ID" --role tester
+# 6. gitea 极简报告
 python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
   "[Tester Bug 报告] zentao bug #$BUG_ID，已写 tests/ 自动化测试，已指派 aidev。" --role tester
 
