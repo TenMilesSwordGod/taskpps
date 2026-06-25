@@ -79,6 +79,8 @@ class AgentWithConfig(BaseModel):
     max_parallel: int = 1
     # 网络可达性：unknown / reachable / unreachable
     net_status: str = "unknown"
+    # 最近一次命令执行完成时间（Unix 时间戳，秒）
+    last_execution_time: float = 0
 
 
 class AgentDeployRequest(BaseModel):

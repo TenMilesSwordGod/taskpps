@@ -275,6 +275,8 @@ export interface AgentWithConfig {
   max_parallel: number;
   /** 网络可达性：unknown / reachable / unreachable */
   net_status: 'unknown' | 'reachable' | 'unreachable';
+  /** 最近一次命令执行完成时间（Unix 时间戳，秒） */
+  last_execution_time: number;
 }
 
 /** Agent 正在执行或等待执行的命令 */

@@ -39,6 +39,7 @@ function makeAgent(overrides: Partial<AgentWithConfig> = {}): AgentWithConfig {
     queued_commands: 0,
     max_parallel: 4,
     net_status: 'reachable',
+    last_execution_time: 0,
     ...overrides,
   }
 }
@@ -205,5 +206,42 @@ describe('<ServerCard />', () => {
     const runLink = screen.getByText('run-abc'.slice(0, 8))
     expect(runLink).toBeInTheDocument()
     expect(() => fireEvent.click(runLink)).not.toThrow()
+  })
+
+  describe('LastExecTime', () => {
+    it('无执行记录时显示"暂无执行记录"', () => {
+      render(
+        <ServerCard agent={makeAgent({ last_execution_time: 0 })} />,
+        { wrapper: Wrapper },
+      )
+      expect(screen.getByText('暂无执行记录')).toBeInTheDocument()
+    })
+
+    it('有执行记录时显示绝对时间格式', () => {
+      // 使用固定时间戳验证格式：2026-05-23 12:23:11 UTC = 1766186591
+      const ts = 1766186591
+      render(
+        <ServerCard agent={makeAgent({ last_execution_time: ts })} />,
+        { wrapper: Wrapper },
+      )
+      // 检查显示格式 YYYY-MM-DD HH:mm:ss
+      const timeText = screen.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+      expect(timeText).toBeInTheDocument()
+    })
+
+    it('点击时间切换为相对时间格式', async () => {
+      // 使用一个已知的时间戳，方便验证相对时间
+      const now = Math.floor(Date.now() / 1000)
+      const ts = now - 125 // 2分钟前
+      render(
+        <ServerCard agent={makeAgent({ last_execution_time: ts })} />,
+        { wrapper: Wrapper },
+      )
+      const timeEl = screen.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+      fireEvent.click(timeEl)
+      await waitFor(() => {
+        expect(screen.getByText('2分钟前')).toBeInTheDocument()
+      })
+    })
   })
 })
