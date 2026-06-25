@@ -14,7 +14,7 @@ notifiers:
   - name: slack-deploy-alerts
     type: webhook
     config:
-      url: https://example.com/slack-webhook
+      url: https://hooks.slack.com/services/PLACEHOLDER
       events:
         - run_completed
         - run_cancelled
