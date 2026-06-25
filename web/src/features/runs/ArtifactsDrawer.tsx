@@ -15,11 +15,14 @@ interface ArtifactLeafNode extends DataNode {
   item: ArtifactItem
 }
 
-function buildTree(artifacts: ArtifactItem[]): DataNode[] {
+function buildTree(artifacts: ArtifactItem[], defaultArtifacts: ArtifactItem[]): ArtifactLeafNode[] {
   const groups: Record<string, ArtifactItem[]> = {}
   for (const item of artifacts) {
     if (!groups[item.task_name]) groups[item.task_name] = []
     groups[item.task_name].push(item)
+  }
+  if (defaultArtifacts.length > 0) {
+    groups['default'] = defaultArtifacts
   }
   return Object.entries(groups).map(([taskName, items]) => ({
     title: taskName,
@@ -51,8 +54,9 @@ export default function ArtifactsDrawer({ runId, open, onClose }: ArtifactsDrawe
   const [checkedKeys, setCheckedKeys] = useState<string[]>([])
 
   const tree = useMemo(() => {
-    if (!data?.artifacts?.length) return []
-    return buildTree(data.artifacts)
+    if (!data) return []
+    if (!data.artifacts?.length && !data.default?.length) return []
+    return buildTree(data.artifacts || [], data.default || [])
   }, [data])
 
   const checkedItems = useMemo(() => getCheckedItems(checkedKeys, tree), [checkedKeys, tree])
