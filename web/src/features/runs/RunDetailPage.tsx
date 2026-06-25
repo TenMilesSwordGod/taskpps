@@ -10,6 +10,7 @@ import TaskTree from './TaskTree';
 import RunStagePanel from './RunStagePanel';
 import RetryModal from './RetryModal';
 import RetryVersionsDrawer from './RetryVersionsDrawer';
+import ArtifactsDrawer from './ArtifactsDrawer';
 import { useSSELogs } from './hooks/useSSELogs';
 import type { RunResponse, TaskStatus, TaskYAML } from '@/types';
 import type { LogEntry } from './hooks/useSSELogs';
@@ -76,6 +77,7 @@ export default function RunDetailPage() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
+  const [artifactsOpen, setArtifactsOpen] = useState(false);
 
   // Issue #72: 右键重试相关状态
   const [retryTaskName, setRetryTaskName] = useState<string | null>(null);
@@ -254,6 +256,14 @@ export default function RunDetailPage() {
                   {debugVisible ? '关闭 Debug' : 'Debug'}
                 </Button>
               </Tooltip>
+              <Tooltip title="Artifacts 下载">
+                <Button
+                  size="small"
+                  onClick={() => setArtifactsOpen(true)}
+                >
+                  Artifacts
+                </Button>
+              </Tooltip>
             </Space>
             <span style={{ fontSize: 18, fontWeight: 600 }}>{run.pipeline_name}</span>
             <StatusTag status={run.status} error={run.error} />
@@ -393,6 +403,15 @@ export default function RunDetailPage() {
           onClose={() => setVersionsTaskName(null)}
           // Issue #99: 切换最终版本后重连 SSE，刷新日志到选中的版本
           onVersionsChanged={sseResult.reconnect}
+        />
+      )}
+
+      {/* Issue #134: Artifacts 下载抽屉 */}
+      {id && (
+        <ArtifactsDrawer
+          runId={id}
+          open={artifactsOpen}
+          onClose={() => setArtifactsOpen(false)}
         />
       )}
     </div>

@@ -10,6 +10,7 @@ import type {
   DependencyTreeResponse,
   PipelineDetail,
   RetryExecutionStrategy,
+  ArtifactListResponse,
 } from '@/types';
 
 /** 历史日志响应（REST 模式） */
@@ -358,5 +359,17 @@ export function useRetryLogs(runId: string | undefined, retryId: string | undefi
       return res.data;
     },
     enabled: !!runId && !!retryId,
+  });
+}
+
+/** 获取运行 artifacts 列表 */
+export function useArtifacts(runId: string | undefined) {
+  return useQuery<ArtifactListResponse>({
+    queryKey: ['artifacts', runId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/api/runs/${runId}/artifacts`);
+      return res.data;
+    },
+    enabled: !!runId,
   });
 }
