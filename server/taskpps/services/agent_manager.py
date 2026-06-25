@@ -49,6 +49,7 @@ class AgentConnection:
         self.agent_pid = 0
         self.connected_at = 0.0
         self.last_heartbeat = 0.0
+        self.last_command_finished_at = 0.0
         self._pending_commands: dict[str, PendingCommandInfo] = {}
         self._output_callbacks: dict[str, Callable] = {}
         self._send_lock = asyncio.Lock()
@@ -114,6 +115,7 @@ class AgentConnection:
         self._output_callbacks.pop(command_id, None)
         if info and not info.future.done():
             info.future.set_result(result)
+        self.last_command_finished_at = time.time()
 
     def register_output_callback(self, command_id: str, callback: Callable) -> None:
         self._output_callbacks[command_id] = callback
@@ -229,6 +231,7 @@ class AgentManager:
         if old:
             conn._pending_commands = old._pending_commands
             conn._output_callbacks = old._output_callbacks
+            conn.last_command_finished_at = old.last_command_finished_at
             with contextlib.suppress(Exception):
                 await old.ws.close(code=4000, reason="replaced by new connection")
 

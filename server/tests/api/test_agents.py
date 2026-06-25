@@ -548,3 +548,88 @@ async def test_agent_all_counts_running_and_queued(app, setup_project, tmp_proje
     assert data[0]["running_commands"] == 1
     assert data[0]["queued_commands"] == 1
 
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0918", domain="server/api", priority="P2")
+async def test_agent_all_includes_last_execution_time(app, setup_project, tmp_project):
+    """/api/agents/all 返回的 AgentWithConfig 应包含 last_execution_time"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_items = [
+        {
+            "id": "agent-a",
+            "name": "Agent A",
+            "type": "execution-agent",
+            "host": "",
+            "port": 0,
+            "max_parallel": 1,
+            "_project_id": "proj-1",
+            "_project_name": "Project 1",
+        },
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents._load_agents_from_projects", return_value=(agent_items, [])):
+            with patch("taskpps.api.agents.AgentManager.instance") as mock_instance:
+                manager = MagicMock()
+                manager.is_connected.return_value = True
+                conn = MagicMock()
+                conn._pending_commands = {}
+                conn.hostname = "host"
+                conn.platform = "linux/x86_64"
+                conn.system = "linux"
+                conn.arch = "x86_64"
+                conn.ip = "10.0.0.1"
+                conn.agent_version = "1.0"
+                conn.agent_pid = 1
+                conn.connected_at = 1000.0
+                conn.last_heartbeat = 1000.0
+                conn.last_command_finished_at = 1718000000.0
+                manager.get_connection.return_value = conn
+                mock_instance.return_value = manager
+                response = await client.get("/api/agents/all")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["last_execution_time"] == 1718000000.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0919", domain="server/api", priority="P2")
+async def test_agent_all_last_execution_time_default_zero(app, setup_project, tmp_project):
+    """/api/agents/all 未连接 agent 的 last_execution_time 应为 0"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_items = [
+        {
+            "id": "agent-o",
+            "name": "Agent offline",
+            "type": "execution-agent",
+            "host": "",
+            "port": 0,
+            "max_parallel": 1,
+            "_project_id": "proj-1",
+            "_project_name": "Project 1",
+        },
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents._load_agents_from_projects", return_value=(agent_items, [])):
+            response = await client.get("/api/agents/all")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["last_execution_time"] == 0
+

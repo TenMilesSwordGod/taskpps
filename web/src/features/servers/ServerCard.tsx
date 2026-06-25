@@ -1,9 +1,9 @@
-import { memo, useState } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { Tooltip, Popconfirm, Tag, Popover } from 'antd';
 import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock,
+  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock, Timer,
 } from 'lucide-react';
 import { useDeployAgent, usePendingCommands } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
@@ -92,6 +92,23 @@ function NetStatusIcon({ netStatus }: { netStatus: 'unknown' | 'reachable' | 'un
 function formatTs(ts: number): string {
   if (!ts) return '—';
   return new Date(ts * 1000).toLocaleTimeString('zh-CN');
+}
+
+function formatDateTime(ts: number): string {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function formatRelativeTime(ts: number): string {
+  if (!ts) return '';
+  const diff = Math.floor((Date.now() / 1000) - ts);
+  if (diff < 0) return '刚刚';
+  if (diff < 60) return `${diff}秒前`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+  return `${Math.floor(diff / 86400)}天前`;
 }
 
 function osArchLabel(systemLabel: string, archLabel: string): string {
@@ -216,6 +233,63 @@ function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCo
       {queued.map((cmd, index) => (
         <CommandRow key={cmd.command_id} cmd={cmd} index={index} status="queued" onRunClick={onRunClick} />
       ))}
+    </div>
+  );
+}
+
+function LastExecTime({ timestamp }: { timestamp: number }) {
+  const [showRelative, setShowRelative] = useState(false);
+  const [flipping, setFlipping] = useState(false);
+
+  const handleToggle = useCallback(() => {
+    setFlipping(true);
+    setTimeout(() => {
+      setShowRelative((v) => !v);
+      setFlipping(false);
+    }, 150);
+  }, []);
+
+  if (!timestamp) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#98a2b3', marginBottom: 6 }}>
+        <Timer size={12} style={{ flexShrink: 0 }} />
+        <span>暂无执行记录</span>
+      </div>
+    );
+  }
+
+  const displayText = showRelative ? formatRelativeTime(timestamp) : formatDateTime(timestamp);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleToggle}
+      onKeyDown={(e) => { if (e.key === 'Enter') handleToggle(); }}
+      title="点击切换相对/绝对时间"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        fontSize: 11,
+        color: '#475467',
+        cursor: 'pointer',
+        marginBottom: 6,
+        userSelect: 'none',
+      }}
+    >
+      <Timer size={12} style={{ flexShrink: 0, color: '#98a2b3' }} />
+      <span
+        style={{
+          display: 'inline-block',
+          transform: flipping ? 'rotateX(90deg)' : 'rotateX(0deg)',
+          opacity: flipping ? 0 : 1,
+          transition: 'transform 0.15s ease-in-out, opacity 0.15s ease-in-out',
+          transformOrigin: 'center center',
+        }}
+      >
+        {displayText}
+      </span>
     </div>
   );
 }
@@ -355,6 +429,9 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
           <span style={{ fontSize: 12 }}>{osArchText}</span>
         </div>
       </div>
+
+      {/* 上次执行时间 */}
+      <LastExecTime timestamp={agent.last_execution_time} />
 
       {/* 底部：运行命令数 / 最大并发 / 连接时间 + 操作按钮 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#98a2b3' }}>

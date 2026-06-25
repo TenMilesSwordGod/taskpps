@@ -273,6 +273,7 @@ async def agent_all():
                 item.agent_pid = conn.agent_pid
                 item.connected_at = conn.connected_at
                 item.last_heartbeat = conn.last_heartbeat
+                item.last_execution_time = conn.last_command_finished_at
                 item.running_commands = sum(1 for info in conn._pending_commands.values() if info.status == "running")
                 item.queued_commands = sum(1 for info in conn._pending_commands.values() if info.status == "queued")
                 item.net_status = "reachable"
