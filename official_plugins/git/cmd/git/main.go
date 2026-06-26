@@ -53,9 +53,9 @@ type DescribeResult struct {
 	Type         string           `json:"type"`
 	Version      string           `json:"version"`
 	HelpMsg      string           `json:"help_msg"`
-	Hooks        []string         `json:"hooks"`
+	Hooks        []string         `json:"hooks,omitempty"`
 	ParamsSchema map[string]Field `json:"params_schema"`
-	ConfigSchema map[string]Field `json:"config_schema"`
+	ConfigSchema map[string]Field `json:"config_schema,omitempty"`
 }
 
 type Field struct {

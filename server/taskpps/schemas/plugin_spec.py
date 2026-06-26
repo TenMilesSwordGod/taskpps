@@ -16,9 +16,9 @@ class DescribeResponse(BaseModel):
     type: str
     version: str = "0.0.0"
     help_msg: str = ""
-    hooks: list[str] = Field(default_factory=list)
-    params_schema: dict[str, Any] = Field(default_factory=dict)
-    config_schema: dict[str, Any] = Field(default_factory=dict)
+    hooks: list[str] | None = Field(default_factory=list)
+    params_schema: dict[str, Any] | None = Field(default_factory=dict)
+    config_schema: dict[str, Any] | None = Field(default_factory=dict)
 
 
 class DescribeRPCResponse(BaseModel):
