@@ -561,3 +561,234 @@ class TestPluginCenterShutdown:
         assert len(pc._processes) == 0
         assert len(pc._hook_map) == 0
         assert len(pc._executor_map) == 0
+
+
+class TestPluginCenterDescribeHang:
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1137", domain="server/plugin_center", priority="P2")
+    async def test_describe_timeout_hang_returns_none(self, tmp_project, caplog):
+        from taskpps.services import plugin_center as pc_mod
+
+        pc = PluginCenter(tmp_project)
+        mock_proc = _MockProcess()
+
+        async def hang_readline():
+            await asyncio.sleep(60)
+            return b""
+        mock_proc.stdout.readline = hang_readline
+
+        with (
+            caplog.at_level(logging.ERROR),
+            patch.object(pc_mod, "DESCRIBE_TIMEOUT", 0.01),
+        ):
+            info = await pc._describe(mock_proc, Path("/fake/hang"))
+        assert info is None
+        assert any("Timeout" in r.message for r in caplog.records)
+
+
+class TestPluginCenterConcurrent:
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P2")
+    async def test_concurrent_execute_independent_responses(self, tmp_project):
+        pc = PluginCenter(tmp_project)
+        desc = _describe_bytes("concurrent_plugin", "executor", version="1.0.0")
+        resp1 = _execute_bytes(True, "result_a", "", 0)
+        resp2 = _execute_bytes(True, "result_b", "", 0)
+
+        mock_proc = _MockProcess(
+            stdout_data_list=[desc, resp1, resp2],
+            returncode=None,
+        )
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/concurrent_plugin"))
+
+        async def call_execute(params):
+            return await pc.execute("concurrent_plugin", params)
+
+        results = await asyncio.gather(
+            call_execute({"i": "a"}),
+            call_execute({"i": "b"}),
+        )
+        assert len(results) == 2
+        stdout_values = {r.stdout for r in results}
+        assert stdout_values == {"result_a", "result_b"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P2")
+    async def test_concurrent_execute_multiple_requests(self, tmp_project):
+        pc = PluginCenter(tmp_project)
+        desc = _describe_bytes("multi_plugin", "executor", version="1.0.0")
+        responses = [_execute_bytes(True, f"result_{i}", "", 0) for i in range(5)]
+
+        mock_proc = _MockProcess(
+            stdout_data_list=[desc, *responses],
+            returncode=None,
+        )
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/multi_plugin"))
+
+        tasks = [pc.execute("multi_plugin", {"i": str(n)}) for n in range(5)]
+        results = await asyncio.gather(*tasks)
+        assert len(results) == 5
+        assert all(r.success for r in results)
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1142", domain="server/plugin_center", priority="P2")
+    async def test_concurrent_dispatch_multiple_hooks(self, tmp_project):
+        pc = PluginCenter(tmp_project)
+        desc = _describe_bytes("multi_hook", "hook", hooks=["h1", "h2", "h3"], version="1.0.0")
+
+        mock_proc = _MockProcess(stdout_data_list=[desc], returncode=None)
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/multi_hook"))
+
+        await asyncio.gather(
+            pc.dispatch("h1", {"x": 1}),
+            pc.dispatch("h2", {"x": 2}),
+            pc.dispatch("h3", {"x": 3}),
+        )
+        # describe writes 1 + 3 dispatches = 4 writes total
+        assert mock_proc.stdin.write.call_count >= 3
+
+
+class TestPluginCenterShutdownRace:
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1147", domain="server/plugin_center", priority="P2")
+    async def test_shutdown_during_pending_execute(self, tmp_project):
+        pc = PluginCenter(tmp_project)
+        desc = _describe_bytes("slow_exec", "executor", version="1.0.0")
+
+        mock_proc = _MockProcess(stdout_data_list=[desc], returncode=None)
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/slow_exec"))
+
+        async def blocked_execute():
+            try:
+                await pc.execute("slow_exec", {}, timeout=0.01)
+            except Exception:
+                pass
+
+        exec_task = asyncio.create_task(blocked_execute())
+        await asyncio.sleep(0)
+        await pc.shutdown()
+
+        try:
+            await asyncio.wait_for(exec_task, timeout=1)
+        except asyncio.TimeoutError:
+            exec_task.cancel()
+
+        assert len(pc._plugins) == 0
+        assert len(pc._processes) == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1147", domain="server/plugin_center", priority="P2")
+    async def test_shutdown_kills_unresponsive_process(self, tmp_project):
+        pc = PluginCenter(tmp_project)
+        mock_proc = _MockProcess(
+            stdout_data_list=[_describe_bytes("stuck_plugin", "executor", version="1.0.0")],
+            returncode=None,
+        )
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/stuck_plugin"))
+
+        assert pc._plugins["stuck_plugin"].status == "loaded"
+        await pc.shutdown()
+        assert len(pc._plugins) == 0
+        assert len(pc._processes) == 0
+
+
+class TestPluginCenterStderr:
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1137", domain="server/plugin_center", priority="P2")
+    async def test_stderr_is_available_in_process(self, tmp_project):
+        pc = PluginCenter(tmp_project)
+        mock_proc = _MockProcess(
+            stdout_data_list=[_describe_bytes("noisy_plugin", "executor", version="1.0.0")],
+            returncode=None,
+        )
+
+        mock_proc.stderr = _QueueStreamReader(b"WARNING: deprecated config\n", b"INFO: started\n")
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/noisy_plugin"))
+
+        assert "noisy_plugin" in pc._plugins
+        stderr_line1 = await mock_proc.stderr.readline()
+        stderr_line2 = await mock_proc.stderr.readline()
+        assert b"WARNING" in stderr_line1
+        assert b"INFO" in stderr_line2
+
+
+class TestPluginCenterRealBinary:
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P1")
+    async def test_real_git_plugin_describe_and_execute(self, tmp_project):
+        import sys
+
+        git_plugin_path = tmp_project / "official_plugins" / "git" / "git_plugin.py"
+        if not git_plugin_path.parent.exists():
+            git_plugin_path.parent.mkdir(parents=True)
+        import sys as _sys
+        git_plugin_path.write_text(
+            f"#!{_sys.executable}\n"
+            "import json, sys\n"
+            "def main():\n"
+            " for line in sys.stdin:\n"
+            "  line = line.strip()\n"
+            "  if not line: continue\n"
+            "  try: req = json.loads(line)\n"
+            "  except: continue\n"
+            "  m = req.get('method', ''); rid = req.get('id', 1)\n"
+            "  if m == 'describe':\n"
+            "   sys.stdout.write(json.dumps({'jsonrpc': '2.0',"
+            "    'result': {'name': 'git_e2e', 'type': 'executor', 'version': '1.2.3',"
+            "     'help_msg': 'E2E Git Plugin', 'hooks': [], 'params_schema': {}, 'config_schema': {}},"
+            "    'id': rid}) + '\\n')\n"
+            "   sys.stdout.flush()\n"
+            "  elif m == 'execute':\n"
+            "   p = req.get('params', {})\n"
+            "   sys.stdout.write(json.dumps({'jsonrpc': '2.0',"
+            "    'result': {'success': True, 'stdout': f\"git done {p}\", 'stderr': '', 'exit_code': 0},"
+            "    'id': rid}) + '\\n')\n"
+            "   sys.stdout.flush()\n"
+            "  elif m == 'on_shutdown': break\n"
+            " sys.exit(0)\n"
+            "if __name__ == '__main__': main()\n"
+        )
+        git_plugin_path.chmod(0o755)
+
+        pc = PluginCenter(tmp_project)
+        await pc._load_plugin(git_plugin_path)
+
+        assert "git_e2e" in pc._plugins
+        info = pc._plugins["git_e2e"]
+        assert info.name == "git_e2e"
+        assert info.type == "executor"
+        assert info.version == "1.2.3"
+        assert info.help_msg == "E2E Git Plugin"
+        assert info.status == "loaded"
+
+        result = await pc.execute("git_e2e", {"action": "clone", "remote": "https://example.com/repo.git"})
+        assert result.success is True
+        assert "git done" in result.stdout
+        assert "clone" in result.stdout
+
+        await pc.shutdown()
