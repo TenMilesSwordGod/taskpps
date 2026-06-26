@@ -156,10 +156,36 @@ _INDEX_MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS ix_task_retry_records_task_name ON task_retry_records(task_name)",
 ]
 
+# PostgreSQL 原生枚举迁移：为新增枚举值追加 ALTER TYPE
+# SQLite 用 TEXT 存枚举值，无需迁移
+_PSQL_ENUM_MIGRATIONS = {
+    "tasktype": ["PLUGIN"],
+}
+
 
 async def _migrate_schema() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
+        dialect_name = engine.url.get_dialect().name
+
+        # PostgreSQL native enum migration: add new enum values if missing
+        if dialect_name == "postgresql":
+            for enum_name, new_values in _PSQL_ENUM_MIGRATIONS.items():
+                for val in new_values:
+                    try:
+                        await conn.execute(
+                            text(f"ALTER TYPE {enum_name} ADD VALUE IF NOT EXISTS '{val}'")
+                        )
+                        logger.info("Added enum value '%s' to %s", val, enum_name)
+                    except Exception:
+                        try:
+                            await conn.execute(
+                                text(f"ALTER TYPE {enum_name} ADD VALUE '{val}'")
+                            )
+                            logger.info("Added enum value '%s' to %s", val, enum_name)
+                        except Exception as e:
+                            logger.debug("Enum migration skip: %s", e)
+
         for table_name, columns in _MIGRATIONS.items():
             result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
             existing = {row[1] for row in result.fetchall()}

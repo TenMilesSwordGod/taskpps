@@ -30,6 +30,7 @@ class TaskType(str, enum.Enum):
     GIT = "git"
     NEXUS = "nexus"
     SSH = "ssh"
+    PLUGIN = "plugin"
 
 
 class PipelineRun(SQLModel, table=True):
