@@ -432,6 +432,7 @@ export interface ResultPageResponse {
   run_id: string;
   pipeline_name: string;
   status: string;
+  format: 'html' | 'md';
   stats: {
     status: string;
     status_display: string;

@@ -6,7 +6,7 @@
  * Mapped to zentao testcase TC-W1000 (case_1577).
  */
 import { describe, it, expect } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import ResultViewer from './ResultViewer'
 import type { ResultPageResponse } from '@/types'
 
@@ -15,6 +15,7 @@ function makeResultPage(overrides: Partial<ResultPageResponse> = {}): ResultPage
     run_id: 'run-1',
     pipeline_name: 'test-pipeline',
     status: 'success',
+    format: 'html',
     stats: {
       status: 'success',
       status_display: '成功',
@@ -49,10 +50,8 @@ describe('ResultViewer QA Boundary', () => {
 
   it('renders very long MD content without crash', () => {
     const longMd = '# Long\n\n' + 'A'.repeat(50000)
-    const data = makeResultPage({ md_content: longMd })
+    const data = makeResultPage({ format: 'md', md_content: longMd, html_content: '' })
     render(<ResultViewer data={data} />)
-    // Switch to MD mode
-    fireEvent.click(screen.getByText('MD'))
     expect(document.querySelector('.flex-1.overflow-auto')).toBeTruthy()
   })
 
@@ -106,19 +105,22 @@ describe('ResultViewer QA Boundary', () => {
   })
 
   it('handles MD with empty code block', () => {
-    const mdWithEmpty = makeResultPage({ md_content: '# Test\n\n```\n\n```\n\nOK' })
+    const mdWithEmpty = makeResultPage({
+      format: 'md',
+      md_content: '# Test\n\n```\n\n```\n\nOK',
+      html_content: '',
+    })
     render(<ResultViewer data={mdWithEmpty} />)
-    fireEvent.click(screen.getByText('MD'))
     expect(screen.getByText('执行结果')).toBeDefined()
   })
 
   it('handles MD with table', () => {
     const mdTable = makeResultPage({
-      md_content:
-        '# Table\n\n| Col A | Col B |\n|------|------|\n| val1 | val2 |\n| val3 | val4 |',
+      format: 'md',
+      md_content: '# Table\n\n| Col A | Col B |\n|------|------|\n| val1 | val2 |\n| val3 | val4 |',
+      html_content: '',
     })
     render(<ResultViewer data={mdTable} />)
-    fireEvent.click(screen.getByText('MD'))
     expect(screen.getByText('执行结果')).toBeDefined()
   })
 
@@ -217,21 +219,7 @@ describe('ResultViewer QA Exception', () => {
 // ══════════════════════════════════════════════════════
 
 describe('ResultViewer QA Concurrency', () => {
-  it('rapidly toggles between HTML and MD modes without error', () => {
-    const data = makeResultPage()
-    const { rerender } = render(<ResultViewer data={data} />)
-
-    for (let i = 0; i < 20; i++) {
-      act(() => {
-        const btn = i % 2 === 0 ? screen.getByText('MD') : screen.getByText('HTML')
-        fireEvent.click(btn)
-      })
-    }
-
-    expect(screen.getByText('执行结果')).toBeDefined()
-  })
-
-  it('handles rapid data changes (re-render with different data)', () => {
+  it('handles rapid re-render with different data', () => {
     const { rerender } = render(
       <ResultViewer data={makeResultPage({ run_id: 'run-1' })} />,
     )
@@ -243,6 +231,21 @@ describe('ResultViewer QA Concurrency', () => {
         html_content: `<h1>Run ${i}</h1>`,
       })
       rerender(<ResultViewer data={newData} />)
+    }
+
+    expect(screen.getByText('执行结果')).toBeDefined()
+  })
+
+  it('handles rapid HTML/MD format switching via re-render', () => {
+    const { rerender } = render(
+      <ResultViewer data={makeResultPage({ format: 'html' })} />,
+    )
+
+    for (let i = 0; i < 20; i++) {
+      act(() => {
+        const fmt = i % 2 === 0 ? 'html' as const : 'md' as const
+        rerender(<ResultViewer data={makeResultPage({ format: fmt })} />)
+      })
     }
 
     expect(screen.getByText('执行结果')).toBeDefined()
@@ -279,33 +282,27 @@ describe('ResultViewer QA Environment', () => {
     expect(screen.getByText('暂无结果数据')).toBeDefined()
   })
 
-  it('renders HTML mode segmented button as active by default', () => {
-    const data = makeResultPage()
+  it('renders HTML content directly when format is html', () => {
+    const data = makeResultPage({ format: 'html' })
     render(<ResultViewer data={data} />)
-    const htmlBtn = screen.getByText('HTML')
-    // Antd Segmented active item has different styling
-    expect(htmlBtn).toBeDefined()
+    const container = document.querySelector('.flex-1.overflow-auto')
+    expect(container?.innerHTML).toContain('Test Result')
   })
 
-  it('switches to MD mode and back to HTML mode correctly', () => {
-    const data = makeResultPage()
+  it('renders MD content as HTML when format is md', () => {
+    const data = makeResultPage({ format: 'md', html_content: '' })
     render(<ResultViewer data={data} />)
-
-    fireEvent.click(screen.getByText('MD'))
-    expect(screen.getByText('HTML')).toBeDefined()
-    expect(screen.getByText('MD')).toBeDefined()
-
-    fireEvent.click(screen.getByText('HTML'))
-    expect(screen.getByText('HTML')).toBeDefined()
-    expect(screen.getByText('MD')).toBeDefined()
+    const container = document.querySelector('.flex-1.overflow-auto')
+    expect(container?.innerHTML).toContain('Test Result')
   })
 
   it('MD content renders code blocks as pre/code tags', () => {
     const mdCode = makeResultPage({
+      format: 'md',
       md_content: '# Code Test\n\n```typescript\nconst x: number = 1;\n```',
+      html_content: '',
     })
     render(<ResultViewer data={mdCode} />)
-    fireEvent.click(screen.getByText('MD'))
     const container = document.querySelector('.flex-1.overflow-auto')
     expect(container?.innerHTML).toContain('<pre>')
     expect(container?.innerHTML).toContain('<code')
@@ -314,21 +311,22 @@ describe('ResultViewer QA Environment', () => {
 
   it('MD content renders links correctly', () => {
     const mdLink = makeResultPage({
+      format: 'md',
       md_content: '# Link\n\n[Click here](http://example.com)',
+      html_content: '',
     })
     render(<ResultViewer data={mdLink} />)
-    fireEvent.click(screen.getByText('MD'))
     const container = document.querySelector('.flex-1.overflow-auto')
     expect(container?.innerHTML).toContain('example.com')
   })
 
   it('MD content renders images correctly as img tags', () => {
-    // Image regex runs before link regex; ![Alt](url) → <img> not <a>
     const mdImg = makeResultPage({
+      format: 'md',
       md_content: '# Image\n\n![Alt text](http://example.com/img.png)',
+      html_content: '',
     })
     render(<ResultViewer data={mdImg} />)
-    fireEvent.click(screen.getByText('MD'))
     const container = document.querySelector('.flex-1.overflow-auto')
     expect(container?.innerHTML).toContain('<img')
     expect(container?.innerHTML).toContain('Alt text')

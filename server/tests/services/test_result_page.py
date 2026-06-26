@@ -75,7 +75,6 @@ class TestGenerateHTML:
         assert "<title>Pipeline Result - test-pipeline</title>" in html
         assert "成功" in html
         assert "Pass" in html
-        assert "通过率" in html
         assert "100.0%" in html
         assert "script" not in html  # No scripts injected
 
@@ -89,8 +88,8 @@ class TestGenerateHTML:
             "failed", "2024-01-01T00:00:00", "2024-01-01T00:02:00",
         )
         html = _generate_html(stats, "test-pipeline")
-        assert "失败 (Fail)" in html
-        assert "阻塞 (Block)" in html
+        assert "失败" in html
+        assert "阻塞" in html
         assert "33.3%" in html
 
 

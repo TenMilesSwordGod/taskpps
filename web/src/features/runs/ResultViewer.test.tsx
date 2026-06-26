@@ -8,6 +8,7 @@ function makeResultPage(overrides: Partial<ResultPageResponse> = {}): ResultPage
     run_id: 'run-1',
     pipeline_name: 'test-pipeline',
     status: 'success',
+    format: 'html',
     stats: {
       status: 'success',
       status_display: '成功',
@@ -33,9 +34,20 @@ describe('<ResultViewer />', () => {
     const data = makeResultPage()
     render(<ResultViewer data={data} />)
     expect(screen.getByText('执行结果')).toBeDefined()
-    // Should show HTML mode selected
     const htmlContent = document.querySelector('.flex-1.overflow-auto')
     expect(htmlContent?.innerHTML).toContain('Test Result')
+  })
+
+  it('renders md content when format is md', () => {
+    const data = makeResultPage({
+      format: 'md',
+      html_content: '',
+      md_content: '# MD Title\n\nHello **world**.',
+    })
+    render(<ResultViewer data={data} />)
+    expect(screen.getByText('执行结果')).toBeDefined()
+    const htmlContent = document.querySelector('.flex-1.overflow-auto')
+    expect(htmlContent?.innerHTML).toContain('MD Title')
   })
 
   it('shows collector badge when has_collector is true', () => {
@@ -44,19 +56,14 @@ describe('<ResultViewer />', () => {
     expect(screen.getByText('Replaced')).toBeDefined()
   })
 
-  it('switches to MD mode and renders markdown', () => {
-    const data = makeResultPage()
-    render(<ResultViewer data={data} />)
-    // Click MD segmented button
-    const mdBtn = screen.getByText('MD')
-    mdBtn.click()
-    // After switching, should still show the header
-    expect(screen.getByText('执行结果')).toBeDefined()
-  })
-
   it('shows empty state when no data provided', () => {
     const data = makeResultPage({ html_content: '', md_content: '' })
     render(<ResultViewer data={data} />)
     expect(screen.getByText('执行结果')).toBeDefined()
+  })
+
+  it('shows 暂无结果数据 when data is null', () => {
+    render(<ResultViewer data={null as unknown as ResultPageResponse} />)
+    expect(screen.getByText('暂无结果数据')).toBeDefined()
   })
 })

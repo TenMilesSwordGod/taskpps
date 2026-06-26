@@ -413,7 +413,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
       ),
     };
 
-    return [...pipelineSetup, resultPageNode, ...nodes, ...pipelineTeardown];
+    return [...pipelineSetup, ...nodes, resultPageNode, ...pipelineTeardown];
   }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, onRetry, onShowVersions, retryCounts, resultSelected]);
 
   const selectedKeys = selectedTaskId ? [selectedTaskId] : resultSelected ? [RESULT_PAGE_KEY] : [];

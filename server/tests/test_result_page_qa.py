@@ -449,7 +449,7 @@ class TestEnvironmentAllStatuses:
                     ],
                 )
                 assert data["has_collector"] is False
-                assert "失败 (Fail)" in data["html_content"]
+                assert "失败" in data["html_content"]
                 assert "<!DOCTYPE html>" in data["html_content"]
                 assert "stats" in data
                 assert data["stats"]["pass_count"] == 0

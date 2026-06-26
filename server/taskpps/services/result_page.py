@@ -88,20 +88,30 @@ def _generate_html(stats: dict, pipeline_name: str) -> str:
     block_c = s["blocked_count"]
     total_c = s["total_count"]
     pass_pct = f"{(pass_c / max(total_c, 1) * 100):.1f}%"
+    is_success = s["status"] == "success"
+
+    status_color = {"success": "#059669", "failed": "#dc2626", "partial": "#d97706", "cancelled": "#9ca3af", "running": "#2563eb", "pending": "#6b7280"}.get(s["status"], "#6b7280")
+    status_bg = {"success": "#ecfdf5", "failed": "#fef2f2", "partial": "#fffbeb", "cancelled": "#f9fafb", "running": "#eff6ff", "pending": "#f3f4f6"}.get(s["status"], "#f3f4f6")
+    status_icon = {"success": "&#10003;", "failed": "&#10007;", "partial": "&#9888;", "cancelled": "&#8855;", "running": "&#9679;", "pending": "&#9678;"}.get(s["status"], "")
+
+    ring_stroke = "#10b981" if is_success else "#ef4444" if fail_c > 0 else "#f59e0b"
+    ring_pct = pass_c / max(total_c, 1)
 
     failed_row = ""
     if fail_c > 0:
         failed_row = f"""
         <tr>
-            <td style="color:#ef4444;font-weight:600;">❌ 失败 (Fail)</td>
-            <td style="text-align:right;">{fail_c}</td>
+            <td><span class="dot" style="background:#ef4444"></span> 失败</td>
+            <td class="num">{fail_c}</td>
+            <td class="pct">{(fail_c / max(total_c, 1) * 100):.0f}%</td>
         </tr>"""
     blocked_row = ""
     if block_c > 0:
         blocked_row = f"""
         <tr>
-            <td style="color:#f59e0b;font-weight:600;">⏸️ 阻塞 (Block)</td>
-            <td style="text-align:right;">{block_c}</td>
+            <td><span class="dot" style="background:#f59e0b"></span> 阻塞</td>
+            <td class="num">{block_c}</td>
+            <td class="pct">{(block_c / max(total_c, 1) * 100):.0f}%</td>
         </tr>"""
 
     return f"""<!DOCTYPE html>
@@ -111,68 +121,74 @@ def _generate_html(stats: dict, pipeline_name: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pipeline Result - {pipeline_name}</title>
 <style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 24px; background: #f9fafb; color: #1f2937; }}
-  .card {{ background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; padding: 24px; max-width: 640px; margin: 0 auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }}
-  h1 {{ font-size: 20px; margin: 0 0 4px 0; }}
-  .status {{ display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }}
-  .status.success {{ background: #ecfdf5; color: #065f46; }}
-  .status.failed {{ background: #fef2f2; color: #991b1b; }}
-  .status.partial {{ background: #fffbeb; color: #92400e; }}
-  .status.cancelled {{ background: #fff7ed; color: #9a3412; }}
-  .status.running {{ background: #eff6ff; color: #1e40af; }}
-  .status.pending {{ background: #f3f4f6; color: #374151; }}
-  table {{ width: 100%; border-collapse: collapse; margin: 12px 0; }}
-  th, td {{ padding: 8px 12px; text-align: left; border-bottom: 1px solid #f3f4f6; }}
-  th {{ font-weight: 600; color: #6b7280; font-size: 12px; text-transform: uppercase; }}
-  .time {{ color: #6b7280; font-size: 13px; margin-top: 16px; }}
-  .summary-value {{ font-size: 24px; font-weight: 700; }}
-  .summary-label {{ font-size: 12px; color: #6b7280; }}
-  .summary-grid {{ display: flex; gap: 24px; margin: 16px 0; }}
-  .summary-item {{ text-align: center; }}
-  .divider {{ border-top: 1px solid #e5e7eb; margin: 16px 0; }}
+  *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+  body{{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f4;color:#292524;line-height:1.5;-webkit-font-smoothing:antialiased}}
+  .card{{max-width:560px;margin:24px auto;background:#fff;border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04);overflow:hidden}}
+  .hero{{padding:28px 28px 20px;border-bottom:1px solid #f0efed}}
+  h1{{font-size:16px;font-weight:600;letter-spacing:-.01em;margin-bottom:8px;color:#1c1917}}
+  .status-badge{{display:inline-flex;align-items:center;gap:5px;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:600;background:{status_bg};color:{status_color}}}
+  .status-badge .icon{{font-size:14px;line-height:1}}
+  .metrics{{display:flex;padding:24px 28px;align-items:center;gap:28px}}
+  .ring{{position:relative;width:72px;height:72px;flex-shrink:0}}
+  .ring svg{{transform:rotate(-90deg)}}
+  .ring-value{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:{ring_stroke}}}
+  .stats-grid{{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+  .stat{{text-align:center}}
+  .stat .val{{font-size:22px;font-weight:700;line-height:1.2}}
+  .stat .lbl{{font-size:11px;color:#78716c;font-weight:500;text-transform:uppercase;letter-spacing:.03em;margin-top:2px}}
+  .pass{{color:#059669}}.fail{{color:#dc2626}}.block{{color:#d97706}}.total{{color:#44403c}}
+  table{{width:100%;border-collapse:collapse;margin:0 28px 20px;width:calc(100% - 56px)}}
+  th{{text-align:left;font-size:11px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:.04em;padding-bottom:8px}}
+  th:last-child,th:nth-child(2){{text-align:right}}
+  td{{padding:7px 0;font-size:13px;border-bottom:1px solid #f5f5f4}}
+  td:last-child,td.num{{text-align:right;font-variant-numeric:tabular-nums}}
+  td .dot{{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}}
+  tr:last-child td{{border-bottom:none;font-weight:600;font-size:14px;padding-top:10px}}
+  .pct{{color:#a8a29e;font-size:12px}}
+  .footer{{padding:16px 28px;background:#fafaf9;border-top:1px solid #f0efed;display:flex;gap:20px;font-size:12px}}
+  .footer-item{{display:flex;align-items:center;gap:5px;color:#78716c}}
+  .footer-item .label{{font-weight:500;color:#a8a29e}}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>{pipeline_name}</h1>
-  <span class="status {s["status"]}">{s["status_display"]}</span>
-
-  <div class="summary-grid">
-    <div class="summary-item">
-      <div class="summary-value" style="color:#10b981;">{pass_c}</div>
-      <div class="summary-label">Pass</div>
+  <div class="hero">
+    <h1>{pipeline_name}</h1>
+    <span class="status-badge"><span class="icon">{status_icon}</span>{s["status_display"]}</span>
+  </div>
+  <div class="metrics">
+    <div class="ring">
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r="30" fill="none" stroke="#f0efed" stroke-width="6"/>
+        <circle cx="36" cy="36" r="30" fill="none" stroke="{ring_stroke}" stroke-width="6"
+          stroke-dasharray="{ring_pct * 188.5:.1f} 188.5" stroke-linecap="round"/>
+      </svg>
+      <div class="ring-value">{pass_pct}</div>
     </div>
-    <div class="summary-item">
-      <div class="summary-value" style="color:#ef4444;">{fail_c}</div>
-      <div class="summary-label">Fail</div>
-    </div>
-    <div class="summary-item">
-      <div class="summary-value" style="color:#f59e0b;">{block_c}</div>
-      <div class="summary-label">Block</div>
-    </div>
-    <div class="summary-item">
-      <div class="summary-value" style="color:#3b82f6;">{pass_pct}</div>
-      <div class="summary-label">通过率</div>
+    <div class="stats-grid">
+      <div class="stat"><div class="val pass">{pass_c}</div><div class="lbl">Pass</div></div>
+      <div class="stat"><div class="val fail">{fail_c}</div><div class="lbl">Fail</div></div>
+      <div class="stat"><div class="val block">{block_c}</div><div class="lbl">Block</div></div>
+      <div class="stat"><div class="val total">{total_c}</div><div class="lbl">Total</div></div>
     </div>
   </div>
-
   <table>
-    <tr><th>指标</th><th>数量</th></tr>
+    <tr><th>指标</th><th>数量</th><th>占比</th></tr>
     <tr>
-      <td style="color:#10b981;font-weight:600;">✅ 通过 (Pass)</td>
-      <td style="text-align:right;">{pass_c}</td>
+      <td><span class="dot" style="background:#10b981"></span> 通过</td>
+      <td class="num">{pass_c}</td>
+      <td class="pct">{pass_pct}</td>
     </tr>{failed_row}{blocked_row}
-    <tr style="font-weight:600;">
-      <td>总计 (Total)</td>
-      <td style="text-align:right;">{total_c}</td>
+    <tr>
+      <td>总计</td>
+      <td class="num">{total_c}</td>
+      <td class="pct">100%</td>
     </tr>
   </table>
-
-  <div class="divider"></div>
-  <div class="time">
-    <div>⏱️ 耗时: {s["duration"]}</div>
-    <div>🕐 开始: {s["started_at"] or "-"}</div>
-    <div>🕐 结束: {s["finished_at"] or "-"}</div>
+  <div class="footer">
+    <div class="footer-item"><span class="label">耗时</span>{s["duration"]}</div>
+    <div class="footer-item"><span class="label">开始</span>{s["started_at"] or "-"}</div>
+    <div class="footer-item"><span class="label">结束</span>{s["finished_at"] or "-"}</div>
   </div>
 </div>
 </body>
@@ -230,12 +246,15 @@ def generate_result_page(
     stats = _build_default_stats(tasks, status, started_at, finished_at)
     html = _generate_html(stats, pipeline_name)
     md = _generate_md(stats, pipeline_name)
+    fmt = DEFAULT_RESULT_FORMAT
 
     if collector_mode == "replace" and (collector_html or collector_md):
         if collector_html:
             html = collector_html
+            fmt = "html"
         if collector_md:
             md = collector_md
+            fmt = "md" if not collector_html else fmt
     elif collector_mode == "append" and (collector_html or collector_md):
         if collector_html:
             html = html + "\n<hr>\n" + collector_html
@@ -248,6 +267,7 @@ def generate_result_page(
         "run_id": run_id,
         "pipeline_name": pipeline_name,
         "status": status,
+        "format": fmt,
         "stats": stats,
         "html_content": html,
         "md_content": md,

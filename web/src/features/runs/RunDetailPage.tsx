@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
 import { XCircle, ListTree, RefreshCw, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
@@ -80,9 +80,11 @@ export default function RunDetailPage() {
   const [debugVisible, setDebugVisible] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
 
-  // Issue #154: 结果页状态
+  // Issue #154: 结果页状态 — pipeline 完成后自动拉取
   const [resultViewVisible, setResultViewVisible] = useState(false);
-  const { data: resultPage } = useResultPage(resultViewVisible ? id : undefined);
+  const isTerminal = rawRun && rawRun.status !== 'running' && rawRun.status !== 'pending';
+  const shouldFetchResult = resultViewVisible || isTerminal;
+  const { data: resultPage } = useResultPage(shouldFetchResult ? id : undefined);
 
   // Issue #72: 右键重试相关状态
   const [retryTaskName, setRetryTaskName] = useState<string | null>(null);
@@ -134,6 +136,16 @@ export default function RunDetailPage() {
   );
 
   const isLive = run?.status === 'running' || run?.status === 'pending';
+
+  const wasLiveRef = useRef(false);
+  useEffect(() => {
+    if (isLive) {
+      wasLiveRef.current = true;
+    } else if (wasLiveRef.current && run) {
+      setResultViewVisible(true);
+      wasLiveRef.current = false;
+    }
+  }, [isLive, run]);
 
   // Debug 模式：拉取 console.log 并合并 phase 日志
   const { data: consoleData } = useRunConsole(debugVisible ? id : undefined, 500);
