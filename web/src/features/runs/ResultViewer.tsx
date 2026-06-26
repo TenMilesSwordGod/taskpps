@@ -27,10 +27,10 @@ function simpleMarkdownToHtml(md: string): string {
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // 图片（必须在链接之前，避免 ![alt](url) 被链接正则误匹配）
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%"/>')
     // 链接
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // 图片
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%"/>')
     // 水平分割线
     .replace(/^---$/gm, '<hr>')
     // 无序列表
@@ -97,6 +97,7 @@ export default function ResultViewer({ data }: ResultViewerProps) {
   const [mode, setMode] = useState<RenderMode>('html');
 
   const htmlContent = useMemo(() => {
+    if (!data) return '';
     const raw = mode === 'html' ? data.html_content : simpleMarkdownToHtml(data.md_content);
     return sanitizeHtml(raw);
   }, [data, mode]);

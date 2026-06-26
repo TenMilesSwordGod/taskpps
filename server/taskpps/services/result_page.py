@@ -266,5 +266,9 @@ def load_result_page(pipeline_id: str, pipeline_version: str, run_id: str) -> di
     path = get_result_page_path(pipeline_id, pipeline_version, run_id)
     if not path.exists():
         return None
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("Failed to load result page at %s: corrupted or empty JSON", path)
+        return None
