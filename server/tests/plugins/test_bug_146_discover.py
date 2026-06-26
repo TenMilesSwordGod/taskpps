@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from taskpps.plugins.cron_trigger import CronTrigger
+from taskpps.services.cron_trigger import CronTrigger
 from taskpps.services.plugin_manager import PluginManager
 
 
@@ -58,7 +58,7 @@ class TestBug146PluginDiscovery:
         plugins_dir.mkdir()
         plugin_file = plugins_dir / "my_plugin.py"
         plugin_file.write_text("""
-from taskpps.plugins.base import TriggerPlugin
+from taskpps.services.plugin_base import TriggerPlugin
 
 class MyPlugin(TriggerPlugin):
     @property
@@ -92,7 +92,7 @@ class MyPlugin(TriggerPlugin):
     def test_cron_trigger_isinstance_trigger_plugin(self):
         """verify: CronTrigger 正确继承 TriggerPlugin 并可正常实例化。"""
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
-        from taskpps.plugins.base import TriggerPlugin
+        from taskpps.services.plugin_base import TriggerPlugin
         assert isinstance(trigger, TriggerPlugin)
 
     @pytest.mark.zentao("TC-S0511", domain="server/plugins", priority="P1")

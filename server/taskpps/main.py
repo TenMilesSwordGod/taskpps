@@ -15,12 +15,14 @@ from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale
 from taskpps.logging_config import setup_logging
 from taskpps.middleware.auth import APIKeyMiddleware
+from taskpps.services.plugin_center import PluginCenter, set_plugin_center
 from taskpps.services.plugin_manager import PluginManager
 from taskpps.version import __version__
 
 logger = logging.getLogger("taskpps")
 
 _plugin_manager: PluginManager | None = None
+_plugin_center: PluginCenter | None = None
 _external_engine = False
 
 
@@ -118,6 +120,10 @@ async def lifespan(app: FastAPI):
     _plugin_manager.discover_plugins()
     _plugin_manager.start_triggers()
 
+    _plugin_center = PluginCenter(get_project_workdir())
+    set_plugin_center(_plugin_center)
+    await _plugin_center.discover_and_load()
+
     yield
 
     # Gracefully shutdown active pipeline runners
@@ -127,6 +133,8 @@ async def lifespan(app: FastAPI):
         logger.info(f"Gracefully shutting down {len(_active_runs)} active pipeline runners")
         for runner in _active_runs.values():
             await runner.cancel()
+    if _plugin_center:
+        await _plugin_center.shutdown()
     if _plugin_manager:
         _plugin_manager.stop_all()
     from taskpps.services.agent_manager import AgentManager

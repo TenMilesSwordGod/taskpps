@@ -11,7 +11,8 @@ class PluginResponse(BaseModel):
     enabled: bool
     help_msg: str
     config: str
-    created_at: datetime
-    updated_at: datetime
+    status: str = "unknown"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}

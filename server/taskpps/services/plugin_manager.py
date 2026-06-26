@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 
 from taskpps.config import get_pipelines_dir, get_plugins_dir, get_settings
-from taskpps.plugins.base import BasePlugin, ExecutorPlugin, NotifierPlugin, TriggerPlugin
-from taskpps.plugins.cron_trigger import CronTrigger
+from taskpps.services.cron_trigger import CronTrigger
+from taskpps.services.plugin_base import BasePlugin, ExecutorPlugin, NotifierPlugin, TriggerPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class PluginManager:
         """将内置插件（taskpps.plugins 包内）的信息写入 DB，确保插件页面始终有可用的插件类型。"""
         import importlib
 
-        import taskpps.plugins as _pkg
+        import taskpps.services as _pkg
 
         pkg_dir = Path(_pkg.__file__).parent
         builtin_plugins: list[dict[str, str]] = []
@@ -119,7 +119,7 @@ class PluginManager:
             if path.suffix != ".py" or path.name.startswith("_"):
                 continue
             module_name = path.stem
-            module = importlib.import_module(f"taskpps.plugins.{module_name}")
+            module = importlib.import_module(f"taskpps.services.{module_name}")
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
                 if (

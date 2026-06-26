@@ -89,7 +89,7 @@ export default function PluginListPage() {
       render: (v: string) => <Tag>{v}</Tag>,
     },
     {
-      title: '状态',
+      title: '启用',
       dataIndex: 'enabled',
       key: 'enabled',
       width: 80,
@@ -100,6 +100,21 @@ export default function PluginListPage() {
           onChange={() => handleToggle(record)}
         />
       ),
+    },
+    {
+      title: '运行状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      render: (status: string | undefined) => {
+        if (!status) return <Tag>unknown</Tag>;
+        const colorMap: Record<string, string> = {
+          loaded: 'green',
+          crashed: 'red',
+          db_only: 'yellow',
+        };
+        return <Tag color={colorMap[status] ?? 'default'}>{status}</Tag>;
+      },
     },
     {
       title: '操作',

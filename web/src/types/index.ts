@@ -8,6 +8,7 @@ export interface PluginResponse {
   type: PluginType;
   version: string;
   enabled: boolean;
+  status?: string;
   help_msg: string;
   config: string;
   created_at: string;
