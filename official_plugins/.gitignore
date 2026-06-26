@@ -1,3 +1,1 @@
-# compiled binaries
-echo/echo
-hello/hello
+# compiled binaries are tracked — do not ignore

@@ -93,15 +93,32 @@ async def get_plugin(name: str):
 
 @router.patch("/{name}/toggle", response_model=PluginResponse)
 async def toggle_plugin(name: str):
+    from datetime import datetime, timezone
+
     async with get_session_factory()() as session:
         result = await session.execute(select(Plugin).where(Plugin.name == name))
         plugin = result.scalar_one_or_none()
+
         if plugin is None:
-            raise HTTPException(status_code=404, detail=f"插件 {name} 不存在")
+            pc = get_plugin_center()
+            if pc is not None:
+                p_info = pc.get_plugin(name)
+                if p_info is not None:
+                    plugin = Plugin(
+                        name=p_info.name,
+                        type=p_info.type,
+                        version=p_info.version,
+                        help_msg=p_info.help_msg,
+                        enabled=False,
+                    )
+                    session.add(plugin)
+                    await session.flush()
+                else:
+                    raise HTTPException(status_code=404, detail=f"插件 {name} 不存在")
+            else:
+                raise HTTPException(status_code=404, detail=f"插件 {name} 不存在")
 
         plugin.enabled = not plugin.enabled
-        from datetime import datetime, timezone
-
         plugin.updated_at = datetime.now(timezone.utc)
         session.add(plugin)
         await session.commit()
