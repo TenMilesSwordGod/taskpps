@@ -19,40 +19,12 @@ class ArtifactDeclaration(BaseModel):
     path: str
 
 
-class GitSpec(BaseModel):
-    repo: str
-    ref: str | None = None
-    credential: str | None = None
-    dest: str = "/workspace/repo"
-    depth: int = 1
-    submodules: bool = False
-
-
-class NexusSpec(BaseModel):
-    action: str
-    url: str
-    repository: str
-    credential: str | None = None
-    group_id: str | None = None
-    artifact_id: str | None = None
-    version: str | None = None
-    packaging: str = "jar"
-    classifier: str | None = None
-    files: list[str] | None = None
-    dest: str | None = None
-    query: str | None = None
-    source_repo: str | None = None
-    target_repo: str | None = None
-
-
 class TaskYAML(BaseModel):
     name: str
     command: str | None = None
     commands: list[str] | None = None
     invoke: InvokeSpec | None = None
     steps: list[TaskStep] | None = None
-    git: GitSpec | None = None
-    nexus: NexusSpec | None = None
     plugin: str | None = None
     params: dict[str, Any] | None = None
     cwd: str | None = None
@@ -71,10 +43,6 @@ class TaskYAML(BaseModel):
             return "invoke"
         if self.steps is not None:
             return "steps"
-        if self.git is not None:
-            return "git"
-        if self.nexus is not None:
-            return "nexus"
         if self.plugin is not None:
             return "plugin"
         return "command"

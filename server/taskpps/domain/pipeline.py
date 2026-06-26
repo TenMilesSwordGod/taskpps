@@ -34,8 +34,6 @@ class ResolvedTask:
         invoke_args: list[Any] | None = None,
         invoke_kwargs: dict[str, Any] | None = None,
         steps: list[ResolvedStep] | None = None,
-        git: dict[str, Any] | None = None,
-        nexus: dict[str, Any] | None = None,
         plugin: str | None = None,
         plugin_params: dict[str, Any] | None = None,
         cwd: str | None = None,
@@ -57,8 +55,6 @@ class ResolvedTask:
         self.invoke_args = invoke_args or []
         self.invoke_kwargs = invoke_kwargs or {}
         self.steps = steps
-        self.git = git or {}
-        self.nexus = nexus or {}
         self.plugin = plugin
         self.plugin_params = plugin_params or {}
         self.cwd = cwd
@@ -84,14 +80,6 @@ class ResolvedTask:
         if task_yaml.steps:
             resolved_steps = [ResolvedStep.from_yaml(s) for s in task_yaml.steps]
 
-        resolved_git = None
-        if task_yaml.git:
-            resolved_git = task_yaml.git.model_dump()
-
-        resolved_nexus = None
-        if task_yaml.nexus:
-            resolved_nexus = task_yaml.nexus.model_dump()
-
         return cls(
             name=task_yaml.name,
             task_type=task_yaml.get_task_type(),
@@ -101,8 +89,6 @@ class ResolvedTask:
             invoke_args=task_yaml.invoke.args if task_yaml.invoke else [],
             invoke_kwargs=task_yaml.invoke.kwargs if task_yaml.invoke else {},
             steps=resolved_steps,
-            git=resolved_git,
-            nexus=resolved_nexus,
             plugin=task_yaml.plugin,
             plugin_params=task_yaml.params,
             cwd=task_yaml.cwd or config.cwd,

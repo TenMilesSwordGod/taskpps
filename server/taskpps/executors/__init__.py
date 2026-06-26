@@ -7,10 +7,8 @@ from typing import Any
 from taskpps.domain.pipeline import ResolvedTask
 from taskpps.executors.agent_executor import AgentExecutor
 from taskpps.executors.base import BaseExecutor
-from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.local import LocalExecutor
-from taskpps.executors.nexus import NexusExecutor
 from taskpps.executors.plugin import PluginExecutor
 from taskpps.executors.ssh import SSHExecutor
 from taskpps.i18n import t
@@ -31,36 +29,12 @@ def create_executor(
     if task.task_type == "invoke":
         return InvokeExecutor()
 
-    if task.task_type == "git" and task.git:
-        return GitExecutor(
-            repo=task.git.get("repo", ""),
-            ref=task.git.get("ref"),
-            credential=task.git.get("credential"),
-            dest=task.git.get("dest", "/workspace/repo"),
-            depth=task.git.get("depth", 1),
-            submodules=task.git.get("submodules", False),
-        )
-
-    if task.task_type == "nexus" and task.nexus:
-        return NexusExecutor(
-            action=task.nexus.get("action", "upload"),
-            url=task.nexus.get("url", ""),
-            repository=task.nexus.get("repository", ""),
-            credential=task.nexus.get("credential"),
-            group_id=task.nexus.get("group_id"),
-            artifact_id=task.nexus.get("artifact_id"),
-            version=task.nexus.get("version"),
-            packaging=task.nexus.get("packaging", "jar"),
-            classifier=task.nexus.get("classifier"),
-            files=task.nexus.get("files"),
-            dest=task.nexus.get("dest"),
-            query=task.nexus.get("query"),
-            source_repo=task.nexus.get("source_repo"),
-            target_repo=task.nexus.get("target_repo"),
-        )
-
     if task.task_type == "plugin" and task.plugin:
-        return _create_plugin_executor(task, project_workdir)
+        plugin_command = _build_plugin_command(task.plugin, task.plugin_params)
+        if task.host:
+            delegate = _create_plugin_remote_delegate(task, project_workdir)
+            return PluginExecutor(plugin_command, delegate=delegate)
+        return PluginExecutor(plugin_command)
 
     if task.host:
         from pathlib import Path
@@ -112,30 +86,48 @@ def create_executor(
     return LocalExecutor()
 
 
-def _create_plugin_executor(task: ResolvedTask, project_workdir: str | None = None) -> BaseExecutor:
+def _build_plugin_command(plugin_name: str, params: dict) -> str:
     from taskpps.services.plugin_center import get_plugin_center
 
     pc = get_plugin_center()
-    if pc is None:
-        raise ValueError(t("PluginCenter not available"))
+    if pc is not None:
+        p_info = pc.get_plugin(plugin_name)
+        if p_info is not None and p_info.binary_path is not None:
+            bp = p_info.binary_path
+            if bp.name == "plugin.py":
+                return _build_python_plugin_command(bp, params)
 
-    p_info = pc.get_plugin(task.plugin)
-    if p_info is None or p_info.binary_path is None:
-        raise ValueError(t("Plugin '{name}' not found or has no binary path", name=task.plugin))
+    raise ValueError(f"Plugin '{plugin_name}' not found")
 
-    binary_path = p_info.binary_path
 
-    if task.host:
-        delegate = _create_plugin_remote_delegate(task, project_workdir)
-        if delegate is not None:
-            return PluginExecutor(binary_path=binary_path, params=task.plugin_params, delegate=delegate)
+def _build_python_plugin_command(plugin_py: Path, params: dict) -> str:
+    import importlib.util
 
-    return PluginExecutor(binary_path=binary_path, params=task.plugin_params)
+    spec = importlib.util.spec_from_file_location(
+        f"_plugin_exec_{plugin_py.parent.name}", str(plugin_py)
+    )
+    if spec is None or spec.loader is None:
+        raise ValueError(f"Failed to load plugin: {plugin_py}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+        if (
+            isinstance(attr, type)
+            and attr.__module__ == module.__name__
+            and hasattr(attr, "params_schema")
+            and hasattr(attr, "build_command")
+        ):
+            instance = attr(**params)
+            return instance.build_command()
+
+    raise ValueError(f"No plugin class with build_command found in {plugin_py}")
 
 
 def _create_plugin_remote_delegate(
     task: ResolvedTask, project_workdir: str | None = None
-) -> BaseExecutor | None:
+) -> BaseExecutor:
     from taskpps.config import get_agents_dir
 
     agents_dir = get_agents_dir(Path(project_workdir)) if project_workdir else None

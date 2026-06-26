@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from taskpps.models.trigger import TriggerType
 from taskpps.schemas.agent import AgentCheckRequest, AgentExecRequest
-from taskpps.schemas.pipeline import GitSpec, InvokeSpec, OptionsYAML, PipelineConfig, PipelineYAML, TaskYAML
+from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineConfig, PipelineYAML, TaskYAML
 from taskpps.schemas.run import CleanRequest, CreateRunRequest
 from taskpps.schemas.trigger import CreateTriggerRequest
 
@@ -60,9 +60,9 @@ class TestTaskYAMLBoundary:
         assert t.get_task_type() == "steps"
 
     @pytest.mark.zentao("TC-S0689", domain="server/schemas", priority="P1")
-    def test_type_detection_git(self):
-        t = TaskYAML(name="test", git=GitSpec(repo="https://github.com/test/repo"))
-        assert t.get_task_type() == "git"
+    def test_type_detection_plugin(self):
+        t = TaskYAML(name="test", plugin="echo", params={"key": "val"})
+        assert t.get_task_type() == "plugin"
 
     @pytest.mark.zentao("TC-S0690", domain="server/schemas", priority="P1")
     def test_type_detection_no_command_no_invoke(self):

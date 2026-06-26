@@ -80,6 +80,10 @@ class PluginCenter:
         binaries: list[Path] = []
         for entry in sorted(dir_path.iterdir()):
             if entry.is_dir():
+                py_file = entry / "plugin.py"
+                if py_file.is_file():
+                    binaries.append(py_file)
+                    continue
                 found = False
                 for f in sorted(entry.iterdir()):
                     if self._is_plugin_binary(f):
@@ -91,7 +95,7 @@ class PluginCenter:
                         if f.is_file() and not f.name.startswith(".") and not f.name.startswith("_"):
                             binaries.append(f)
                             break
-            elif self._is_plugin_binary(entry):
+            elif self._is_plugin_binary(entry) or (entry.name == "plugin.py" and entry.is_file()):
                 binaries.append(entry)
         return binaries
 
@@ -102,10 +106,80 @@ class PluginCenter:
             return False
         if path.suffix == ".pyc":
             return False
+        if path.name == "plugin.py":
+            return False
         return os.access(path, os.X_OK)
 
+    async def _load_python_plugin(self, plugin_py: Path) -> None:
+        import importlib.util
+
+        logger.info("Loading Python plugin: %s", plugin_py)
+        try:
+            spec = importlib.util.spec_from_file_location(
+                f"taskpps_plugin_{plugin_py.parent.name}", str(plugin_py)
+            )
+            if spec is None or spec.loader is None:
+                logger.error("Failed to load plugin spec: %s", plugin_py)
+                return
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as e:
+            logger.error("Failed to load Python plugin %s: %s", plugin_py, e)
+            return
+
+        plugin_cls = None
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if (
+                isinstance(attr, type)
+                and attr.__module__ == module.__name__
+                and hasattr(attr, "type")
+                and hasattr(attr, "params_schema")
+            ):
+                plugin_cls = attr
+                break
+
+        if plugin_cls is None:
+            logger.error("No plugin class found in %s", plugin_py)
+            return
+
+        name = plugin_py.parent.name
+        p_type = getattr(plugin_cls, "type", "executor")
+        version = getattr(plugin_cls, "version", "0.0.0")
+        help_msg = (plugin_cls.__doc__ or "").strip()
+        params_schema = getattr(plugin_cls, "params_schema", {})
+        hooks = getattr(plugin_cls, "hooks", [])
+
+        if p_type not in ("hook", "executor"):
+            logger.warning("Plugin %s: unknown type '%s', skipping", name, p_type)
+            return
+
+        plugin_info = PluginInfo(
+            name=name,
+            type=p_type,
+            version=version,
+            help_msg=help_msg,
+            binary_path=plugin_py,
+            hooks=hooks,
+            params_schema=params_schema,
+        )
+        self._plugins[plugin_info.name] = plugin_info
+        self._register_python_info(plugin_info)
+        logger.info("Registered Python plugin: %s (type=%s)", name, p_type)
+
+    def _register_python_info(self, plugin_info: PluginInfo) -> None:
+        if plugin_info.type == "hook":
+            for hook in plugin_info.hooks:
+                self._hook_map.setdefault(hook, []).append(plugin_info.name)
+        elif plugin_info.type == "executor":
+            self._executor_map[plugin_info.name] = plugin_info.name
+
     async def _load_plugin(self, binary_path: Path) -> None:
-        logger.info("Loading plugin: %s", binary_path)
+        if binary_path.name == "plugin.py":
+            await self._load_python_plugin(binary_path)
+            return
+
+        logger.info("Loading plugin binary: %s", binary_path)
         try:
             proc = await asyncio.create_subprocess_exec(
                 str(binary_path),

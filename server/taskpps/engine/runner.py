@@ -33,10 +33,8 @@ from taskpps.events.bus import (
 from taskpps.executors import create_executor
 from taskpps.executors.agent_executor import AgentExecutor
 from taskpps.executors.base import BaseExecutor, ExecutorResult
-from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.local import LocalExecutor
-from taskpps.executors.nexus import NexusExecutor
 from taskpps.executors.plugin import PluginExecutor
 from taskpps.i18n import t
 from taskpps.models.run import RunStatus, TaskStatus
@@ -772,10 +770,6 @@ class PipelineRunner:
 
         if task.task_type == "invoke":
             self._write_pipeline_log("CMD", f"  invoke: {task.invoke_task}")
-        elif task.task_type == "git" and task.git:
-            self._write_pipeline_log("CMD", f"  git: {task.git.get('action', 'clone')} {task.git.get('repo', '')}")
-        elif task.task_type == "nexus" and task.nexus:
-            self._write_pipeline_log("CMD", f"  nexus: {task.nexus.get('action', '')} {task.nexus.get('url', '')}")
         elif task.task_type == "plugin" and task.plugin:
             self._write_pipeline_log("CMD", f"  plugin: {task.plugin} (params={len(task.plugin_params)} keys)")
         elif task.task_type == "steps" and task.steps:
@@ -837,21 +831,6 @@ class PipelineRunner:
                         invoke_args=task.invoke_args,
                         invoke_kwargs=task.invoke_kwargs,
                     )
-                elif isinstance(executor, (GitExecutor, NexusExecutor)):
-                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': {type(executor).__name__} path")
-                    logger.info("PipelineRunner: task '%s' dispatching to %s", qualified_name, type(executor).__name__)
-                    if isinstance(executor, GitExecutor) and (not executor.dest or executor.dest == "/workspace/repo"):
-                        workspace_dir = get_workspaces_dir() / self.run_id / "repo"
-                        workspace_dir.mkdir(parents=True, exist_ok=True)
-                        executor.dest = str(workspace_dir)
-                    result = await executor.execute(
-                        command="",
-                        env=env,
-                        log_path=log_path,
-                        timeout=timeout,
-                    )
-                    if isinstance(executor, GitExecutor) and result.success:
-                        self.context.set_workspace(task.name, executor.dest)
                 elif isinstance(executor, PluginExecutor):
                     logger.debug(f"[DEBUG-EXEC] '{qualified_name}': PluginExecutor path")
                     logger.info("PipelineRunner: task '%s' dispatching to PluginExecutor", qualified_name)

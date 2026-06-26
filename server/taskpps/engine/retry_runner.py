@@ -15,9 +15,8 @@ from taskpps.events.bus import SIGNAL_RETRY_FINISHED, SIGNAL_RETRY_STARTED, get_
 from taskpps.executors import create_executor
 from taskpps.executors.agent_executor import AgentExecutor
 from taskpps.executors.base import ExecutorResult
-from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
-from taskpps.executors.nexus import NexusExecutor
+from taskpps.executors.plugin import PluginExecutor
 from taskpps.models.run import TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -209,7 +208,7 @@ class RetryRunner:
                 invoke_args=task.invoke_args,
                 invoke_kwargs=task.invoke_kwargs,
             )
-        elif isinstance(executor, (GitExecutor, NexusExecutor)):
+        elif isinstance(executor, PluginExecutor):
             return await executor.execute(command="", env=env, log_path=log_path, timeout=timeout)
         elif task.task_type == "steps" and task.steps:
             return await executor.execute(
