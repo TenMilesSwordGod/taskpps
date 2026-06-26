@@ -586,8 +586,14 @@ class PipelineRunner:
                 for dep in task.depends_on:
                     qualified_dep = f"{sub.name}.{dep}"
                     if qualified_dep in failed_tasks:
-                        should_skip = True
-                        break
+                        dep_task = sub.get_task_by_name(dep)
+                        if dep_task is None:
+                            should_skip = True
+                            break
+                        on_failure_cfg = dep_task.on_failure or sub.config.on_failure
+                        if on_failure_cfg != "continue":
+                            should_skip = True
+                            break
 
                 if should_skip:
                     async with get_session_factory()() as session:

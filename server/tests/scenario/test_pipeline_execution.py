@@ -125,7 +125,7 @@ class TestPipelineExecution:
         ):
             await runner.run()
 
-        assert call_count == 1, "flaky 失败后依赖它的 reliable 应被跳过"
+        assert call_count == 2, "flaky on_failure=continue 失败后 reliable 应继续执行"
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0204", domain="server/scenario", priority="P2")
