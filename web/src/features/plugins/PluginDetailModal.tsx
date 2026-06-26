@@ -31,10 +31,21 @@ export default function PluginDetailModal({ plugin, onClose }: PluginDetailModal
         <Descriptions.Item label="版本">
           <Tag>{plugin.version}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="状态">
+        <Descriptions.Item label="启用">
           <Tag color={plugin.enabled ? 'success' : 'default'}>
             {plugin.enabled ? '已启用' : '已关闭'}
           </Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label="运行状态">
+          {plugin.status ? (
+            <Tag color={
+              plugin.status === 'loaded' ? 'success' :
+              plugin.status === 'crashed' ? 'error' :
+              plugin.status === 'db_only' ? 'warning' : 'default'
+            }>{plugin.status}</Tag>
+          ) : (
+            <Tag>unknown</Tag>
+          )}
         </Descriptions.Item>
         <Descriptions.Item label="创建时间">
           {new Date(plugin.created_at).toLocaleString()}
