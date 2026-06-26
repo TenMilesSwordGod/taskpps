@@ -1,4 +1,4 @@
-from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineYAML, TaskYAML
+from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineYAML, PostConfig, TaskYAML
 from taskpps.schemas.plugin import PluginResponse
 from taskpps.schemas.run import (
     CleanRequest,
@@ -19,6 +19,7 @@ __all__ = [
     "OptionsYAML",
     "PipelineYAML",
     "PluginResponse",
+    "PostConfig",
     "RunListResponse",
     "RunResponse",
     "TaskRunResponse",

@@ -6,6 +6,7 @@ from taskpps.schemas.pipeline import (
     OptionsYAML,
     PipelineConfig,
     PipelineYAML,
+    PostConfig,
     SubPipeline,
     TaskStep,
     TaskYAML,
@@ -46,6 +47,7 @@ class ResolvedTask:
         depends_on: list[str] | None = None,
         when: str | None = None,
         artifacts: list[dict[str, str]] | None = None,
+        post: ResolvedPostConfig | None = None,
     ):
         self.name = name
         self.task_type = task_type
@@ -67,6 +69,7 @@ class ResolvedTask:
         self.depends_on = depends_on or []
         self.when = when
         self.artifacts = artifacts or []
+        self.post = post
 
     @classmethod
     def from_yaml(
@@ -79,6 +82,10 @@ class ResolvedTask:
         resolved_steps = None
         if task_yaml.steps:
             resolved_steps = [ResolvedStep.from_yaml(s) for s in task_yaml.steps]
+
+        resolved_post = None
+        if task_yaml.post:
+            resolved_post = ResolvedPostConfig.from_yaml(task_yaml.post, config)
 
         return cls(
             name=task_yaml.name,
@@ -101,6 +108,7 @@ class ResolvedTask:
             depends_on=task_yaml.depends_on,
             when=task_yaml.when,
             artifacts=[{"path": a.path} for a in task_yaml.artifacts],
+            post=resolved_post,
         )
 
 
@@ -112,23 +120,29 @@ class ResolvedSubPipeline:
         config: PipelineConfig,
         depends_on: list[str] | None = None,
         artifacts: list[dict[str, str]] | None = None,
+        post: ResolvedPostConfig | None = None,
     ):
         self.name = name
         self.tasks = tasks
         self.config = config
         self.depends_on = depends_on or []
         self.artifacts = artifacts or []
+        self.post = post
 
     @classmethod
     def from_yaml(cls, sub: SubPipeline, top_config: PipelineConfig) -> ResolvedSubPipeline:
         merged_config = _merge_config(top_config, sub.config)
         tasks = [ResolvedTask.from_yaml(t, merged_config) for t in sub.tasks]
+        resolved_post = None
+        if sub.post:
+            resolved_post = ResolvedPostConfig.from_yaml(sub.post, top_config)
         return cls(
             name=sub.name,
             tasks=tasks,
             config=merged_config,
             depends_on=sub.depends_on,
             artifacts=[{"path": a.path} for a in sub.artifacts],
+            post=resolved_post,
         )
 
     def get_task_by_name(self, name: str) -> ResolvedTask | None:
@@ -136,6 +150,34 @@ class ResolvedSubPipeline:
             if t.name == name:
                 return t
         return None
+
+
+class ResolvedPostConfig:
+    def __init__(
+        self,
+        on_fail: list[ResolvedTask] | None = None,
+        on_success: list[ResolvedTask] | None = None,
+        always: list[ResolvedTask] | None = None,
+    ):
+        self.on_fail = on_fail or []
+        self.on_success = on_success or []
+        self.always = always or []
+
+    @classmethod
+    def from_yaml(
+        cls,
+        post: PostConfig,
+        top_config: PipelineConfig,
+    ) -> ResolvedPostConfig:
+        return cls(
+            on_fail=[ResolvedTask.from_yaml(t, top_config) for t in post.on_fail],
+            on_success=[ResolvedTask.from_yaml(t, top_config) for t in post.on_success],
+            always=[ResolvedTask.from_yaml(t, top_config) for t in post.always],
+        )
+
+    @property
+    def has_any(self) -> bool:
+        return bool(self.on_fail or self.on_success or self.always)
 
 
 class ResolvedPipeline:
@@ -148,10 +190,12 @@ class ResolvedPipeline:
         top_config: PipelineConfig | None = None,
         pipeline_file: str = "",
         artifacts: list[dict[str, str]] | None = None,
+        post: ResolvedPostConfig | None = None,
     ):
         self.name = name
         self.pipeline_file = pipeline_file
         self.artifacts = artifacts or []
+        self.post = post
 
         if subpipelines is not None:
             self.subpipelines = subpipelines
@@ -175,12 +219,16 @@ class ResolvedPipeline:
         if spec.pipelines:
             for sub in spec.pipelines:
                 subs.append(ResolvedSubPipeline.from_yaml(sub, top_config))
+        resolved_post = None
+        if spec.post:
+            resolved_post = ResolvedPostConfig.from_yaml(spec.post, top_config)
         return cls(
             name=spec.name,
             subpipelines=subs,
             top_config=top_config,
             pipeline_file=pipeline_file,
             artifacts=[{"path": a.path} for a in spec.artifacts],
+            post=resolved_post,
         )
 
     def get_subpipeline_by_name(self, name: str) -> ResolvedSubPipeline | None:
