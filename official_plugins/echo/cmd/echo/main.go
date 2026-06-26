@@ -3,8 +3,11 @@
 //	type: executor
 //
 // 在 pipeline YAML 中使用:
-//   EchoPlugin:
+//   plugin: echo
+//   params:
 //     message: "hello world"
+//
+// host 继承自 task/subpipeline/pipeline config，不设则本地执行。
 //
 // 编译: go build -o echo ./cmd/echo/
 // 安装: cp echo <project>/official_plugins/echo/
@@ -72,7 +75,7 @@ var describe = DescribeResult{
 	Name:      "echo",
 	Type:      "executor",
 	Version:   "1.0.0",
-	HelpMsg:   "Echo 执行器 — 最小 ExecutorPlugin 示例\n\n在 pipeline 中使用:\n  EchoPlugin:\n    message: \"hello world\"\n\n参数:\n  message (必填) — 要输出的消息",
+	HelpMsg:   "Echo 执行器 — 最小 ExecutorPlugin 示例\n\n在 pipeline 中使用:\n  plugin: echo\n  params:\n    message: \"hello world\"\n\nhost 继承自 task/subpipeline/pipeline config，不设则本地执行。\n\n参数:\n  message (必填) — 要输出的消息",
 	ParamsSchema: map[string]Field{
 		"message": {Type: "string", Required: true, Label: "输出消息"},
 	},

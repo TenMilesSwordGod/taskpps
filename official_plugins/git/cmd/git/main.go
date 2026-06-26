@@ -4,10 +4,13 @@
 //	params: remote (string, required), branch (string, required), action (enum: clone/checkout/pull, required)
 //
 // 在 pipeline YAML 中使用:
-//   GitPlugin:
+//   plugin: git_plugin
+//   params:
 //     remote: "https://github.com/user/repo.git"
 //     branch: "main"
 //     action: "clone"
+//
+// host 继承自 task/subpipeline/pipeline config，不设则本地执行。
 //
 // 编译: go build -o git ./cmd/git/
 // 安装: cp git <project>/official_plugins/git/
@@ -78,7 +81,7 @@ var describe = DescribeResult{
 	Name:      "git_plugin",
 	Type:      "executor",
 	Version:   "1.0.0",
-	HelpMsg:   "Git 执行器 — 支持 clone/checkout/pull 操作\n\n在 pipeline 中使用:\n  GitPlugin:\n    remote: \"https://github.com/user/repo.git\"\n    branch: \"main\"\n    action: \"clone\"",
+	HelpMsg:   "Git 执行器 — 支持 clone/checkout/pull 操作\n\n在 pipeline 中使用:\n  plugin: git_plugin\n  params:\n    remote: \"https://github.com/user/repo.git\"\n    branch: \"main\"\n    action: \"clone\"\n\nhost 继承自 task/subpipeline/pipeline config，不设则本地执行。",
 	Hooks:     nil,
 	ParamsSchema: map[string]Field{
 		"remote": {Type: "string", Required: true, Label: "远程仓库地址"},

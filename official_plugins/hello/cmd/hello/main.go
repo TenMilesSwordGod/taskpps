@@ -1,11 +1,15 @@
 // Hello plugin — ExecutorPlugin 示例，演示 taskpps execute 协议。
 //
 //	type: executor
-//	params: message (string)
+//	params: message (string, required), delay (integer, optional)
 //
 // 在 pipeline YAML 中使用:
-//   HelloPlugin:
+//   plugin: hello
+//   params:
 //     message: "hello world"
+//     delay: 1   # 可选，模拟耗时操作(秒)
+//
+// host 继承自 task/subpipeline/pipeline config，不设则本地执行。
 //
 // 编译: go build -o hello ./cmd/hello/
 // 安装: cp hello <project>/official_plugins/hello/
@@ -74,7 +78,7 @@ var describe = DescribeResult{
 	Name:      "hello",
 	Type:      "executor",
 	Version:   "1.0.0",
-	HelpMsg:   "Hello Executor Plugin — 演示 taskpps ExecutorPlugin 协议\n\n在 pipeline 中使用:\n  HelloPlugin:\n    message: \"hello world\"\n    delay: 1   # 可选，模拟耗时操作(秒)",
+	HelpMsg:   "Hello Executor Plugin — 演示 taskpps ExecutorPlugin 协议\n\n在 pipeline 中使用:\n  plugin: hello\n  params:\n    message: \"hello world\"\n    delay: 1   # 可选，模拟耗时操作(秒)\n\nhost 继承自 task/subpipeline/pipeline config，不设则本地执行。",
 	Hooks:     nil,
 	ParamsSchema: map[string]Field{
 		"message": {Type: "string", Required: true, Label: "输出消息"},

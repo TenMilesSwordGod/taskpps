@@ -39,7 +39,7 @@ Plugin binary 通过 stdin/stdout JSON-RPC 2.0 与 Server 通信。
   "name": "git_plugin",
   "type": "executor",
   "version": "1.0.0",
-  "help_msg": "在 pipeline 中使用:\n  GitPlugin:\n    remote: ...\n    branch: main\n    action: checkout",
+  "help_msg": "在 pipeline 中使用:\n  plugin: git_plugin\n  params:\n    remote: ...\n    branch: main\n    action: checkout",
   "params_schema": {
     "remote": {"type":"string","required":true,"label":"远程仓库地址"},
     "branch": {"type":"string","required":true,"label":"分支名"},
@@ -96,8 +96,24 @@ Server                          Plugin
 
 ## convention
 
-- binary 名 = 目录名 = describe.name = YAML 中 task 类型名
+- binary 名 = 目录名 = describe.name（如 `echo`, `hello`, `git_plugin`）
 - stderr 用于插件日志（不影响 JSON-RPC 通信）
 - stdout 仅输出 JSON-RPC 响应（一行一条）
 - help_msg 必须包含在 pipeline YAML 中的使用示例
 - params_schema 中 required=true 的字段缺失时返回 JSON-RPC error
+
+### YAML 语法
+
+```yaml
+tasks:
+  - name: my_task
+    plugin: echo          # describe.name
+    params:               # 对应 params_schema 的字段
+      message: "hello"
+    host: my-agent        # 可选，覆盖 pipeline 级 host
+```
+
+- `plugin` 值 = `describe.name`（如 `echo`、`hello`、`git_plugin`）
+- `params` 对应 `params_schema` 定义的字段
+- `host` 继承链：task → subpipeline → pipeline config，不设则本地执行
+- 远程执行时插件 binary 必须存在于远程主机的相同路径下
