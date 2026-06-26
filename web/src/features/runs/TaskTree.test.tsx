@@ -170,6 +170,26 @@ describe('<TaskTree /> Issue #72 - 右键重试 + 重试版本徽标', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('Issue #154: 结果页节点出现在树中', () => {
+    const pipeline = makePipeline();
+    const onSelectResult = vi.fn();
+
+    render(
+      <Wrapper>
+        <TaskTree
+          pipeline={pipeline}
+          taskRuns={[]}
+          onSelect={vi.fn()}
+          isLive={false}
+          onSelectResult={onSelectResult}
+          resultSelected={false}
+        />
+      </Wrapper>,
+    );
+
+    expect(screen.getByText('结果页')).toBeInTheDocument();
+  });
+
   it('Issue #99: 服务端终态不被陈旧 SSE 覆盖', () => {
     const pipeline = makePipeline();
     const taskRuns = [

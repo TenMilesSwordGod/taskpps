@@ -337,6 +337,8 @@ describe('<RunDetailPage /> — Issue #134 artifacts 按钮', () => {
 
   it('TDD: RunDetailPage 操作栏包含 artifacts 按钮', async () => {
     // Re-mock api/runs for RunDetailPage context
+    const mockUseResultPage = vi.fn().mockReturnValue({ data: undefined });
+
     vi.doMock('@/api/runs', () => ({
       useRun: (id?: string) => mockUseRun(id),
       useCancelRun: () => mockUseCancelRun(),
@@ -344,6 +346,7 @@ describe('<RunDetailPage /> — Issue #134 artifacts 按钮', () => {
       usePipelineSnapshot: (id?: string) => mockUsePipelineSnapshot(id),
       useRetryVersions: (id?: string) => mockUseRetryVersions(id),
       useArtifacts: (id?: string) => mockUseArtifacts(id),
+      useResultPage: (id?: string) => mockUseResultPage(id),
     }))
 
     vi.doMock('./hooks/useSSELogs', () => ({

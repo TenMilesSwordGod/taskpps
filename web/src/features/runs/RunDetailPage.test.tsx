@@ -11,6 +11,8 @@ const mockUseRunConsole = vi.fn()
 const mockUsePipelineSnapshot = vi.fn()
 const mockUsePipeline = vi.fn()
 const mockUseRetryVersions = vi.fn()
+const mockUseResultPage = vi.fn()
+const mockUseArtifacts = vi.fn()
 
 vi.mock('@/api/runs', () => ({
   useRun: (id?: string) => mockUseRun(id),
@@ -18,6 +20,8 @@ vi.mock('@/api/runs', () => ({
   useRunConsole: () => mockUseRunConsole(),
   usePipelineSnapshot: (id?: string) => mockUsePipelineSnapshot(id),
   useRetryVersions: (id?: string) => mockUseRetryVersions(id),
+  useResultPage: (id?: string) => mockUseResultPage(id),
+  useArtifacts: (id?: string) => mockUseArtifacts(id),
 }))
 
 // usePipeline 不应被调用：#57 修复后禁止回退到当前 pipeline 文件
@@ -44,6 +48,10 @@ vi.mock('./LogViewer', () => ({
 
 // Issue #113: 捕获 RunStagePanel 收到的 props，用于断言面板传入快照和任务运行记录
 const mockRunStagePanelProps = vi.fn()
+vi.mock('./ResultViewer', () => ({
+  default: ({ data }: { data?: unknown }) => <div data-testid="result-viewer" data-has-data={String(!!data)} />,
+}))
+
 vi.mock('./RunStagePanel', () => ({
   default: (props: Record<string, unknown>) => {
     mockRunStagePanelProps(props)
@@ -119,6 +127,8 @@ describe('<RunDetailPage /> Issue #57 - 历史运行必须用快照', () => {
     mockUseCancelRun.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
     mockUseRunConsole.mockReturnValue({ data: null })
     mockUseRetryVersions.mockReturnValue({ data: undefined })
+    mockUseResultPage.mockReturnValue({ data: undefined })
+    mockUseArtifacts.mockReturnValue({ data: undefined, isLoading: false, error: null })
   })
 
   it('使用快照渲染 TaskTree，且不调用 usePipeline', async () => {

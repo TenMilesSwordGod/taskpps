@@ -15,7 +15,6 @@ from taskpps.config import (
     build_pipeline_log_path,
     get_logs_dir,
     get_settings,
-    get_workspaces_dir,
 )
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
@@ -43,6 +42,7 @@ from taskpps.services.artifact_service import (
     collect_task_artifacts,
     substitute_artifact_refs,
 )
+from taskpps.services.result_page import generate_result_page
 
 logger = logging.getLogger(__name__)
 _active_runs: dict[str, PipelineRunner] = {}
@@ -198,6 +198,19 @@ class PipelineRunner:
                         started_at=self._start_time,
                         finished_at=end_time,
                     )
+                try:
+                    generate_result_page(
+                        run_id=self.run_id,
+                        pipeline_name=self.pipeline.name,
+                        pipeline_id=self._pipeline_id,
+                        pipeline_version=self._pipeline_version,
+                        status=RunStatus.SUCCESS.value,
+                        started_at=self._start_time.isoformat() if self._start_time else None,
+                        finished_at=end_time.isoformat() if end_time else None,
+                        tasks=[],
+                    )
+                except Exception as rp_err:
+                    logger.warning("Failed to generate result page: %s", rp_err)
             finally:
                 _active_runs.pop(self.run_id, None)
             return
@@ -356,6 +369,31 @@ class PipelineRunner:
                 await run_repo.update_run_status(self.run_id, final_status, finished_at=end_time, error=run_error)
                 _final_status_updated = True
 
+                task_repo = TaskRunRepository(session)
+                task_runs = await task_repo.list_task_runs(self.run_id)
+                tasks_data = [
+                    {
+                        "task_name": t.task_name,
+                        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
+                    }
+                    for t in task_runs
+                ]
+
+            try:
+                generate_result_page(
+                    run_id=self.run_id,
+                    pipeline_name=self.pipeline.name,
+                    pipeline_id=self._pipeline_id,
+                    pipeline_version=self._pipeline_version,
+                    status=final_status.value,
+                    started_at=self._start_time.isoformat() if self._start_time else None,
+                    finished_at=end_time.isoformat() if end_time else None,
+                    tasks=tasks_data,
+                )
+                self._write_pipeline_log("INFO", "Result page generated")
+            except Exception as rp_err:
+                self._write_pipeline_log("WARN", f"Failed to generate result page: {rp_err}")
+
             task_names = [f"{sub.name}.{t.name}" for sub in self.pipeline.subpipelines for t in sub.tasks]
             try:
                 await collect_default_artifacts(
@@ -376,10 +414,13 @@ class PipelineRunner:
                 workspace = self.context.get_workspace()
                 try:
                     from taskpps.services.artifact_service import collect_task_artifacts as collect_pipeline_artifacts
+
                     await collect_pipeline_artifacts(
                         self.run_id, "pipeline", self.pipeline.artifacts, Path(workspace) if workspace else Path.cwd()
                     )
-                    self._write_pipeline_log("INFO", f"Collected {len(self.pipeline.artifacts)} pipeline-level artifact(s)")
+                    self._write_pipeline_log(
+                        "INFO", f"Collected {len(self.pipeline.artifacts)} pipeline-level artifact(s)"
+                    )
                 except Exception as art_err:
                     self._write_pipeline_log("WARN", f"Failed to collect pipeline artifacts: {art_err}")
 
@@ -691,8 +732,12 @@ class PipelineRunner:
         if sub.artifacts:
             workspace = self.context.get_workspace()
             try:
-                await collect_task_artifacts(self.run_id, sub_name, sub.artifacts, Path(workspace) if workspace else Path.cwd())
-                self._write_pipeline_log("INFO", f"Collected {len(sub.artifacts)} subpipeline-level artifact(s) for '{sub_name}'")
+                await collect_task_artifacts(
+                    self.run_id, sub_name, sub.artifacts, Path(workspace) if workspace else Path.cwd()
+                )
+                self._write_pipeline_log(
+                    "INFO", f"Collected {len(sub.artifacts)} subpipeline-level artifact(s) for '{sub_name}'"
+                )
             except Exception as art_err:
                 self._write_pipeline_log("WARN", f"Failed to collect subpipeline artifacts for '{sub_name}': {art_err}")
 
@@ -926,7 +971,9 @@ class PipelineRunner:
             workdir = Path(effective_cwd) if effective_cwd else Path.cwd()
             try:
                 await collect_task_artifacts(self.run_id, qualified_name, task.artifacts, workdir)
-                self._write_pipeline_log("INFO", f"Collected {len(task.artifacts)} artifact(s) for task '{qualified_name}'")
+                self._write_pipeline_log(
+                    "INFO", f"Collected {len(task.artifacts)} artifact(s) for task '{qualified_name}'"
+                )
             except Exception as art_err:
                 self._write_pipeline_log("WARN", f"Failed to collect artifacts for task '{qualified_name}': {art_err}")
 

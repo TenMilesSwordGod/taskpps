@@ -3,11 +3,12 @@ import { useParams, Link } from 'react-router-dom';
 import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
 import { XCircle, ListTree, RefreshCw, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot, useRetryVersions } from '@/api/runs';
+import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot, useRetryVersions, useResultPage } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
 import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
 import RunStagePanel from './RunStagePanel';
+import ResultViewer from './ResultViewer';
 import RetryModal from './RetryModal';
 import RetryVersionsDrawer from './RetryVersionsDrawer';
 import ArtifactsDrawer from './ArtifactsDrawer';
@@ -78,6 +79,10 @@ export default function RunDetailPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [debugVisible, setDebugVisible] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+
+  // Issue #154: 结果页状态
+  const [resultViewVisible, setResultViewVisible] = useState(false);
+  const { data: resultPage } = useResultPage(resultViewVisible ? id : undefined);
 
   // Issue #72: 右键重试相关状态
   const [retryTaskName, setRetryTaskName] = useState<string | null>(null);
@@ -313,22 +318,26 @@ export default function RunDetailPage() {
         />
       )}
 
-      {/* 主内容区：树 + 日志（可拖拽调整） */}
+      {/* 主内容区：树 + 日志/结果页（可拖拽调整） */}
       <div className="flex flex-1 min-h-0">
         {treeCollapsed ? (
           // 树隐藏时，日志占满
           <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
-            <LogViewer
-              logs={logs}
-              connected={connected}
-              autoScroll={autoScroll}
-              onAutoScrollChange={setAutoScroll}
-              onClear={clearLogs}
-              selectedTaskId={selectedTaskId}
-              onClearTaskFilter={() => setSelectedTaskId(null)}
-              failedCount={progress.failed}
-              onCopyLogs={handleCopyLogs}
-            />
+            {resultViewVisible && resultPage ? (
+              <ResultViewer data={resultPage} />
+            ) : (
+              <LogViewer
+                logs={logs}
+                connected={connected}
+                autoScroll={autoScroll}
+                onAutoScrollChange={setAutoScroll}
+                onClear={clearLogs}
+                selectedTaskId={selectedTaskId}
+                onClearTaskFilter={() => setSelectedTaskId(null)}
+                failedCount={progress.failed}
+                onCopyLogs={handleCopyLogs}
+              />
+            )}
           </div>
         ) : (
           <Splitter
@@ -346,7 +355,10 @@ export default function RunDetailPage() {
                   pipeline={pipeline}
                   taskRuns={run?.tasks}
                   selectedTaskId={selectedTaskId ?? undefined}
-                  onSelect={setSelectedTaskId}
+                  onSelect={(taskId) => {
+                    setResultViewVisible(false);
+                    setSelectedTaskId(taskId);
+                  }}
                   debugVisible={debugVisible}
                   runId={id}
                   isLive={isLive}
@@ -354,6 +366,11 @@ export default function RunDetailPage() {
                   onRetry={setRetryTaskName}
                   onShowVersions={setVersionsTaskName}
                   retryCounts={retryCounts}
+                  onSelectResult={() => {
+                    setResultViewVisible(true);
+                    setSelectedTaskId(null);
+                  }}
+                  resultSelected={resultViewVisible}
                 />
               ) : snapshotLoading ? (
                 <div className="p-3 text-gray-400 text-sm">加载历史快照中…</div>
@@ -365,17 +382,21 @@ export default function RunDetailPage() {
             </Splitter.Panel>
             <Splitter.Panel className="min-w-0">
               <div className="h-full rounded-lg overflow-hidden border border-gray-200 shadow-sm">
-                <LogViewer
-                  logs={logs}
-                  connected={connected}
-                  autoScroll={autoScroll}
-                  onAutoScrollChange={setAutoScroll}
-                  onClear={clearLogs}
-                  selectedTaskId={selectedTaskId}
-                  onClearTaskFilter={() => setSelectedTaskId(null)}
-                  failedCount={progress.failed}
-                  onCopyLogs={handleCopyLogs}
-                />
+                {resultViewVisible && resultPage ? (
+                  <ResultViewer data={resultPage} />
+                ) : (
+                  <LogViewer
+                    logs={logs}
+                    connected={connected}
+                    autoScroll={autoScroll}
+                    onAutoScrollChange={setAutoScroll}
+                    onClear={clearLogs}
+                    selectedTaskId={selectedTaskId}
+                    onClearTaskFilter={() => setSelectedTaskId(null)}
+                    failedCount={progress.failed}
+                    onCopyLogs={handleCopyLogs}
+                  />
+                )}
               </div>
             </Splitter.Panel>
           </Splitter>

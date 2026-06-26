@@ -427,6 +427,29 @@ export interface ArtifactListResponse {
   artifacts: ArtifactItem[]
 }
 
+/** 结果页响应 */
+export interface ResultPageResponse {
+  run_id: string;
+  pipeline_name: string;
+  status: string;
+  stats: {
+    status: string;
+    status_display: string;
+    pass_count: number;
+    fail_count: number;
+    blocked_count: number;
+    total_count: number;
+    started_at: string | null;
+    finished_at: string | null;
+    duration: string;
+  };
+  html_content: string;
+  md_content: string;
+  collector_mode: string | null;
+  has_collector: boolean;
+  generated_at: string | null;
+}
+
 /** 重试触发响应 */
 export interface RetryRunResponse {
   run_id: string;

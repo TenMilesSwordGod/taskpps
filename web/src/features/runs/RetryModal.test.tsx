@@ -11,12 +11,15 @@ const mockUseRetryVersions = vi.fn();
 const mockUseSelectRetryReport = vi.fn();
 const mockUseRetryLogs = vi.fn();
 
+const mockUseCancelRetryRun = vi.fn();
+
 vi.mock('@/api/runs', () => ({
   useDependencyTree: (...args: unknown[]) => mockUseDependencyTree(...args),
   useRetryRun: () => mockUseRetryRun(),
   useRetryVersions: (runId?: string) => mockUseRetryVersions(runId),
   useSelectRetryReport: () => mockUseSelectRetryReport(),
   useRetryLogs: (runId?: string, retryId?: string) => mockUseRetryLogs(runId, retryId),
+  useCancelRetryRun: () => mockUseCancelRetryRun(),
 }));
 
 vi.mock('@/components/StatusTag', () => ({
