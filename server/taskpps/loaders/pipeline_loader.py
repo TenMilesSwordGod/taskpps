@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from pathlib import Path
@@ -8,6 +9,8 @@ import yaml
 from taskpps.config import get_agents_dir, get_pipelines_dir, get_settings
 from taskpps.i18n import t
 from taskpps.schemas.pipeline import PipelineYAML
+
+log = logging.getLogger(__name__)
 
 _VAR_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
@@ -212,14 +215,16 @@ class PipelineLoader:
                 rel = path.relative_to(base)
                 spec = self.load(str(rel))
                 result[spec.name] = spec
-            except Exception:
+            except Exception as e:
+                log.warning("跳过无效 pipeline 文件 %s: %s", path, e)
                 continue
         for path in sorted(base.glob("**/*.yml")):
             try:
                 rel = path.relative_to(base)
                 spec = self.load(str(rel))
                 result[spec.name] = spec
-            except Exception:
+            except Exception as e:
+                log.warning("跳过无效 pipeline 文件 %s: %s", path, e)
                 continue
         return result
 
@@ -234,13 +239,15 @@ class PipelineLoader:
                 rel = path.relative_to(base)
                 spec = self.load(str(rel))
                 result[str(rel)] = spec
-            except Exception:
+            except Exception as e:
+                log.warning("跳过无效 pipeline 文件 %s: %s", path, e)
                 continue
         for path in sorted(base.glob("**/*.yml")):
             try:
                 rel = path.relative_to(base)
                 spec = self.load(str(rel))
                 result[str(rel)] = spec
-            except Exception:
+            except Exception as e:
+                log.warning("跳过无效 pipeline 文件 %s: %s", path, e)
                 continue
         return result
