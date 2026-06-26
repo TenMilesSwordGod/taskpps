@@ -1,5 +1,5 @@
 {
-  "total": 1136,
+  "total": 1168,
   "mappings": {
     "test_agent_executor.py::test_sequential_task_waits_for_busy_agent": {
       "tc_local_id": "TC-S0001",
@@ -10224,6 +10224,294 @@
       "test_name": "test_legacy_options_cwd",
       "file": "domain/test_pipeline_cwd.py",
       "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterDescribe::test_describe_executor_plugin_parsed_correctly": {
+      "tc_local_id": "TC-S1137",
+      "zentao_id": 1562,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_describe_executor_plugin_parsed_correctly",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterDescribe::test_describe_hook_plugin_parsed_correctly": {
+      "tc_local_id": "TC-S1137",
+      "zentao_id": 1562,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_describe_hook_plugin_parsed_correctly",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterDescribe::test_describe_empty_hooks_and_schema": {
+      "tc_local_id": "TC-S1137",
+      "zentao_id": 1562,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_describe_empty_hooks_and_schema",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterBinaryNotFound::test_binary_not_found_logs_error_and_skips": {
+      "tc_local_id": "TC-S1138",
+      "zentao_id": 1563,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_binary_not_found_logs_error_and_skips",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterInvalidJSON::test_invalid_json_skips_and_logs_error": {
+      "tc_local_id": "TC-S1139",
+      "zentao_id": 1564,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_invalid_json_skips_and_logs_error",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterUnknownType::test_unknown_type_skips_and_warns": {
+      "tc_local_id": "TC-S1140",
+      "zentao_id": 1565,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_unknown_type_skips_and_warns",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterUnknownType::test_type_none_skips_and_warns": {
+      "tc_local_id": "TC-S1140",
+      "zentao_id": 1565,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_type_none_skips_and_warns",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterExecute::test_execute_success": {
+      "tc_local_id": "TC-S1141",
+      "zentao_id": 1566,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_execute_success",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterExecute::test_execute_failure": {
+      "tc_local_id": "TC-S1141",
+      "zentao_id": 1566,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_execute_failure",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterExecute::test_execute_nonexistent_plugin_raises": {
+      "tc_local_id": "TC-S1141",
+      "zentao_id": 1566,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_execute_nonexistent_plugin_raises",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterExecute::test_execute_crashed_plugin_raises": {
+      "tc_local_id": "TC-S1141",
+      "zentao_id": 1566,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_execute_crashed_plugin_raises",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterExecute::test_execute_not_executor_type_raises": {
+      "tc_local_id": "TC-S1141",
+      "zentao_id": 1566,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_execute_not_executor_type_raises",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterHookDispatch::test_hook_registered_in_hook_map": {
+      "tc_local_id": "TC-S1142",
+      "zentao_id": 1567,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_hook_registered_in_hook_map",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterHookDispatch::test_dispatch_sends_jsonrpc_to_plugin": {
+      "tc_local_id": "TC-S1142",
+      "zentao_id": 1567,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_dispatch_sends_jsonrpc_to_plugin",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterHookDispatch::test_dispatch_nonexistent_hook_noop": {
+      "tc_local_id": "TC-S1142",
+      "zentao_id": 1567,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_dispatch_nonexistent_hook_noop",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterHookDispatch::test_dispatch_skips_crashed_plugin": {
+      "tc_local_id": "TC-S1142",
+      "zentao_id": 1567,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_dispatch_skips_crashed_plugin",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterMultiplePlugins::test_multiple_plugins_load_independently": {
+      "tc_local_id": "TC-S1143",
+      "zentao_id": 1568,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_multiple_plugins_load_independently",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterMultiplePlugins::test_one_plugin_failure_does_not_block_others": {
+      "tc_local_id": "TC-S1143",
+      "zentao_id": 1568,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_one_plugin_failure_does_not_block_others",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterCrashRestart::test_crash_restart_works_within_limit": {
+      "tc_local_id": "TC-S1144",
+      "zentao_id": 1570,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_crash_restart_works_within_limit",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterCrashRestart::test_crash_exceeds_max_restarts_marks_crashed": {
+      "tc_local_id": "TC-S1144",
+      "zentao_id": 1570,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_crash_exceeds_max_restarts_marks_crashed",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterDualDirectory::test_both_directories_scanned": {
+      "tc_local_id": "TC-S1145",
+      "zentao_id": 1571,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_both_directories_scanned",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterDualDirectory::test_plugins_dir_not_exists_degraded": {
+      "tc_local_id": "TC-S1145",
+      "zentao_id": 1571,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_plugins_dir_not_exists_degraded",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterDualDirectory::test_empty_both_directories_no_plugins": {
+      "tc_local_id": "TC-S1145",
+      "zentao_id": 1571,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_empty_both_directories_no_plugins",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterAPI::test_list_plugins_returns_status_and_help_msg": {
+      "tc_local_id": "TC-S1146",
+      "zentao_id": 1569,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_list_plugins_returns_status_and_help_msg",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterAPI::test_list_plugins_empty": {
+      "tc_local_id": "TC-S1146",
+      "zentao_id": 1569,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_list_plugins_empty",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterAPI::test_get_plugin_by_name": {
+      "tc_local_id": "TC-S1146",
+      "zentao_id": 1569,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_get_plugin_by_name",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterAPI::test_get_plugin_nonexistent": {
+      "tc_local_id": "TC-S1146",
+      "zentao_id": 1569,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_get_plugin_nonexistent",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterTimeout::test_execute_timeout_returns_error": {
+      "tc_local_id": "TC-S1147",
+      "zentao_id": 1572,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_execute_timeout_returns_error",
+      "file": "test_plugin_center.py",
+      "priority": "P1"
+    },
+    "test_plugin_center.py::TestPluginCenterBoundary::test_describe_response_eof_returns_none": {
+      "tc_local_id": "TC-S1137",
+      "zentao_id": 1562,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_describe_response_eof_returns_none",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterBoundary::test_oserror_during_spawn_logs_and_skips": {
+      "tc_local_id": "TC-S1138",
+      "zentao_id": 1563,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_oserror_during_spawn_logs_and_skips",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterBoundary::test_invalid_rpc_structure_skips_and_logs": {
+      "tc_local_id": "TC-S1139",
+      "zentao_id": 1564,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_invalid_rpc_structure_skips_and_logs",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
+    },
+    "test_plugin_center.py::TestPluginCenterShutdown::test_shutdown_cleans_up_plugins": {
+      "tc_local_id": "TC-S1147",
+      "zentao_id": 1572,
+      "domain": "server/plugin_center",
+      "source": "server",
+      "test_name": "test_shutdown_cleans_up_plugins",
+      "file": "test_plugin_center.py",
+      "priority": "P2"
     }
   }
 }
