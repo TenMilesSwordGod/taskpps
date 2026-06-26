@@ -123,3 +123,4 @@ secrets.yml
 .secrets/
 .env.*
 !.env.example
+web/dist_old/
