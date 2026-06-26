@@ -20,7 +20,7 @@ from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext
 from taskpps.domain.dag import DAG, DAGCycleError
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedSubPipeline, ResolvedTask
 from taskpps.events.bus import (
     SIGNAL_PIPELINE_STARTED,
     SIGNAL_RUN_CANCELLED,
@@ -198,6 +198,7 @@ class PipelineRunner:
                         started_at=self._start_time,
                         finished_at=end_time,
                     )
+                await self._execute_post_phase(RunStatus.SUCCESS)
                 try:
                     generate_result_page(
                         run_id=self.run_id,
@@ -423,6 +424,8 @@ class PipelineRunner:
                     )
                 except Exception as art_err:
                     self._write_pipeline_log("WARN", f"Failed to collect pipeline artifacts: {art_err}")
+
+            await self._execute_post_phase(final_status)
 
             self._write_pipeline_log("PIPELINE:TEARDOWN", "")
             self._write_pipeline_log("SYSTEM", f"End Time: {end_time.isoformat()}")
@@ -715,6 +718,7 @@ class PipelineRunner:
             self._write_pipeline_log(
                 "FAILED", f"SubPipeline '{sub_name}' finished with {len(failed_tasks)} failed tasks"
             )
+            await self._execute_subpipeline_post(sub, sub_name, has_failures=True)
             self._write_pipeline_log(f"SUB:{sub_name}:TEARDOWN", "")
             self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' finished")
             self._write_separator("=", f"[subpipeline] {sub_name} end")
@@ -740,6 +744,8 @@ class PipelineRunner:
                 )
             except Exception as art_err:
                 self._write_pipeline_log("WARN", f"Failed to collect subpipeline artifacts for '{sub_name}': {art_err}")
+
+        await self._execute_subpipeline_post(sub, sub_name, has_failures=False)
 
         self._write_pipeline_log(f"SUB:{sub_name}:TEARDOWN", "")
         self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' finished")
@@ -982,6 +988,8 @@ class PipelineRunner:
             if last_result.stderr:
                 self._write_pipeline_log("ERROR", f"Error output: {last_result.stderr[:500]}")
 
+        await self._execute_task_post(task, qualified_name, task_succeeded=last_result.success)
+
         self._write_pipeline_log(f"TASK:{qualified_name}:TEARDOWN", "")
         self._write_pipeline_log("INFO", f"Task '{qualified_name}' finished with exit_code={last_result.exit_code}")
         self._write_separator("-", f"[task] {qualified_name} end")
@@ -1079,6 +1087,321 @@ class PipelineRunner:
                 )
 
         return ExecutorResult(exit_code=0, stdout=combined_output)
+
+    async def _execute_post_phase(self, final_status: RunStatus) -> None:
+        post = self.pipeline.post
+        if post is None:
+            return
+        if not post.has_any:
+            return
+
+        failed_like = (final_status == RunStatus.FAILED
+                       or final_status == RunStatus.PARTIAL
+                       or final_status == RunStatus.CANCELLED)
+
+        if failed_like and post.on_fail:
+            await self._execute_post_block("on_fail", post.on_fail)
+
+        if final_status == RunStatus.SUCCESS and post.on_success:
+            await self._execute_post_block("on_success", post.on_success)
+
+        if post.always:
+            await self._execute_post_block("always", post.always)
+
+    async def _execute_task_post(
+        self, task: ResolvedTask, qualified_task_name: str, task_succeeded: bool
+    ) -> None:
+        post = task.post
+        if post is None or not post.has_any:
+            return
+
+        if not task_succeeded and post.on_fail:
+            await self._execute_post_block_for_level(
+                "TASK", qualified_task_name, "on_fail", post.on_fail
+            )
+
+        if task_succeeded and post.on_success:
+            await self._execute_post_block_for_level(
+                "TASK", qualified_task_name, "on_success", post.on_success
+            )
+
+        if post.always:
+            await self._execute_post_block_for_level(
+                "TASK", qualified_task_name, "always", post.always
+            )
+
+    async def _execute_subpipeline_post(
+        self, sub: ResolvedSubPipeline, sub_name: str, has_failures: bool
+    ) -> None:
+        post = sub.post
+        if post is None or not post.has_any:
+            return
+
+        if has_failures and post.on_fail:
+            await self._execute_post_block_for_level(
+                "SUB", sub_name, "on_fail", post.on_fail
+            )
+
+        if not has_failures and post.on_success:
+            await self._execute_post_block_for_level(
+                "SUB", sub_name, "on_success", post.on_success
+            )
+
+        if post.always:
+            await self._execute_post_block_for_level(
+                "SUB", sub_name, "always", post.always
+            )
+
+    async def _execute_post_block_for_level(
+        self, level: str, level_name: str, condition: str, tasks: list[ResolvedTask]
+    ) -> None:
+        self._write_pipeline_log(
+            "INFO",
+            f"Running post phase: {level.lower()}={level_name} condition={condition} ({len(tasks)} tasks)",
+        )
+        self._write_pipeline_log(f"POST:{level}:{level_name}:{condition}:SETUP", "")
+
+        for task in tasks:
+            await self._execute_post_task_for_level(level, level_name, condition, task)
+
+        self._write_pipeline_log(f"POST:{level}:{level_name}:{condition}:TEARDOWN", "")
+
+    async def _execute_post_task_for_level(
+        self, level: str, level_name: str, condition: str, task: ResolvedTask
+    ) -> ExecutorResult:
+        qualified_name = f"POST.{condition}.{task.name}"
+
+        if self._pipeline_id:
+            log_path = build_log_path(
+                self._pipeline_id, self._pipeline_version or "", self.run_id, qualified_name
+            )
+        else:
+            log_path = Path(self._task_run_ids.get(qualified_name, "post_task.log"))
+
+        env = self.context.get_task_env(task)
+        env["TASKPPS_RUN_ID"] = self.run_id
+        env["TASKPPS_LEVEL"] = level
+        env["TASKPPS_LEVEL_NAME"] = level_name
+        env["TASKPPS_POST_CONDITION"] = condition
+
+        for key, val in env.items():
+            if isinstance(val, str) and "${artifact:" in val:
+                env[key] = substitute_artifact_refs(val, self.run_id, level_name if level == "TASK" else "")
+
+        when_env = {**self.pipeline.top_config.env, **task.env, **self.context.env}
+        if not _evaluate_when(task.when, when_env):
+            logger.info("PipelineRunner: post task '%s' skipped due to when condition", qualified_name)
+            self._write_pipeline_log("SKIP", f"Post task '{qualified_name}' skipped (when condition not met)")
+            return ExecutorResult(exit_code=0, stdout="Post task skipped (when condition not met)")
+
+        self._write_separator("-", f"[post task] {qualified_name} start")
+        self._write_pipeline_log(f"TASK:{qualified_name}:SETUP", "")
+        self._write_pipeline_log(
+            "INFO",
+            f"Executing post task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})",
+        )
+        if task.cwd:
+            self._write_pipeline_log("INFO", f"  cwd: {task.cwd}")
+
+        if task.task_type == "plugin" and task.plugin:
+            self._write_pipeline_log("CMD", f"  plugin: {task.plugin} (params={len(task.plugin_params)} keys)")
+        elif task.commands:
+            self._write_pipeline_log("CMD", f"  commands: {len(task.commands)} command(s)")
+        else:
+            cmd = task.command or ""
+            self._write_pipeline_log("CMD", f"  command: {cmd}")
+
+        timeout = task.timeout or get_settings().executor.default_timeout
+
+        try:
+            executor = create_executor(task, self.context.project_workdir)
+            effective_cwd = task.cwd or self.context.get_workspace()
+
+            if effective_cwd and isinstance(executor, LocalExecutor) and not os.path.isdir(effective_cwd):
+                self._write_pipeline_log(
+                    "WARN", f"Post task '{qualified_name}' cwd does not exist: {effective_cwd}, using current dir"
+                )
+                effective_cwd = os.getcwd()
+
+            if isinstance(executor, InvokeExecutor):
+                result = await executor.execute(
+                    command="",
+                    env=env,
+                    log_path=log_path,
+                    timeout=timeout,
+                    invoke_task=task.invoke_task,
+                    invoke_args=task.invoke_args,
+                    invoke_kwargs=task.invoke_kwargs,
+                )
+            elif isinstance(executor, PluginExecutor):
+                result = await executor.execute(
+                    command="",
+                    env=env,
+                    log_path=log_path,
+                    timeout=timeout,
+                )
+            elif task.task_type == "steps" and task.steps:
+                result = await self._execute_steps(executor, task, env, log_path, timeout, effective_cwd)
+            elif task.commands:
+                result = await self._execute_commands(executor, task, env, log_path, timeout, effective_cwd)
+            else:
+                cmd = task.command or ""
+                result = await executor.execute(
+                    command=cmd,
+                    env=env,
+                    log_path=log_path,
+                    timeout=timeout,
+                    cwd=effective_cwd,
+                )
+        except Exception as e:
+            error_msg = f"Unexpected error executing post task '{qualified_name}': {e}"
+            logger.exception(error_msg)
+            self._write_pipeline_log("ERROR", error_msg)
+            self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
+            try:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(log_path, "a") as f:
+                    f.write(f"\n[ERROR] {error_msg}\n")
+                    f.write(f"[ERROR] Traceback:\n{traceback.format_exc()}")
+            except Exception:
+                pass
+            result = ExecutorResult(exit_code=1, stderr=str(e))
+
+        exit_code = result.exit_code
+        if result.success:
+            self._write_pipeline_log(
+                "INFO", f"Post task '{qualified_name}' completed with exit_code: {exit_code}"
+            )
+        else:
+            self._write_pipeline_log(
+                "WARN", f"Post task '{qualified_name}' failed with exit_code: {exit_code}"
+            )
+
+        self._write_pipeline_log(f"TASK:{qualified_name}:TEARDOWN", "")
+        self._write_pipeline_log("INFO", f"Post task '{qualified_name}' finished with exit_code={exit_code}")
+        self._write_separator("-", f"[post task] {qualified_name} end")
+        return result
+
+    async def _execute_post_block(self, condition: str, tasks: list[ResolvedTask]) -> None:
+        self._write_pipeline_log("INFO", f"Running post phase: {condition} ({len(tasks)} tasks)")
+        self._write_pipeline_log(f"POST:{condition}:SETUP", "")
+
+        for task in tasks:
+            await self._execute_post_task(condition, task)
+
+        self._write_pipeline_log(f"POST:{condition}:TEARDOWN", "")
+
+    async def _execute_post_task(self, condition: str, task: ResolvedTask) -> ExecutorResult:
+        qualified_name = f"POST.{condition}.{task.name}"
+
+        if self._pipeline_id:
+            log_path = build_log_path(
+                self._pipeline_id, self._pipeline_version or "", self.run_id, qualified_name
+            )
+        else:
+            log_path = Path(self._task_run_ids.get(qualified_name, "post_task.log"))
+
+        env = self.context.get_task_env(task)
+        env["TASKPPS_RUN_ID"] = self.run_id
+        env["TASKPPS_PIPELINE_STATUS"] = self._cancelled and "cancelled" or "success"
+
+        for key, val in env.items():
+            if isinstance(val, str) and "${artifact:" in val:
+                env[key] = substitute_artifact_refs(val, self.run_id, "")
+
+        when_env = {**self.pipeline.top_config.env, **task.env, **self.context.env}
+        if not _evaluate_when(task.when, when_env):
+            logger.info("PipelineRunner: post task '%s' skipped due to when condition", qualified_name)
+            self._write_pipeline_log("SKIP", f"Post task '{qualified_name}' skipped (when condition not met)")
+            return ExecutorResult(exit_code=0, stdout="Post task skipped (when condition not met)")
+
+        self._write_separator("-", f"[post task] {qualified_name} start")
+        self._write_pipeline_log(f"TASK:{qualified_name}:SETUP", "")
+        self._write_pipeline_log(
+            "INFO",
+            f"Executing post task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})",
+        )
+        if task.cwd:
+            self._write_pipeline_log("INFO", f"  cwd: {task.cwd}")
+
+        if task.task_type == "plugin" and task.plugin:
+            self._write_pipeline_log("CMD", f"  plugin: {task.plugin} (params={len(task.plugin_params)} keys)")
+        elif task.commands:
+            self._write_pipeline_log("CMD", f"  commands: {len(task.commands)} command(s)")
+        else:
+            cmd = task.command or ""
+            self._write_pipeline_log("CMD", f"  command: {cmd}")
+
+        timeout = task.timeout or get_settings().executor.default_timeout
+
+        try:
+            executor = create_executor(task, self.context.project_workdir)
+            effective_cwd = task.cwd or self.context.get_workspace()
+
+            if effective_cwd and isinstance(executor, LocalExecutor) and not os.path.isdir(effective_cwd):
+                self._write_pipeline_log(
+                    "WARN", f"Post task '{qualified_name}' cwd does not exist: {effective_cwd}, using current dir"
+                )
+                effective_cwd = os.getcwd()
+
+            if isinstance(executor, InvokeExecutor):
+                result = await executor.execute(
+                    command="",
+                    env=env,
+                    log_path=log_path,
+                    timeout=timeout,
+                    invoke_task=task.invoke_task,
+                    invoke_args=task.invoke_args,
+                    invoke_kwargs=task.invoke_kwargs,
+                )
+            elif isinstance(executor, PluginExecutor):
+                result = await executor.execute(
+                    command="",
+                    env=env,
+                    log_path=log_path,
+                    timeout=timeout,
+                )
+            elif task.task_type == "steps" and task.steps:
+                result = await self._execute_steps(executor, task, env, log_path, timeout, effective_cwd)
+            elif task.commands:
+                result = await self._execute_commands(executor, task, env, log_path, timeout, effective_cwd)
+            else:
+                cmd = task.command or ""
+                result = await executor.execute(
+                    command=cmd,
+                    env=env,
+                    log_path=log_path,
+                    timeout=timeout,
+                    cwd=effective_cwd,
+                )
+        except Exception as e:
+            error_msg = f"Unexpected error executing post task '{qualified_name}': {e}"
+            logger.exception(error_msg)
+            self._write_pipeline_log("ERROR", error_msg)
+            self._write_pipeline_log("ERROR", f"Traceback:\n{traceback.format_exc()}")
+            try:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(log_path, "a") as f:
+                    f.write(f"\n[ERROR] {error_msg}\n")
+                    f.write(f"[ERROR] Traceback:\n{traceback.format_exc()}")
+            except Exception:
+                pass
+            result = ExecutorResult(exit_code=1, stderr=str(e))
+
+        exit_code = result.exit_code
+        if result.success:
+            self._write_pipeline_log(
+                "INFO", f"Post task '{qualified_name}' completed with exit_code: {exit_code}"
+            )
+        else:
+            self._write_pipeline_log(
+                "WARN", f"Post task '{qualified_name}' failed with exit_code: {exit_code}"
+            )
+
+        self._write_pipeline_log(f"TASK:{qualified_name}:TEARDOWN", "")
+        self._write_pipeline_log("INFO", f"Post task '{qualified_name}' finished with exit_code={exit_code}")
+        self._write_separator("-", f"[post task] {qualified_name} end")
+        return result
 
     async def cancel(self) -> None:
         self._cancelled = True

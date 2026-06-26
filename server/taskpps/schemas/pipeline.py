@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
@@ -37,6 +39,7 @@ class TaskYAML(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     when: str | None = None
     artifacts: list[ArtifactDeclaration] = Field(default_factory=list)
+    post: PostConfig | None = None
 
     def get_task_type(self) -> str:
         if self.invoke is not None:
@@ -89,12 +92,20 @@ class SubPipeline(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     tasks: list[TaskYAML]
     artifacts: list[ArtifactDeclaration] = Field(default_factory=list)
+    post: PostConfig | None = None
+
+
+class PostConfig(BaseModel):
+    on_fail: list[TaskYAML] = Field(default_factory=list)
+    on_success: list[TaskYAML] = Field(default_factory=list)
+    always: list[TaskYAML] = Field(default_factory=list)
 
 
 class PipelineYAML(BaseModel):
     name: str
     options: OptionsYAML | None = None
     config: PipelineConfig | None = None
+    post: PostConfig | None = None
     tasks: list[TaskYAML] | None = None
     pipelines: list[SubPipeline] | None = None
     artifacts: list[ArtifactDeclaration] = Field(default_factory=list)
