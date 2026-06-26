@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from croniter import croniter
 
 from taskpps.i18n import t
-from taskpps.plugins.base import TriggerPlugin
+from taskpps.services.plugin_base import TriggerPlugin
 
 logger = logging.getLogger(__name__)
 

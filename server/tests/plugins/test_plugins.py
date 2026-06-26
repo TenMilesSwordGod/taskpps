@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from taskpps.plugins.base import BasePlugin, ExecutorPlugin, NotifierPlugin, TriggerPlugin
-from taskpps.plugins.cron_trigger import CronTrigger
+from taskpps.services.plugin_base import BasePlugin, ExecutorPlugin, NotifierPlugin, TriggerPlugin
+from taskpps.services.cron_trigger import CronTrigger
 from taskpps.services.plugin_manager import PluginManager
 
 
@@ -272,7 +272,7 @@ class TestPluginManagerPlugins:
         plugins_dir.mkdir()
         plugin_file = plugins_dir / "simple_plugin.py"
         plugin_file.write_text("""
-from taskpps.plugins.base import BasePlugin
+from taskpps.services.plugin_base import BasePlugin
 
 class SimplePlugin(BasePlugin):
     @property

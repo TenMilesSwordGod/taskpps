@@ -39,7 +39,7 @@ class TestPluginManager:
     @pytest.mark.zentao("TC-S0382", domain="server/services", priority="P1")
     def test_stop_all_with_plugins(self):
         pm = PluginManager()
-        from taskpps.plugins.base import BasePlugin
+        from taskpps.services.plugin_base import BasePlugin
 
         class TestPlugin(BasePlugin):
             @property
@@ -66,7 +66,7 @@ class TestPluginManager:
     @pytest.mark.zentao("TC-S0383", domain="server/services", priority="P2")
     def test_start_triggers_already_running(self):
         pm = PluginManager()
-        from taskpps.plugins.cron_trigger import CronTrigger
+        from taskpps.services.cron_trigger import CronTrigger
 
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
         trigger._running = True
@@ -86,7 +86,7 @@ async def test_discover_registers_to_db(db_engine, tmp_project):
     plugins_dir = tmp_project / "plugins"
     plugin_file = plugins_dir / "discoverable.py"
     plugin_file.write_text("""
-from taskpps.plugins.base import NotifierPlugin
+from taskpps.services.plugin_base import NotifierPlugin
 
 class DiscoverablePlugin(NotifierPlugin):
     @property
@@ -143,7 +143,7 @@ async def test_discover_upserts_existing(db_engine, tmp_project):
     plugins_dir = tmp_project / "plugins"
     plugin_file = plugins_dir / "upsertable.py"
     plugin_file.write_text("""
-from taskpps.plugins.base import NotifierPlugin
+from taskpps.services.plugin_base import NotifierPlugin
 
 class UpsertablePlugin(NotifierPlugin):
     @property
