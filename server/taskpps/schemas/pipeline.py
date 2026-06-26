@@ -53,6 +53,8 @@ class TaskYAML(BaseModel):
     steps: list[TaskStep] | None = None
     git: GitSpec | None = None
     nexus: NexusSpec | None = None
+    plugin: str | None = None
+    params: dict[str, Any] | None = None
     cwd: str | None = None
     host: str | None = None
     credential: str | None = None
@@ -73,6 +75,8 @@ class TaskYAML(BaseModel):
             return "git"
         if self.nexus is not None:
             return "nexus"
+        if self.plugin is not None:
+            return "plugin"
         return "command"
 
     def get_effective_command(self) -> str | None:

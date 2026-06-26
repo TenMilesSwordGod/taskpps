@@ -37,6 +37,7 @@ from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.local import LocalExecutor
 from taskpps.executors.nexus import NexusExecutor
+from taskpps.executors.plugin import PluginExecutor
 from taskpps.i18n import t
 from taskpps.models.run import RunStatus, TaskStatus
 from taskpps.services.artifact_service import (
@@ -775,6 +776,8 @@ class PipelineRunner:
             self._write_pipeline_log("CMD", f"  git: {task.git.get('action', 'clone')} {task.git.get('repo', '')}")
         elif task.task_type == "nexus" and task.nexus:
             self._write_pipeline_log("CMD", f"  nexus: {task.nexus.get('action', '')} {task.nexus.get('url', '')}")
+        elif task.task_type == "plugin" and task.plugin:
+            self._write_pipeline_log("CMD", f"  plugin: {task.plugin} (params={len(task.plugin_params)} keys)")
         elif task.task_type == "steps" and task.steps:
             self._write_pipeline_log("CMD", f"  steps: {len(task.steps)} step(s)")
         elif task.commands:
@@ -849,6 +852,15 @@ class PipelineRunner:
                     )
                     if isinstance(executor, GitExecutor) and result.success:
                         self.context.set_workspace(task.name, executor.dest)
+                elif isinstance(executor, PluginExecutor):
+                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': PluginExecutor path")
+                    logger.info("PipelineRunner: task '%s' dispatching to PluginExecutor", qualified_name)
+                    result = await executor.execute(
+                        command="",
+                        env=env,
+                        log_path=log_path,
+                        timeout=timeout,
+                    )
                 elif task.task_type == "steps" and task.steps:
                     logger.debug(f"[DEBUG-EXEC] '{qualified_name}': steps path, {len(task.steps)} steps")
                     logger.info(

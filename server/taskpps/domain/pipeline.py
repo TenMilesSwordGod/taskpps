@@ -36,6 +36,8 @@ class ResolvedTask:
         steps: list[ResolvedStep] | None = None,
         git: dict[str, Any] | None = None,
         nexus: dict[str, Any] | None = None,
+        plugin: str | None = None,
+        plugin_params: dict[str, Any] | None = None,
         cwd: str | None = None,
         host: str | None = None,
         credential: str | None = None,
@@ -57,6 +59,8 @@ class ResolvedTask:
         self.steps = steps
         self.git = git or {}
         self.nexus = nexus or {}
+        self.plugin = plugin
+        self.plugin_params = plugin_params or {}
         self.cwd = cwd
         self.host = host
         self.credential = credential
@@ -99,6 +103,8 @@ class ResolvedTask:
             steps=resolved_steps,
             git=resolved_git,
             nexus=resolved_nexus,
+            plugin=task_yaml.plugin,
+            plugin_params=task_yaml.params,
             cwd=task_yaml.cwd or config.cwd,
             host=task_yaml.host or config.host,
             credential=task_yaml.credential or config.credential,

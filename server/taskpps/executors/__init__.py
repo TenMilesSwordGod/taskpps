@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from taskpps.domain.pipeline import ResolvedTask
@@ -10,6 +11,7 @@ from taskpps.executors.git import GitExecutor
 from taskpps.executors.invoke import InvokeExecutor
 from taskpps.executors.local import LocalExecutor
 from taskpps.executors.nexus import NexusExecutor
+from taskpps.executors.plugin import PluginExecutor
 from taskpps.executors.ssh import SSHExecutor
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
@@ -56,6 +58,9 @@ def create_executor(
             source_repo=task.nexus.get("source_repo"),
             target_repo=task.nexus.get("target_repo"),
         )
+
+    if task.task_type == "plugin" and task.plugin:
+        return _create_plugin_executor(task, project_workdir)
 
     if task.host:
         from pathlib import Path
@@ -105,6 +110,66 @@ def create_executor(
         return _make_ssh_executor(host, port, agent_data, task)
 
     return LocalExecutor()
+
+
+def _create_plugin_executor(task: ResolvedTask, project_workdir: str | None = None) -> BaseExecutor:
+    from taskpps.services.plugin_center import get_plugin_center
+
+    pc = get_plugin_center()
+    if pc is None:
+        raise ValueError(t("PluginCenter not available"))
+
+    p_info = pc.get_plugin(task.plugin)
+    if p_info is None or p_info.binary_path is None:
+        raise ValueError(t("Plugin '{name}' not found or has no binary path", name=task.plugin))
+
+    binary_path = p_info.binary_path
+
+    if task.host:
+        delegate = _create_plugin_remote_delegate(task, project_workdir)
+        if delegate is not None:
+            return PluginExecutor(binary_path=binary_path, params=task.plugin_params, delegate=delegate)
+
+    return PluginExecutor(binary_path=binary_path, params=task.plugin_params)
+
+
+def _create_plugin_remote_delegate(
+    task: ResolvedTask, project_workdir: str | None = None
+) -> BaseExecutor | None:
+    from taskpps.config import get_agents_dir
+
+    agents_dir = get_agents_dir(Path(project_workdir)) if project_workdir else None
+    agent_loader = AgentLoader(base_dir=agents_dir) if agents_dir else AgentLoader()
+    agent_data = _resolve_agent(agent_loader, task.host)
+
+    if agent_data is None and agents_dir is not None:
+        default_loader = AgentLoader()
+        agent_data = _resolve_agent(default_loader, task.host)
+
+    if agent_data is not None:
+        host = agent_data.get("host", task.host)
+        port = agent_data.get("port", 22)
+        if agent_data.get("execution_agent", True):
+            manager = AgentManager.instance()
+            if manager.is_connected(task.host):
+                return AgentExecutor(
+                    agent_id=task.host,
+                    manager=manager,
+                    agent_data=agent_data,
+                )
+            return _make_ssh_executor(host, port, agent_data, task)
+        return _make_ssh_executor(host, port, agent_data, task)
+
+    if task.host:
+        manager = AgentManager.instance()
+        if manager.is_connected(task.host):
+            return AgentExecutor(
+                agent_id=task.host,
+                manager=manager,
+                agent_data={"id": task.host, "execution_agent": True},
+            )
+
+    return SSHExecutor(host=task.host)
 
 
 def _make_ssh_executor(host: str, port: int, agent_data: dict[str, Any], task: ResolvedTask) -> SSHExecutor:
