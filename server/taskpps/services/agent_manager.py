@@ -37,9 +37,10 @@ class PendingCommandInfo:
 
 
 class AgentConnection:
-    def __init__(self, agent_id: str, ws: WebSocket):
+    def __init__(self, agent_id: str, ws: WebSocket, _manager: AgentManager | None = None):
         self.agent_id = agent_id
         self.ws = ws
+        self._manager = _manager
         self.hostname = ""
         self.platform = ""
         self.system = ""
@@ -116,6 +117,8 @@ class AgentConnection:
         if info and not info.future.done():
             info.future.set_result(result)
         self.last_command_finished_at = time.time()
+        if self._manager is not None:
+            self._manager._last_execution_times[self.agent_id] = self.last_command_finished_at
 
     def register_output_callback(self, command_id: str, callback: Callable) -> None:
         self._output_callbacks[command_id] = callback
@@ -138,6 +141,8 @@ class AgentManager:
     def __init__(self):
         self._connections: dict[str, AgentConnection] = {}
         self._active = True
+        # Issue #152: 持久化 agent 最后执行时间，防止断连后丢失
+        self._last_execution_times: dict[str, float] = {}
         # Issue #78: per-agent 信号量，限制并发命令数
         self._agent_semaphores: dict[str, asyncio.Semaphore] = {}
         # Issue #106: 记录每个 agent 的 max_parallel 配置值，用于信号量升级
@@ -210,7 +215,7 @@ class AgentManager:
 
         now = time.time()
 
-        conn = AgentConnection(agent_id, ws)
+        conn = AgentConnection(agent_id, ws, _manager=self)
         conn.hostname = hostname_info
         conn.system = os_name
         conn.arch = arch_name
@@ -283,6 +288,9 @@ class AgentManager:
                             conn.cleanup_command(cid)
                         except Exception:
                             logger.exception("Failed to cleanup command %s for agent '%s'", cid, agent_id)
+                # Issue #152: 持久化 last_command_finished_at 防止断连后丢失
+                if conn.last_command_finished_at > 0:
+                    self._last_execution_times[agent_id] = conn.last_command_finished_at
                 # 从 _connections 中移除，释放 WebSocket 引用
                 self._connections.pop(agent_id, None)
                 logger.info("Agent '%s' removed from connections after grace period", agent_id)
@@ -294,6 +302,10 @@ class AgentManager:
 
     def get_connection(self, agent_id: str) -> AgentConnection | None:
         return self._connections.get(agent_id)
+
+    def get_last_execution_time(self, agent_id: str) -> float:
+        """获取 agent 最后执行时间（持久化层），agent 断连后仍可获取。"""
+        return self._last_execution_times.get(agent_id, 0.0)
 
     # Issue #78: per-agent 并发控制
     # Issue #106: 支持信号量升级和全局并发限制
