@@ -159,7 +159,7 @@ _INDEX_MIGRATIONS = [
 # PostgreSQL 原生枚举迁移：为新增枚举值追加 ALTER TYPE
 # SQLite 用 TEXT 存枚举值，无需迁移
 _PSQL_ENUM_MIGRATIONS = {
-    "tasktype": ["PLUGIN"],
+    "tasktype": ["plugin"],
 }
 
 
