@@ -708,7 +708,7 @@ class TestPipelineRunnerBoundary:
         ):
             await runner.run()
 
-        assert mock_executor.execute.call_count == 1, "sequential 下 t1 失败后: 隐式依赖 t1 的 t2 应被跳过"
+        assert mock_executor.execute.call_count == 2, "sequential 下 t1 on_failure=continue 失败后 t2 应继续执行"
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0252", domain="server/engine", priority="P1")
