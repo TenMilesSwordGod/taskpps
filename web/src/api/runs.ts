@@ -4,6 +4,7 @@ import type {
   RunListResponse,
   RunResponse,
   RunStatsResponse,
+  ResultPageResponse,
   RetryRunResponse,
   RetryVersionsResponse,
   RetryCommandResponse,
@@ -359,6 +360,19 @@ export function useRetryLogs(runId: string | undefined, retryId: string | undefi
       return res.data;
     },
     enabled: !!runId && !!retryId,
+  });
+}
+
+/** 获取运行结果页 */
+export function useResultPage(runId: string | undefined) {
+  return useQuery<ResultPageResponse>({
+    queryKey: ['resultPage', runId],
+    queryFn: async () => {
+      const res = await apiClient.get<ResultPageResponse>(`/api/runs/${runId}/result`);
+      return res.data;
+    },
+    enabled: !!runId,
+    staleTime: Infinity,
   });
 }
 

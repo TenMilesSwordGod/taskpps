@@ -170,6 +170,18 @@ class DependencyNode(BaseModel):
     mandatory_if_upstream: bool = False
 
 
+class ResultPageResponse(BaseModel):
+    run_id: str
+    pipeline_name: str
+    status: str
+    stats: dict[str, Any]
+    html_content: str
+    md_content: str
+    collector_mode: str | None = None
+    has_collector: bool = False
+    generated_at: str | None = None
+
+
 class DependencyTreeResponse(BaseModel):
     target: str
     subpipeline: str

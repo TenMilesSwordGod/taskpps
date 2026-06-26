@@ -25,6 +25,7 @@ from taskpps.schemas.run import (
     CleanResponse,
     CreateRunRequest,
     DependencyTreeResponse,
+    ResultPageResponse,
     RetryCommandResponse,
     RetryRequest,
     RetryVersionsResponse,
@@ -35,6 +36,7 @@ from taskpps.schemas.run import (
     UpdateRetryCommandRequest,
 )
 from taskpps.services.pipeline_service import PipelineService
+from taskpps.services.result_page import load_result_page
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -52,13 +54,13 @@ def _yield_complete_lines(new_content: str):
     advance = 0
     if not new_content:
         return lines, advance
-    last_nl = new_content.rfind('\n')
+    last_nl = new_content.rfind("\n")
     if last_nl < 0:
         return lines, advance
     advance = last_nl + 1
     complete = new_content[:advance]
-    for line in complete.split('\n')[:-1]:
-        lines.append(line.rstrip('\r'))
+    for line in complete.split("\n")[:-1]:
+        lines.append(line.rstrip("\r"))
     return lines, advance
 
 
@@ -74,9 +76,7 @@ def _decode_log_bytes(raw: bytes) -> str:
         return raw.decode("gbk", errors="replace")
 
 
-def _read_log_lines(
-    log_path: Path, position: int = 0, include_partial: bool = False
-) -> tuple[list[str], int]:
+def _read_log_lines(log_path: Path, position: int = 0, include_partial: bool = False) -> tuple[list[str], int]:
     """从日志文件的字节位置读取行。
 
     处理 UTF-8 和 GBK 编码。include_partial=False 时只返回完整行（以 \\n 结尾），
@@ -272,7 +272,10 @@ async def get_run_logs(
 
                     task_status = statuses.get(task_name)
                     is_active = task_status and task_status not in (
-                        TS.SUCCESS, TS.FAILED, TS.CANCELLED, TS.SKIPPED,
+                        TS.SUCCESS,
+                        TS.FAILED,
+                        TS.CANCELLED,
+                        TS.SKIPPED,
                     )
 
                     if is_active:  # pragma: no cover
@@ -291,9 +294,7 @@ async def get_run_logs(
                     ):
                         # Issue #68: 任务结束后刷新剩余日志（含不完整行），避免丢失尾部输出
                         flushed.add(task_name)
-                        lines, new_pos = _read_log_lines(
-                            log_path, positions[task_name], include_partial=True
-                        )
+                        lines, new_pos = _read_log_lines(log_path, positions[task_name], include_partial=True)
                         if lines:
                             positions[task_name] = new_pos
                             for line in lines:
@@ -361,7 +362,7 @@ async def get_run_console(
             f.seek(max(0, size - block))
             raw = f.read()
             text = _decode_log_bytes(raw)
-            lines = text.split('\n')
+            lines = text.split("\n")
             if size > block:
                 lines = lines[1:]
             return JSONResponse(
@@ -398,6 +399,7 @@ async def delete_run(run_id: str):
         raise
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
@@ -450,7 +452,8 @@ async def get_retry_versions(run_id: str):
 async def batch_select_retry_report(run_id: str, body: BatchSelectReportRequest):
     try:
         result = await _pipeline_service.batch_select_retry_report(
-            run_id=run_id, selections=body.selections,
+            run_id=run_id,
+            selections=body.selections,
         )
         return result
     except ValueError as e:
@@ -540,16 +543,15 @@ async def get_retry_logs(
                 retry_repo = RetryRecordRepository(session)
                 record = await retry_repo.get_retry_record(retry_id)
                 is_active = record and record.status in (
-                    TaskStatus.PENDING, TaskStatus.RUNNING,
+                    TaskStatus.PENDING,
+                    TaskStatus.RUNNING,
                 )
                 if not is_active:
                     active = False
                     # Issue #68: 任务结束后刷新剩余日志（含不完整行）
                     if not flushed:
                         flushed = True
-                        lines, new_pos = _read_log_lines(
-                            log_path, position, include_partial=True
-                        )
+                        lines, new_pos = _read_log_lines(log_path, position, include_partial=True)
                         if lines:
                             position = new_pos
                             for line in lines:
@@ -559,6 +561,7 @@ async def get_retry_logs(
         yield {"event": "done", "data": ""}
 
     from taskpps.models.run import TaskStatus
+
     return EventSourceResponse(_retry_log_stream())
 
 
@@ -583,11 +586,32 @@ async def update_retry_command(run_id: str, retry_id: str, body: UpdateRetryComm
 async def select_retry_report(run_id: str, retry_id: str, body: SelectReportRequest):
     try:
         result = await _pipeline_service.select_retry_report(
-            run_id=run_id, task_name=body.task_name, selected_retry_id=body.selected_retry_id,
+            run_id=run_id,
+            task_name=body.task_name,
+            selected_retry_id=body.selected_retry_id,
         )
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/{run_id}/result", response_model=ResultPageResponse)
+async def get_result_page(run_id: str):
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        run = await run_repo.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=t("Run not found"))
+        if not run.pipeline_id:
+            raise HTTPException(status_code=404, detail=t("Result page not available"))
+
+        pipeline_id = run.pipeline_id
+        pipeline_version = run.pipeline_version or ""
+
+    result = load_result_page(pipeline_id, pipeline_version, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=t("Result page not found"))
+    return result
 
 
 @router.get("/{run_id}/pipeline-snapshot")
@@ -617,6 +641,7 @@ async def get_pipeline_snapshot(run_id: str):
 
         # 用运行时参数进行变量替换
         import json
+
         params = json.loads(run.params) if run.params else {}
         project_workdir = getattr(run, "project_workdir", None)
         data = substitute_env_vars(data, params, Path(project_workdir) if project_workdir else None)

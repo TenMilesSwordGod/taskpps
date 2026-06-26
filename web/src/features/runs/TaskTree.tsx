@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Tree, Tooltip, Dropdown } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import { PartitionOutlined, AppstoreOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { PartitionOutlined, AppstoreOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Loader2, RotateCcw, History } from 'lucide-react';
 
 import { useRunConsole } from '@/api/runs';
@@ -48,6 +48,10 @@ interface TaskTreeProps {
   onShowVersions?: (taskName: string) => void;
   /** Issue #72: 各任务的重试版本数映射 */
   retryCounts?: Record<string, number>;
+  /** Issue #154: 选择结果页回调 */
+  onSelectResult?: () => void;
+  /** Issue #154: 是否选中结果页 */
+  resultSelected?: boolean;
 }
 
 /** 推断任务类型 */
@@ -140,7 +144,9 @@ const PHASE_BADGE: Record<'setup' | 'teardown', { bg: string; color: string; lab
 };
 
 /** 紧凑层级任务树 + 可选 system debug log */
-export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap, onRetry, onShowVersions, retryCounts }: TaskTreeProps) {
+const RESULT_PAGE_KEY = '__result_page__';
+
+export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap, onRetry, onShowVersions, retryCounts, onSelectResult, resultSelected }: TaskTreeProps) {
   // SSE 状态更新：合并到 taskRuns 中
   // Issue #61: 防止陈旧的 SSE 状态覆盖服务端更新的终态状态
   // （SSE 断连重连期间 taskStatusMap 可能停留在旧的 running，而服务端已 failed）
@@ -394,10 +400,23 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
     const pipelineSetup = pipelinePhases.filter((g) => g.phase === 'setup').map(buildPhaseNode);
     const pipelineTeardown = pipelinePhases.filter((g) => g.phase === 'teardown').map(buildPhaseNode);
 
-    return [...pipelineSetup, ...nodes, ...pipelineTeardown];
-  }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, onRetry, onShowVersions, retryCounts]);
+    // Issue #154: 结果页节点（与 SubPipeline 同级）
+    const resultPageNode: DataNode = {
+      key: RESULT_PAGE_KEY,
+      title: (
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', whiteSpace: 'nowrap', cursor: 'pointer', minWidth: 0 }}
+        >
+          <FileTextOutlined style={{ color: '#3b82f6', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: resultSelected ? 600 : 400, color: resultSelected ? '#1d4ed8' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>结果页</span>
+        </div>
+      ),
+    };
 
-  const selectedKeys = selectedTaskId ? [selectedTaskId] : [];
+    return [...pipelineSetup, resultPageNode, ...nodes, ...pipelineTeardown];
+  }, [pipeline, runMap, selectedTaskId, phaseGroups, isLive, onRetry, onShowVersions, retryCounts, resultSelected]);
+
+  const selectedKeys = selectedTaskId ? [selectedTaskId] : resultSelected ? [RESULT_PAGE_KEY] : [];
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#fafafa', borderRight: '1px solid #e5e7eb' }}>
@@ -416,6 +435,10 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         selectedKeys={selectedKeys}
         onSelect={(keys) => {
           const key = keys[0] as string | undefined;
+          if (key === RESULT_PAGE_KEY) {
+            onSelectResult?.();
+            return;
+          }
           if (key && key.startsWith('sub-')) return;
           onSelect(key ?? null);
         }}
