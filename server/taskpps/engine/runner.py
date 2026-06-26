@@ -198,6 +198,7 @@ class PipelineRunner:
                         started_at=self._start_time,
                         finished_at=end_time,
                     )
+                await self._execute_post_phase(RunStatus.SUCCESS)
                 try:
                     generate_result_page(
                         run_id=self.run_id,
