@@ -277,6 +277,9 @@ async def agent_all():
                 item.running_commands = sum(1 for info in conn._pending_commands.values() if info.status == "running")
                 item.queued_commands = sum(1 for info in conn._pending_commands.values() if info.status == "queued")
                 item.net_status = "reachable"
+        else:
+            # Issue #152: agent 未连接时从持久化存储获取历史执行时间
+            item.last_execution_time = manager.get_last_execution_time(agent_id)
         result.append(item)
 
     # 并发探测所有 agent 的网络可达性
