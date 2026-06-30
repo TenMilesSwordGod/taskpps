@@ -612,8 +612,6 @@ class PipelineService:
                 raise ValueError("Run not found")
             if run.status == RunStatus.RUNNING:
                 raise ValueError(t("Run is still running, cannot retry"))
-            if run.status == RunStatus.CANCELLED:
-                raise ValueError(t("Run is cancelled, cannot retry"))
 
             if tasks and subpipeline:
                 raise ValueError("Cannot specify both tasks and subpipeline")
@@ -656,6 +654,10 @@ class PipelineService:
                 if t_name not in task_run_map:
                     raise ValueError(f"Task '{t_name}' not found in run")
 
+                # 对于 cancelled 状态的 run，跳过已成功的 task
+                if run.status == RunStatus.CANCELLED and task_run_map[t_name].status == TaskStatus.SUCCESS:
+                    continue
+
                 existing = await retry_repo.list_retries_by_task(run_id, t_name)
                 pending = [r for r in existing if r.status == TaskStatus.PENDING or r.status == TaskStatus.RUNNING]
                 if pending:
@@ -671,6 +673,10 @@ class PipelineService:
 
             retry_records = []
             for t_name in task_targets:
+                # 对于 cancelled 状态的 run，跳过已成功的 task
+                if run.status == RunStatus.CANCELLED and task_run_map[t_name].status == TaskStatus.SUCCESS:
+                    continue
+
                 tr = task_run_map[t_name]
                 task_obj = resolved.get_task_by_name(t_name.split(".", 1)[1])
 
