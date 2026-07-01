@@ -10,50 +10,14 @@ metadata:
 
 # 软件开发团队协作技能（software-team-skill, v1.6）
 
-> **v1.0**：合并 `gitea-issue` 和 `zentao-team-skill` 为统一的 `software-team-skill`。
-> Manager 是 main agent（唯一入口），PM/Developer/Tester/UIUX 是 sub-agent。
->
-> **v1.2（issue #132）**：重构 zentao task 创建/关闭流程。
-> - **Manager 创建全部 4 种 task**：`req task`（PM 规划）、`dev task`（Dev 实现）、`testtask`（QA/Tester 测试）、`uiux design task`（UIUX 设计，按需）
-> - **各 sub-agent 关闭自己负责的 task**（PM finish req task / Dev finish dev task / QA or Tester finish testtask / UIUX finish uiux design task）
-> - **Manager 仍不创建** story / bug / testcase / execution / project
-> - PM 现在只建 story，**不再建 task**（task 由 Manager 统一建）
->
-> **v1.3（简化快速路径）**：对"确定且简单"的工单提供快速通道。
-> - **新增复杂度评估**：Manager 在类型识别后判断工单是否"简单"（单点修复/无歧义/无设计决策/无新 API）
-> - **简化快速路径（分支 E）**：简单工单**只建 dev task**，跳过 PM story+req task、跳过 Tester zentao bug+testtask
-> - **直接让 Dev 开发**：Manager 建 dev task → Developer 直接实现 → Manager 创建 PR → 验收
-> - **不创建 req/bug 在 zentao**：快速路径不建 story、不建 zentao bug、不建 testtask（仅保留 dev task 作追踪）
-> - 不确定"是否简单"时**走完整流程**（保守默认）
->
-> **v1.2（issue #108 实战优化）**：优化 Dev/QA 协作流程。
-> - **Dev 和 QA 串行工作**：Dev 先完成实现，QA 再编写测试用例并执行
-> - **QA 发现 bug 时创建 zentao bug**：指派给 Dev，Dev 读取 zentao bug 并修复
-> - **迭代修复循环**：QA 测试 → 发现 bug → Dev 修复 → QA 验证 → 循环直到所有测试通过
-> - **Manager 创建 PR**：所有测试通过后，Manager 创建 PR 供用户审查
-> - **Manager 不尝试测试**：Manager 只负责协调，不参与测试或修复
->
-> **v1.4（issue #134 实战优化）**：PR 合并后 push main 到 GitHub。
-> - **汇总验收前 push GitHub**：所有分支流程在 PR 合并后 → `git push github main` 推送 → 再关闭 zentao/gitea 对象
-> - **Manager 负责 push**：Manager 在汇总验收阶段执行 push 操作
->
-> **v1.5（issue #134 reopen 实战）**：QA/Tester 必须验证构建。
-> - **QA/Tester 测试后必须验证 build**：运行 tests 后必须跑 `npm run build` / `npx tsc --noEmit` / 对应语言的构建检查，确认无编译错误才能 finish testtask
-> - **不验证 build = QA/Tester 的失职**：TypeScript 编译错误（如 TS2322）不会被 vitest 捕获，QA 不跑 build 会导致用户部署失败
-> - **所有涉及前端/web 代码变更的 testtask 都必须做 build check**
->
-> **v1.6（issue #134 实战优化）**：简化 gitea 标签，只保留 Kind + Priority。
-> - **移除项目上下文标签**：不再打 `项目/<name>` / `产品/<name>` / `执行/<name>`（zentao 中已有，gitea 评论含链接即可）
-> - **移除对象 ID 标签**：不再打 `Task/<id>` / `Bug/<id>` / `Story/<id>` / `TestCase/<id>`（zentao 链接已在 gitea 评论中，标签冗余）
-> - **仅保留 Kind + Priority** 为必选标签（由 Manager audit 维护）
-> - **各角色无需调 set_labels**（不再需要打项目/产品/执行/Task/Bug/Story/TestCase 标签）
+> **演进**：v1.0 合并角色为统一技能 → v1.2 task 创建/关闭/Dev-QA 串行+迭代修复 → v1.3 复杂度评估+快速路径 E → v1.4 PR 后 push github → v1.5 QA 必须验证 build → v1.6 简化 gitea 标签（仅 Kind+Priority）。
 >
 > **核心约定**：
 > - **gitea issue 评论 = 极简**（链接 + 1-2 句状态）
 > - **zentao 对象 comment = 详细**（用户故事、验收标准、方案对比、bug 详情、testcase 步骤、**bug 根因分析**）
 > - **Manager 在 zentao 可创建 4 种 task（req/dev/test/uiux）+ 可改 task.assignedTo**，仍不创建 story / bug / testcase / execution / project
 > - **PM 不创建 execution/project**，只复用用户已创建的最新 doing execution
-> - **PM 不创建 task**（v1.2 起 task 由 Manager 统一建），只建 story
+> - **PM 负责建 story + 关联 task**，Manager 补充 testtask/uiux task
 > - **各 sub-agent 自己关闭自己负责的 task**（不依赖 PM/Manager 帮忙 close）
 > - **所有 testcase 必须可自动化执行**（pytest/vitest，可放入 CI）
 > - **QA/Tester 完成后必须验证 build**（v1.5 起：跑 `npm run build` / `npx tsc --noEmit` 确认无编译错误）
@@ -110,7 +74,7 @@ roles/<role>/_base.md
 | 创建 zentao **story** / execution / project | developer, tester, uiux（**PM 仍可建 story**） |
 | 创建 zentao **bug** | developer, pm, uiux（**Tester 可建 bug**） |
 | 创建 zentao **testcase** | developer, pm, uiux（**Tester/QA 可建 testcase**） |
-| 创建 zentao **task** | developer, tester, uiux, pm（**v1.2 起 task 由 Manager 统一建**） |
+| 创建 zentao **task** | developer, tester, uiux |
 | 写 `src/` / `server/` / `web/src/` 生产代码 | manager, pm, tester, uiux |
 | 关闭 gitea issue | developer, tester（sub-agent 模式） |
 | 写 `tests/` 正式测试 | developer, pm, uiux |
@@ -207,7 +171,7 @@ roles/<role>/_base.md
 | `[UIUX 设计] <issue 标题>`（按需） | design | designer | UIUX：`zentao task finish $ID --consumed=<h>` |
 
 > **v1.2 变更**：
-> - Manager 创建所有 task（PM 不创建 task）
+> - Manager 和 PM 共同负责 task 创建（PM 建 story + 关联 dev task，Manager 补充 testtask/uiux task）
 > - Dev 和 QA 串行工作（Dev 先完成，QA 再测试）
 > - QA 发现 bug 时创建 zentao bug 并指派给 Dev
 > - Dev 读取 zentao bug 并修复
@@ -278,7 +242,7 @@ Manager (main)
 | `[PM 规划] <issue 标题>` | affair | aipm | PM：`zentao task finish $ID --consumed=<h>` |
 | `[Dev 实现] <issue 标题>` | devel | aidev | Dev：`zentao task finish $ID --consumed=<h>` |
 
-> **v1.2 变更**：Manager 创建所有 task（PM 不创建 task），PM 只写 desc + finish req task。
+> **v1.2 变更**：PM 负责建 task + 写 desc + finish req task，Manager 可额外补充 testtask。
 
 ---
 
@@ -380,18 +344,7 @@ Manager (main)
 | **v1.2: Manager 创建 PR** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Manager / PM / Tester close story/bug | PM close story | Tester close bug | — | — | 无需 close zentao 对象 |
 
-> **v1.3 变更**：
-> - 新增复杂度评估（type 识别后强制执行，简单 → 分支 E）
-> - 简化快速路径（分支 E）：只建 dev task，跳过 PM/Tester/UIUX，Dev 直接实现
-> - 不创建 story / zentao bug / testtask 在 zentao（保守默认走完整流程）
->
-> **v1.2 变更**：
-> - Dev 和 QA 串行工作（Dev 先完成，QA 再测试）
-> - QA 发现 bug 时创建 zentao bug 并指派给 Dev
-> - Dev 读取 zentao bug 并修复
-> - 迭代循环直到所有测试通过
-> - Manager 在最后创建 PR 供用户审查
-> - Manager 不尝试测试，只负责协调
+
 
 ---
 
@@ -534,6 +487,46 @@ python3 scripts/gitea/audit_labels.py "$ISSUE_URL" --role manager --auto-fix
 2. **避免漏打 Priority**——有些用户从不主动打 priority，audit 强制补
 3. **审计报告可追溯**——所有标签变更记录在 `status.json`
 4. **统一性**——所有 issue 在禅道/工单系统里看起来一致，方便看板上筛选
+
+## Gitea 评论命令（所有角色必读）
+
+> **v1.6.2 新增**：澄清 Gitea 评论脚本的正确用法，消除 `--comment` 误用的空评论问题。
+
+### comment_issue.py
+
+```bash
+# ✅ 正确用法 — 3 种等价方式
+python3 scripts/gitea/comment_issue.py "$ISSUE_URL" "[进度] 内容" --role manager
+python3 scripts/gitea/comment_issue.py "$ISSUE_URL" --comment "[进度] 内容" --role developer
+python3 scripts/gitea/comment_issue.py "$ISSUE_URL" --file result.md --role tester
+
+# ❌ 错误 — 以下会导致空评论或 "--comment" 字面量被发表
+python3 scripts/gitea/comment_issue.py "$ISSUE_URL" --comment --role manager   # 缺少参数值，会报错
+python3 scripts/gitea/comment_issue.py "$ISSUE_URL" --desc "内容" --role pm    # --desc 不是合法 flag，拒绝
+python3 scripts/gitea/comment_issue.py "$ISSUE_URL" --role developer            # 缺评论内容，报错
+```
+
+**支持的参数**：
+| 参数 | 说明 |
+|------|------|
+| `"评论内容"` (positional) | 直接写评论正文 |
+| `--comment "内容"` | 推荐写法，与 positional 等价 |
+| `--file <path>` | 从文件读评论内容 |
+| `--attach <path>` | 上传附件（可多次使用） |
+| `--role <角色>` | **必选**：manager/pm/developer/tester/uiux |
+
+> ⚠️ `--comment` 是 `comment_issue.py` 支持的合法 flag，但 `--desc`、`--data`、`--steps` 等 zentao CLI 的 flag **不适用于** Gitea 评论脚本，传入会被拒绝。
+
+### close_issue.py
+
+```bash
+# ✅ 正确用法
+python3 scripts/gitea/close_issue.py "$ISSUE_URL" --role manager
+python3 scripts/gitea/close_issue.py "$ISSUE_URL" --comment "已修复" --role manager
+
+# ❌ 错误 — 不支持未知 flag
+python3 scripts/gitea/close_issue.py "$ISSUE_URL" --desc "原因" --role manager   # --desc 拒绝
+```
 
 ## Gitea Issue vs Zentao 评论约定
 
@@ -747,6 +740,10 @@ python3 .agents/skills/software-team-skill/scripts/zentao/create_and_run_testtas
 ## 技术约束速查
 
 > 写 zentao 内容时直接照以下命令，不调用 CLI `--pick=`/`--comment=`/`--data=`。
+> 注意：`--comment` 是 zentao CLI 的字段参数，与 Gitea 评论脚本 `comment_issue.py --comment` 同名但不同义。
+> **Gitea 评论 → `comment_issue.py`**；**Zentao comment → zentao CLI `--comment` / curl PUT 的 `"comment":`**。
+
+### Zentao 操作
 
 | 操作 | 正确命令 |
 |------|---------|
@@ -757,6 +754,18 @@ python3 .agents/skills/software-team-skill/scripts/zentao/create_and_run_testtas
 | comment 字段 | **用 markdown**（表格 `\|--\|` 也可用） |
 | token 过期刷新 | `bash scripts/setup_role_configs.sh --check` |
 | Manager 读 zentao 受限 | `export ZENTAO_CONFIG_FILE="state/zentao-pm.json"` |
+
+### Gitea 评论操作
+
+| 操作 | 正确命令 |
+|------|---------|
+| 发 Gitea 评论（正文） | `python3 scripts/gitea/comment_issue.py "$ISSUE_URL" "评论内容" --role <role>` |
+| 发 Gitea 评论（--comment 写法） | `python3 scripts/gitea/comment_issue.py "$ISSUE_URL" --comment "评论内容" --role <role>` |
+| 发 Gitea 评论（文件方式） | `python3 scripts/gitea/comment_issue.py "$ISSUE_URL" --file comment.md --role <role>` |
+| 关闭 Gitea issue | `python3 scripts/gitea/close_issue.py "$ISSUE_URL" --comment "原因" --role manager` |
+
+> ⚠️ `comment_issue.py` 和 `close_issue.py` 只接受 `--comment`、`--file`、`--attach`、`--role`、`--label` 这 5 个 flag。
+> 其他 flag（如 `--desc`、`--data`、`--steps`、`--pick`）是 zentao CLI 的参数，**不适用于 Gitea 脚本**。
 
 ---
 
