@@ -55,7 +55,8 @@ python3 "$SKILL_DIR/scripts/gitea/fetch_issue.py" "<url>" --role manager
 |------|---------|----------|-----------|--------|------|
 | 决定 issue 优先级 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 拆需求/任务 | ❌ | ✅ | ❌ | ❌ | ❌ |
-| 创建 zentao story/task | ❌ | ✅ | ❌ | ❌ | ❌ |
+| 创建 zentao story | ❌ | ✅ | ❌ | ❌ | ❌ |
+| 创建 zentao task | ✅ | ✅ | ❌ | ❌ | ❌ |
 | 创建 zentao bug | ❌ | ❌ | ❌ | ✅ | ❌ |
 | 改 task.assignedTo | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 启动 sub-agent | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -82,7 +83,7 @@ python3 "$SKILL_DIR/scripts/gitea/fetch_issue.py" "<url>" --role manager
 
 ## Manager 不做的事
 
-- ❌ 不在 zentao 创建/修改/关闭 story / task / bug / testcase
+- ❌ 不在 zentao 创建/修改/关闭 story / bug / testcase（task 除外：Manager 可建 req/dev/test/uiux 四种 task）
 - ❌ 不写代码、不写测试
 - ❌ 不创建 execution / project
 - ❌ 不做需求澄清（PM 的活）

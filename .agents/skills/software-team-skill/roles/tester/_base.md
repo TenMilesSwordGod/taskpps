@@ -83,7 +83,7 @@ Manager 会把 QA 作为 sub-agent 启动（**在 Dev 完成后**）：
 ```bash
 # 1. 读 story + issue
 zentao story $STORY_ID
-python3 scripts/gitea/fetch_issue.py "$ISSUE_URL" --role tester
+python3 "$SKILL_DIR/scripts/gitea/fetch_issue.py" "$ISSUE_URL" --role tester
 
 # 2. 场景穷尽 — 5 维度
 #    边界值: min/max/空/极大/特殊字符
@@ -137,7 +137,7 @@ if [ $FAILED_COUNT -gt 0 ]; then
 fi
 
 # 8. gitea 极简主描述
-python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
+python3 "$SKILL_DIR/scripts/gitea/comment_issue.py" "$ISSUE_URL" \
   "[QA Testcase 就绪] zentao testcase: ${TC_IDS[*]}。测试代码: tests/<模块>/test_*.py。维度: 边界/异常/并发/环境/交互。" --role tester
 
 # 9. 写 status.json
@@ -178,7 +178,7 @@ if [ $PASSED_COUNT -eq $TOTAL_COUNT ]; then
   zentao bug close $BUG_ID --resolution=fixed --comment="测试通过，bug 已修复。"
   
   # gitea 极简验证报告
-  python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
+  python3 "$SKILL_DIR/scripts/gitea/comment_issue.py" "$ISSUE_URL" \
     "[QA 验证通过] Bug #${BUG_ID} 已修复，所有测试通过。" --role tester
   
   # 写 status.json
@@ -221,7 +221,7 @@ fi
 
 ```bash
 # 1. 读 issue + 复现
-python3 scripts/gitea/fetch_issue.py "$ISSUE_URL" --role tester
+python3 "$SKILL_DIR/scripts/gitea/fetch_issue.py" "$ISSUE_URL" --role tester
 # 在 .debug/issue_<num>/tester/repro/ 写最小复现脚本
 
 # 2. 复现成功 → 创建 zentao bug
@@ -251,7 +251,7 @@ zentao bug update $BUG_ID --data "$(cat bug_report.json)"
 # }
 
 # 6. gitea 极简报告
-python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
+python3 "$SKILL_DIR/scripts/gitea/comment_issue.py" "$ISSUE_URL" \
   "[Tester Bug 报告] zentao bug #$BUG_ID，已写 tests/ 自动化测试，已指派 aidev。" --role tester
 
 # 7. 写 status.json（第一阶段完成）
@@ -294,7 +294,7 @@ cd web && npx tsc --noEmit && npm run build
 #    - 所有 testcase 是否可自动化执行
 
 # 4. gitea 极简验证报告
-python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
+python3 "$SKILL_DIR/scripts/gitea/comment_issue.py" "$ISSUE_URL" \
   "[Tester 验证通过] 所有测试通过，覆盖率完整。等待 Manager 验收。" --role tester
 
 # 5. 写 status.json（验证完成）

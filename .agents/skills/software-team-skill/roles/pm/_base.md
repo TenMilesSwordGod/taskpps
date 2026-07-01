@@ -75,7 +75,7 @@ print(json.dumps(plan, ensure_ascii=False))
 # }
 
 # 4. gitea 极简评论（通知 admin 来 review，**不是**通知 Manager 分配）
-python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
+python3 "$SKILL_DIR/scripts/gitea/comment_issue.py" "$ISSUE_URL" \
   "[PM 进度] 已建 story #$STORY_ID（reviewer=admin）+ task #$TASK_ID，等待 admin 审核。" --role pm
 
 # 5. 写 status.json —— phase=pm_done 之前需要 admin 审核通过
@@ -83,8 +83,8 @@ python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
 python3 -c "
 import json
 s = json.load(open('$DEBUG_DIR/status.json'))
-s['story'] = $STORY_ID; s['task_dev'] = $TASK_ID
-s['pm'] = {'status': 'awaiting_review', 'story_id': $STORY_ID, 'task_ids': [$TASK_ID], 'reviewer': 'admin'}
+s['story'] = $STORY_ID; s['tasks'] = s.get('tasks', {}); s['tasks']['dev'] = $TASK_ID
+s['pm'] = {'status': 'awaiting_review', 'story_id': $STORY_ID, 'req_task_id': $TASK_ID, 'reviewer': 'admin'}
 s['phase'] = 'pm_done'
 json.dump(s, open('$DEBUG_DIR/status.json','w'), indent=2)
 "
@@ -96,7 +96,7 @@ PM **不**建 zentao bug。只准备上下文：
 
 ```bash
 # 1. gitea 极简评论
-python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
+python3 "$SKILL_DIR/scripts/gitea/comment_issue.py" "$ISSUE_URL" \
   "[PM 进度] 已准备上下文，等待 Tester 调查。" --role pm
 
 # 2. 写 status.json
@@ -130,15 +130,15 @@ zentao task update $TASK_ID --data "$(cat task_plan.json)"
 # }
 
 # 3. gitea 极简评论
-python3 scripts/gitea/comment_issue.py "$ISSUE_URL" \
+python3 "$SKILL_DIR/scripts/gitea/comment_issue.py" "$ISSUE_URL" \
   "[PM 进度] 已建 task #$TASK_ID" --role pm
 
 # 4. 写 status.json
 python3 -c "
 import json
 s = json.load(open('$DEBUG_DIR/status.json'))
-s['task_dev'] = $TASK_ID
-s['pm'] = {'status': 'done', 'task_ids': [$TASK_ID]}
+s['tasks'] = s.get('tasks', {}); s['tasks']['dev'] = $TASK_ID
+s['pm'] = {'status': 'done', 'req_task_id': $TASK_ID}
 s['phase'] = 'pm_done'
 json.dump(s, open('$DEBUG_DIR/status.json','w'), indent=2)
 "
