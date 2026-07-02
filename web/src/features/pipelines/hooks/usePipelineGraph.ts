@@ -269,19 +269,15 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const allNodes = [...groupNodes, ...taskNodes, ...postNodes, startNode, endNode];
     const layoutedNodes = applyDagreLayout(allNodes, taskEdges, groupSizes);
 
-    // dagre 布局后，固定 Start 在最顶部、End 在最底部
+    // dagre 布局后，固定 Start 在最顶部（End 在 group resize 后再定位）
     let minY = Infinity;
-    let maxY = -Infinity;
     for (const n of layoutedNodes) {
       if (n.id === '__start__' || n.id === '__end__') continue;
       minY = Math.min(minY, n.position.y);
-      maxY = Math.max(maxY, n.position.y + ((groupSizes.get(n.id)?.height) ?? TASK_H));
     }
     for (const n of layoutedNodes) {
       if (n.id === '__start__') {
         n.position.y = minY - 50;
-      } else if (n.id === '__end__') {
-        n.position.y = maxY + 20;
       }
     }
 
@@ -332,6 +328,21 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             }
           }
         }
+      }
+    }
+
+    // group resize 后，用实际 group box 高度定位 End 到最底部
+    let finalMaxY = -Infinity;
+    for (const node of finalNodes) {
+      if (node.id === '__start__' || node.id === '__end__') continue;
+      const nodeBottom = node.position.y + ((node.type === 'subpipelineGroup')
+        ? ((node.style as { height?: number })?.height ?? 100)
+        : TASK_H);
+      finalMaxY = Math.max(finalMaxY, nodeBottom);
+    }
+    for (const node of finalNodes) {
+      if (node.id === '__end__') {
+        node.position.y = finalMaxY + 40;
       }
     }
 
