@@ -9,7 +9,7 @@ import {
   CodeOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
-import { usePipeline } from '@/api/pipelines';
+import { usePipeline, useSavePipeline } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
 import PropertiesPanel from './PropertiesPanel';
 import YamlEditor from './YamlEditor';
@@ -38,6 +38,15 @@ export default function PipelineDetailPage() {
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const saveMutation = useSavePipeline(file);
+
+  const handleSave = useCallback(() => {
+    if (!yamlText || !file) return;
+    saveMutation.mutate(yamlText, {
+      onSuccess: () => message.success('已保存'),
+      onError: (err: Error) => message.error(`保存失败: ${err.message}`),
+    });
+  }, [yamlText, file, saveMutation]);
 
   // 当 API 数据加载后，初始化 YAML 编辑器内容
   useEffect(() => {
@@ -230,6 +239,8 @@ export default function PipelineDetailPage() {
               onChange={handleYamlChange}
               error={yamlError}
               onCursorTaskChange={handleCursorTaskChange}
+              onSave={handleSave}
+              saving={saveMutation.isPending}
             />
           </div>
         )}

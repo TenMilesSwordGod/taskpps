@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import yaml
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from taskpps.config import get_pipelines_dir, get_project_workdir_by_id
 from taskpps.db.engine import get_session_factory
@@ -144,3 +146,34 @@ async def get_pipeline(file: str, project_id: str | None = Query(None)):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     return spec.model_dump()
+
+
+class SavePipelineRequest(BaseModel):
+    content: str
+
+
+@router.put("/{file:path}")
+async def save_pipeline(file: str, body: SavePipelineRequest, project_id: str | None = Query(None)):
+    """保存 pipeline YAML 内容到文件"""
+    if project_id:
+        project_workdir = get_project_workdir_by_id(project_id)
+        if not project_workdir:
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+        pipelines_dir = get_pipelines_dir(project_workdir)
+    else:
+        pipelines_dir = get_pipelines_dir()
+
+    file_path = (pipelines_dir / file).resolve()
+    # 安全检查：路径不能逃逸出 pipelines 目录
+    if not str(file_path).startswith(str(pipelines_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    # 验证 YAML 格式合法
+    try:
+        yaml.safe_load(body.content)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}") from e
+
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(body.content, encoding="utf-8")
+    return {"status": "ok", "file": file}

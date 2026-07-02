@@ -9,7 +9,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintGutter } from '@codemirror/lint';
 import { Alert, Button, Tooltip, Space } from 'antd';
-import { FormatPainterOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons';
+import { FormatPainterOutlined, UndoOutlined, RedoOutlined, SaveOutlined } from '@ant-design/icons';
 
 export interface YamlEditorRef {
   /** 滚动到指定行（1-indexed），并临时高亮 2s */
@@ -29,10 +29,14 @@ export interface YamlEditorProps {
   readOnly?: boolean;
   /** 光标所在行包含 task name 时回调 */
   onCursorTaskChange?: (taskId: string | null) => void;
+  /** 保存回调 */
+  onSave?: () => void;
+  /** 是否正在保存 */
+  saving?: boolean;
 }
 
 /** CodeMirror YAML 编辑器组件 */
-const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEditor({ value, onChange, error, height = '100%', readOnly = false, onCursorTaskChange }, ref) {
+const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEditor({ value, onChange, error, height = '100%', readOnly = false, onCursorTaskChange, onSave, saving }, ref) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -40,6 +44,8 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
   const [internalError, setInternalError] = useState<typeof error>(null);
 
   onChangeRef.current = onChange;
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
   const onCursorTaskChangeRef = useRef(onCursorTaskChange);
   onCursorTaskChangeRef.current = onCursorTaskChange;
 
@@ -112,6 +118,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
           ...closeBracketsKeymap,
           ...searchKeymap,
           indentWithTab,
+          { key: 'Mod-s', run: () => { onSaveRef.current?.(); return true; } },
         ]),
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         updateListener,
@@ -187,6 +194,13 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
           <Tooltip title="格式化">
             <Button type="text" size="small" icon={<FormatPainterOutlined />} onClick={handleFormat} className="text-gray-400 hover:text-white" />
           </Tooltip>
+          {onSave && (
+            <Tooltip title="保存 (Ctrl+S)">
+              <Button type="primary" size="small" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
+                保存
+              </Button>
+            </Tooltip>
+          )}
         </Space>
       </div>
 
