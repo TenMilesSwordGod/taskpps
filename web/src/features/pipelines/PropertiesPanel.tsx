@@ -59,7 +59,7 @@ function findTask(
 
   const subpipelines = pipeline.pipelines || [];
   for (const sub of subpipelines) {
-    for (const task of sub.tasks) {
+    for (const task of sub.tasks ?? []) {
       if (`${sub.name}.${task.name}` === selectedNodeId) {
         return { task, subName: sub.name };
       }
@@ -341,13 +341,13 @@ function SubpipelinePanel({ sub }: { sub: SubPipeline }) {
       </div>
       <div>
         <label className="text-xs text-gray-500 mb-1 block">任务数</label>
-        <Input value={String(sub.tasks.length)} readOnly size="small" />
+        <Input value={String(sub.tasks?.length ?? 0)} readOnly size="small" />
       </div>
-      {sub.depends_on.length > 0 && (
+      {(sub.depends_on?.length ?? 0) > 0 && (
         <div>
           <label className="text-xs text-gray-500 mb-1 block">依赖</label>
           <div className="flex flex-wrap gap-1">
-            {sub.depends_on.map((dep) => (
+            {sub.depends_on?.map((dep) => (
               <Tag key={dep}>{dep}</Tag>
             ))}
           </div>

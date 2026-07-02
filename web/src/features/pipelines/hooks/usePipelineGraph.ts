@@ -43,7 +43,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       const ids: string[] = [];
       const groupId = `__group__${sub.name}`;
 
-      sub.tasks.forEach((task) => {
+      sub.tasks?.forEach((task) => {
         const taskId = `${sub.name}.${task.name}`;
         const status = taskStatuses?.[taskId];
 
@@ -59,7 +59,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         orderIndex++;
         ids.push(taskId);
 
-        task.depends_on.forEach((dep) => {
+        task.depends_on?.forEach((dep) => {
           const sourceId = `${sub.name}.${dep}`;
           taskEdges.push({
             id: `dep-${sourceId}-${taskId}`,
@@ -81,8 +81,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
       if (strategy !== 'parallel') {
         for (let i = 1; i < ids.length; i++) {
-          const currTask = sub.tasks[i];
-          if (currTask.depends_on.length === 0) {
+          const currTask = sub.tasks?.[i];
+          if (currTask && (currTask.depends_on?.length ?? 0) === 0) {
             taskEdges.push({
               id: `implicit-${ids[i - 1]}-${ids[i]}`,
               source: ids[i - 1],
@@ -97,7 +97,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
       // 预计算该 group 的 post 子节点数量
       let postCount = countPostTasks(sub.post);
-      for (const task of sub.tasks) {
+      for (const task of sub.tasks ?? []) {
         postCount += countPostTasks(task.post);
       }
 
@@ -120,7 +120,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
     // 跨 subpipeline 边
     subpipelines.forEach((sub, idx) => {
-      sub.depends_on.forEach((depSubName) => {
+      sub.depends_on?.forEach((depSubName) => {
         const sourceIdx = subpipelines.findIndex((s) => s.name === depSubName);
         if (sourceIdx >= 0 && sourceIdx < subpipelineTaskIds.length) {
           const sourceIds = subpipelineTaskIds[sourceIdx];
@@ -176,7 +176,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     subpipelines.forEach((sub, idx) => {
       const groupId = `__group__${sub.name}`;
       addPostNodes(sub.post, subpipelineTaskIds[idx]?.[subpipelineTaskIds[idx].length - 1] ?? '', groupId);
-      sub.tasks.forEach((task) => {
+      sub.tasks?.forEach((task) => {
         addPostNodes(task.post, `${sub.name}.${task.name}`, groupId);
       });
     });
