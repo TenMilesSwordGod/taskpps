@@ -164,8 +164,11 @@ class TestPipelineYAMLBoundary:
                 TaskYAML(name="step3", command="echo 3"),
             ],
         )
-        assert p.tasks is not None
-        assert len(p.tasks) == 3
+        # _normalize wraps tasks into pipelines and clears tasks
+        assert p.tasks is None
+        assert p.pipelines is not None
+        assert len(p.pipelines) == 1
+        assert len(p.pipelines[0].tasks) == 3
 
     @pytest.mark.zentao("TC-S0705", domain="server/schemas", priority="P1")
     def test_get_effective_config_none(self):
