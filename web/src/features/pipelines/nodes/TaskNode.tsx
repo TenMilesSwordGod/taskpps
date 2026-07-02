@@ -23,12 +23,12 @@ const TASK_TYPE_ICON: Record<TaskType, React.ReactNode> = {
 
 /** 任务类型颜色映射 */
 const TASK_TYPE_COLOR: Record<TaskType, string> = {
-  command: '#8c8c8c',
+  command: '#16a34a',
   invoke: '#1677ff',
   steps: '#722ed1',
   git: '#fa8c16',
   nexus: '#13c2c2',
-  ssh: '#8c8c8c',
+  ssh: '#0891b2',
 };
 
 /** 任务类型标签 */

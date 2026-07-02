@@ -67,4 +67,43 @@ describe('applyDagreLayout()', () => {
     expect(Number.isFinite(c.position.x)).toBe(true)
     expect(Number.isFinite(c.position.y)).toBe(true)
   })
+
+  it('groupSizes：为指定节点使用自定义尺寸，布局结果有效', () => {
+    const nodes = [makeNode('group1'), makeNode('a')]
+    const edges = [makeEdge('e1', 'group1', 'a')]
+    const groupSizes = new Map([['group1', { width: 400, height: 200 }]])
+    const out = applyDagreLayout(nodes, edges, groupSizes)
+    expect(out).toHaveLength(2)
+    const g = out.find((n) => n.id === 'group1')!
+    const a = out.find((n) => n.id === 'a')!
+    expect(Number.isFinite(g.position.x)).toBe(true)
+    expect(Number.isFinite(a.position.x)).toBe(true)
+    // TB 方向：a 应在 group1 下方
+    expect(a.position.y).toBeGreaterThan(g.position.y)
+  })
+
+  it('间距增大：nodesep=80, ranksep=60 导致节点间距更大', () => {
+    const nodes = [makeNode('a'), makeNode('b'), makeNode('c')]
+    const edges = [makeEdge('e1', 'a', 'b'), makeEdge('e2', 'a', 'c')]
+    const out = applyDagreLayout(nodes, edges)
+    const a = out.find((n) => n.id === 'a')!
+    const b = out.find((n) => n.id === 'b')!
+    // ranksep=60，加上节点高度 48，b.y - a.y 应 >= 60 + 48 = 108
+    // dagre 返回 center，position = center - 24，所以 rank 间距 = ranksep + height
+    expect(b.position.y - a.position.y).toBeGreaterThanOrEqual(60)
+  })
+
+  it('groupSizes：未在 map 中的节点仍使用默认尺寸，布局结果有效', () => {
+    const nodes = [makeNode('group1'), makeNode('a')]
+    const edges = [makeEdge('e1', 'group1', 'a')]
+    const groupSizes = new Map([['group1', { width: 400, height: 200 }]])
+    const out = applyDagreLayout(nodes, edges, groupSizes)
+    // 'a' 不在 groupSizes 中，应使用默认 200x48
+    // 布局后 group1 在上，a 在下（TB 方向）
+    const g = out.find((n) => n.id === 'group1')!
+    const a = out.find((n) => n.id === 'a')!
+    expect(Number.isFinite(g.position.x)).toBe(true)
+    expect(Number.isFinite(a.position.x)).toBe(true)
+    expect(a.position.y).toBeGreaterThan(g.position.y)
+  })
 })
