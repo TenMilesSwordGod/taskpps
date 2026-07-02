@@ -166,6 +166,13 @@ export interface PipelineConfig {
   cwd?: string | null;
 }
 
+/** Post 阶段配置 */
+export interface PostConfig {
+  on_fail?: TaskYAML[] | null;
+  on_success?: TaskYAML[] | null;
+  always?: TaskYAML[] | null;
+}
+
 /** 任务 YAML 定义 */
 export interface TaskYAML {
   name: string;
@@ -184,6 +191,7 @@ export interface TaskYAML {
   on_failure?: string | null;
   depends_on: string[];
   when?: string | null;
+  post?: PostConfig | null;
 }
 
 /** 子流水线 */
@@ -192,6 +200,7 @@ export interface SubPipeline {
   config?: PipelineConfig | null;
   depends_on: string[];
   tasks: TaskYAML[];
+  post?: PostConfig | null;
 }
 
 /** 流水线详情 */

@@ -9,14 +9,25 @@ import {
 import '@xyflow/react/dist/style.css';
 import TaskNode from './nodes/TaskNode';
 import SubpipelineGroupNode from './nodes/SubpipelineGroupNode';
+import PostTaskNode from './nodes/PostTaskNode';
+import { StartNode, EndNode } from './nodes/StartEndNode';
 import { usePipelineGraph } from './hooks/usePipelineGraph';
 import { useAppStore } from '@/stores/appStore';
 import type { PipelineDetail, TaskStatus } from '@/types';
+
+/** Start/End 节点包装组件 */
+function StartEndNodeWrapper(props: { data: { variant: 'start' | 'end'; [key: string]: unknown } }) {
+  return props.data.variant === 'start'
+    ? <StartNode data={props.data as { variant: 'start' }} />
+    : <EndNode data={props.data as { variant: 'end' }} />;
+}
 
 /** 注册自定义节点类型 */
 const nodeTypes = {
   taskNode: TaskNode,
   subpipelineGroup: SubpipelineGroupNode,
+  postTask: PostTaskNode,
+  startEnd: StartEndNodeWrapper,
 };
 
 interface PipelineGraphProps {

@@ -14,9 +14,16 @@ function makePipeline(overrides: Partial<PipelineDetail> = {}): PipelineDetail {
   }
 }
 
-/** 提取边的 source→target 对 */
+/** 提取边的 source→target 对（过滤 Start/End 哨兵边） */
 function edgePairs(edges: ReturnType<typeof usePipelineGraph>['edges']) {
-  return edges.map((e) => [e.source, e.target])
+  return edges
+    .filter((e) => e.source !== '__start__' && e.target !== '__end__')
+    .map((e) => [e.source, e.target])
+}
+
+/** 过滤掉 Start/End 哨兵边 */
+function taskEdges(edges: ReturnType<typeof usePipelineGraph>['edges']) {
+  return edges.filter((e) => e.source !== '__start__' && e.target !== '__end__')
 }
 
 describe('usePipelineGraph — implicit edges & execution_strategy', () => {
@@ -68,7 +75,7 @@ describe('usePipelineGraph — implicit edges & execution_strategy', () => {
     const pairs = edgePairs(result.current.edges)
     expect(pairs).not.toContainEqual(['build.task-a', 'build.task-b'])
     expect(pairs).not.toContainEqual(['build.task-b', 'build.task-c'])
-    expect(result.current.edges).toHaveLength(0)
+    expect(taskEdges(result.current.edges)).toHaveLength(0)
   })
 
   it('pipeline options parallel：无隐式顺序边', () => {
@@ -144,7 +151,7 @@ describe('usePipelineGraph — implicit edges & execution_strategy', () => {
     // 显式边仍然存在
     const depEdge = result.current.edges.find((e) => e.id === 'dep-build.task-a-build.task-b')
     expect(depEdge).toBeDefined()
-    // 没有隐式边（只有一个显式边）
-    expect(result.current.edges).toHaveLength(1)
+    // 没有隐式边（只有一个显式边，不含 Start/End 哨兵边）
+    expect(taskEdges(result.current.edges)).toHaveLength(1)
   })
 })
