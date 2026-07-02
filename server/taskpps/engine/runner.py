@@ -1304,6 +1304,14 @@ class PipelineRunner:
                 "WARN", f"Post task '{qualified_name}' failed with exit_code: {exit_code}"
             )
 
+        # 将 task 输出写入 pipeline console.log 便于排查
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                self._write_pipeline_log("OUTPUT", f"  {line}")
+        if result.stderr and not result.success:
+            for line in result.stderr.strip().splitlines():
+                self._write_pipeline_log("OUTPUT", f"  {line}")
+
         # 更新 post task 最终状态
         task_status = TaskStatus.SUCCESS if result.success else TaskStatus.FAILED
         async with get_session_factory()() as session:
