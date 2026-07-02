@@ -8,13 +8,17 @@ const NODE_HEIGHT = 48;
 export function applyDagreLayout<N extends Record<string, unknown>, E extends Record<string, unknown>>(
   nodes: Node<N>[],
   edges: Edge<E>[],
+  groupSizes?: Map<string, { width: number; height: number }>,
 ): Node<N>[] {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 30 });
+  g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 60 });
 
   for (const node of nodes) {
-    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    const custom = groupSizes?.get(node.id);
+    const w = custom?.width ?? NODE_WIDTH;
+    const h = custom?.height ?? NODE_HEIGHT;
+    g.setNode(node.id, { width: w, height: h });
   }
 
   for (const edge of edges) {
@@ -25,11 +29,14 @@ export function applyDagreLayout<N extends Record<string, unknown>, E extends Re
 
   return nodes.map((node) => {
     const pos = g.node(node.id);
+    const custom = groupSizes?.get(node.id);
+    const w = custom?.width ?? NODE_WIDTH;
+    const h = custom?.height ?? NODE_HEIGHT;
     return {
       ...node,
       position: {
-        x: pos.x - NODE_WIDTH / 2,
-        y: pos.y - NODE_HEIGHT / 2,
+        x: pos.x - w / 2,
+        y: pos.y - h / 2,
       },
     };
   });

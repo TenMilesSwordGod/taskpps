@@ -129,9 +129,17 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       });
     });
 
+    // 预计算每个 group 的实际尺寸，传给 dagre 以获得正确的间距
+    const groupSizes = new Map<string, { width: number; height: number }>();
+    for (const gn of groupNodes) {
+      const w = (gn.style as { width?: number })?.width ?? 200;
+      const h = (gn.style as { height?: number })?.height ?? 100;
+      groupSizes.set(gn.id, { width: w, height: h });
+    }
+
     // 使用 dagre 布局所有节点（含分组节点）
     const allNodes = [...groupNodes, ...taskNodes];
-    const layoutedNodes = applyDagreLayout(allNodes, taskEdges);
+    const layoutedNodes = applyDagreLayout(allNodes, taskEdges, groupSizes);
 
     // dagre 调整位置后，为每个分组节点计算其子节点的边界，
     // 然后更新子节点 position 为相对于分组的 offset
