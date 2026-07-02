@@ -73,18 +73,26 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
       subpipelineTaskIds.push(ids);
 
-      // 对于没有显式依赖的任务，按 YAML 顺序添加隐式顺序边
-      for (let i = 1; i < ids.length; i++) {
-        const currTask = sub.tasks[i];
-        if (currTask.depends_on.length === 0) {
-          taskEdges.push({
-            id: `implicit-${ids[i - 1]}-${ids[i]}`,
-            source: ids[i - 1],
-            target: ids[i],
-            type: 'smoothstep',
-            animated: true,
-            markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-          });
+      // 检查 execution_strategy：subpipeline 级别优先，否则用 pipeline 级别
+      const strategy = sub.config?.execution_strategy
+        ?? pipeline.options?.execution_strategy
+        ?? pipeline.config?.execution_strategy
+        ?? 'sequential';
+
+      // 对于没有显式依赖的任务，按 YAML 顺序添加隐式顺序边（parallel 模式跳过）
+      if (strategy !== 'parallel') {
+        for (let i = 1; i < ids.length; i++) {
+          const currTask = sub.tasks[i];
+          if (currTask.depends_on.length === 0) {
+            taskEdges.push({
+              id: `implicit-${ids[i - 1]}-${ids[i]}`,
+              source: ids[i - 1],
+              target: ids[i],
+              type: 'smoothstep',
+              animated: true,
+              markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+            });
+          }
         }
       }
 
