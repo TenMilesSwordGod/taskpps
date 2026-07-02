@@ -1186,6 +1186,18 @@ class PipelineRunner:
         else:
             log_path = Path(self._task_run_ids.get(qualified_name, "post_task.log"))
 
+        # 创建 TaskRun 记录使 Web UI 可发现 post task 日志
+        async with get_session_factory()() as session:
+            task_repo = TaskRunRepository(session)
+            tr = await task_repo.create_task_run(
+                run_id=self.run_id,
+                task_name=qualified_name,
+                task_type=task.task_type,
+                subpipeline_name=level_name,
+                log_path=str(log_path),
+            )
+            post_task_run_id = tr.id
+
         env = self.context.get_task_env(task)
         env["TASKPPS_RUN_ID"] = self.run_id
         env["TASKPPS_LEVEL"] = level
@@ -1220,6 +1232,13 @@ class PipelineRunner:
             self._write_pipeline_log("CMD", f"  command: {cmd}")
 
         timeout = task.timeout or get_settings().executor.default_timeout
+
+        # 更新 post task 状态为 RUNNING
+        async with get_session_factory()() as session:
+            task_repo = TaskRunRepository(session)
+            await task_repo.update_task_status(
+                post_task_run_id, TaskStatus.RUNNING, started_at=datetime.now(timezone.utc)
+            )
 
         try:
             executor = create_executor(task, self.context.project_workdir)
@@ -1283,6 +1302,16 @@ class PipelineRunner:
         else:
             self._write_pipeline_log(
                 "WARN", f"Post task '{qualified_name}' failed with exit_code: {exit_code}"
+            )
+
+        # 更新 post task 最终状态
+        task_status = TaskStatus.SUCCESS if result.success else TaskStatus.FAILED
+        async with get_session_factory()() as session:
+            task_repo = TaskRunRepository(session)
+            await task_repo.update_task_status(
+                post_task_run_id, task_status, exit_code=exit_code,
+                error=result.stderr[:500] if not result.success and result.stderr else None,
+                finished_at=datetime.now(timezone.utc),
             )
 
         self._write_pipeline_log(f"TASK:{qualified_name}:TEARDOWN", "")

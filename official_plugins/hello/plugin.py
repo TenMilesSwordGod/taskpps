@@ -1,26 +1,27 @@
 class HelloPlugin:
     """## Hello 执行器
 
-演示 taskpps ExecutorPlugin 协议，支持延迟模拟。
+    演示 taskpps ExecutorPlugin 协议，支持延迟模拟。
 
-### YAML 用法
+    ### YAML 用法
 
-```yaml
-tasks:
-  - name: demo
-    plugin: hello
-    params:
-      message: "hello world"
-      delay: 1
-```
+    ```yaml
+    tasks:
+      - name: demo
+        plugin: hello
+        params:
+          message: "hello world"
+          delay: 1
+    ```
 
-### 参数
+    ### 参数
 
-| 参数 | 必填 | 默认值 | 说明 |
-|------|------|--------|------|
-| `message` | 是 | — | 输出消息内容 |
-| `delay` | 否 | `0` | 模拟延迟（秒） |
-"""
+    | 参数 | 必填 | 默认值 | 说明 |
+    |------|------|--------|------|
+    | `message` | 是 | — | 输出消息内容 |
+    | `delay` | 否 | `0` | 模拟延迟（秒） |
+    """
+
     type = "executor"
     version = "1.0.0"
     params_schema = {
@@ -34,6 +35,7 @@ tasks:
 
     def build_command(self) -> str:
         import shlex
+
         parts = [f"echo {shlex.quote(self.message)}"]
         if self.delay > 0:
             parts.append(f"sleep {self.delay}")
