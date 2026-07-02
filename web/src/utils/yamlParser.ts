@@ -1,0 +1,68 @@
+import { load, dump, YAMLException } from 'js-yaml';
+import type { PipelineDetail } from '@/types';
+
+export interface YamlParseResult {
+  success: boolean;
+  pipeline?: PipelineDetail;
+  error?: { message: string; line: number; column: number };
+}
+
+/** 将 YAML 文本解析为 PipelineDetail 对象 */
+export function parseYamlToPipeline(yamlText: string): YamlParseResult {
+  if (!yamlText.trim()) {
+    return { success: false, error: { message: 'YAML 内容为空', line: 1, column: 1 } };
+  }
+
+  try {
+    const doc = load(yamlText);
+
+    if (!doc || typeof doc !== 'object') {
+      return { success: false, error: { message: 'YAML 内容不是有效的对象', line: 1, column: 1 } };
+    }
+
+    const obj = doc as Record<string, unknown>;
+    const pipeline: PipelineDetail = {
+      name: String(obj.name || 'unnamed'),
+    };
+
+    if (obj.options && typeof obj.options === 'object') {
+      pipeline.options = obj.options as PipelineDetail['options'];
+    }
+    if (obj.config && typeof obj.config === 'object') {
+      pipeline.config = obj.config as PipelineDetail['config'];
+    }
+    if (Array.isArray(obj.tasks)) {
+      pipeline.tasks = obj.tasks as PipelineDetail['tasks'];
+    }
+    if (Array.isArray(obj.pipelines)) {
+      pipeline.pipelines = obj.pipelines as PipelineDetail['pipelines'];
+    }
+
+    return { success: true, pipeline };
+  } catch (err) {
+    if (err instanceof YAMLException) {
+      return {
+        success: false,
+        error: {
+          message: err.message,
+          line: err.mark?.line != null ? err.mark.line + 1 : 1,
+          column: err.mark?.column != null ? err.mark.column + 1 : 1,
+        },
+      };
+    }
+    return {
+      success: false,
+      error: { message: err instanceof Error ? err.message : '未知解析错误', line: 1, column: 1 },
+    };
+  }
+}
+
+/** 将 PipelineDetail 对象序列化为 YAML 文本 */
+export function pipelineToYaml(pipeline: PipelineDetail): string {
+  const obj: Record<string, unknown> = { name: pipeline.name };
+  if (pipeline.options) obj.options = pipeline.options;
+  if (pipeline.config) obj.config = pipeline.config;
+  if (pipeline.tasks) obj.tasks = pipeline.tasks;
+  if (pipeline.pipelines) obj.pipelines = pipeline.pipelines;
+  return dump(obj, { indent: 2, lineWidth: 120, noRefs: true });
+}
