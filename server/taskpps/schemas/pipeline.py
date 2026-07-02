@@ -119,6 +119,7 @@ class PipelineYAML(BaseModel):
             elif self.options:
                 sub.config = PipelineConfig(**self.options.model_dump())
             object.__setattr__(self, "pipelines", [sub])
+            object.__setattr__(self, "tasks", None)
         return self
 
     def get_effective_config(self) -> PipelineConfig:

@@ -81,7 +81,11 @@ export function pipelineToYaml(pipeline: PipelineDetail): string {
   const obj: Record<string, unknown> = { name: pipeline.name };
   if (pipeline.options) obj.options = pipeline.options;
   if (pipeline.config) obj.config = pipeline.config;
-  if (pipeline.tasks) obj.tasks = pipeline.tasks;
-  if (pipeline.pipelines) obj.pipelines = pipeline.pipelines;
+  // pipelines 存在时只输出 pipelines（tasks 已被归入 pipelines），避免重复
+  if (pipeline.pipelines?.length) {
+    obj.pipelines = pipeline.pipelines;
+  } else if (pipeline.tasks?.length) {
+    obj.tasks = pipeline.tasks;
+  }
   return dump(stripDefaults(obj) as object, { indent: 2, lineWidth: 120, noRefs: true });
 }
