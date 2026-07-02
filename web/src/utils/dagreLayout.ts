@@ -12,7 +12,7 @@ export function applyDagreLayout<N extends Record<string, unknown>, E extends Re
 ): Node<N>[] {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 60 });
+  g.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 40 });
 
   for (const node of nodes) {
     const custom = groupSizes?.get(node.id);
