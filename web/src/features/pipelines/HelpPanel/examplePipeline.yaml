@@ -1,0 +1,199 @@
+# ═══════════════════════════════════════════════════
+# Taskpps Pipeline 完整示例
+# 展示所有可能的写法：stages / jobs / steps /
+# 条件执行 / 变量引用 / 参数化 / 并行 /
+# 超时 / 重试 / artifact / depends_on / agent
+# ═══════════════════════════════════════════════════
+
+version: "1.0"
+name: example-full-pipeline
+
+# ── 全局参数（触发运行时由用户填入） ──
+params:
+  - name: DEPLOY_ENV
+    label: 部署环境
+    type: select
+    options:
+      - staging
+      - canary
+      - production
+    default: staging
+  - name: VERSION_TAG
+    label: 版本标签
+    type: string
+    default: latest
+  - name: ENABLE_SMOKE_TEST
+    label: 冒烟测试
+    type: boolean
+    default: true
+
+# ── 全局环境变量（所有子流水线均可用） ──
+env:
+  DOCKER_REGISTRY: "${credential:docker-registry}"
+  NPM_TOKEN: "${credential:npm-publish}"
+
+# ── Stages 定义顺序 ──
+stages:
+  - prepare
+  - build
+  - deploy
+
+# ══════════════════ pipelines ══════════════════
+
+pipelines:
+
+  # ── prepare 阶段 ──
+  - name: prepare
+    stage: prepare
+    config:
+      execution_strategy: parallel
+      max_parallel: 4
+    depends_on: []
+
+    tasks:
+      # 基础 command 任务
+      - name: lint-check
+        command: |
+          echo "Running lint on branch ${env.GIT_BRANCH}"
+          ruff check . && ruff format --check .
+        timeout: 300
+        retry: 1
+        when: ${env.ENABLE_LINT}
+        env:
+          GIT_BRANCH: "${env.CI_COMMIT_BRANCH}"
+
+      # 带 commands 列表的任务
+      - name: unit-test
+        commands:
+          - echo "Installing dependencies..."
+          - uv sync --group dev
+          - echo "Running tests with coverage..."
+          - uv run pytest --cov=. --cov-report=xml
+        on_failure: ignore
+        cwd: /workspace/server
+        env:
+          TEST_DB_URL: "${credential:test-database}"
+          PYTHONPATH: "${env.WORKSPACE}/server"
+
+      # git 克隆任务
+      - name: clone-sdk
+        git:
+          repo: https://github.com/org/sdk.git
+          ref: "${params.VERSION_TAG}"
+          dest: ./vendor/sdk
+          depth: 1
+        credential: github-token
+
+      # Nexus 发布任务
+      - name: publish-artifact
+        nexus:
+          action: upload
+          url: "${credential:nexus.url}"
+          repository: releases
+          group_id: com.example
+          artifact_id: myapp
+          version: "${params.VERSION_TAG}"
+          file: ./dist/myapp-${params.VERSION_TAG}.tar.gz
+        timeout: 600
+
+  # ── build 阶段（并行执行） ──
+  - name: build
+    stage: build
+    config:
+      execution_strategy: parallel
+    depends_on:
+      - prepare
+    host: "${agent:builder.host}"
+    credential: build-key
+
+    tasks:
+      # docker 构建 (invoke 类型)
+      - name: docker-build
+        invoke:
+          task: docker
+          args:
+            - build
+            - --tag
+            - "${env.DOCKER_REGISTRY}/myapp:${params.VERSION_TAG}"
+          kwargs:
+            file: Dockerfile
+            context: .
+        retry: 2
+
+      # npm 构建 (steps 类型)
+      - name: npm-build
+        steps:
+          - run: npm ci
+            cd: ./web
+          - run: npm run build
+            cd: ./web
+          - run: |
+              echo "Build version: ${params.VERSION_TAG}"
+              ls -la dist/
+        env:
+          NODE_ENV: production
+          VITE_API_BASE: "${env.API_BASE_URL}"
+
+      # SSH 远程执行
+      - name: remote-healthcheck
+        ssh:
+          host: "${agent:prod-master.host}"
+          credential: "${credential:ssh-prod}"
+          command: "systemctl status taskpps || true"
+        timeout: 30
+        on_failure: ignore
+        when: "${params.DEPLOY_ENV} == 'production'"
+
+  # ── deploy 阶段（串行，依赖 build） ──
+  - name: deploy
+    stage: deploy
+    config:
+      execution_strategy: sequential
+    depends_on:
+      - build
+    timeout: 1800
+
+    tasks:
+      - name: smoke-test
+        commands:
+          - echo "Running smoke tests against ${env.TARGET_URL}"
+          - curl -f "http://${env.TARGET_URL}/health" || exit 1
+        when: ${params.ENABLE_SMOKE_TEST}
+        env:
+          TARGET_URL: "${agent:staging.host}:8080"
+
+      - name: deploy-k8s
+        invoke:
+          task: helm
+          args:
+            - upgrade
+            - --install
+            - myapp
+            - ./charts/myapp
+          kwargs:
+            namespace: "${params.DEPLOY_ENV}"
+            set:
+              - "image.tag=${params.VERSION_TAG}"
+              - "replicas=${env.REPLICA_COUNT}"
+        retry: 1
+        timeout: 600
+        depends_on:
+          - smoke-test
+
+      # artifact 发布
+      - name: publish-release
+        invoke:
+          task: github-release
+          args:
+            - create
+            - "${params.VERSION_TAG}"
+          kwargs:
+            artifacts: ./dist/*
+            notes: |
+              Pipeline ${PIPELINE_ID} Job ${JOB_ID}
+              由 ${env.CI_USER} 通过 Taskpps 触发
+        depends_on:
+          - deploy-k8s
+        agent:
+          host: "${agent:builder.host}"
+          credential: github-token
