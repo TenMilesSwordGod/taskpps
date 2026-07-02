@@ -10,8 +10,10 @@ import {
 import { usePipeline } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
 import PropertiesPanel from './PropertiesPanel';
+import { HelpPanel } from './HelpPanel';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
+import { useAppStore } from '@/stores/appStore';
 
 /** 流水线详情页 */
 export default function PipelineDetailPage() {
@@ -20,6 +22,8 @@ export default function PipelineDetailPage() {
   const { data: pipeline, isLoading } = usePipeline(file);
   const graphWrapperRef = useRef<HTMLDivElement>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
+  const helpPanelMinimized = useAppStore((s) => s.helpPanelMinimized);
+  const toggleHelpPanel = useAppStore((s) => s.toggleHelpPanel);
 
   if (isLoading) {
     return (
@@ -120,6 +124,10 @@ export default function PipelineDetailPage() {
         <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden">
           <PipelineGraph pipeline={pipeline} />
         </div>
+        <HelpPanel
+          minimized={helpPanelMinimized}
+          onToggleMinimized={toggleHelpPanel}
+        />
         <PropertiesPanel pipeline={pipeline} />
       </div>
 

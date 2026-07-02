@@ -17,6 +17,10 @@ interface AppState {
   panelMinimized: boolean;
   setPanelMinimized: (minimized: boolean) => void;
 
+  /** Help 面板是否最小化 */
+  helpPanelMinimized: boolean;
+  toggleHelpPanel: () => void;
+
   /** 是否可编辑（V1 固定为 false） */
   editable: false;
 }
@@ -33,6 +37,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   panelMinimized: false,
   setPanelMinimized: (minimized) => set({ panelMinimized: minimized }),
+
+  helpPanelMinimized: true,
+  toggleHelpPanel: () => set((s) => ({ helpPanelMinimized: !s.helpPanelMinimized })),
 
   editable: false,
 }));
