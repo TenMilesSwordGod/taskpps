@@ -27,10 +27,12 @@ export interface YamlEditorProps {
   height?: string | number;
   /** 是否只读 */
   readOnly?: boolean;
+  /** 光标所在行包含 task name 时回调 */
+  onCursorTaskChange?: (taskId: string | null) => void;
 }
 
 /** CodeMirror YAML 编辑器组件 */
-const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEditor({ value, onChange, error, height = '100%', readOnly = false }, ref) {
+const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEditor({ value, onChange, error, height = '100%', readOnly = false, onCursorTaskChange }, ref) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -38,6 +40,8 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
   const [internalError, setInternalError] = useState<typeof error>(null);
 
   onChangeRef.current = onChange;
+  const onCursorTaskChangeRef = useRef(onCursorTaskChange);
+  onCursorTaskChangeRef.current = onCursorTaskChange;
 
   // 暴露 scrollToLine 给父组件
   useImperativeHandle(ref, () => ({
@@ -75,6 +79,13 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         debouncedOnChange(update.state.doc.toString());
+      }
+      // 检测光标所在行是否包含 `- name: <taskId>`
+      if (update.selectionSet || update.docChanged) {
+        const pos = update.state.selection.main.head;
+        const line = update.state.doc.lineAt(pos);
+        const match = line.text.match(/-\s+name:\s+(\S+)/);
+        onCursorTaskChangeRef.current?.(match ? match[1] : null);
       }
     });
 

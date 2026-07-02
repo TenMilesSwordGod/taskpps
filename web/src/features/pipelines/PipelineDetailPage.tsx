@@ -37,6 +37,7 @@ export default function PipelineDetailPage() {
   const [yamlError, setYamlError] = useState<{ message: string; line: number; column: number } | null>(null);
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // 当 API 数据加载后，初始化 YAML 编辑器内容
   useEffect(() => {
@@ -69,13 +70,15 @@ export default function PipelineDetailPage() {
     }
   }, []);
 
-  // 点击 DAG 节点 → YAML 编辑器滚动到对应行
+  // 点击 DAG 节点 → YAML 编辑器滚动到对应行 + 高亮节点
   const handleNodeClick = useCallback((taskId: string) => {
+    setSelectedTaskId(taskId || null);
     if (!yamlEditorOpen || !taskId) return;
-    // 在 YAML 文本中查找 `- name: <taskId>` 的行号
+    // 节点 ID 格式: "subpipeline.taskname"，YAML 中只有 "taskname"
+    const taskName = taskId.includes('.') ? taskId.split('.').pop()! : taskId;
     const lines = yamlText.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].match(new RegExp(`-\\s+name:\\s+${taskId}\\b`))) {
+      if (lines[i].match(new RegExp(`-\\s+name:\\s+${taskName}\\b`))) {
         yamlEditorRef.current?.scrollToLine(i + 1);
         return;
       }
@@ -87,6 +90,31 @@ export default function PipelineDetailPage() {
     if (yamlEditorOpen && editedPipeline) return editedPipeline;
     return pipeline;
   }, [yamlEditorOpen, editedPipeline, pipeline]);
+
+  // YAML 光标所在行 → DAG 节点高亮（taskName → node ID 映射）
+  const taskNameToNodeId = useMemo(() => {
+    const map = new Map<string, string>();
+    const p = displayPipeline;
+    if (!p) return map;
+    p.pipelines?.forEach((sub) => {
+      sub.tasks?.forEach((t) => {
+        map.set(t.name, `${sub.name}.${t.name}`);
+      });
+    });
+    p.tasks?.forEach((t) => {
+      map.set(t.name, t.name);
+    });
+    return map;
+  }, [displayPipeline]);
+
+  const handleCursorTaskChange = useCallback((taskName: string | null) => {
+    if (!taskName) {
+      setSelectedTaskId(null);
+      return;
+    }
+    const nodeId = taskNameToNodeId.get(taskName) ?? taskName;
+    setSelectedTaskId(nodeId);
+  }, [taskNameToNodeId]);
 
   if (isLoading) {
     return (
@@ -201,13 +229,14 @@ export default function PipelineDetailPage() {
               value={yamlText}
               onChange={handleYamlChange}
               error={yamlError}
+              onCursorTaskChange={handleCursorTaskChange}
             />
           </div>
         )}
 
         {/* DAG 画布 */}
         <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden">
-          <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} />
+          <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
         </div>
 
         {/* 帮助面板 + 属性面板 */}
