@@ -5,6 +5,7 @@ import {
   Terminal,
   Code2,
   ListOrdered,
+  Puzzle,
   GitBranch,
   Upload,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ const TASK_TYPE_ICON: Record<TaskType, React.ReactNode> = {
   command: <Terminal size={16} />,
   invoke: <Code2 size={16} />,
   steps: <ListOrdered size={16} />,
+  plugin: <Puzzle size={16} />,
   git: <GitBranch size={16} />,
   nexus: <Upload size={16} />,
   ssh: <Terminal size={16} />,
@@ -26,6 +28,7 @@ const TASK_TYPE_COLOR: Record<TaskType, string> = {
   command: '#16a34a',
   invoke: '#1677ff',
   steps: '#722ed1',
+  plugin: '#eb2f96',
   git: '#fa8c16',
   nexus: '#13c2c2',
   ssh: '#0891b2',
@@ -36,6 +39,7 @@ const TASK_TYPE_LABEL: Record<TaskType, string> = {
   command: '命令',
   invoke: '调用',
   steps: '步骤',
+  plugin: '插件',
   git: 'Git',
   nexus: 'Nexus',
   ssh: 'SSH',
@@ -55,6 +59,7 @@ const STATUS_BORDER_COLOR: Record<TaskStatus, string> = {
 function inferTaskType(task: TaskYAML): TaskType {
   if (task.invoke) return 'invoke';
   if (task.steps) return 'steps';
+  if (task.plugin) return 'plugin';
   if (task.git) return 'git';
   if (task.nexus) return 'nexus';
   return 'command';

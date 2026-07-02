@@ -85,9 +85,10 @@ export default function PipelineDetailPage() {
     if (!yamlEditorOpen || !taskId) return;
     // 节点 ID 格式: "subpipeline.taskname"，YAML 中只有 "taskname"
     const taskName = taskId.includes('.') ? taskId.split('.').pop()! : taskId;
+    const escaped = taskName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const lines = yamlText.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].match(new RegExp(`-\\s+name:\\s+${taskName}\\b`))) {
+      if (lines[i].match(new RegExp(`-\\s+name:\\s+${escaped}\\b`))) {
         yamlEditorRef.current?.scrollToLine(i + 1);
         return;
       }

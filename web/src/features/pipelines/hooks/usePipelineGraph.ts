@@ -275,6 +275,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       if (n.id === '__start__' || n.id === '__end__') continue;
       minY = Math.min(minY, n.position.y);
     }
+    if (!isFinite(minY)) minY = 0;
     for (const n of layoutedNodes) {
       if (n.id === '__start__') {
         n.position.y = minY - 50;
@@ -340,6 +341,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         : TASK_H);
       finalMaxY = Math.max(finalMaxY, nodeBottom);
     }
+    if (!isFinite(finalMaxY)) finalMaxY = 100;
     for (const node of finalNodes) {
       if (node.id === '__end__') {
         node.position.y = finalMaxY + 40;
