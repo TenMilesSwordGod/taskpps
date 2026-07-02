@@ -189,8 +189,9 @@ class TestRealWorldPipelineScenarios:
 
         assert "A" in executed
         assert "B" in executed
-        assert "C" not in executed, "B 失败后依赖 B 的 C 应被跳过"
-        assert "D" not in executed, "C 被跳过后依赖 C 的 D 不应执行"
+        # sub 级 on_failure=continue + C 级 on_failure=continue, B 失败后 C 应继续执行
+        assert "C" in executed, "on_failure=continue 时 B 失败后 C 应继续执行"
+        assert "D" in executed, "C 成功后 D 应继续执行"
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0124", domain="server/scenario", priority="P2")
@@ -800,5 +801,6 @@ class TestRealWorldPipelineScenarios:
         ):
             await runner.run()
 
-        assert executed == ["A", "B"], "B 失败后依赖 B 的下游 task 应级联跳过"
+        # sub 级 on_failure=continue, 所有 task 都应执行
+        assert executed == ["A", "B", "C", "D", "E"], "on_failure=continue 时所有 task 都应执行"
 

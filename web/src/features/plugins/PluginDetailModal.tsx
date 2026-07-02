@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { Modal, Tag, Descriptions } from 'antd';
+import { marked } from 'marked';
 import type { PluginResponse, PluginType } from '@/types';
 
 const TYPE_LABELS: Record<PluginType, string> = {
@@ -13,6 +15,11 @@ interface PluginDetailModalProps {
 }
 
 export default function PluginDetailModal({ plugin, onClose }: PluginDetailModalProps) {
+  const renderedHelp = useMemo(() => {
+    if (!plugin?.help_msg) return '';
+    return marked.parse(plugin.help_msg) as string;
+  }, [plugin?.help_msg]);
+
   if (!plugin) return null;
 
   return (
@@ -54,9 +61,14 @@ export default function PluginDetailModal({ plugin, onClose }: PluginDetailModal
 
       <div className="border border-gray-200 rounded-lg p-4">
         <h4 className="text-sm font-semibold text-gray-700 mb-3">帮助信息</h4>
-        <div className="prose prose-sm max-w-none text-gray-600 text-xs leading-relaxed whitespace-pre-wrap">
-          {plugin.help_msg || '(无帮助信息)'}
-        </div>
+        {renderedHelp ? (
+          <div
+            className="prose prose-sm max-w-none text-gray-600 text-xs leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: renderedHelp }}
+          />
+        ) : (
+          <div className="text-gray-400 text-xs">(无帮助信息)</div>
+        )}
       </div>
     </Modal>
   );

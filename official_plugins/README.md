@@ -98,6 +98,7 @@ class EchoPlugin:
 | hello | `hello/` | ExecutorPlugin，演示 execute + delay + 参数校验 |
 | git_plugin | `git/` | Git 操作，支持 clone/checkout/pull + credential |
 | collector | `collector/` | 收集 pipeline 所有 task 结果生成测试报告表格 |
+| webhook | `webhook/` | Webhook 通知器，支持 Slack/飞书/钉钉/自定义 URL |
 
 ## YAML 语法
 

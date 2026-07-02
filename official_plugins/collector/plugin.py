@@ -1,18 +1,33 @@
 class CollectorPlugin:
-    """Collector — 收集 pipeline 所有 task 执行结果生成测试报告表格。
+    """## Collector 结果收集器
 
-    在 pipeline YAML 中使用:
-      plugin: collector
-      params:
-        run_id: "${env.TASKPPS_RUN_ID}"
-        output_format: "markdown"
+收集 pipeline 所有 task 执行结果，生成测试报告表格。
 
-    生成表格示例:
-      | Name | Status | Duration | Link |
-      |------|--------|----------|------|
-      | build | PASS | 2.3s | ... |
-      | test  | FAIL | 1.5s | ... |
-    """
+### YAML 用法
+
+```yaml
+tasks:
+  - name: report
+    plugin: collector
+    params:
+      run_id: "${TASKPPS_RUN_ID}"
+      output_format: "markdown"
+```
+
+### 输出示例
+
+| Name | Status | Duration | Link |
+|------|--------|----------|------|
+| build | PASS | 2.3s | ... |
+| test | FAIL | 1.5s | ... |
+
+### 参数
+
+| 参数 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `run_id` | 是 | — | Run ID，通常用 `${TASKPPS_RUN_ID}` |
+| `output_format` | 否 | `markdown` | 输出格式：`markdown` / `json` |
+"""
     type = "executor"
     version = "1.0.0"
     params_schema = {

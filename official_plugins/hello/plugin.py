@@ -1,12 +1,26 @@
 class HelloPlugin:
-    """Hello Executor Plugin — 演示 taskpps ExecutorPlugin 协议。
+    """## Hello 执行器
 
-    在 pipeline YAML 中使用:
-      plugin: hello
-      params:
-        message: "hello world"
-        delay: 1   # 可选，模拟耗时操作(秒)
-    """
+演示 taskpps ExecutorPlugin 协议，支持延迟模拟。
+
+### YAML 用法
+
+```yaml
+tasks:
+  - name: demo
+    plugin: hello
+    params:
+      message: "hello world"
+      delay: 1
+```
+
+### 参数
+
+| 参数 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `message` | 是 | — | 输出消息内容 |
+| `delay` | 否 | `0` | 模拟延迟（秒） |
+"""
     type = "executor"
     version = "1.0.0"
     params_schema = {

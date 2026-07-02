@@ -590,8 +590,10 @@ class PipelineRunner:
                         if dep_task is None:
                             should_skip = True
                             break
-                        on_failure_cfg = dep_task.on_failure or sub.config.on_failure
-                        if on_failure_cfg != "continue":
+                        # 当前 task 或失败依赖 task 任一设置 on_failure=continue 即不跳过
+                        task_on_failure = task.on_failure or sub.config.on_failure
+                        dep_on_failure = dep_task.on_failure or sub.config.on_failure
+                        if task_on_failure != "continue" and dep_on_failure != "continue":
                             should_skip = True
                             break
 
