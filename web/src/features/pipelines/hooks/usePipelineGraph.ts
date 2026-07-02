@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
-import type { PipelineDetail, TaskStatus } from '@/types';
+import type { PipelineDetail, TaskStatus, PostConfig } from '@/types';
+import type { PostVariant } from '../nodes/PostTaskNode';
 import { applyDagreLayout } from '@/utils/dagreLayout';
 
 const GROUP_PADDING_X = 24;
@@ -137,6 +138,104 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       });
     });
 
+    // === Post 阶段节点 ===
+    const postNodes: Node[] = [];
+    let postIndex = 0;
+
+    function addPostNodes(post: PostConfig | null | undefined, parentTaskId: string, parentGroupId: string) {
+      if (!post) return;
+      const variants: PostVariant[] = ['on_fail', 'on_success', 'always'];
+      for (const variant of variants) {
+        const tasks = post[variant];
+        if (!tasks || tasks.length === 0) continue;
+        for (const pt of tasks) {
+          const postId = `__post__${postIndex++}_${parentTaskId}_${variant}`;
+          postNodes.push({
+            id: postId,
+            type: 'postTask',
+            parentId: parentGroupId,
+            extent: 'parent' as const,
+            position: { x: 0, y: 0 },
+            data: { label: pt.name, variant, parentTaskId },
+          });
+          taskEdges.push({
+            id: `post-edge-${parentTaskId}-${postId}`,
+            source: parentTaskId,
+            target: postId,
+            type: 'smoothstep',
+            animated: false,
+            markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12 },
+            style: { strokeDasharray: '4 2', opacity: 0.7 },
+          });
+        }
+      }
+    }
+
+    subpipelines.forEach((sub, idx) => {
+      const groupId = `__group__${sub.name}`;
+      // subpipeline-level post
+      addPostNodes(sub.post, subpipelineTaskIds[idx]?.[subpipelineTaskIds[idx].length - 1] ?? '', groupId);
+      // task-level post
+      sub.tasks.forEach((task) => {
+        addPostNodes(task.post, `${sub.name}.${task.name}`, groupId);
+      });
+    });
+
+    // === Start / End 哨兵节点 ===
+    const startNode: Node = {
+      id: '__start__',
+      type: 'startEnd',
+      position: { x: 0, y: 0 },
+      data: { variant: 'start' },
+    };
+    const endNode: Node = {
+      id: '__end__',
+      type: 'startEnd',
+      position: { x: 0, y: 0 },
+      data: { variant: 'end' },
+    };
+
+    // 找出所有有入边的节点 target（非根节点）
+    const hasIncoming = new Set<string>();
+    for (const e of taskEdges) {
+      hasIncoming.add(e.target);
+    }
+    // 找出所有有出边的节点 source（非叶子节点）
+    const hasOutgoing = new Set<string>();
+    for (const e of taskEdges) {
+      hasOutgoing.add(e.source);
+    }
+
+    // 连接 Start → 所有无入边的根节点（taskNode 或 subpipelineGroup）
+    const allTaskIds = taskNodes.map((n) => n.id);
+    const allGroupIds = groupNodes.map((n) => n.id);
+    const rootIds = [...allTaskIds, ...allGroupIds].filter((id) => !hasIncoming.has(id));
+    for (const rootId of rootIds) {
+      taskEdges.push({
+        id: `start-to-${rootId}`,
+        source: '__start__',
+        target: rootId,
+        type: 'smoothstep',
+        animated: false,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+        style: { stroke: '#22c55e', strokeWidth: 1.5 },
+      });
+    }
+
+    // 连接所有无出边的叶子节点 → End
+    const leafIds = [...allTaskIds, ...allGroupIds].filter((id) => !hasOutgoing.has(id));
+    for (const leafId of leafIds) {
+      taskEdges.push({
+        id: `${leafId}-to-end`,
+        source: leafId,
+        target: '__end__',
+        type: 'smoothstep',
+        animated: false,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+        style: { stroke: '#ef4444', strokeWidth: 1.5 },
+      });
+    }
+
     // 预计算每个 group 的实际尺寸，传给 dagre 以获得正确的间距
     const groupSizes = new Map<string, { width: number; height: number }>();
     for (const gn of groupNodes) {
@@ -145,8 +244,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       groupSizes.set(gn.id, { width: w, height: h });
     }
 
-    // 使用 dagre 布局所有节点（含分组节点）
-    const allNodes = [...groupNodes, ...taskNodes];
+    // 使用 dagre 布局所有节点（含分组节点、post 节点、Start/End 节点）
+    const allNodes = [...groupNodes, ...taskNodes, ...postNodes, startNode, endNode];
     const layoutedNodes = applyDagreLayout(allNodes, taskEdges, groupSizes);
 
     // dagre 调整位置后，为每个分组节点计算其子节点的边界，
