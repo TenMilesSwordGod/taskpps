@@ -47,7 +47,8 @@ func resolveShell(configured string) string {
 	return configured
 }
 
-/** isExecutable 使用 LookPath 解析，并要求是普通文件且可执行。 */
+// isExecutable 检查路径是否可实际执行。
+// 除了 LookPath 解析外，还尝试实际运行来验证动态链接器等依赖可用（issue #171）。
 func isExecutable(path string) bool {
 	if path == "" {
 		return false
@@ -56,7 +57,12 @@ func isExecutable(path string) bool {
 	if err != nil {
 		return false
 	}
-	return resolved != ""
+	if resolved == "" {
+		return false
+	}
+	// 尝试实际执行，验证动态链接器等运行时依赖存在
+	cmd := exec.Command(path, "-c", "exit 0")
+	return cmd.Run() == nil
 }
 
 type runningCmd struct {
