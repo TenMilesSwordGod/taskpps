@@ -164,8 +164,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             target: postId,
             type: 'smoothstep',
             animated: false,
-            markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10 },
-            style: { stroke: '#d1d5db', strokeWidth: 1 },
+            markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+            style: { stroke: '#9ca3af', strokeWidth: 1.5, strokeDasharray: '5 3' },
           });
         }
       }
@@ -217,8 +217,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         target: rootId,
         type: 'smoothstep',
         animated: false,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12 },
-        style: { stroke: '#d1d5db', strokeWidth: 1 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+        style: { stroke: '#22c55e', strokeWidth: 1.5 },
       });
     }
 
@@ -231,8 +231,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         target: '__end__',
         type: 'smoothstep',
         animated: false,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12 },
-        style: { stroke: '#d1d5db', strokeWidth: 1 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+        style: { stroke: '#9ca3af', strokeWidth: 1.5 },
       });
     }
 
