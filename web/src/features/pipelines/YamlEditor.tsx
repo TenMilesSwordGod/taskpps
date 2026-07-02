@@ -1,14 +1,20 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
-import { foldGutter, indentOnInput, bracketMatching, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemirror/language';
+import { oneDark } from '@codemirror/theme-one-dark';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintGutter } from '@codemirror/lint';
 import { Alert, Button, Tooltip, Space } from 'antd';
 import { FormatPainterOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons';
+
+export interface YamlEditorRef {
+  /** 滚动到指定行（1-indexed），并临时高亮 2s */
+  scrollToLine: (line: number) => void;
+}
 
 export interface YamlEditorProps {
   /** 初始 YAML 文本 */
@@ -23,51 +29,8 @@ export interface YamlEditorProps {
   readOnly?: boolean;
 }
 
-/** 暗色主题 */
-const darkTheme = EditorView.theme({
-  '&': {
-    backgroundColor: '#1e1e1e',
-    color: '#d4d4d4',
-    fontSize: '13px',
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
-  },
-  '.cm-content': {
-    caretColor: '#aeafad',
-    padding: '8px 0',
-  },
-  '.cm-cursor': {
-    borderLeftColor: '#aeafad',
-  },
-  '.cm-activeLine': {
-    backgroundColor: '#2a2d2e',
-  },
-  '.cm-activeLineGutter': {
-    backgroundColor: '#2a2d2e',
-    color: '#858585',
-  },
-  '.cm-selectionBackground': {
-    backgroundColor: '#264f78 !important',
-  },
-  '.cm-gutters': {
-    backgroundColor: '#1e1e1e',
-    color: '#858585',
-    borderRight: '1px solid #333',
-  },
-  '.cm-foldGutter .cm-gutterElement': {
-    color: '#858585',
-    cursor: 'pointer',
-  },
-  '.cm-matchingBracket': {
-    backgroundColor: '#3a3d41',
-    outline: '1px solid #888',
-  },
-  '.cm-highlightSelection': {
-    backgroundColor: '#57595c',
-  },
-}, { dark: true });
-
 /** CodeMirror YAML 编辑器组件 */
-export default function YamlEditor({ value, onChange, error, height = '100%', readOnly = false }: YamlEditorProps) {
+const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEditor({ value, onChange, error, height = '100%', readOnly = false }, ref) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -75,6 +38,26 @@ export default function YamlEditor({ value, onChange, error, height = '100%', re
   const [internalError, setInternalError] = useState<typeof error>(null);
 
   onChangeRef.current = onChange;
+
+  // 暴露 scrollToLine 给父组件
+  useImperativeHandle(ref, () => ({
+    scrollToLine(line: number) {
+      const view = viewRef.current;
+      if (!view) return;
+      const lineObj = view.state.doc.line(Math.min(Math.max(line, 1), view.state.doc.lines));
+      view.dispatch({
+        selection: { anchor: lineObj.from },
+        effects: EditorView.scrollIntoView(lineObj.from, { y: 'center' }),
+      });
+      // 临时高亮目标行 2s — 通过 DOM 操作
+      const lineEls = view.dom.querySelectorAll('.cm-line');
+      const targetEl = lineEls[lineObj.number - 1];
+      if (targetEl) {
+        targetEl.classList.add('cm-highlight-line');
+        setTimeout(() => targetEl.classList.remove('cm-highlight-line'), 2000);
+      }
+    },
+  }), []);
 
   // debounce 的 onChange
   const debouncedOnChange = useCallback((val: string) => {
@@ -110,8 +93,7 @@ export default function YamlEditor({ value, onChange, error, height = '100%', re
         highlightSelectionMatches(),
         lintGutter(),
         yaml(),
-        syntaxHighlighting(defaultHighlightStyle),
-        darkTheme,
+        oneDark,
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
@@ -123,6 +105,12 @@ export default function YamlEditor({ value, onChange, error, height = '100%', re
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         updateListener,
         EditorView.lineWrapping,
+        EditorView.theme({
+          '.cm-highlight-line': {
+            backgroundColor: 'rgba(255, 255, 0, 0.15)',
+            display: 'inline',
+          },
+        }),
       ],
     });
 
@@ -212,4 +200,6 @@ export default function YamlEditor({ value, onChange, error, height = '100%', re
       )}
     </div>
   );
-}
+});
+
+export default YamlEditor;

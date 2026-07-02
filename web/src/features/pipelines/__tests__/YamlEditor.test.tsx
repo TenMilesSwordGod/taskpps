@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import YamlEditor from '../YamlEditor';
+import { render, screen, act } from '@testing-library/react';
+import { useRef } from 'react';
+import YamlEditor, { type YamlEditorRef } from '../YamlEditor';
 
 // CodeMirror 需要 DOM 环境，jsdom 下做基本渲染测试
 describe('YamlEditor', () => {
@@ -71,5 +72,27 @@ describe('YamlEditor', () => {
     );
     const content = container.querySelector('.cm-content');
     expect(content?.textContent).toContain('name: hello-world');
+  });
+
+  it('暴露 scrollToLine 方法', () => {
+    function TestWrapper() {
+      const ref = useRef<YamlEditorRef>(null);
+      return (
+        <div>
+          <YamlEditor
+            ref={ref}
+            value="name: test\npipelines:\n  - name: build\n    tasks:\n      - name: compile"
+            onChange={() => {}}
+          />
+          <button onClick={() => ref.current?.scrollToLine(3)}>go to line 3</button>
+        </div>
+      );
+    }
+    const { container } = render(<TestWrapper />);
+    // ref 应该指向编辑器实例
+    const button = container.querySelector('button');
+    expect(button).toBeTruthy();
+    // 点击不应报错
+    act(() => { button!.click(); });
   });
 });

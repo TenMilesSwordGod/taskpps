@@ -57,6 +57,25 @@ export function parseYamlToPipeline(yamlText: string): YamlParseResult {
   }
 }
 
+/** 递归移除 null/undefined/空对象/空数组，保留 0/false 等有意义 falsy 值 */
+function stripDefaults(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    const cleaned = obj.map(stripDefaults).filter((v) => v !== null && v !== undefined);
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const c = stripDefaults(v);
+      if (c !== null && c !== undefined) {
+        cleaned[k] = c;
+      }
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  }
+  return obj;
+}
+
 /** 将 PipelineDetail 对象序列化为 YAML 文本 */
 export function pipelineToYaml(pipeline: PipelineDetail): string {
   const obj: Record<string, unknown> = { name: pipeline.name };
@@ -64,5 +83,5 @@ export function pipelineToYaml(pipeline: PipelineDetail): string {
   if (pipeline.config) obj.config = pipeline.config;
   if (pipeline.tasks) obj.tasks = pipeline.tasks;
   if (pipeline.pipelines) obj.pipelines = pipeline.pipelines;
-  return dump(obj, { indent: 2, lineWidth: 120, noRefs: true });
+  return dump(stripDefaults(obj) as object, { indent: 2, lineWidth: 120, noRefs: true });
 }

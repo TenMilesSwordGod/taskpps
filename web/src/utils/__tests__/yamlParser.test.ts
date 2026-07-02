@@ -128,8 +128,7 @@ describe('pipelineToYaml', () => {
       pipelines: [
         {
           name: 'build',
-          depends_on: [],
-          tasks: [{ name: 'compile', command: 'make', env: {}, retry: 0, depends_on: [] }],
+          tasks: [{ name: 'compile', command: 'make' }],
         },
       ],
     };
@@ -145,10 +144,9 @@ describe('pipelineToYaml', () => {
       pipelines: [
         {
           name: 'stage1',
-          depends_on: [],
           tasks: [
-            { name: 'task-a', command: 'echo a', env: {}, retry: 0, depends_on: [] },
-            { name: 'task-b', command: 'echo b', env: {}, retry: 0, depends_on: ['task-a'] },
+            { name: 'task-a', command: 'echo a' },
+            { name: 'task-b', command: 'echo b', depends_on: ['task-a'] },
           ],
         },
       ],
@@ -160,5 +158,54 @@ describe('pipelineToYaml', () => {
     expect(result.pipeline?.pipelines).toHaveLength(1);
     expect(result.pipeline?.pipelines?.[0].tasks).toHaveLength(2);
     expect(result.pipeline?.pipelines?.[0].tasks[1].depends_on).toEqual(['task-a']);
+  });
+
+  it('stripDefaults: 移除 null 值字段', () => {
+    const pipeline: PipelineDetail = {
+      name: 'test',
+      pipelines: [
+        {
+          name: 'build',
+          tasks: [{ name: 'compile', command: 'make', commands: null, invoke: null, steps: null }],
+        },
+      ],
+    };
+    const yaml = pipelineToYaml(pipeline);
+    expect(yaml).not.toContain('commands');
+    expect(yaml).not.toContain('invoke');
+    expect(yaml).not.toContain('steps');
+    expect(yaml).toContain('compile');
+    expect(yaml).toContain('make');
+  });
+
+  it('stripDefaults: 移除空对象和空数组', () => {
+    const pipeline: PipelineDetail = {
+      name: 'test',
+      pipelines: [
+        {
+          name: 'build',
+          tasks: [{ name: 'compile', command: 'make', env: {}, depends_on: [], artifacts: [] }],
+        },
+      ],
+    };
+    const yaml = pipelineToYaml(pipeline);
+    expect(yaml).not.toContain('env:');
+    expect(yaml).not.toContain('depends_on');
+    expect(yaml).not.toContain('artifacts');
+  });
+
+  it('stripDefaults: 保留有意义的 falsy 值 (retry: 0)', () => {
+    const pipeline: PipelineDetail = {
+      name: 'test',
+      pipelines: [
+        {
+          name: 'build',
+          tasks: [{ name: 'compile', command: 'make', retry: 0, timeout: 0 }],
+        },
+      ],
+    };
+    const yaml = pipelineToYaml(pipeline);
+    expect(yaml).toContain('retry: 0');
+    expect(yaml).toContain('timeout: 0');
   });
 });

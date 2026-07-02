@@ -13,6 +13,7 @@ import { usePipeline } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
 import PropertiesPanel from './PropertiesPanel';
 import YamlEditor from './YamlEditor';
+import type { YamlEditorRef } from './YamlEditor';
 import { HelpPanel } from './HelpPanel';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
@@ -35,6 +36,7 @@ export default function PipelineDetailPage() {
   const [yamlText, setYamlText] = useState('');
   const [yamlError, setYamlError] = useState<{ message: string; line: number; column: number } | null>(null);
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
+  const yamlEditorRef = useRef<YamlEditorRef>(null);
 
   // 当 API 数据加载后，初始化 YAML 编辑器内容
   useEffect(() => {
@@ -66,6 +68,19 @@ export default function PipelineDetailPage() {
       // 保留上一次有效的 pipeline，不更新
     }
   }, []);
+
+  // 点击 DAG 节点 → YAML 编辑器滚动到对应行
+  const handleNodeClick = useCallback((taskId: string) => {
+    if (!yamlEditorOpen || !taskId) return;
+    // 在 YAML 文本中查找 `- name: <taskId>` 的行号
+    const lines = yamlText.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].match(new RegExp(`-\\s+name:\\s+${taskId}\\b`))) {
+        yamlEditorRef.current?.scrollToLine(i + 1);
+        return;
+      }
+    }
+  }, [yamlEditorOpen, yamlText]);
 
   // 显示的 pipeline：编辑器打开时用编辑后的版本，否则用 API 版本
   const displayPipeline: PipelineDetail | undefined = useMemo(() => {
@@ -182,6 +197,7 @@ export default function PipelineDetailPage() {
         {yamlEditorOpen && (
           <div className="flex-shrink-0 border-r border-gray-200 bg-[#1e1e1e]" style={{ width: '40%', minWidth: 300 }}>
             <YamlEditor
+              ref={yamlEditorRef}
               value={yamlText}
               onChange={handleYamlChange}
               error={yamlError}
@@ -191,7 +207,7 @@ export default function PipelineDetailPage() {
 
         {/* DAG 画布 */}
         <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden">
-          <PipelineGraph pipeline={displayPipeline} />
+          <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} />
         </div>
 
         {/* 帮助面板 + 属性面板 */}
