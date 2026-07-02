@@ -1,47 +1,47 @@
 class WebhookPlugin:
     """## Webhook 通知器
 
-    向外部 URL 发送 HTTP 请求，支持 Slack/飞书/钉钉/自定义。
+        向外部 URL 发送 HTTP 请求，支持 Slack/飞书/钉钉/自定义。
 
-    ### YAML 用法
+        ### YAML 用法
 
-    **通用 Webhook：**
+        **通用 Webhook：**
 
-    ```yaml
-    tasks:
-      - name: notify
-        plugin: webhook
-        params:
-          url: "https://your-webhook-url.com/notify"
-          payload: '{"status":"success","run":"${TASKPPS_RUN_ID}"}'
-          headers: "Authorization=Bearer token,X-Custom=value"
-          timeout: "10"
-          retry: "3"
-    ```
+        ```yaml
+        tasks:
+          - name: notify
+            plugin: webhook
+            params:
+              url: "https://your-webhook-url.com/notify"
+              payload: '{"status":"success","run":"${TASKPPS_RUN_ID}"}'
+              headers: "Authorization=Bearer token,X-Custom=value"
+              timeout: "10"
+              retry: "3"
+        ```
 
-    **Slack：**
+        **Slack：**
 
-    ```yaml
-    tasks:
-      - name: slack-alert
-        plugin: webhook
-        params:
-          url: "https://hooks.slack.com/services/T.../B.../xxx"
-          preset: slack
-          message: "Deploy completed!"
-    ```
+        ```yaml
+        tasks:
+          - name: slack-alert
+            plugin: webhook
+            params:
+              url: "https://hooks.slack.com/services/T.../B.../xxx"
+              preset: slack
+              message: "Deploy completed!"
+        ```
 
-    **飞书：**
+        **飞书：**
 
-    ```yaml
-    tasks:
-      - name: feishu-notify
-        plugin: webhook
-        params:
-          url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxx"
-          preset: feishu
-          message: "Pipeline failed!"
-    ```
+        ```yaml
+        tasks:
+          - name: feishu-notify
+            plugin: webhook
+            params:
+              url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxx"
+              preset: feishu
+              message: "Pipeline failed!"
+        ```
 
     **钉钉：**
 
@@ -55,18 +55,30 @@ class WebhookPlugin:
           message: "Build finished"
     ```
 
+    **Teams：**
+
+    ```yaml
+    tasks:
+      - name: teams-notify
+        plugin: webhook
+        params:
+          url: "https://your-workflow.webhook.office.com/webhookb2/xxx"
+          preset: teams
+          message: "Pipeline completed successfully"
+    ```
+
     ### 参数
 
-    | 参数 | 必填 | 默认值 | 说明 |
-    |------|------|--------|------|
-    | `url` | 是 | — | Webhook URL |
-    | `method` | 否 | `POST` | HTTP 方法：`POST` / `PUT` / `PATCH` |
-    | `payload` | 否 | — | 自定义 JSON 请求体 |
-    | `headers` | 否 | — | 自定义 Headers（`key=value,key=value`） |
-    | `timeout` | 否 | `10` | 超时秒数 |
-    | `retry` | 否 | `3` | 重试次数 |
-    | `preset` | 否 | — | 内置模板：`slack` / `feishu` / `dingtalk` |
-    | `message` | 否 | — | preset 模式下的消息内容 |
+        | 参数 | 必填 | 默认值 | 说明 |
+        |------|------|--------|------|
+        | `url` | 是 | — | Webhook URL |
+        | `method` | 否 | `POST` | HTTP 方法：`POST` / `PUT` / `PATCH` |
+        | `payload` | 否 | — | 自定义 JSON 请求体 |
+        | `headers` | 否 | — | 自定义 Headers（`key=value,key=value`） |
+        | `timeout` | 否 | `10` | 超时秒数 |
+        | `retry` | 否 | `3` | 重试次数 |
+        | `preset` | 否 | — | 内置模板：`slack` / `feishu` / `dingtalk` / `teams` |
+        | `message` | 否 | — | preset 模式下的消息内容 |
     """
 
     type = "executor"
@@ -84,7 +96,12 @@ class WebhookPlugin:
         "headers": {"type": "string", "required": False, "label": "自定义 Headers (key=value,key=value)"},
         "timeout": {"type": "string", "required": False, "label": "超时秒数", "default": "10"},
         "retry": {"type": "string", "required": False, "label": "重试次数", "default": "3"},
-        "preset": {"type": "string", "required": False, "label": "内置模板", "enum": ["slack", "feishu", "dingtalk"]},
+        "preset": {
+            "type": "string",
+            "required": False,
+            "label": "内置模板",
+            "enum": ["slack", "feishu", "dingtalk", "teams"],
+        },
         "message": {"type": "string", "required": False, "label": "消息内容 (preset 模式)"},
     }
 
@@ -118,6 +135,37 @@ class WebhookPlugin:
                 {
                     "msgtype": "text",
                     "text": {"content": self.message},
+                }
+            )
+        elif self.preset == "teams":
+            return json.dumps(
+                {
+                    "type": "message",
+                    "attachments": [
+                        {
+                            "contentType": "application/vnd.microsoft.card.adaptive",
+                            "contentUrl": None,
+                            "content": {
+                                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                "type": "AdaptiveCard",
+                                "version": "1.4",
+                                "body": [
+                                    {
+                                        "type": "TextBlock",
+                                        "text": self.message or "Pipeline Notification",
+                                        "weight": "bolder",
+                                        "size": "medium",
+                                    },
+                                    {
+                                        "type": "FactSet",
+                                        "facts": [
+                                            {"title": "Status", "value": "completed"},
+                                        ],
+                                    },
+                                ],
+                            },
+                        }
+                    ],
                 }
             )
         return self.payload or ""
