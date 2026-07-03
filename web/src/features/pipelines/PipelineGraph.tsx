@@ -11,6 +11,7 @@ import TaskNode from './nodes/TaskNode';
 import SubpipelineGroupNode from './nodes/SubpipelineGroupNode';
 import PostTaskNode from './nodes/PostTaskNode';
 import { StartNode, EndNode } from './nodes/StartEndNode';
+import WhenNode from './nodes/WhenNode';
 import { usePipelineGraph } from './hooks/usePipelineGraph';
 import { useAppStore } from '@/stores/appStore';
 import type { PipelineDetail, TaskStatus } from '@/types';
@@ -28,6 +29,7 @@ const nodeTypes = {
   subpipelineGroup: SubpipelineGroupNode,
   postTask: PostTaskNode,
   startEnd: StartEndNodeWrapper,
+  whenNode: WhenNode,
 };
 
 interface PipelineGraphProps {

@@ -1,16 +1,17 @@
 import { useMemo } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
-import type { PipelineDetail, TaskStatus, PostConfig } from '@/types';
+import type { PipelineDetail, TaskStatus, PostConfig, TaskYAML } from '@/types';
 import type { PostVariant } from '../nodes/PostTaskNode';
 import { applyDagreLayout } from '@/utils/dagreLayout';
 
 const GROUP_PADDING_X = 24;
-const GROUP_PADDING_Y = 48;
-const GROUP_HEADER = 28;
+const GROUP_PADDING_Y = 10;
+const GROUP_HEADER = 0;
 const TASK_W = 200;
-const TASK_H = 48;
+const TASK_H = 64;
 const POST_H = 30;
+const GATEWAY_SIZE = 50;
 
 interface UsePipelineGraphOptions {
   pipeline: PipelineDetail | undefined;
@@ -27,6 +28,84 @@ function countPostTasks(post: PostConfig | null | undefined): number {
   return count;
 }
 
+function hasWhen(task: TaskYAML | null | undefined): task is TaskYAML & { when: string } {
+  return !!task?.when;
+}
+
+function makeGatewayId(sourceId: string): string {
+  return `gateway-${sourceId}`;
+}
+
+interface WhenTargetInfo {
+  targetId: string;
+  targetTask: TaskYAML & { when: string };
+  groupId: string;
+  edgeBaseId: string;
+  markerEnd: Edge['markerEnd'];
+  style?: Edge['style'];
+}
+
+function pushPlainEdge(
+  taskEdges: Edge[],
+  sourceId: string,
+  targetId: string,
+  edgeBaseId: string,
+  markerEnd: Edge['markerEnd'],
+  style?: Edge['style'],
+) {
+  taskEdges.push({
+    id: edgeBaseId,
+    source: sourceId,
+    target: targetId,
+    type: 'smoothstep',
+    animated: true,
+    markerEnd,
+    style,
+  });
+}
+
+function collectWhenTarget(
+  whenTargetsBySource: Map<string, WhenTargetInfo[]>,
+  sourceId: string,
+  targetId: string,
+  targetTask: TaskYAML,
+  groupId: string,
+  edgeBaseId: string,
+  markerEnd: Edge['markerEnd'],
+  style?: Edge['style'],
+) {
+  if (!hasWhen(targetTask)) return;
+  const list = whenTargetsBySource.get(sourceId);
+  const info: WhenTargetInfo = {
+    targetId,
+    targetTask,
+    groupId,
+    edgeBaseId,
+    markerEnd,
+    style,
+  };
+  if (list) {
+    list.push(info);
+  } else {
+    whenTargetsBySource.set(sourceId, [info]);
+  }
+}
+
+function createGatewayNode(sourceId: string, parentId: string | undefined, whenTargets: WhenTargetInfo[]): Node {
+  return {
+    id: makeGatewayId(sourceId),
+    type: 'whenNode',
+    parentId,
+    extent: 'parent' as const,
+    position: { x: 0, y: 0 },
+    data: {
+      isGateway: true,
+      whenTargets: whenTargets.map((t) => ({ targetId: t.targetId, when: t.targetTask.when })),
+      sourceTaskName: sourceId,
+    },
+  };
+}
+
 export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOptions) {
   return useMemo(() => {
     if (!pipeline) return { nodes: [] as Node[], edges: [] as Edge[] };
@@ -35,6 +114,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const taskNodes: Node[] = [];
     const taskEdges: Edge[] = [];
     const groupNodes: Node[] = [];
+    const whenTargetsBySource = new Map<string, WhenTargetInfo[]>();
+    const sourceParentMap = new Map<string, string | undefined>();
 
     let orderIndex = 1;
     const subpipelineTaskIds: string[][] = [];
@@ -55,20 +136,32 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           position: { x: 0, y: 0 },
           data: { task, subpipelineName: sub.name, status, order: orderIndex },
         });
+        sourceParentMap.set(taskId, groupId);
 
         orderIndex++;
         ids.push(taskId);
 
         task.depends_on?.forEach((dep) => {
           const sourceId = `${sub.name}.${dep}`;
-          taskEdges.push({
-            id: `dep-${sourceId}-${taskId}`,
-            source: sourceId,
-            target: taskId,
-            type: 'smoothstep',
-            animated: true,
-            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-          });
+          if (hasWhen(task)) {
+            collectWhenTarget(
+              whenTargetsBySource,
+              sourceId,
+              taskId,
+              task,
+              groupId,
+              `dep-${sourceId}-${taskId}`,
+              { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+            );
+          } else {
+            pushPlainEdge(
+              taskEdges,
+              sourceId,
+              taskId,
+              `dep-${sourceId}-${taskId}`,
+              { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+            );
+          }
         });
       });
 
@@ -82,15 +175,28 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       if (strategy !== 'parallel') {
         for (let i = 1; i < ids.length; i++) {
           const currTask = sub.tasks?.[i];
+          const prevId = ids[i - 1];
+          const currId = ids[i];
           if (currTask && (currTask.depends_on?.length ?? 0) === 0) {
-            taskEdges.push({
-              id: `implicit-${ids[i - 1]}-${ids[i]}`,
-              source: ids[i - 1],
-              target: ids[i],
-              type: 'smoothstep',
-              animated: true,
-              markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-            });
+            if (hasWhen(currTask)) {
+              collectWhenTarget(
+                whenTargetsBySource,
+                prevId,
+                currId,
+                currTask,
+                groupId,
+                `implicit-${prevId}-${currId}`,
+                { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+              );
+            } else {
+              pushPlainEdge(
+                taskEdges,
+                prevId,
+                currId,
+                `implicit-${prevId}-${currId}`,
+                { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+              );
+            }
           }
         }
       }
@@ -126,19 +232,69 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           const sourceIds = subpipelineTaskIds[sourceIdx];
           const targetIds = subpipelineTaskIds[idx];
           if (sourceIds.length > 0 && targetIds.length > 0) {
-            taskEdges.push({
-              id: `cross-sub-${depSubName}-${sub.name}`,
-              source: sourceIds[sourceIds.length - 1],
-              target: targetIds[0],
-              type: 'smoothstep',
-              animated: true,
-              markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#f59e0b' },
-              style: { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 3' },
-            });
+            const sourceId = sourceIds[sourceIds.length - 1];
+            const targetId = targetIds[0];
+            const targetFirstTask = sub.tasks?.[0];
+            const groupId = `__group__${sub.name}`;
+            if (hasWhen(targetFirstTask)) {
+              collectWhenTarget(
+                whenTargetsBySource,
+                sourceId,
+                targetId,
+                targetFirstTask,
+                groupId,
+                `cross-sub-${depSubName}-${sub.name}`,
+                { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#f59e0b' },
+                { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 3' },
+              );
+            } else {
+              pushPlainEdge(
+                taskEdges,
+                sourceId,
+                targetId,
+                `cross-sub-${depSubName}-${sub.name}`,
+                { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#f59e0b' },
+                { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 3' },
+              );
+            }
           }
         }
       });
     });
+
+    // 创建 Gateway 节点与相关边
+    for (const [sourceId, whenTargets] of whenTargetsBySource.entries()) {
+      const gatewayId = makeGatewayId(sourceId);
+      const parentId = sourceParentMap.get(sourceId);
+      taskNodes.push(createGatewayNode(sourceId, parentId, whenTargets));
+
+      taskEdges.push({
+        id: `${gatewayId}-in`,
+        source: sourceId,
+        target: gatewayId,
+        type: 'step',
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+        style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+      });
+
+      for (const info of whenTargets) {
+        taskEdges.push({
+          id: `${gatewayId}-to-${info.targetId}`,
+          source: gatewayId,
+          target: info.targetId,
+          type: 'step',
+          animated: true,
+          markerEnd: info.markerEnd,
+          style: info.style ?? { stroke: '#9ca3af', strokeWidth: 1.5 },
+          label: info.targetTask.when,
+          labelStyle: { fill: '#B45309', fontSize: 12, fontWeight: 500, fontFamily: 'monospace' },
+          labelBgStyle: { fill: '#FFFBEB', stroke: '#FCD34D', strokeWidth: 1, rx: 4, ry: 4 },
+          labelBgPadding: [4, 6],
+          labelBgBorderRadius: 4,
+        });
+      }
+    }
 
     // === Post 阶段节点 ===
     const postNodes: Node[] = [];
@@ -306,8 +462,18 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const child of finalNodes) {
           if (child.parentId === node.id) {
-            const cw = child.type === 'postTask' ? 160 : TASK_W;
-            const ch = child.type === 'postTask' ? POST_H : TASK_H;
+            const cw =
+              child.type === 'postTask'
+                ? 160
+                : child.type === 'whenNode'
+                  ? GATEWAY_SIZE
+                  : TASK_W;
+            const ch =
+              child.type === 'postTask'
+                ? POST_H
+                : child.type === 'whenNode'
+                  ? GATEWAY_SIZE
+                  : TASK_H;
             minX = Math.min(minX, child.position.x);
             minY = Math.min(minY, child.position.y);
             maxX = Math.max(maxX, child.position.x + cw);
