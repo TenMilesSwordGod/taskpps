@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from './client';
 import type { PipelineListResponse, PipelineDetail } from '@/types';
 
@@ -22,5 +22,19 @@ export function usePipeline(file: string | undefined) {
       return res.data;
     },
     enabled: !!file,
+  });
+}
+
+/** 保存 pipeline YAML */
+export function useSavePipeline(file: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiClient.put(`/api/pipelines/${encodeURIComponent(file!)}`, { content });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline', file] });
+    },
   });
 }

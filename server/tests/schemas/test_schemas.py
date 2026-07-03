@@ -42,7 +42,10 @@ def test_pipeline_yaml():
         tasks=[TaskYAML(name="step1", command="echo hi")],
     )
     assert p.name == "test"
-    assert len(p.tasks) == 1
+    # _normalize wraps tasks into pipelines and clears tasks
+    assert p.tasks is None
+    assert p.pipelines is not None
+    assert len(p.pipelines[0].tasks) == 1
     assert p.options.env["KEY"] == "VAL"
 
 

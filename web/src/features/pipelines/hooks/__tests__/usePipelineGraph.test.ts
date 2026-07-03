@@ -155,3 +155,50 @@ describe('usePipelineGraph — implicit edges & execution_strategy', () => {
     expect(taskEdges(result.current.edges)).toHaveLength(1)
   })
 })
+
+describe('usePipelineGraph — null tasks 安全', () => {
+  it('tasks 为 null 时不崩溃', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            { name: 'build', tasks: null, depends_on: [] },
+          ],
+        }),
+      }),
+    )
+    expect(result.current.nodes).toBeDefined()
+    expect(result.current.edges).toBeDefined()
+  })
+
+  it('tasks 为空数组时不崩溃', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            { name: 'build', tasks: [], depends_on: [] },
+          ],
+        }),
+      }),
+    )
+    expect(result.current.nodes).toBeDefined()
+    expect(result.current.edges).toBeDefined()
+  })
+
+  it('部分 subpipeline tasks 为 null', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            { name: 'build', tasks: [{ name: 'compile', command: 'make', depends_on: [] }], depends_on: [] },
+            { name: 'deploy', tasks: null, depends_on: ['build'] },
+          ],
+        }),
+      }),
+    )
+    // build 有 1 个 task 节点，deploy 没有
+    const taskNodes = result.current.nodes.filter((n) => n.type === 'taskNode')
+    expect(taskNodes).toHaveLength(1)
+    expect(taskNodes[0].id).toBe('build.compile')
+  })
+})

@@ -22,7 +22,7 @@ export type RunStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelle
 export type TaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled';
 
 /** 任务类型 */
-export type TaskType = 'command' | 'invoke' | 'steps' | 'git' | 'nexus' | 'ssh';
+export type TaskType = 'command' | 'invoke' | 'steps' | 'plugin' | 'git' | 'nexus' | 'ssh';
 
 /** 重试执行策略 */
 export type RetryExecutionStrategy = 'parallel' | 'sequential';
@@ -163,6 +163,8 @@ export interface PipelineConfig {
   on_failure: string;
   execution_strategy: string;
   max_parallel?: number | null;
+  max_concurrent_runs?: number | null;
+  max_concurrent_tasks?: number | null;
   cwd?: string | null;
 }
 
@@ -173,6 +175,12 @@ export interface PostConfig {
   always?: TaskYAML[] | null;
 }
 
+/** 制品声明 */
+export interface ArtifactDeclaration {
+  path: string;
+  type?: string;
+}
+
 /** 任务 YAML 定义 */
 export interface TaskYAML {
   name: string;
@@ -180,6 +188,8 @@ export interface TaskYAML {
   commands?: string[] | null;
   invoke?: InvokeSpec | null;
   steps?: TaskStep[] | null;
+  plugin?: string | null;
+  params?: Record<string, unknown> | null;
   git?: GitSpec | null;
   nexus?: NexusSpec | null;
   cwd?: string | null;
@@ -191,6 +201,7 @@ export interface TaskYAML {
   on_failure?: string | null;
   depends_on: string[];
   when?: string | null;
+  artifacts?: ArtifactDeclaration[];
   post?: PostConfig | null;
 }
 
@@ -208,8 +219,10 @@ export interface PipelineDetail {
   name: string;
   options?: PipelineConfig | null;
   config?: PipelineConfig | null;
+  post?: PostConfig | null;
   tasks?: TaskYAML[] | null;
   pipelines?: SubPipeline[] | null;
+  artifacts?: ArtifactDeclaration[];
 }
 
 /** 健康检查响应 */

@@ -26,6 +26,7 @@ const TASK_TYPE_COLOR: Record<TaskType, string> = {
   command: '#8c8c8c',
   invoke: '#1677ff',
   steps: '#722ed1',
+  plugin: '#eb2f96',
   git: '#fa8c16',
   nexus: '#13c2c2',
   ssh: '#8c8c8c',
@@ -36,6 +37,7 @@ const TASK_TYPE_LABEL: Record<TaskType, string> = {
   command: '命令',
   invoke: '调用',
   steps: '步骤',
+  plugin: '插件',
   git: 'Git',
   nexus: 'Nexus',
   ssh: 'SSH',
@@ -45,6 +47,7 @@ const TASK_TYPE_LABEL: Record<TaskType, string> = {
 function inferTaskType(task: TaskYAML): TaskType {
   if (task.invoke) return 'invoke';
   if (task.steps) return 'steps';
+  if (task.plugin) return 'plugin';
   if (task.git) return 'git';
   if (task.nexus) return 'nexus';
   return 'command';
@@ -57,12 +60,19 @@ function findTask(
 ): { task: TaskYAML; subName: string } | null {
   if (!pipeline || !selectedNodeId) return null;
 
+  // 搜索 subpipelines 内的 tasks
   const subpipelines = pipeline.pipelines || [];
   for (const sub of subpipelines) {
-    for (const task of sub.tasks) {
+    for (const task of sub.tasks ?? []) {
       if (`${sub.name}.${task.name}` === selectedNodeId) {
         return { task, subName: sub.name };
       }
+    }
+  }
+  // 搜索顶层 tasks（用户手写 tasks 格式时）
+  for (const task of pipeline.tasks ?? []) {
+    if (task.name === selectedNodeId) {
+      return { task, subName: '' };
     }
   }
   return null;
@@ -341,13 +351,13 @@ function SubpipelinePanel({ sub }: { sub: SubPipeline }) {
       </div>
       <div>
         <label className="text-xs text-gray-500 mb-1 block">任务数</label>
-        <Input value={String(sub.tasks.length)} readOnly size="small" />
+        <Input value={String(sub.tasks?.length ?? 0)} readOnly size="small" />
       </div>
-      {sub.depends_on.length > 0 && (
+      {(sub.depends_on?.length ?? 0) > 0 && (
         <div>
           <label className="text-xs text-gray-500 mb-1 block">依赖</label>
           <div className="flex flex-wrap gap-1">
-            {sub.depends_on.map((dep) => (
+            {sub.depends_on?.map((dep) => (
               <Tag key={dep}>{dep}</Tag>
             ))}
           </div>
