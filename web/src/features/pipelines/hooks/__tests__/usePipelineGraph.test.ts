@@ -26,8 +26,9 @@ function taskEdges(edges: ReturnType<typeof usePipelineGraph>['edges']) {
   return edges.filter((e) => e.source !== '__start__' && e.target !== '__end__')
 }
 
-function gatewayId(sourceId: string): string {
-  return `gateway-${sourceId}`
+/** 生成决策节点 id */
+function decisionId(sourceId: string, targetId: string): string {
+  return `decision-${sourceId}-${targetId}`
 }
 
 describe('usePipelineGraph — implicit edges & execution_strategy', () => {
@@ -160,8 +161,8 @@ describe('usePipelineGraph — implicit edges & execution_strategy', () => {
   })
 })
 
-describe('usePipelineGraph — gateway 合并与边结构', () => {
-  it('depends_on 目标 task 有 when 时插入 gateway 并拆分边', () => {
+describe('usePipelineGraph — decisionNode 决策节点与边结构', () => {
+  it('depends_on 目标 task 有 when 时创建决策节点，source→decision→(yes)→target', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -171,13 +172,13 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
               config: null,
               depends_on: [],
               tasks: [
-                { name: 'task-a', depends_on: [], env: {}, retry: 0 },
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
                 {
-                  name: 'task-b',
-                  depends_on: ['task-a'],
+                  name: 'smoke-test',
+                  depends_on: ['setup'],
                   env: {},
                   retry: 0,
-                  when: '${env.RUN_B} == "true"',
+                  when: '${RUN_SMOKE}',
                 },
               ],
             },
@@ -186,28 +187,73 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    const sourceId = 'build.task-a'
-    const gateway = gatewayId(sourceId)
-    const gatewayNode = result.current.nodes.find((n) => n.id === gateway)
-    expect(gatewayNode).toBeDefined()
-    expect(gatewayNode?.data).toMatchObject({
-      isGateway: true,
-      sourceTaskName: sourceId,
-    })
+    const did = decisionId('build.setup', 'build.smoke-test')
 
-    const pairs = edgePairs(result.current.edges)
-    expect(pairs).toContainEqual([sourceId, gateway])
-    expect(pairs).toContainEqual([gateway, 'build.task-b'])
-    expect(pairs).not.toContainEqual([sourceId, 'build.task-b'])
+    // 创建了决策节点
+    const dn = result.current.nodes.find((n) => n.id === did)
+    expect(dn).toBeDefined()
+    expect(dn?.type).toBe('decisionNode')
 
-    const inEdge = result.current.edges.find((e) => e.target === gateway)
-    const outEdge = result.current.edges.find((e) => e.source === gateway)
-    expect(inEdge?.type).toBe('step')
-    expect(outEdge?.type).toBe('step')
-    expect(outEdge?.label).toBe('${env.RUN_B} == "true"')
+    // source → decision 边（无 sourceHandle，普通样式）
+    const srcEdge = result.current.edges.find((e) => e.source === 'build.setup' && e.target === did)
+    expect(srcEdge).toBeDefined()
+    expect(srcEdge?.sourceHandle).toBeUndefined()
+
+    // decision →(yes)→ target 边
+    const yesEdge = result.current.edges.find((e) => e.source === did && e.target === 'build.smoke-test')
+    expect(yesEdge).toBeDefined()
+    expect(yesEdge?.sourceHandle).toBe('yes')
+    expect(yesEdge?.label).toBe('yes')
+    expect((yesEdge?.style as { stroke?: string })?.stroke).toBe('#16A34A')
   })
 
-  it('同一 source 多个 when target 时只产生一个 gateway', () => {
+  it('条件任务有下游时，不创建 no 边（no 路径由菱形标注隐含）', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'build',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'smoke-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_SMOKE}',
+                },
+                {
+                  name: 'final',
+                  depends_on: ['smoke-test'],
+                  env: {},
+                  retry: 0,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const did = decisionId('build.setup', 'build.smoke-test')
+
+    // 不应有 no 边（no 路径隐含，不画边避免交叉）
+    const noEdges = result.current.edges.filter(
+      (e) => e.source === did && e.sourceHandle === 'no',
+    )
+    expect(noEdges).toHaveLength(0)
+
+    // smoke-test → final 直连边仍存在
+    const directEdge = result.current.edges.find(
+      (e) => e.source === 'build.smoke-test' && e.target === 'build.final',
+    )
+    expect(directEdge).toBeDefined()
+  })
+
+  it('同一 source 多个 when target 时各创建独立决策节点', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -239,21 +285,21 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    const gatewayNodes = result.current.nodes.filter((n) => n.type === 'whenNode')
-    expect(gatewayNodes).toHaveLength(1)
+    const did1 = decisionId('build.setup', 'build.smoke-test')
+    const did2 = decisionId('build.setup', 'build.perf-test')
 
-    const sourceId = 'build.setup'
-    const gateway = gatewayId(sourceId)
-    expect(gatewayNodes[0].id).toBe(gateway)
+    // 两个独立决策节点
+    expect(result.current.nodes.find((n) => n.id === did1)).toBeDefined()
+    expect(result.current.nodes.find((n) => n.id === did2)).toBeDefined()
 
-    const outEdges = result.current.edges.filter((e) => e.source === gateway)
-    expect(outEdges).toHaveLength(2)
-    expect(outEdges.map((e) => e.target).sort()).toEqual(['build.perf-test', 'build.smoke-test'])
-    expect(outEdges.map((e) => e.label).sort()).toEqual(['${RUN_PERF}', '${RUN_SMOKE}'])
-    expect(outEdges.every((e) => e.type === 'step')).toBe(true)
+    // 各自有 yes 边
+    const yes1 = result.current.edges.find((e) => e.source === did1 && e.target === 'build.smoke-test')
+    const yes2 = result.current.edges.find((e) => e.source === did2 && e.target === 'build.perf-test')
+    expect(yes1?.sourceHandle).toBe('yes')
+    expect(yes2?.sourceHandle).toBe('yes')
   })
 
-  it('gateway → target 的边显示完整 when 条件且不截断', () => {
+  it('决策节点 data.when 等于完整条件表达式', () => {
     const longWhen = '${params.A} == "1" && ${params.B} == "2"'
     const { result } = renderHook(() =>
       usePipelineGraph({
@@ -279,13 +325,12 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    const gateway = gatewayId('build.task-a')
-    const outEdge = result.current.edges.find((e) => e.source === gateway && e.target === 'build.task-b')
-    expect(outEdge).toBeDefined()
-    expect(outEdge?.label).toBe(longWhen)
+    const did = decisionId('build.task-a', 'build.task-b')
+    const dn = result.current.nodes.find((n) => n.id === did)
+    expect((dn?.data as { when?: string })?.when).toBe(longWhen)
   })
 
-  it('隐式顺序边目标 task 有 when 时插入 gateway', () => {
+  it('隐式顺序边目标 task 有 when 时也创建决策节点', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -310,17 +355,16 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    const sourceId = 'build.task-a'
-    const gateway = gatewayId(sourceId)
-    const gatewayNode = result.current.nodes.find((n) => n.id === gateway)
-    expect(gatewayNode).toBeDefined()
-    const pairs = edgePairs(result.current.edges)
-    expect(pairs).toContainEqual([sourceId, gateway])
-    expect(pairs).toContainEqual([gateway, 'build.task-b'])
-    expect(pairs).not.toContainEqual([sourceId, 'build.task-b'])
+    const did = decisionId('build.task-a', 'build.task-b')
+    const dn = result.current.nodes.find((n) => n.id === did)
+    expect(dn).toBeDefined()
+    expect(dn?.type).toBe('decisionNode')
+
+    const yesEdge = result.current.edges.find((e) => e.source === did && e.target === 'build.task-b')
+    expect(yesEdge?.sourceHandle).toBe('yes')
   })
 
-  it('目标 task 无 when 时不插入 gateway，保留原边', () => {
+  it('目标 task 无 when 时不插入决策节点，保留原边', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -339,12 +383,12 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    expect(result.current.nodes.find((n) => n.type === 'whenNode')).toBeUndefined()
+    expect(result.current.nodes.find((n) => n.type === 'decisionNode')).toBeUndefined()
     const pairs = edgePairs(result.current.edges)
     expect(pairs).toContainEqual(['build.task-a', 'build.task-b'])
   })
 
-  it('when 为空字符串时不插入 gateway', () => {
+  it('when 为空字符串时不插入决策节点', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -363,12 +407,12 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    expect(result.current.nodes.find((n) => n.type === 'whenNode')).toBeUndefined()
+    expect(result.current.nodes.find((n) => n.type === 'decisionNode')).toBeUndefined()
     const pairs = edgePairs(result.current.edges)
     expect(pairs).toContainEqual(['build.task-a', 'build.task-b'])
   })
 
-  it('跨 subpipeline 目标 firstTask 有 when 时插入 gateway', () => {
+  it('跨 subpipeline 目标 firstTask 有 when 时创建决策节点', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -398,17 +442,27 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    const sourceId = 'build.compile'
-    const gateway = gatewayId(sourceId)
-    const gatewayNode = result.current.nodes.find((n) => n.id === gateway)
-    expect(gatewayNode).toBeDefined()
-    const pairs = edgePairs(result.current.edges)
-    expect(pairs).toContainEqual([sourceId, gateway])
-    expect(pairs).toContainEqual([gateway, 'deploy.push'])
-    expect(pairs).not.toContainEqual([sourceId, 'deploy.push'])
+    const did = 'decision-cross-build-deploy'
+    const dn = result.current.nodes.find((n) => n.id === did)
+    expect(dn).toBeDefined()
+    expect(dn?.type).toBe('decisionNode')
+
+    // 跨 group 拓扑边：source group → target group
+    const crossEdge = result.current.edges.find(
+      (e) => e.id === 'cross-sub-build-deploy',
+    )
+    expect(crossEdge).toBeDefined()
+    expect(crossEdge?.source).toBe('__group__build')
+    expect(crossEdge?.target).toBe('__group__deploy')
+
+    // decision →(yes)→ push
+    const yesEdge = result.current.edges.find((e) => e.source === did && e.target === 'deploy.push')
+    expect(yesEdge?.sourceHandle).toBe('yes')
+    expect(yesEdge?.label).toBe('yes')
+    expect((yesEdge?.style as { stroke?: string })?.stroke).toBe('#16A34A')
   })
 
-  it('gateway parentId 与 source task 同 group', () => {
+  it('决策节点 parentId 与 source task 同 group', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -433,8 +487,11 @@ describe('usePipelineGraph — gateway 合并与边结构', () => {
       }),
     )
 
-    const gatewayNode = result.current.nodes.find((n) => n.type === 'whenNode')
-    expect(gatewayNode?.parentId).toBe('__group__build')
+    const did = decisionId('build.compile', 'build.push')
+    const dn = result.current.nodes.find((n) => n.id === did)
+    const sourceNode = result.current.nodes.find((n) => n.id === 'build.compile')
+    expect(dn?.parentId).toBe(sourceNode?.parentId)
+    expect(dn?.parentId).toBe('__group__build')
   })
 })
 

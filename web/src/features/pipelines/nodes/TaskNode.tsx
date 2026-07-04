@@ -1,61 +1,19 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Tag, Tooltip } from 'antd';
-import {
-  Terminal,
-  Code2,
-  ListOrdered,
-  Puzzle,
-  GitBranch,
-  Upload,
-} from 'lucide-react';
+import { Tooltip } from 'antd';
 import type { TaskYAML, TaskType, TaskStatus } from '@/types';
 import { useAppStore } from '@/stores/appStore';
+import {
+  NODE_SIZE,
+  INK,
+  STATUS_COLOR,
+  STATUS_SOFT_BG,
+  STATUS_LABEL,
+  TYPE_LABEL,
+  FONT_MONO,
+} from './nodeTokens';
 
-/** 任务类型图标映射 */
-const TASK_TYPE_ICON: Record<TaskType, React.ReactNode> = {
-  command: <Terminal size={16} />,
-  invoke: <Code2 size={16} />,
-  steps: <ListOrdered size={16} />,
-  plugin: <Puzzle size={16} />,
-  git: <GitBranch size={16} />,
-  nexus: <Upload size={16} />,
-  ssh: <Terminal size={16} />,
-};
-
-/** 任务类型颜色映射 */
-const TASK_TYPE_COLOR: Record<TaskType, string> = {
-  command: '#16a34a',
-  invoke: '#1677ff',
-  steps: '#722ed1',
-  plugin: '#eb2f96',
-  git: '#fa8c16',
-  nexus: '#13c2c2',
-  ssh: '#0891b2',
-};
-
-/** 任务类型标签 */
-const TASK_TYPE_LABEL: Record<TaskType, string> = {
-  command: '命令',
-  invoke: '调用',
-  steps: '步骤',
-  plugin: '插件',
-  git: 'Git',
-  nexus: 'Nexus',
-  ssh: 'SSH',
-};
-
-/** 任务状态边框颜色 */
-const STATUS_BORDER_COLOR: Record<TaskStatus, string> = {
-  pending: '#d9d9d9',
-  running: '#1677ff',
-  success: '#52c41a',
-  failed: '#ff4d4f',
-  skipped: '#faad14',
-  cancelled: '#ff4d4f',
-};
-
-/** 推断任务类型 */
+/** 推断任务类型（仅用于 Tooltip） */
 function inferTaskType(task: TaskYAML): TaskType {
   if (task.invoke) return 'invoke';
   if (task.steps) return 'steps';
@@ -65,12 +23,11 @@ function inferTaskType(task: TaskYAML): TaskType {
   return 'command';
 }
 
-/** 脉冲动画样式 */
+/** 运行中边框脉冲（状态驱动整卡，不再用左侧条 + 底部流光） */
 const pulseStyle = `
-@keyframes task-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(22, 119, 255, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(22, 119, 255, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(22, 119, 255, 0); }
+@keyframes task-border-pulse {
+  0%, 100% { border-color: #0EA5E9; box-shadow: 0 0 0 2px rgba(14,165,233,0.12); }
+  50% { border-color: #7DD3FC; box-shadow: 0 0 0 4px rgba(14,165,233,0.06); }
 }
 `;
 
@@ -83,73 +40,76 @@ interface TaskNodeData {
 }
 
 function TaskNodeComponent({ data, id }: { data: TaskNodeData; id: string }) {
-  const { task, status, order } = data;
+  const { task, status } = data;
   const taskType = inferTaskType(task);
-  const typeColor = TASK_TYPE_COLOR[taskType];
-  const borderColor = status ? STATUS_BORDER_COLOR[status] : typeColor;
   const selectedNodeId = useAppStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useAppStore((s) => s.setSelectedNodeId);
   const isSelected = selectedNodeId === id;
-
   const isRunning = status === 'running';
+
+  // 状态驱动整卡：边框色 + 极淡背景晕染（参考 Argo CD / GitHub Actions）
+  const borderColor = isSelected
+    ? INK.accent
+    : status
+      ? STATUS_COLOR[status]
+      : INK.border;
+  const cardBg = status ? STATUS_SOFT_BG[status] : '#FFFFFF';
 
   return (
     <>
-      {/* 注入脉冲动画 */}
       {isRunning && <style>{pulseStyle}</style>}
 
-      <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-gray-400" />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!w-1.5 !h-1.5 !bg-slate-300 !border-0 !-top-[3px]"
+      />
 
-      <Tooltip title={`${task.name} (${TASK_TYPE_LABEL[taskType]})`}>
+      <Tooltip
+        title={
+          <span style={{ fontFamily: FONT_MONO, fontSize: 11 }}>
+            {task.name} · {TYPE_LABEL[taskType]}
+            {status ? ` · ${STATUS_LABEL[status]}` : ''}
+          </span>
+        }
+      >
         <div
           onClick={(e) => {
             e.stopPropagation();
             setSelectedNodeId(id);
           }}
-          className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md select-none"
+          className="relative flex items-center justify-center bg-white cursor-pointer select-none transition-colors duration-150"
           style={{
-            width: 200,
-            border: `2px solid ${borderColor}`,
-            animation: isRunning ? 'task-pulse 2s infinite' : undefined,
-            outline: isSelected ? `2px solid ${typeColor}` : undefined,
-            outlineOffset: '2px',
+            width: NODE_SIZE.TASK_W,
+            height: NODE_SIZE.TASK_H,
+            border: `1.5px solid ${borderColor}`,
+            borderRadius: 6,
+            backgroundColor: cardBg,
+            boxShadow: isSelected && !isRunning ? `inset 0 0 0 1px ${INK.accent}55` : undefined,
+            animation: isRunning ? 'task-border-pulse 1.6s ease-in-out infinite' : undefined,
           }}
         >
-          {/* 顺序编号 */}
-          {order != null && (
-            <div
-              className="flex items-center justify-center w-6 h-6 rounded-full text-white text-xs font-bold shrink-0"
-              style={{ backgroundColor: typeColor }}
-            >
-              {order}
-            </div>
-          )}
-
-          {/* 类型图标 */}
-          <div
-            className="flex items-center justify-center w-7 h-7 rounded"
-            style={{ color: typeColor }}
+          {/* 任务名（居中，等宽 —— CI/CD job 名本身即代码） */}
+          <span
+            className="px-3 max-w-full truncate text-center"
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 12,
+              fontWeight: 600,
+              color: INK.textPrimary,
+              letterSpacing: -0.1,
+            }}
           >
-            {TASK_TYPE_ICON[taskType]}
-          </div>
-
-          {/* 任务名 + 类型标签 */}
-          <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-sm font-medium truncate text-gray-800">
-              {task.name}
-            </span>
-            <Tag
-              color={typeColor}
-              className="text-xs leading-none mt-0.5"
-              style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px', border: 'none' }}
-            >
-              {TASK_TYPE_LABEL[taskType]}
-            </Tag>
-          </div>
+            {task.name}
+          </span>
         </div>
       </Tooltip>
 
-      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-gray-400" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!w-1.5 !h-1.5 !bg-slate-300 !border-0 !-bottom-[3px]"
+      />
     </>
   );
 }

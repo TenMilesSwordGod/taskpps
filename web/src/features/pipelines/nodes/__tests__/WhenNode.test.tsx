@@ -25,20 +25,21 @@ function renderWhenNode(partial: Partial<NodeProps> = {}) {
 }
 
 describe('WhenNode — Gateway 模式', () => {
-  it('isGateway=true 时渲染 50x50 菱形且无文字', () => {
+  it('isGateway=true 时渲染 46x46 菱形且无文字', () => {
     renderWhenNode({ data: { isGateway: true, whenTargets: [] } })
     const gateway = screen.getByTestId('gateway-node')
     expect(gateway).toBeInTheDocument()
-    expect(gateway.classList.contains('w-[50px]')).toBe(true)
-    expect(gateway.classList.contains('h-[50px]')).toBe(true)
+    expect(gateway.style.width).toBe('46px')
+    expect(gateway.style.height).toBe('46px')
     expect(screen.queryByTestId('when-node-text')).not.toBeInTheDocument()
   })
 
-  it('gateway 菱形内部显示 X（两条交叉白线）', () => {
+  it('gateway 菱形内部显示 X（两条交叉描边）', () => {
     renderWhenNode({ data: { isGateway: true, whenTargets: [] } })
     const gateway = screen.getByTestId('gateway-node')
-    const lines = gateway.querySelectorAll('line')
-    expect(lines).toHaveLength(2)
+    // lucide X 图标由两条 <path>（或旧版本 <line>）组成
+    const strokes = gateway.querySelectorAll('path, line')
+    expect(strokes).toHaveLength(2)
   })
 
   it('isGateway=true 时不渲染普通 when-node', () => {
@@ -64,7 +65,7 @@ describe('WhenNode — 菱形决策节点渲染（非 Gateway 模式）', () => 
   it('无变量引用时长文本按字符截断并带省略号', () => {
     const when = 'always_run_on_success'
     renderWhenNode({ data: { when } })
-    expect(screen.getByTestId('when-node-text')).toHaveTextContent('always_run…')
+    expect(screen.getByTestId('when-node-text')).toHaveTextContent('always_r…')
   })
 
   it('摘要文本使用等宽字体、截断样式并被放大到 12px', () => {
@@ -76,11 +77,11 @@ describe('WhenNode — 菱形决策节点渲染（非 Gateway 模式）', () => 
     expect(text.classList.contains('text-xs')).toBe(true)
   })
 
-  it('菱形容器尺寸为 90x90', () => {
+  it('菱形容器尺寸为 76x76', () => {
     renderWhenNode({ data: { when: '${env.X}' } })
     const node = screen.getByTestId('when-node')
-    expect(node.classList.contains('w-[90px]')).toBe(true)
-    expect(node.classList.contains('h-[90px]')).toBe(true)
+    expect(node.style.width).toBe('76px')
+    expect(node.style.height).toBe('76px')
   })
 
   it('鼠标悬停时 Tooltip 显示完整 when 表达式', async () => {

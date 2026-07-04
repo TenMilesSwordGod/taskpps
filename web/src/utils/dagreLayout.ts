@@ -1,18 +1,18 @@
 import dagre from 'dagre';
 import type { Node, Edge } from '@xyflow/react';
 
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 48;
-const GATEWAY_SIZE = 50;
+const NODE_WIDTH = 150;
+const NODE_HEIGHT = 36;
+const DECISION_SIZE = 60;
 
 function getNodeSize(node: Node, groupSizes?: Map<string, { width: number; height: number }>) {
   const custom = groupSizes?.get(node.id);
   if (custom) return { width: custom.width, height: custom.height };
-  if (node.type === 'whenNode') return { width: GATEWAY_SIZE, height: GATEWAY_SIZE };
+  if (node.type === 'decisionNode') return { width: DECISION_SIZE, height: DECISION_SIZE };
   return { width: NODE_WIDTH, height: NODE_HEIGHT };
 }
 
-/** 使用 dagre 计算自动布局 */
+/** 使用 dagre 计算自动布局 —— 工程蓝图：紧凑、对齐 */
 export function applyDagreLayout<N extends Record<string, unknown>, E extends Record<string, unknown>>(
   nodes: Node<N>[],
   edges: Edge<E>[],
@@ -20,7 +20,7 @@ export function applyDagreLayout<N extends Record<string, unknown>, E extends Re
 ): Node<N>[] {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 20 });
+  g.setGraph({ rankdir: 'TB', nodesep: 55, ranksep: 48 });
 
   for (const node of nodes) {
     const { width, height } = getNodeSize(node, groupSizes);

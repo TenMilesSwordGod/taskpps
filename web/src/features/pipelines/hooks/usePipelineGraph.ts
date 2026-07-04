@@ -1,17 +1,18 @@
 import { useMemo } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
-import type { PipelineDetail, TaskStatus, PostConfig, TaskYAML } from '@/types';
+import type { PipelineDetail, TaskStatus, PostConfig } from '@/types';
 import type { PostVariant } from '../nodes/PostTaskNode';
 import { applyDagreLayout } from '@/utils/dagreLayout';
 
-const GROUP_PADDING_X = 24;
-const GROUP_PADDING_Y = 10;
+const GROUP_PADDING_X = 20;
+const GROUP_PADDING_Y = 14;
 const GROUP_HEADER = 0;
-const TASK_W = 200;
-const TASK_H = 64;
-const POST_H = 30;
-const GATEWAY_SIZE = 50;
+const TASK_W = 150;
+const TASK_H = 36;
+const POST_H = 26;
+const POST_W = 168;
+const DECISION_SIZE = 60;
 
 interface UsePipelineGraphOptions {
   pipeline: PipelineDetail | undefined;
@@ -28,22 +29,13 @@ function countPostTasks(post: PostConfig | null | undefined): number {
   return count;
 }
 
-function hasWhen(task: TaskYAML | null | undefined): task is TaskYAML & { when: string } {
-  return !!task?.when;
-}
+/** 默认流轨样式 */
+const RAIL_STYLE = { stroke: '#94A3B8', strokeWidth: 1.5 };
+const RAIL_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
 
-function makeGatewayId(sourceId: string): string {
-  return `gateway-${sourceId}`;
-}
-
-interface WhenTargetInfo {
-  targetId: string;
-  targetTask: TaskYAML & { when: string };
-  groupId: string;
-  edgeBaseId: string;
-  markerEnd: Edge['markerEnd'];
-  style?: Edge['style'];
-}
+/** Yes 路径边样式（绿色实线） */
+const YES_STYLE = { stroke: '#16A34A', strokeWidth: 1.5 };
+const YES_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#16A34A' };
 
 function pushPlainEdge(
   taskEdges: Edge[],
@@ -58,52 +50,10 @@ function pushPlainEdge(
     source: sourceId,
     target: targetId,
     type: 'smoothstep',
-    animated: true,
-    markerEnd,
-    style,
+    animated: false,
+    markerEnd: markerEnd ?? RAIL_MARKER,
+    style: style ?? RAIL_STYLE,
   });
-}
-
-function collectWhenTarget(
-  whenTargetsBySource: Map<string, WhenTargetInfo[]>,
-  sourceId: string,
-  targetId: string,
-  targetTask: TaskYAML,
-  groupId: string,
-  edgeBaseId: string,
-  markerEnd: Edge['markerEnd'],
-  style?: Edge['style'],
-) {
-  if (!hasWhen(targetTask)) return;
-  const list = whenTargetsBySource.get(sourceId);
-  const info: WhenTargetInfo = {
-    targetId,
-    targetTask,
-    groupId,
-    edgeBaseId,
-    markerEnd,
-    style,
-  };
-  if (list) {
-    list.push(info);
-  } else {
-    whenTargetsBySource.set(sourceId, [info]);
-  }
-}
-
-function createGatewayNode(sourceId: string, parentId: string | undefined, whenTargets: WhenTargetInfo[]): Node {
-  return {
-    id: makeGatewayId(sourceId),
-    type: 'whenNode',
-    parentId,
-    extent: 'parent' as const,
-    position: { x: 0, y: 0 },
-    data: {
-      isGateway: true,
-      whenTargets: whenTargets.map((t) => ({ targetId: t.targetId, when: t.targetTask.when })),
-      sourceTaskName: sourceId,
-    },
-  };
 }
 
 export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOptions) {
@@ -114,11 +64,16 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const taskNodes: Node[] = [];
     const taskEdges: Edge[] = [];
     const groupNodes: Node[] = [];
-    const whenTargetsBySource = new Map<string, WhenTargetInfo[]>();
-    const sourceParentMap = new Map<string, string | undefined>();
-
+    const decisionNodes: Node[] = [];
     let orderIndex = 1;
     const subpipelineTaskIds: string[][] = [];
+
+    // 先收集所有任务节点和它们的 when 条件
+    const taskWhenMap = new Map<string, string>(); // taskId → when expr
+    // 收集所有显式 depends_on 关系（sourceId → targetId[]）
+    const dependsOnMap = new Map<string, string[]>();
+    // 收集所有隐式顺序关系
+    const implicitEdges: [string, string][] = [];
 
     subpipelines.forEach((sub) => {
       const ids: string[] = [];
@@ -127,6 +82,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       sub.tasks?.forEach((task) => {
         const taskId = `${sub.name}.${task.name}`;
         const status = taskStatuses?.[taskId];
+        const whenExpr = task.when?.trim();
 
         taskNodes.push({
           id: taskId,
@@ -136,32 +92,18 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           position: { x: 0, y: 0 },
           data: { task, subpipelineName: sub.name, status, order: orderIndex },
         });
-        sourceParentMap.set(taskId, groupId);
-
         orderIndex++;
         ids.push(taskId);
 
+        if (whenExpr) {
+          taskWhenMap.set(taskId, whenExpr);
+        }
+
+        // 收集显式 depends_on
         task.depends_on?.forEach((dep) => {
           const sourceId = `${sub.name}.${dep}`;
-          if (hasWhen(task)) {
-            collectWhenTarget(
-              whenTargetsBySource,
-              sourceId,
-              taskId,
-              task,
-              groupId,
-              `dep-${sourceId}-${taskId}`,
-              { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-            );
-          } else {
-            pushPlainEdge(
-              taskEdges,
-              sourceId,
-              taskId,
-              `dep-${sourceId}-${taskId}`,
-              { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-            );
-          }
+          if (!dependsOnMap.has(sourceId)) dependsOnMap.set(sourceId, []);
+          dependsOnMap.get(sourceId)!.push(taskId);
         });
       });
 
@@ -178,25 +120,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           const prevId = ids[i - 1];
           const currId = ids[i];
           if (currTask && (currTask.depends_on?.length ?? 0) === 0) {
-            if (hasWhen(currTask)) {
-              collectWhenTarget(
-                whenTargetsBySource,
-                prevId,
-                currId,
-                currTask,
-                groupId,
-                `implicit-${prevId}-${currId}`,
-                { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-              );
-            } else {
-              pushPlainEdge(
-                taskEdges,
-                prevId,
-                currId,
-                `implicit-${prevId}-${currId}`,
-                { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-              );
-            }
+            implicitEdges.push([prevId, currId]);
           }
         }
       }
@@ -208,8 +132,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       }
 
       const hasChildren = ids.length > 0;
-      const taskAreaH = ids.length * (TASK_H + 30) - 30;
-      const postAreaH = postCount > 0 ? postCount * POST_H + 8 : 0;
+      const taskAreaH = ids.length * (TASK_H + 20) - 20;
+      const postAreaH = postCount > 0 ? postCount * (POST_H + 6) + 6 : 0;
       groupNodes.push({
         id: groupId,
         type: 'subpipelineGroup',
@@ -224,7 +148,105 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       });
     });
 
-    // 跨 subpipeline 边
+    // 收集所有任务 ID → 所属 group 映射
+    const taskGroupMap = new Map<string, string>();
+    for (const tn of taskNodes) {
+      if (tn.parentId) taskGroupMap.set(tn.id, tn.parentId);
+    }
+
+    // === 构建边 ===
+    // 对于有 when 条件的目标任务：
+    //   source → decisionNode → (yes) → 条件任务
+    //   no 路径由菱形 yes/no 标注隐含表达（不画 no 边到下游，避免与条件任务的出边交叉）
+    // 对于无 when 条件的目标任务：source → target 直连
+
+    // 处理显式 depends_on 边
+    for (const [sourceId, targets] of dependsOnMap) {
+      for (const targetId of targets) {
+        const whenExpr = taskWhenMap.get(targetId);
+        if (whenExpr) {
+          const decisionId = `decision-${sourceId}-${targetId}`;
+          const sourceGroup = taskGroupMap.get(sourceId);
+
+          if (!decisionNodes.find((d) => d.id === decisionId)) {
+            decisionNodes.push({
+              id: decisionId,
+              type: 'decisionNode',
+              parentId: sourceGroup ?? undefined,
+              extent: sourceGroup ? 'parent' as const : undefined,
+              position: { x: 0, y: 0 },
+              data: { when: whenExpr },
+            });
+
+            // source → decision
+            pushPlainEdge(taskEdges, sourceId, decisionId, `dep-${sourceId}-${decisionId}`, RAIL_MARKER, RAIL_STYLE);
+
+            // decision → (yes) → 条件任务
+            taskEdges.push({
+              id: `yes-${decisionId}-${targetId}`,
+              source: decisionId,
+              sourceHandle: 'yes',
+              target: targetId,
+              type: 'smoothstep',
+              animated: false,
+              label: 'yes',
+              labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
+              labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
+              labelBgPadding: [2, 4] as [number, number],
+              labelBgBorderRadius: 3,
+              markerEnd: YES_MARKER,
+              style: YES_STYLE,
+            });
+
+            // no 路径由菱形标注隐含（不画边，避免交叉）
+          }
+        } else {
+          pushPlainEdge(taskEdges, sourceId, targetId, `dep-${sourceId}-${targetId}`, RAIL_MARKER, RAIL_STYLE);
+        }
+      }
+    }
+
+    // 处理隐式顺序边
+    for (const [prevId, currId] of implicitEdges) {
+      const whenExpr = taskWhenMap.get(currId);
+      if (whenExpr) {
+        const decisionId = `decision-${prevId}-${currId}`;
+        const sourceGroup = taskGroupMap.get(prevId);
+
+        if (!decisionNodes.find((d) => d.id === decisionId)) {
+          decisionNodes.push({
+            id: decisionId,
+            type: 'decisionNode',
+            parentId: sourceGroup ?? undefined,
+            extent: sourceGroup ? 'parent' as const : undefined,
+            position: { x: 0, y: 0 },
+            data: { when: whenExpr },
+          });
+
+          pushPlainEdge(taskEdges, prevId, decisionId, `implicit-${prevId}-${decisionId}`, RAIL_MARKER, RAIL_STYLE);
+
+          taskEdges.push({
+            id: `yes-${decisionId}-${currId}`,
+            source: decisionId,
+            sourceHandle: 'yes',
+            target: currId,
+            type: 'smoothstep',
+            animated: false,
+            label: 'yes',
+            labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
+            labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
+            labelBgPadding: [2, 4] as [number, number],
+            labelBgBorderRadius: 3,
+            markerEnd: YES_MARKER,
+            style: YES_STYLE,
+          });
+        }
+      } else {
+        pushPlainEdge(taskEdges, prevId, currId, `implicit-${prevId}-${currId}`, RAIL_MARKER, RAIL_STYLE);
+      }
+    }
+
+    // 跨 subpipeline 边 —— 直接连接 group 节点（不经过 task），让 dagre 识别 group 拓扑顺序
     subpipelines.forEach((sub, idx) => {
       sub.depends_on?.forEach((depSubName) => {
         const sourceIdx = subpipelines.findIndex((s) => s.name === depSubName);
@@ -232,69 +254,65 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           const sourceIds = subpipelineTaskIds[sourceIdx];
           const targetIds = subpipelineTaskIds[idx];
           if (sourceIds.length > 0 && targetIds.length > 0) {
-            const sourceId = sourceIds[sourceIds.length - 1];
             const targetId = targetIds[0];
-            const targetFirstTask = sub.tasks?.[0];
-            const groupId = `__group__${sub.name}`;
-            if (hasWhen(targetFirstTask)) {
-              collectWhenTarget(
-                whenTargetsBySource,
-                sourceId,
-                targetId,
-                targetFirstTask,
-                groupId,
-                `cross-sub-${depSubName}-${sub.name}`,
-                { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#f59e0b' },
-                { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 3' },
-              );
+            const sourceGroup = `__group__${depSubName}`;
+            const targetGroup = `__group__${sub.name}`;
+            const whenExpr = taskWhenMap.get(targetId);
+            if (whenExpr) {
+              const decisionId = `decision-cross-${depSubName}-${sub.name}`;
+              decisionNodes.push({
+                id: decisionId,
+                type: 'decisionNode',
+                parentId: targetGroup,
+                extent: 'parent' as const,
+                position: { x: 0, y: 0 },
+                data: { when: whenExpr },
+              });
+              // 跨 group 拓扑边：sourceGroup → targetGroup（让 dagre 知道顺序）
+              taskEdges.push({
+                id: `cross-sub-${depSubName}-${sub.name}`,
+                source: sourceGroup,
+                sourceHandle: 'bottom',
+                target: targetGroup,
+                targetHandle: 'top',
+                type: 'smoothstep',
+                animated: false,
+                markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#F59E0B' },
+                style: { stroke: '#F59E0B', strokeWidth: 1.5, strokeDasharray: '4 3' },
+              });
+              taskEdges.push({
+                id: `yes-${decisionId}-${targetId}`,
+                source: decisionId,
+                sourceHandle: 'yes',
+                target: targetId,
+                type: 'smoothstep',
+                animated: false,
+                label: 'yes',
+                labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
+                labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
+                labelBgPadding: [2, 4] as [number, number],
+                labelBgBorderRadius: 3,
+                markerEnd: YES_MARKER,
+                style: YES_STYLE,
+              });
             } else {
-              pushPlainEdge(
-                taskEdges,
-                sourceId,
-                targetId,
-                `cross-sub-${depSubName}-${sub.name}`,
-                { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#f59e0b' },
-                { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 3' },
-              );
+              // 跨 group 拓扑边：sourceGroup → targetGroup
+              taskEdges.push({
+                id: `cross-sub-${depSubName}-${sub.name}`,
+                source: sourceGroup,
+                sourceHandle: 'bottom',
+                target: targetGroup,
+                targetHandle: 'top',
+                type: 'smoothstep',
+                animated: false,
+                markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#F59E0B' },
+                style: { stroke: '#F59E0B', strokeWidth: 1.5, strokeDasharray: '4 3' },
+              });
             }
           }
         }
       });
     });
-
-    // 创建 Gateway 节点与相关边
-    for (const [sourceId, whenTargets] of whenTargetsBySource.entries()) {
-      const gatewayId = makeGatewayId(sourceId);
-      const parentId = sourceParentMap.get(sourceId);
-      taskNodes.push(createGatewayNode(sourceId, parentId, whenTargets));
-
-      taskEdges.push({
-        id: `${gatewayId}-in`,
-        source: sourceId,
-        target: gatewayId,
-        type: 'step',
-        animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-        style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-      });
-
-      for (const info of whenTargets) {
-        taskEdges.push({
-          id: `${gatewayId}-to-${info.targetId}`,
-          source: gatewayId,
-          target: info.targetId,
-          type: 'step',
-          animated: true,
-          markerEnd: info.markerEnd,
-          style: info.style ?? { stroke: '#9ca3af', strokeWidth: 1.5 },
-          label: info.targetTask.when,
-          labelStyle: { fill: '#B45309', fontSize: 12, fontWeight: 500, fontFamily: 'monospace' },
-          labelBgStyle: { fill: '#FFFBEB', stroke: '#FCD34D', strokeWidth: 1, rx: 4, ry: 4 },
-          labelBgPadding: [4, 6],
-          labelBgBorderRadius: 4,
-        });
-      }
-    }
 
     // === Post 阶段节点 ===
     const postNodes: Node[] = [];
@@ -322,8 +340,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             target: postId,
             type: 'smoothstep',
             animated: false,
-            markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-            style: { stroke: '#9ca3af', strokeWidth: 1.5, strokeDasharray: '5 3' },
+            markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' },
+            style: { stroke: '#CBD5E1', strokeWidth: 1.2, strokeDasharray: '3 3' },
           });
         }
       }
@@ -351,65 +369,81 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       data: { variant: 'end' },
     };
 
-    // Start/End 连接到 group 节点（不是 task 节点），减少边路由复杂度
-    const hasIncoming = new Set<string>();
-    const hasOutgoing = new Set<string>();
+    // Start/End 连接到 group 节点
+    // 只统计跨 group 的入/出边（group 内部边不算），判断 group 是否为根/叶子
+    const groupHasIncoming = new Set<string>();
+    const groupHasOutgoing = new Set<string>();
     for (const e of taskEdges) {
-      hasIncoming.add(e.target);
-      hasOutgoing.add(e.source);
+      const srcTask = taskNodes.find((t) => t.id === e.source);
+      const tgtTask = taskNodes.find((t) => t.id === e.target);
+      const srcDecision = decisionNodes.find((d) => d.id === e.source);
+      const tgtDecision = decisionNodes.find((d) => d.id === e.target);
+      // 边两端可能是：task（parentId 即 group）、decisionNode（parentId 即 group）、或 group 本身
+      const srcGroup = srcTask?.parentId ?? srcDecision?.parentId
+        ?? (e.source.startsWith('__group__') ? e.source : null);
+      const tgtGroup = tgtTask?.parentId ?? tgtDecision?.parentId
+        ?? (e.target.startsWith('__group__') ? e.target : null);
+      // 跨 group 的边才计入
+      if (tgtGroup && srcGroup !== tgtGroup) {
+        groupHasIncoming.add(tgtGroup);
+      }
+      if (srcGroup && srcGroup !== tgtGroup) {
+        groupHasOutgoing.add(srcGroup);
+      }
     }
 
     const allGroupIds = groupNodes.map((n) => n.id);
-    const rootGroupIds = allGroupIds.filter((id) => !hasIncoming.has(id));
-    const leafGroupIds = allGroupIds.filter((id) => !hasOutgoing.has(id));
+    const rootGroupIds = allGroupIds.filter((id) => !groupHasIncoming.has(id));
+    const leafGroupIds = allGroupIds.filter((id) => !groupHasOutgoing.has(id));
 
-    // 如果 group 没有入边（根 group），Start → 该 group
     for (const gid of rootGroupIds) {
       taskEdges.push({
         id: `start-to-${gid}`,
         source: '__start__',
         target: gid,
+        targetHandle: 'top',
         type: 'smoothstep',
         animated: false,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-        style: { stroke: '#22c55e', strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#10B981' },
+        style: { stroke: '#10B981', strokeWidth: 1.5 },
       });
     }
-    // 如果 group 没有出边（叶子 group），该 group → End
     for (const gid of leafGroupIds) {
       taskEdges.push({
         id: `${gid}-to-end`,
         source: gid,
+        sourceHandle: 'bottom',
         target: '__end__',
         type: 'smoothstep',
         animated: false,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-        style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' },
+        style: { stroke: '#94A3B8', strokeWidth: 1.5 },
       });
     }
-    // 无 group 时（只有 tasks），直接连 task
     if (allGroupIds.length === 0) {
+      const taskHasIncoming = new Set(taskEdges.map((e) => e.target));
+      const taskHasOutgoing = new Set(taskEdges.map((e) => e.source));
       const allTaskIds = taskNodes.map((n) => n.id);
-      for (const tid of allTaskIds.filter((id) => !hasIncoming.has(id))) {
+      for (const tid of allTaskIds.filter((id) => !taskHasIncoming.has(id))) {
         taskEdges.push({
           id: `start-to-${tid}`,
           source: '__start__',
           target: tid,
           type: 'smoothstep',
           animated: false,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-          style: { stroke: '#22c55e', strokeWidth: 1.5 },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#10B981' },
+          style: { stroke: '#10B981', strokeWidth: 1.5 },
         });
       }
-      for (const tid of allTaskIds.filter((id) => !hasOutgoing.has(id))) {
+      for (const tid of allTaskIds.filter((id) => !taskHasOutgoing.has(id))) {
         taskEdges.push({
           id: `${tid}-to-end`,
           source: tid,
           target: '__end__',
           type: 'smoothstep',
           animated: false,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-          style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' },
+          style: { stroke: '#94A3B8', strokeWidth: 1.5 },
         });
       }
     }
@@ -422,10 +456,10 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       groupSizes.set(gn.id, { width: w, height: h });
     }
 
-    const allNodes = [...groupNodes, ...taskNodes, ...postNodes, startNode, endNode];
+    const allNodes = [...groupNodes, ...taskNodes, ...decisionNodes, ...postNodes, startNode, endNode];
     const layoutedNodes = applyDagreLayout(allNodes, taskEdges, groupSizes);
 
-    // dagre 布局后，固定 Start 在最顶部（End 在 group resize 后再定位）
+    // 固定 Start 在最顶部
     let minY = Infinity;
     for (const n of layoutedNodes) {
       if (n.id === '__start__' || n.id === '__end__') continue;
@@ -456,24 +490,23 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       finalNodes.push(n);
     }
 
-    // 调整 group 尺寸以包裹所有子节点（含 post 节点）
+    // 调整 group 尺寸以包裹所有子节点
+    // 关键：保留 dagre 给的 group 位置，但尺寸取 dagre 算的 和 子节点边界的最大值
     for (const node of finalNodes) {
       if (node.type === 'subpipelineGroup') {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const child of finalNodes) {
           if (child.parentId === node.id) {
-            const cw =
-              child.type === 'postTask'
-                ? 160
-                : child.type === 'whenNode'
-                  ? GATEWAY_SIZE
-                  : TASK_W;
-            const ch =
-              child.type === 'postTask'
-                ? POST_H
-                : child.type === 'whenNode'
-                  ? GATEWAY_SIZE
-                  : TASK_H;
+            const cw = child.type === 'postTask'
+              ? POST_W
+              : child.type === 'decisionNode'
+                ? DECISION_SIZE
+                : TASK_W;
+            const ch = child.type === 'postTask'
+              ? POST_H
+              : child.type === 'decisionNode'
+                ? DECISION_SIZE
+                : TASK_H;
             minX = Math.min(minX, child.position.x);
             minY = Math.min(minY, child.position.y);
             maxX = Math.max(maxX, child.position.x + cw);
@@ -481,10 +514,15 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           }
         }
         if (minX < Infinity) {
+          // 尺寸取 dagre 给的和子节点边界的最大值
+          const dagreW = ((node.style as { width?: number })?.width) ?? 0;
+          const dagreH = ((node.style as { height?: number })?.height) ?? 0;
+          const contentW = maxX - minX + GROUP_PADDING_X * 2;
+          const contentH = maxY - minY + GROUP_PADDING_Y * 2 + GROUP_HEADER;
           node.style = {
             ...((node.style as object) || {}),
-            width: maxX - minX + GROUP_PADDING_X * 2,
-            height: maxY - minY + GROUP_PADDING_Y * 2 + GROUP_HEADER,
+            width: Math.max(dagreW, contentW),
+            height: Math.max(dagreH, contentH),
           };
           for (const child of finalNodes) {
             if (child.parentId === node.id) {
@@ -498,13 +536,15 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       }
     }
 
-    // group resize 后，用实际 group box 高度定位 End 到最底部
+    // End 定位到最底部
     let finalMaxY = -Infinity;
     for (const node of finalNodes) {
       if (node.id === '__start__' || node.id === '__end__') continue;
       const nodeBottom = node.position.y + ((node.type === 'subpipelineGroup')
         ? ((node.style as { height?: number })?.height ?? 100)
-        : TASK_H);
+        : node.type === 'decisionNode'
+          ? DECISION_SIZE
+          : TASK_H);
       finalMaxY = Math.max(finalMaxY, nodeBottom);
     }
     if (!isFinite(finalMaxY)) finalMaxY = 100;
