@@ -11,7 +11,6 @@ import {
 } from '@ant-design/icons';
 import { usePipeline, useSavePipeline } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
-import PropertiesPanel from './PropertiesPanel';
 import YamlEditor from './YamlEditor';
 import type { YamlEditorRef } from './YamlEditor';
 import { HelpPanel } from './HelpPanel';
@@ -251,12 +250,11 @@ export default function PipelineDetailPage() {
           <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
         </div>
 
-        {/* 帮助面板 + 属性面板 */}
+        {/* 帮助面板 */}
         <HelpPanel
           minimized={helpPanelMinimized}
           onToggleMinimized={toggleHelpPanel}
         />
-        <PropertiesPanel pipeline={displayPipeline} />
       </div>
 
       {/* 触发运行弹窗 */}

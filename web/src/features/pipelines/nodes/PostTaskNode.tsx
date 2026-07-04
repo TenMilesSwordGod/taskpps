@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { INK, FONT_MONO, NODE_SIZE } from './nodeTokens';
 
 export type PostVariant = 'on_fail' | 'on_success' | 'always';
 
@@ -12,75 +12,81 @@ interface PostTaskNodeData {
 }
 
 const VARIANT_STYLE: Record<PostVariant, {
-  border: string;
   color: string;
-  icon: React.ReactNode;
   tag: string;
 }> = {
-  on_fail: {
-    border: '#f97316',
-    color: '#ea580c',
-    icon: <AlertTriangle size={12} />,
-    tag: 'on_fail',
-  },
-  on_success: {
-    border: '#22c55e',
-    color: '#16a34a',
-    icon: <CheckCircle2 size={12} />,
-    tag: 'on_success',
-  },
-  always: {
-    border: '#a3a3a3',
-    color: '#737373',
-    icon: <RefreshCw size={12} />,
-    tag: 'always',
-  },
+  on_fail: { color: '#EA580C', tag: 'ON_FAIL' },
+  on_success: { color: '#16A34A', tag: 'ON_OK' },
+  always: { color: '#64748B', tag: 'ALWAYS' },
 };
 
+/**
+ * Post 任务节点 —— 工程蓝图风格极简条
+ * 左侧色条 + 等宽名称 + 变体标签
+ */
 function PostTaskNodeComponent({ data }: { data: PostTaskNodeData }) {
   const { label, variant } = data;
   const s = VARIANT_STYLE[variant];
 
   return (
     <>
-      <Handle type="target" position={Position.Top} className="!w-1.5 !h-1.5" />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!w-1 !h-1 !bg-slate-300 !border-0 !-top-[2px]"
+      />
 
       <div
+        className="flex items-center gap-1.5 bg-white select-none whitespace-nowrap"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          padding: '3px 10px',
-          background: '#ffffff',
-          border: `1.5px solid ${s.border}`,
-          borderLeftWidth: 3,
-          borderRadius: 6,
-          fontSize: 11,
-          color: '#374151',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          userSelect: 'none',
-          whiteSpace: 'nowrap',
-          maxWidth: 160,
+          maxWidth: NODE_SIZE.POST_W,
+          height: NODE_SIZE.POST_H,
+          padding: '0 6px 0 0',
+          border: `1px solid ${INK.border}`,
+          borderRadius: 3,
+          fontFamily: FONT_MONO,
         }}
       >
-        <span style={{ color: s.color, flexShrink: 0, display: 'flex' }}>{s.icon}</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
-        <span
+        {/* 左侧变体色条 */}
+        <div
           style={{
-            fontSize: 9,
-            color: s.color,
-            background: `${s.border}14`,
-            padding: '0 4px',
-            borderRadius: 3,
-            fontWeight: 500,
+            width: 2,
+            alignSelf: 'stretch',
+            backgroundColor: s.color,
+            borderTopLeftRadius: 3,
+            borderBottomLeftRadius: 3,
             flexShrink: 0,
+          }}
+        />
+        <span
+          className="truncate flex-1"
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            color: INK.textPrimary,
+            padding: '0 4px',
+          }}
+        >
+          {label}
+        </span>
+        <span
+          className="shrink-0"
+          style={{
+            fontSize: 8.5,
+            fontWeight: 700,
+            color: s.color,
+            letterSpacing: 0.5,
           }}
         >
           {s.tag}
         </span>
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!w-1.5 !h-1.5" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!w-1 !h-1 !bg-slate-300 !border-0 !-bottom-[2px]"
+      />
     </>
   );
 }
