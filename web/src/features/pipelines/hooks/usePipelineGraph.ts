@@ -7,6 +7,7 @@ import { applyDagreLayout } from '@/utils/dagreLayout';
 
 const GROUP_PADDING_X = 20;
 const GROUP_PADDING_Y = 14;
+const GROUP_GAP_Y = 24;
 const GROUP_HEADER = 0;
 const TASK_W = 150;
 const TASK_H = 36;
@@ -532,6 +533,29 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
               };
             }
           }
+        }
+      }
+    }
+
+    // 修复：dagre 用估算高度布局，group 实际高度更大 → 相邻 group 垂直重叠
+    // 按 dagre 给的 y 排序，逐个下推消除重叠（仅处理 x 范围有重叠的 group 对）
+    const sortedGroups = finalNodes
+      .filter((n) => n.type === 'subpipelineGroup')
+      .sort((a, b) => a.position.y - b.position.y);
+
+    for (let i = 0; i < sortedGroups.length; i++) {
+      const curr = sortedGroups[i];
+      const currW = (curr.style as { width?: number })?.width ?? 200;
+      for (let j = 0; j < i; j++) {
+        const prev = sortedGroups[j];
+        const prevW = (prev.style as { width?: number })?.width ?? 200;
+        const prevH = (prev.style as { height?: number })?.height ?? 100;
+        // x 范围无重叠则跳过（并行 group 不需下推）
+        const xOverlap = !(curr.position.x + currW <= prev.position.x || prev.position.x + prevW <= curr.position.x);
+        if (!xOverlap) continue;
+        const prevBottom = prev.position.y + prevH;
+        if (curr.position.y < prevBottom + GROUP_GAP_Y) {
+          curr.position.y = prevBottom + GROUP_GAP_Y;
         }
       }
     }

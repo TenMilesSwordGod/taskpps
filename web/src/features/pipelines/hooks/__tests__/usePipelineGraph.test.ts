@@ -541,3 +541,65 @@ describe('usePipelineGraph — null tasks 安全', () => {
     expect(taskNodes[0].id).toBe('build.compile')
   })
 })
+
+describe('usePipelineGraph — group 垂直不重叠', () => {
+  it('链式 subpipeline 的 group 不应垂直重叠', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'sub1',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'task-a', depends_on: [], env: {}, retry: 0 },
+                { name: 'task-b', depends_on: ['task-a'], env: {}, retry: 0 },
+              ],
+            },
+            {
+              name: 'sub2',
+              config: null,
+              depends_on: ['sub1'],
+              tasks: [
+                { name: 'task-c', depends_on: [], env: {}, retry: 0 },
+                { name: 'task-d', depends_on: ['task-c'], env: {}, retry: 0 },
+              ],
+            },
+            {
+              name: 'sub3',
+              config: null,
+              depends_on: ['sub2'],
+              tasks: [
+                { name: 'task-e', depends_on: [], env: {}, retry: 0 },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const groups = result.current.nodes.filter((n) => n.type === 'subpipelineGroup')
+    expect(groups.length).toBe(3)
+
+    // 检查每对 x 范围有重叠的 group 是否垂直重叠
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const a = groups[i]
+        const b = groups[j]
+        const aW = (a.style as { width?: number })?.width ?? 200
+        const aH = (a.style as { height?: number })?.height ?? 100
+        const bW = (b.style as { width?: number })?.width ?? 200
+        const bH = (b.style as { height?: number })?.height ?? 100
+
+        const xOverlap = !(a.position.x + aW <= b.position.x || b.position.x + bW <= a.position.x)
+        if (!xOverlap) continue
+
+        const aBottom = a.position.y + aH
+        const bBottom = b.position.y + bH
+        const yOverlap = !(aBottom <= b.position.y || bBottom <= a.position.y)
+        expect(yOverlap).toBe(false)
+      }
+    }
+  })
+})
