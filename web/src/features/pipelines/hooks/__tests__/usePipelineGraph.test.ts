@@ -14,16 +14,31 @@ function makePipeline(overrides: Partial<PipelineDetail> = {}): PipelineDetail {
   }
 }
 
-/** 提取边的 source→target 对（过滤 Start/End 哨兵边） */
+/** 判断是否为 group 拓扑边（START→group.top、group.bottom→END、group↔group 等经过 group handle 的边） */
+function isGroupTopologyEdge(e: { source: string; target: string }) {
+  return e.source.startsWith('__group__') || e.target.startsWith('__group__')
+}
+
+/** 提取边的 source→target 对（过滤哨兵边和 group 拓扑边，只保留 task↔task 边） */
 function edgePairs(edges: ReturnType<typeof usePipelineGraph>['edges']) {
   return edges
-    .filter((e) => e.source !== '__start__' && e.target !== '__end__')
+    .filter(
+      (e) =>
+        e.source !== '__start__' &&
+        e.target !== '__end__' &&
+        !isGroupTopologyEdge(e),
+    )
     .map((e) => [e.source, e.target])
 }
 
-/** 过滤掉 Start/End 哨兵边 */
+/** 过滤掉 Start/End 哨兵边和 group 拓扑边，只保留 task↔task 边 */
 function taskEdges(edges: ReturnType<typeof usePipelineGraph>['edges']) {
-  return edges.filter((e) => e.source !== '__start__' && e.target !== '__end__')
+  return edges.filter(
+    (e) =>
+      e.source !== '__start__' &&
+      e.target !== '__end__' &&
+      !isGroupTopologyEdge(e),
+  )
 }
 
 /** 生成决策节点 id */
@@ -156,8 +171,10 @@ describe('usePipelineGraph — implicit edges & execution_strategy', () => {
     // 显式边仍然存在
     const depEdge = result.current.edges.find((e) => e.id === 'dep-build.task-a-build.task-b')
     expect(depEdge).toBeDefined()
-    // 没有隐式边（只有一个显式边，不含 Start/End 哨兵边）
-    expect(taskEdges(result.current.edges)).toHaveLength(1)
+    // 没有隐式边（只有一条显式 dep 边；其余是 START→IN、IN→首task、末task→OUT、OUT→END 等拓扑边）
+    const taskToTaskEdges = taskEdges(result.current.edges)
+    expect(taskToTaskEdges).toHaveLength(1)
+    expect(taskToTaskEdges[0].id).toBe('dep-build.task-a-build.task-b')
   })
 })
 
@@ -587,12 +604,13 @@ describe('usePipelineGraph — alt 边补全（when 孤立 task）', () => {
       }),
     )
 
-    // perf-test 是带 when 且无出边的孤立 task → 应有 alt 边直连 __end__
+    // perf-test 是带 when 且无出边的孤立 task → 应有 alt 边汇入所在 group 的 exit handle
     const altEdge = result.current.edges.find(
       (e) => e.source === 'main.perf-test' && e.label === 'alt',
     )
     expect(altEdge).toBeDefined()
-    expect(altEdge?.target).toBe('__end__')
+    expect(altEdge?.target).toBe('__group__main')
+    expect(altEdge?.targetHandle).toBe('exit')
     expect(altEdge?.type).toBe('smoothstep')
     expect((altEdge?.style as { stroke?: string })?.stroke).toBe('#94A3B8')
     expect((altEdge?.style as { strokeWidth?: number })?.strokeWidth).toBe(1)
@@ -699,7 +717,8 @@ describe('usePipelineGraph — alt 边补全（when 孤立 task）', () => {
     )
     expect(altEdge).toBeDefined()
     expect(altEdge?.source).toBe('main.perf-test')
-    expect(altEdge?.target).toBe('__end__')
+    expect(altEdge?.target).toBe('__group__main')
+    expect(altEdge?.targetHandle).toBe('exit')
   })
 })
 
@@ -940,5 +959,79 @@ describe('usePipelineGraph — group 垂直不重叠', () => {
         expect(yOverlap).toBe(false)
       }
     }
+  })
+})
+
+describe('usePipelineGraph — START/END 通过 group IN/OUT handle', () => {
+  it('根 group 的 START 经 group.top(IN) → 首 task 两段连线', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                { name: 'final', depends_on: ['setup'], env: {}, retry: 0 },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const gid = '__group__main'
+
+    // START → group.top（IN handle，target 类型）
+    const startEdge = result.current.edges.find((e) => e.id === `start-to-${gid}`)
+    expect(startEdge).toBeDefined()
+    expect(startEdge?.source).toBe('__start__')
+    expect(startEdge?.target).toBe(gid)
+    expect(startEdge?.targetHandle).toBe('top')
+
+    // group.top-out（source 类型）→ 首 task
+    const enterEdge = result.current.edges.find((e) => e.id === `enter-${gid}`)
+    expect(enterEdge).toBeDefined()
+    expect(enterEdge?.source).toBe(gid)
+    expect(enterEdge?.sourceHandle).toBe('top-out')
+    expect(enterEdge?.target).toBe('main.setup')
+  })
+
+  it('叶子 group 的末 task 经 group.exit(OUT-IN) → group.bottom(OUT) → END 三段连线', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                { name: 'final', depends_on: ['setup'], env: {}, retry: 0 },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const gid = '__group__main'
+
+    // 末 task → group.exit（内部汇聚 target 类型）
+    const outEdge = result.current.edges.find((e) => e.id === `${gid}-out`)
+    expect(outEdge).toBeDefined()
+    expect(outEdge?.source).toBe('main.final')
+    expect(outEdge?.target).toBe(gid)
+    expect(outEdge?.targetHandle).toBe('exit')
+
+    // group.bottom（OUT handle，source 类型）→ END
+    const endEdge = result.current.edges.find((e) => e.id === `${gid}-to-end`)
+    expect(endEdge).toBeDefined()
+    expect(endEdge?.source).toBe(gid)
+    expect(endEdge?.sourceHandle).toBe('bottom')
+    expect(endEdge?.target).toBe('__end__')
   })
 })

@@ -257,8 +257,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
     // === alt 边补全 ===
     // 对带 when 且没有任何出边的 task（显式 + 隐式边均未把它作为 source），
-    // 补一条到 __end__ 的灰色虚线，label 为 'alt'（走左侧短路径，避免与 group→end 底部水平重叠）。
-    // alt 路径直连 __end__，避免与 group → __end__ 边在底部水平重叠。
+    // 补一条到所在 group 的 OUT 出口（group.bottom handle）的灰色虚线，label 为 'alt'。
+    // 与末 task 一起汇入 OUT，再由 group.bottom → END 统一连出，
+    // 避免多根线各自直穿 group 边框导致 OUT handle 悬空。
     const tasksWithOutgoing = new Set(taskEdges.map((e) => e.source));
     for (const taskId of taskWhenMap.keys()) {
       if (tasksWithOutgoing.has(taskId)) continue;
@@ -267,7 +268,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       taskEdges.push({
         id: `alt-${taskId}-${groupId}`,
         source: taskId,
-        target: '__end__',
+        target: groupId,
+        targetHandle: 'exit',
         type: 'smoothstep',
         animated: false,
         label: 'alt',
@@ -447,14 +449,15 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       data: { variant: 'end' },
     };
 
-    // Start/End 连接到 group 内的首/末 task（线穿过 group 边框，IN/OUT handle 作视觉标记）
-    // 只统计跨 group 的入/出边（group 内部边不算），判断 group 是否为根/叶子
-    // 注意：alt 边（task → __end__）是任务直接退出，不应算作 group 的跨 group 出边；
-    //       否则带 alt 边的 group 会被误判为非叶子，导致 group → END 边缺失、END 定位偏移。
+    // 拓扑：START → group.top(IN) → 首 task → ... → 末 task → group.bottom(OUT) → END
+    // alt 边（带 when 的孤立 task）汇入 group.bottom(OUT)，与末 task 共享出口。
+    // 跨 group 拓扑边：sub.depends_on 触发的 group → group 边。
+    // 只统计跨 group 的入/出边（group 内部边如 alt 边、task→group.bottom 不算），
+    // 判断 group 是否为根/叶子。
+    // 注意：START 边（来自 __start__）和 END 边（去 __end__）不算作 group 间拓扑边。
     const groupHasIncoming = new Set<string>();
     const groupHasOutgoing = new Set<string>();
     for (const e of taskEdges) {
-      // 排除哨兵边：alt 边直连 __end__、START 边来自 __start__，不算作 group 间的拓扑边
       if (e.target === '__end__' || e.source === '__start__') continue;
       const srcTask = taskNodes.find((t) => t.id === e.source);
       const tgtTask = taskNodes.find((t) => t.id === e.target);
@@ -494,11 +497,23 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const END_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
     for (const gid of rootGroupIds) {
       const firstTaskId = groupFirstTask.get(gid);
+      // START → group.top(IN handle) → 首 task：IN handle 作为入口视觉汇合点，
+      // 不再让 START 直接穿过 IN handle 连接内部 task 导致 IN 看起来悬空。
       if (firstTaskId) {
-        // START → 首 task：线从 group 外进入 group 内，穿过顶边 IN handle
         taskEdges.push({
           id: `start-to-${gid}`,
           source: '__start__',
+          target: gid,
+          targetHandle: 'top',
+          type: 'smoothstep',
+          animated: false,
+          markerEnd: START_MARKER,
+          style: { stroke: '#10B981', strokeWidth: 1.5 },
+        });
+        taskEdges.push({
+          id: `enter-${gid}`,
+          source: gid,
+          sourceHandle: 'top-out',
           target: firstTaskId,
           type: 'smoothstep',
           animated: false,
@@ -521,11 +536,23 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     }
     for (const gid of leafGroupIds) {
       const lastTaskId = groupLastTask.get(gid);
+      // 末 task → group.bottom(OUT handle) → END：OUT handle 作为出口视觉汇合点，
+      // 所有"出 group 的边"（末 task / alt 路径）都先汇入 OUT，再统一连到 END。
       if (lastTaskId) {
-        // 末 task → END：线从 group 内退出 group 外，穿过底边 OUT handle
+        taskEdges.push({
+          id: `${gid}-out`,
+          source: lastTaskId,
+          target: gid,
+          targetHandle: 'exit',
+          type: 'smoothstep',
+          animated: false,
+          markerEnd: END_MARKER,
+          style: { stroke: '#94A3B8', strokeWidth: 1.5 },
+        });
         taskEdges.push({
           id: `${gid}-to-end`,
-          source: lastTaskId,
+          source: gid,
+          sourceHandle: 'bottom',
           target: '__end__',
           type: 'smoothstep',
           animated: false,
