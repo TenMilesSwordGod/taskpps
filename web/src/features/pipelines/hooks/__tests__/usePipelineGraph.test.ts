@@ -207,7 +207,7 @@ describe('usePipelineGraph — decisionNode 决策节点与边结构', () => {
     expect((yesEdge?.style as { stroke?: string })?.stroke).toBe('#16A34A')
   })
 
-  it('条件任务有下游时，不创建 no 边（no 路径由菱形标注隐含）', () => {
+  it('条件任务有下游时，no 边连到下游任务（自然垂直路径）', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -240,11 +240,16 @@ describe('usePipelineGraph — decisionNode 决策节点与边结构', () => {
 
     const did = decisionId('build.setup', 'build.smoke-test')
 
-    // 不应有 no 边（no 路径隐含，不画边避免交叉）
-    const noEdges = result.current.edges.filter(
+    // no 边连到下游任务 final（自然垂直路径，不绕行 group exit）
+    const noEdge = result.current.edges.find(
       (e) => e.source === did && e.sourceHandle === 'no',
     )
-    expect(noEdges).toHaveLength(0)
+    expect(noEdge).toBeDefined()
+    expect(noEdge?.target).toBe('build.final')
+    expect(noEdge?.targetHandle).toBe('left')
+    expect(noEdge?.label).toBe('no')
+    // pathOptions.offset 增大以推开垂直段，避免横穿条件 task
+    expect((noEdge as { pathOptions?: { offset?: number } }).pathOptions?.offset).toBe(100)
 
     // smoke-test → final 直连边仍存在
     const directEdge = result.current.edges.find(
@@ -539,6 +544,340 @@ describe('usePipelineGraph — null tasks 安全', () => {
     const taskNodes = result.current.nodes.filter((n) => n.type === 'taskNode')
     expect(taskNodes).toHaveLength(1)
     expect(taskNodes[0].id).toBe('build.compile')
+  })
+})
+
+describe('usePipelineGraph — alt 边补全（when 孤立 task）', () => {
+  it('带 when 且无出边的 task 补一条 alt 边到 group 输出点（bottom handle）', () => {
+    // 复现 pipelines/debug/06-conditional.yaml 场景
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'smoke-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_SMOKE} == true',
+                },
+                {
+                  name: 'perf-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_PERF} == true',
+                },
+                {
+                  name: 'final',
+                  depends_on: ['smoke-test'],
+                  env: {},
+                  retry: 0,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    // perf-test 是带 when 且无出边的孤立 task → 应有 alt 边直连 __end__
+    const altEdge = result.current.edges.find(
+      (e) => e.source === 'main.perf-test' && e.label === 'alt',
+    )
+    expect(altEdge).toBeDefined()
+    expect(altEdge?.target).toBe('__end__')
+    expect(altEdge?.type).toBe('smoothstep')
+    expect((altEdge?.style as { stroke?: string })?.stroke).toBe('#94A3B8')
+    expect((altEdge?.style as { strokeWidth?: number })?.strokeWidth).toBe(1)
+    expect((altEdge?.style as { strokeDasharray?: string })?.strokeDasharray).toBe('3 3')
+    expect((altEdge?.labelStyle as { fill?: string })?.fill).toBe('#64748B')
+  })
+
+  it('带 when 但有显式出边的 task 不补 alt 边', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'smoke-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_SMOKE} == true',
+                },
+                {
+                  name: 'final',
+                  depends_on: ['smoke-test'],
+                  env: {},
+                  retry: 0,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    // smoke-test 有出边（smoke-test → final），不应有 alt 边
+    const altEdge = result.current.edges.find(
+      (e) => e.source === 'main.smoke-test' && e.label === 'alt',
+    )
+    expect(altEdge).toBeUndefined()
+  })
+
+  it('无 when 的孤立 task 不补 alt 边', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'lonely',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    // lonely 无 when，即使没有出边也不补 alt 边
+    const altEdge = result.current.edges.find(
+      (e) => e.source === 'main.lonely' && e.label === 'alt',
+    )
+    expect(altEdge).toBeUndefined()
+  })
+
+  it('alt 边 id 唯一且可识别', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'perf-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_PERF} == true',
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const altEdge = result.current.edges.find(
+      (e) => e.id === 'alt-main.perf-test-__group__main',
+    )
+    expect(altEdge).toBeDefined()
+    expect(altEdge?.source).toBe('main.perf-test')
+    expect(altEdge?.target).toBe('__end__')
+  })
+})
+
+describe('usePipelineGraph — no 边构建（决策节点跳过路径）', () => {
+  it('no 边连到下游任务（有下游时连下游，自然垂直路径）', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'build',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'smoke-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_SMOKE} == true',
+                },
+                {
+                  name: 'final',
+                  depends_on: ['smoke-test'],
+                  env: {},
+                  retry: 0,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const did = decisionId('build.setup', 'build.smoke-test')
+    const noEdge = result.current.edges.find(
+      (e) => e.source === did && e.sourceHandle === 'no',
+    )
+    expect(noEdge).toBeDefined()
+    // no 边连到下游任务 final
+    expect(noEdge?.target).toBe('build.final')
+    expect(noEdge?.targetHandle).toBe('left')
+    expect(noEdge?.label).toBe('no')
+    expect(noEdge?.sourceHandle).toBe('no')
+  })
+
+  it('条件任务无下游时，不画 no 边（由菱形标注隐含）', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'perf-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_PERF} == true',
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const did = decisionId('main.setup', 'main.perf-test')
+    const noEdge = result.current.edges.find(
+      (e) => e.source === did && e.sourceHandle === 'no',
+    )
+    // 无下游时不画 no 边（由菱形 yes/no 标注隐含表达，避免长距离绕行交叉）
+    expect(noEdge).toBeUndefined()
+  })
+
+  it('06-conditional.yaml 场景：smoke-test 有下游 no 连 final，perf-test 无下游不画 no 边', () => {
+    // 复现 pipelines/debug/06-conditional.yaml 场景
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'main',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'smoke-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_SMOKE} == true',
+                },
+                {
+                  name: 'perf-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_PERF} == true',
+                },
+                {
+                  name: 'final',
+                  depends_on: ['smoke-test'],
+                  env: {},
+                  retry: 0,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const didSmoke = decisionId('main.setup', 'main.smoke-test')
+    const didPerf = decisionId('main.setup', 'main.perf-test')
+
+    // smoke-test 有下游 final → no 边连到 final
+    const noSmoke = result.current.edges.find(
+      (e) => e.source === didSmoke && e.sourceHandle === 'no',
+    )
+    expect(noSmoke).toBeDefined()
+    expect(noSmoke?.target).toBe('main.final')
+    expect(noSmoke?.targetHandle).toBe('left')
+
+    // perf-test 无下游 → 不画 no 边（由菱形标注隐含）
+    const noPerf = result.current.edges.find(
+      (e) => e.source === didPerf && e.sourceHandle === 'no',
+    )
+    expect(noPerf).toBeUndefined()
+  })
+
+  it('no 边样式为灰色实线 smoothstep（区别于 yes 的绿色和 alt 的虚线）', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'build',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'setup', depends_on: [], env: {}, retry: 0 },
+                {
+                  name: 'smoke-test',
+                  depends_on: ['setup'],
+                  env: {},
+                  retry: 0,
+                  when: '${RUN_SMOKE} == true',
+                },
+                {
+                  name: 'final',
+                  depends_on: ['smoke-test'],
+                  env: {},
+                  retry: 0,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const did = decisionId('build.setup', 'build.smoke-test')
+    const noEdge = result.current.edges.find(
+      (e) => e.source === did && e.sourceHandle === 'no',
+    )
+    expect(noEdge).toBeDefined()
+    // no 边使用 smoothstep 类型（正交路由，减少与其他边的交叉）
+    expect(noEdge?.type).toBe('smoothstep')
+    // no 边使用 RAIL_STYLE（灰色实线）
+    expect((noEdge?.style as { stroke?: string })?.stroke).toBe('#94A3B8')
+    expect((noEdge?.style as { strokeDasharray?: string })?.strokeDasharray).toBeUndefined()
   })
 })
 

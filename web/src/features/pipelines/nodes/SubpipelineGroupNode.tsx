@@ -56,8 +56,27 @@ export default function SubpipelineGroupNode({ data }: NodeProps) {
         </span>
       </div>
 
-      <Handle id="top" type="target" position={Position.Top} style={{ visibility: 'hidden' }} />
-      <Handle id="bottom" type="source" position={Position.Bottom} style={{ visibility: 'hidden' }} />
+      {/* 输入点 —— START / 上游 group 连入 */}
+      <Handle
+        id="top"
+        type="target"
+        position={Position.Top}
+        className="!w-1.5 !h-1.5 !bg-slate-400 !border-0 !-top-[3px]"
+      />
+      {/* 输出点 —— group → __end__ / 下游 group */}
+      <Handle
+        id="bottom"
+        type="source"
+        position={Position.Bottom}
+        className="!w-1.5 !h-1.5 !bg-slate-400 !border-0 !-bottom-[3px]"
+      />
+      {/* 内部汇聚点 —— no/alt 路径汇入此点（target 类型，与 bottom 同位置） */}
+      <Handle
+        id="exit"
+        type="target"
+        position={Position.Bottom}
+        className="!w-1.5 !h-1.5 !bg-slate-500 !border-0 !-bottom-[3px]"
+      />
     </div>
   );
 }

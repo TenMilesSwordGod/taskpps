@@ -64,6 +64,13 @@ function TaskNodeComponent({ data, id }: { data: TaskNodeData; id: string }) {
         position={Position.Top}
         className="!w-1.5 !h-1.5 !bg-slate-300 !border-0 !-top-[3px]"
       />
+      {/* 左侧 target handle —— no 边专用，让跳过路径从左侧进入而非顶部 */}
+      <Handle
+        id="left"
+        type="target"
+        position={Position.Left}
+        className="!w-1.5 !h-1.5 !bg-slate-300 !border-0 !-left-[3px]"
+      />
 
       <Tooltip
         title={
