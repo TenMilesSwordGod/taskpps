@@ -257,16 +257,14 @@ describe('usePipelineGraph — decisionNode 决策节点与边结构', () => {
 
     const did = decisionId('build.setup', 'build.smoke-test')
 
-    // no 边连到下游任务 final（自然垂直路径，不绕行 group exit）
+    // no 边汇入 group.exit handle（底部 target），与 group.bottom（source → END）同位置
     const noEdge = result.current.edges.find(
       (e) => e.source === did && e.sourceHandle === 'no',
     )
     expect(noEdge).toBeDefined()
-    expect(noEdge?.target).toBe('build.final')
-    expect(noEdge?.targetHandle).toBe('left')
+    expect(noEdge?.target).toBe('__group__build')
+    expect(noEdge?.targetHandle).toBe('exit')
     expect(noEdge?.label).toBe('no')
-    // pathOptions.offset 增大以推开垂直段，避免横穿条件 task
-    expect((noEdge as { pathOptions?: { offset?: number } }).pathOptions?.offset).toBe(100)
 
     // smoke-test → final 直连边仍存在
     const directEdge = result.current.edges.find(
@@ -604,7 +602,7 @@ describe('usePipelineGraph — alt 边补全（when 孤立 task）', () => {
       }),
     )
 
-    // perf-test 是带 when 且无出边的孤立 task → 应有 alt 边汇入所在 group 的 exit handle
+    // perf-test 是带 when 且无出边的孤立 task → 应有 alt 边汇入 group.exit handle
     const altEdge = result.current.edges.find(
       (e) => e.source === 'main.perf-test' && e.label === 'alt',
     )
@@ -759,14 +757,14 @@ describe('usePipelineGraph — no 边构建（决策节点跳过路径）', () =
       (e) => e.source === did && e.sourceHandle === 'no',
     )
     expect(noEdge).toBeDefined()
-    // no 边连到下游任务 final
-    expect(noEdge?.target).toBe('build.final')
-    expect(noEdge?.targetHandle).toBe('left')
+    // no 边汇入 group.exit handle
+    expect(noEdge?.target).toBe('__group__build')
+    expect(noEdge?.targetHandle).toBe('exit')
     expect(noEdge?.label).toBe('no')
     expect(noEdge?.sourceHandle).toBe('no')
   })
 
-  it('条件任务无下游时，不画 no 边（由菱形标注隐含）', () => {
+  it('条件任务无下游时，no 边连到 group exit（确保 flow 完整）', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -795,11 +793,14 @@ describe('usePipelineGraph — no 边构建（决策节点跳过路径）', () =
     const noEdge = result.current.edges.find(
       (e) => e.source === did && e.sourceHandle === 'no',
     )
-    // 无下游时不画 no 边（由菱形 yes/no 标注隐含表达，避免长距离绕行交叉）
-    expect(noEdge).toBeUndefined()
+    // 无下游时 no 边必须存在，连到 group exit，确保条件全 no 时 flow 不中断
+    expect(noEdge).toBeDefined()
+    expect(noEdge?.target).toBe('__group__main')
+    expect(noEdge?.targetHandle).toBe('exit')
+    expect(noEdge?.label).toBe('no')
   })
 
-  it('06-conditional.yaml 场景：smoke-test 有下游 no 连 final，perf-test 无下游不画 no 边', () => {
+  it('06-conditional.yaml 场景：所有 decision 的 no 边都连到 group exit', () => {
     // 复现 pipelines/debug/06-conditional.yaml 场景
     const { result } = renderHook(() =>
       usePipelineGraph({
@@ -841,19 +842,21 @@ describe('usePipelineGraph — no 边构建（决策节点跳过路径）', () =
     const didSmoke = decisionId('main.setup', 'main.smoke-test')
     const didPerf = decisionId('main.setup', 'main.perf-test')
 
-    // smoke-test 有下游 final → no 边连到 final
+    // smoke-test 有下游 final → no 边汇入 group.exit handle
     const noSmoke = result.current.edges.find(
       (e) => e.source === didSmoke && e.sourceHandle === 'no',
     )
     expect(noSmoke).toBeDefined()
-    expect(noSmoke?.target).toBe('main.final')
-    expect(noSmoke?.targetHandle).toBe('left')
+    expect(noSmoke?.target).toBe('__group__main')
+    expect(noSmoke?.targetHandle).toBe('exit')
 
-    // perf-test 无下游 → 不画 no 边（由菱形标注隐含）
+    // perf-test 无下游 → no 边也必须存在，连到 group exit
     const noPerf = result.current.edges.find(
       (e) => e.source === didPerf && e.sourceHandle === 'no',
     )
-    expect(noPerf).toBeUndefined()
+    expect(noPerf).toBeDefined()
+    expect(noPerf?.target).toBe('__group__main')
+    expect(noPerf?.targetHandle).toBe('exit')
   })
 
   it('no 边样式为灰色实线 smoothstep（区别于 yes 的绿色和 alt 的虚线）', () => {
@@ -963,7 +966,7 @@ describe('usePipelineGraph — group 垂直不重叠', () => {
 })
 
 describe('usePipelineGraph — START/END 通过 group IN/OUT handle', () => {
-  it('根 group 的 START 经 group.top(IN) → 首 task 两段连线', () => {
+  it('根 group 的 START → group.top(绿) → group.top-out(灰) → 首 task', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -984,22 +987,24 @@ describe('usePipelineGraph — START/END 通过 group IN/OUT handle', () => {
 
     const gid = '__group__main'
 
-    // START → group.top（IN handle，target 类型）
+    // START → group.top（绿色外部边）
     const startEdge = result.current.edges.find((e) => e.id === `start-to-${gid}`)
     expect(startEdge).toBeDefined()
     expect(startEdge?.source).toBe('__start__')
     expect(startEdge?.target).toBe(gid)
     expect(startEdge?.targetHandle).toBe('top')
+    expect((startEdge?.style as { stroke?: string })?.stroke).toBe('#10B981')
 
-    // group.top-out（source 类型）→ 首 task
+    // group.top-out → 首 task（灰色内部边）
     const enterEdge = result.current.edges.find((e) => e.id === `enter-${gid}`)
     expect(enterEdge).toBeDefined()
     expect(enterEdge?.source).toBe(gid)
     expect(enterEdge?.sourceHandle).toBe('top-out')
     expect(enterEdge?.target).toBe('main.setup')
+    expect((enterEdge?.style as { stroke?: string })?.stroke).toBe('#94A3B8')
   })
 
-  it('叶子 group 的末 task 经 group.exit(OUT-IN) → group.bottom(OUT) → END 三段连线', () => {
+  it('叶子 group 的末 task → group.exit → group.bottom → END', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -1020,14 +1025,14 @@ describe('usePipelineGraph — START/END 通过 group IN/OUT handle', () => {
 
     const gid = '__group__main'
 
-    // 末 task → group.exit（内部汇聚 target 类型）
+    // 末 task → group.exit（底部 target handle）
     const outEdge = result.current.edges.find((e) => e.id === `${gid}-out`)
     expect(outEdge).toBeDefined()
     expect(outEdge?.source).toBe('main.final')
     expect(outEdge?.target).toBe(gid)
     expect(outEdge?.targetHandle).toBe('exit')
 
-    // group.bottom（OUT handle，source 类型）→ END
+    // group.bottom（底部 source handle）→ END
     const endEdge = result.current.edges.find((e) => e.id === `${gid}-to-end`)
     expect(endEdge).toBeDefined()
     expect(endEdge?.source).toBe(gid)

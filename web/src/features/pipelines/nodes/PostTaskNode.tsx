@@ -39,7 +39,7 @@ function PostTaskNodeComponent({ data }: { data: PostTaskNodeData }) {
       <div
         className="flex items-center gap-1.5 bg-white select-none whitespace-nowrap"
         style={{
-          maxWidth: NODE_SIZE.POST_W,
+          width: NODE_SIZE.POST_W,
           height: NODE_SIZE.POST_H,
           padding: '0 6px 0 0',
           border: `1px solid ${INK.border}`,

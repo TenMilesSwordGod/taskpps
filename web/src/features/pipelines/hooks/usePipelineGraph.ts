@@ -9,11 +9,15 @@ const GROUP_PADDING_X = 20;
 const GROUP_PADDING_Y = 14;
 const GROUP_GAP_Y = 24;
 const GROUP_HEADER = 0;
+// 顶部入口区域：top-out handle → 首 task/decision 的边需要垂直空间
+const GROUP_ENTRY_AREA = 30;
+// 底部出口区域：no/alt/lastTask 边汇聚到 exit handle 需要垂直空间
+const GROUP_EXIT_AREA = 50;
 const TASK_W = 150;
 const TASK_H = 36;
 const POST_H = 26;
 const POST_W = 168;
-const DECISION_SIZE = 60;
+const DECISION_SIZE = 76;
 
 interface UsePipelineGraphOptions {
   pipeline: PipelineDetail | undefined;
@@ -139,16 +143,18 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       }
 
       const hasChildren = ids.length > 0;
-      const taskAreaH = ids.length * (TASK_H + 20) - 20;
+      // decision 节点(76px)比 task(36px)高，行高取最大值避免低估高度
+      const rowH = Math.max(TASK_H + 20, DECISION_SIZE + 20);
+      const taskAreaH = ids.length * rowH - 20;
       const postAreaH = postCount > 0 ? postCount * (POST_H + 6) + 6 : 0;
       groupNodes.push({
         id: groupId,
         type: 'subpipelineGroup',
         position: { x: 0, y: 0 },
         style: {
-          width: hasChildren ? TASK_W + GROUP_PADDING_X * 2 : 200,
+          width: hasChildren ? Math.max(TASK_W, POST_W) + GROUP_PADDING_X * 2 : 200,
           height: hasChildren
-            ? taskAreaH + postAreaH + GROUP_PADDING_Y * 2 + GROUP_HEADER
+            ? taskAreaH + postAreaH + GROUP_PADDING_Y * 2 + GROUP_HEADER + GROUP_ENTRY_AREA + GROUP_EXIT_AREA
             : 100,
         },
         data: { label: sub.name, taskCount: ids.length },
@@ -257,14 +263,14 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
     // === alt 边补全 ===
     // 对带 when 且没有任何出边的 task（显式 + 隐式边均未把它作为 source），
-    // 补一条到所在 group 的 OUT 出口（group.bottom handle）的灰色虚线，label 为 'alt'。
-    // 与末 task 一起汇入 OUT，再由 group.bottom → END 统一连出，
-    // 避免多根线各自直穿 group 边框导致 OUT handle 悬空。
+    // 补一条到 group.exit handle 的灰色虚线，label 为 'alt'。
+    // group.exit 是 target handle（底部），与 group.bottom（source → END）同位置，
+    // 视觉上形成 task → exit → END 的连接。
     const tasksWithOutgoing = new Set(taskEdges.map((e) => e.source));
     for (const taskId of taskWhenMap.keys()) {
       if (tasksWithOutgoing.has(taskId)) continue;
       const groupId = taskGroupMap.get(taskId);
-      if (!groupId) continue; // 无所属 group，跳过（无统一输出点可连）
+      if (!groupId) continue;
       taskEdges.push({
         id: `alt-${taskId}-${groupId}`,
         source: taskId,
@@ -284,45 +290,27 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
     // === no 边构建 ===
     // 为每个决策节点的 "no" 路径添加边，表示条件为 false 时跳过条件任务后的流向。
-    // 若被跳过的 task 有下游任务，no 边连到下游任务（自然垂直路径，不交叉）；
-    // 若无下游，不画 no 边（由菱形 yes/no 标注隐含表达，避免长距离绕行交叉）。
-    const downstreamMap = new Map<string, string[]>();
-    for (const [src, targets] of dependsOnMap) {
-      downstreamMap.set(src, [...targets]);
-    }
-    for (const [prevId, currId] of implicitEdges) {
-      if (!downstreamMap.has(prevId)) downstreamMap.set(prevId, []);
-      downstreamMap.get(prevId)!.push(currId);
-    }
+    // 汇入 group.exit handle（底部 target），与 group.bottom（source → END）同位置，
+    // 视觉上形成 decision.no → exit → END 的连接。
     for (const dn of decisionNodes) {
       const groupId = dn.parentId;
       if (!groupId) continue;
-      const skippedTaskId = decisionTargetMap.get(dn.id);
-      const downstream = skippedTaskId ? downstreamMap.get(skippedTaskId) : undefined;
-      if (downstream && downstream.length > 0) {
-        // no 边从 decision.left 出，到下游 task.left 入。
-        // 默认 smoothstep 的 offset=20 会让垂直段落在 decision 与下游 task 之间，
-        // 当 decision 位于被跳过的条件 task 右侧时，垂直段会横穿该 task。
-        // 增大 offset 把垂直段推到条件 task 左侧之外，绕开穿越。
-        // pathOptions 是 SmoothStepEdge 的字段（不在 base Edge 类型上），需 as 断言。
-        taskEdges.push({
-          id: `no-${dn.id}-${downstream[0]}`,
-          source: dn.id,
-          sourceHandle: 'no',
-          target: downstream[0],
-          targetHandle: 'left',
-          type: 'smoothstep',
-          animated: false,
-          label: 'no',
-          labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#64748B' },
-          labelBgStyle: { fill: '#F1F5F9', fillOpacity: 1 },
-          labelBgPadding: [2, 4] as [number, number],
-          labelBgBorderRadius: 3,
-          markerEnd: RAIL_MARKER,
-          style: RAIL_STYLE,
-          pathOptions: { offset: 100 },
-        } as unknown as Edge);
-      }
+      taskEdges.push({
+        id: `no-${dn.id}-${groupId}`,
+        source: dn.id,
+        sourceHandle: 'no',
+        target: groupId,
+        targetHandle: 'exit',
+        type: 'smoothstep',
+        animated: false,
+        label: 'no',
+        labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#64748B' },
+        labelBgStyle: { fill: '#F1F5F9', fillOpacity: 1 },
+        labelBgPadding: [2, 4] as [number, number],
+        labelBgBorderRadius: 3,
+        markerEnd: RAIL_MARKER,
+        style: RAIL_STYLE,
+      });
     }
 
     // 跨 subpipeline 边 —— 直接连接 group 节点（不经过 task），让 dagre 识别 group 拓扑顺序
@@ -337,6 +325,18 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             const sourceGroup = `__group__${depSubName}`;
             const targetGroup = `__group__${sub.name}`;
             const whenExpr = taskWhenMap.get(targetId);
+            // 跨 group 拓扑边：sourceGroup.bottom → targetGroup.top（让 dagre 知道顺序）
+            taskEdges.push({
+              id: `cross-sub-${depSubName}-${sub.name}`,
+              source: sourceGroup,
+              sourceHandle: 'bottom',
+              target: targetGroup,
+              targetHandle: 'top',
+              type: 'smoothstep',
+              animated: false,
+              markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#F59E0B' },
+              style: { stroke: '#F59E0B', strokeWidth: 1.5, strokeDasharray: '4 3' },
+            });
             if (whenExpr) {
               const decisionId = `decision-cross-${depSubName}-${sub.name}`;
               decisionNodes.push({
@@ -348,17 +348,16 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 data: { when: whenExpr },
               });
               decisionTargetMap.set(decisionId, targetId);
-              // 跨 group 拓扑边：sourceGroup → targetGroup（让 dagre 知道顺序）
+              // targetGroup.top-out → decision（灰色内部边）
               taskEdges.push({
-                id: `cross-sub-${depSubName}-${sub.name}`,
-                source: sourceGroup,
-                sourceHandle: 'bottom',
-                target: targetGroup,
-                targetHandle: 'top',
+                id: `enter-decision-${decisionId}`,
+                source: targetGroup,
+                sourceHandle: 'top-out',
+                target: decisionId,
                 type: 'smoothstep',
                 animated: false,
-                markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#F59E0B' },
-                style: { stroke: '#F59E0B', strokeWidth: 1.5, strokeDasharray: '4 3' },
+                markerEnd: RAIL_MARKER,
+                style: RAIL_STYLE,
               });
               taskEdges.push({
                 id: `yes-${decisionId}-${targetId}`,
@@ -376,17 +375,16 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 style: YES_STYLE,
               });
             } else {
-              // 跨 group 拓扑边：sourceGroup → targetGroup
+              // 无 when：targetGroup.top-out → 首 task（灰色内部边）
               taskEdges.push({
-                id: `cross-sub-${depSubName}-${sub.name}`,
-                source: sourceGroup,
-                sourceHandle: 'bottom',
-                target: targetGroup,
-                targetHandle: 'top',
+                id: `enter-${targetGroup}`,
+                source: targetGroup,
+                sourceHandle: 'top-out',
+                target: targetId,
                 type: 'smoothstep',
                 animated: false,
-                markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#F59E0B' },
-                style: { stroke: '#F59E0B', strokeWidth: 1.5, strokeDasharray: '4 3' },
+                markerEnd: RAIL_MARKER,
+                style: RAIL_STYLE,
               });
             }
           }
@@ -435,7 +433,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       });
     });
 
-    // === Start / End 哨兵节点 ===
+    // === Start / End 哨兵节点（占位，位置在分组尺寸调整后设置） ===
     const startNode: Node = {
       id: '__start__',
       type: 'startEnd',
@@ -449,12 +447,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       data: { variant: 'end' },
     };
 
-    // 拓扑：START → group.top(IN) → 首 task → ... → 末 task → group.bottom(OUT) → END
-    // alt 边（带 when 的孤立 task）汇入 group.bottom(OUT)，与末 task 共享出口。
-    // 跨 group 拓扑边：sub.depends_on 触发的 group → group 边。
-    // 只统计跨 group 的入/出边（group 内部边如 alt 边、task→group.bottom 不算），
-    // 判断 group 是否为根/叶子。
-    // 注意：START 边（来自 __start__）和 END 边（去 __end__）不算作 group 间拓扑边。
+    // 拓扑：START → group.top(IN) → group.top-out → 首 task → ... → 末 task → group.exit(OUT) → group.bottom → END
+    // no/alt 边汇入 group.exit（底部 target handle），与 group.bottom（底部 source → END）同位置。
     const groupHasIncoming = new Set<string>();
     const groupHasOutgoing = new Set<string>();
     for (const e of taskEdges) {
@@ -497,9 +491,16 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const END_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
     for (const gid of rootGroupIds) {
       const firstTaskId = groupFirstTask.get(gid);
-      // START → group.top(IN handle) → 首 task：IN handle 作为入口视觉汇合点，
-      // 不再让 START 直接穿过 IN handle 连接内部 task 导致 IN 看起来悬空。
+      // START → group.top（绿色，进入 group 的 IN handle）
+      // group.top-out → 首 task 或 decision（灰色内部边，不穿出 group）
       if (firstTaskId) {
+        const firstTaskWhen = taskWhenMap.get(firstTaskId);
+        const decisionForFirstTask = firstTaskWhen
+          ? decisionNodes.find((d) => d.parentId === gid && decisionTargetMap.get(d.id) === firstTaskId)
+          : undefined;
+        const enterTarget = decisionForFirstTask ? decisionForFirstTask.id : firstTaskId;
+
+        // START → group.top（绿色外部边）
         taskEdges.push({
           id: `start-to-${gid}`,
           source: '__start__',
@@ -510,15 +511,16 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           markerEnd: START_MARKER,
           style: { stroke: '#10B981', strokeWidth: 1.5 },
         });
+        // group.top-out → 首 task/decision（灰色内部边）
         taskEdges.push({
           id: `enter-${gid}`,
           source: gid,
           sourceHandle: 'top-out',
-          target: firstTaskId,
+          target: enterTarget,
           type: 'smoothstep',
           animated: false,
-          markerEnd: START_MARKER,
-          style: { stroke: '#10B981', strokeWidth: 1.5 },
+          markerEnd: RAIL_MARKER,
+          style: RAIL_STYLE,
         });
       } else {
         // 空 group 回退：START → group.top
@@ -536,8 +538,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     }
     for (const gid of leafGroupIds) {
       const lastTaskId = groupLastTask.get(gid);
-      // 末 task → group.bottom(OUT handle) → END：OUT handle 作为出口视觉汇合点，
-      // 所有"出 group 的边"（末 task / alt 路径）都先汇入 OUT，再统一连到 END。
+      // 末 task → group.exit（底部 target handle）
+      // group.bottom（底部 source handle）→ END
+      // exit 和 bottom 同位于底部，视觉上形成 末task → exit → END 连接
       if (lastTaskId) {
         taskEdges.push({
           id: `${gid}-out`,
@@ -602,11 +605,16 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     }
 
     // dagre 布局
+    // groupSizes 同时承载 group 与 decision 节点的自定义尺寸：
+    // dagreLayout.getNodeSize 优先查 custom 尺寸，再回退到 type 硬编码。
     const groupSizes = new Map<string, { width: number; height: number }>();
     for (const gn of groupNodes) {
       const w = (gn.style as { width?: number })?.width ?? 200;
       const h = (gn.style as { height?: number })?.height ?? 100;
       groupSizes.set(gn.id, { width: w, height: h });
+    }
+    for (const dn of decisionNodes) {
+      groupSizes.set(dn.id, { width: DECISION_SIZE, height: DECISION_SIZE });
     }
 
     const allNodes = [...groupNodes, ...taskNodes, ...decisionNodes, ...postNodes, startNode, endNode];
@@ -644,7 +652,6 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     }
 
     // 调整 group 尺寸以包裹所有子节点
-    // 关键：保留 dagre 给的 group 位置，但尺寸取 dagre 算的 和 子节点边界的最大值
     for (const node of finalNodes) {
       if (node.type === 'subpipelineGroup') {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -667,21 +674,19 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           }
         }
         if (minX < Infinity) {
-          // 尺寸取 dagre 给的和子节点边界的最大值
           const dagreW = ((node.style as { width?: number })?.width) ?? 0;
-          const dagreH = ((node.style as { height?: number })?.height) ?? 0;
           const contentW = maxX - minX + GROUP_PADDING_X * 2;
-          const contentH = maxY - minY + GROUP_PADDING_Y * 2 + GROUP_HEADER;
+          const contentH = maxY - minY + GROUP_PADDING_Y * 2 + GROUP_HEADER + GROUP_ENTRY_AREA + GROUP_EXIT_AREA;
           node.style = {
             ...((node.style as object) || {}),
             width: Math.max(dagreW, contentW),
-            height: Math.max(dagreH, contentH),
+            height: contentH,
           };
           for (const child of finalNodes) {
             if (child.parentId === node.id) {
               child.position = {
                 x: child.position.x - minX + GROUP_PADDING_X,
-                y: child.position.y - minY + GROUP_PADDING_Y + GROUP_HEADER,
+                y: child.position.y - minY + GROUP_PADDING_Y + GROUP_HEADER + GROUP_ENTRY_AREA,
               };
             }
           }
@@ -726,7 +731,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     if (!isFinite(finalMaxY)) finalMaxY = 100;
     for (const node of finalNodes) {
       if (node.id === '__end__') {
-        node.position.y = finalMaxY + 40;
+        node.position.y = finalMaxY + 60;
       }
     }
 
@@ -750,8 +755,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           node.position.x = targetGroup.position.x + gw / 2 - START_W / 2;
         }
       } else if (node.id === '__end__') {
-        // 优先找 group 的主出边（末 task → END，id 以 '-to-end' 结尾），
-        // 避免 alt 边（perf-test → __end__）把 END 拉到右侧分支下方
+        // END 对齐所连接 group 的中心。
+        // 主出边（末 task → END，id 以 '-to-end' 结尾）决定 END 的 x；
+        // alt 边汇入 group.exit（不直连 END），不影响 END 定位。
         const endEdge = taskEdges.find(
           (e) => e.target === '__end__' && e.id.endsWith('-to-end'),
         );

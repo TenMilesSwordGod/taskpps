@@ -109,7 +109,7 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
         onNodeClick={handleNodeClick}
         onPaneClick={onPaneClick}
         fitView
-        fitViewOptions={{ padding: 0.24, includeHiddenNodes: false }}
+        fitViewOptions={{ padding: 0.3, includeHiddenNodes: false }}
         onlyRenderVisibleElements
         minZoom={0.1}
         maxZoom={2}
@@ -133,6 +133,7 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
           nodeStrokeColor="#fff"
           maskColor="rgba(241, 245, 249, 0.6)"
           className="!shadow-sm !border !border-slate-200 !rounded !overflow-hidden"
+          position="bottom-left"
           zoomable
           pannable
         />

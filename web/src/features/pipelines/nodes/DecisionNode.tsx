@@ -41,7 +41,7 @@ function DecisionNodeComponent({ data }: { data: DecisionNodeData }) {
       <div
         data-testid="decision-node"
         className="relative flex items-center justify-center"
-        style={{ width: 60, height: 60 }}
+        style={{ width: 76, height: 76 }}
       >
         {/* Target handle — 顶部入边 */}
         <Handle
@@ -56,8 +56,8 @@ function DecisionNodeComponent({ data }: { data: DecisionNodeData }) {
           aria-hidden
           className="absolute"
           style={{
-            width: 40,
-            height: 40,
+            width: 52,
+            height: 52,
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%) rotate(45deg)',
@@ -72,7 +72,7 @@ function DecisionNodeComponent({ data }: { data: DecisionNodeData }) {
           className="relative z-10 text-center leading-none select-none cursor-default"
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             color: '#C2410C',
             letterSpacing: 0.1,

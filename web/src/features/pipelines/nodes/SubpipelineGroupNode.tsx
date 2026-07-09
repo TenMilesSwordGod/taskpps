@@ -56,19 +56,21 @@ export default function SubpipelineGroupNode({ data }: NodeProps) {
         </span>
       </div>
 
-      {/* 输入点 —— START / 上游 group 连入（target 类型） */}
+      {/* 输入点 —— START / 上游 group 连入（target 类型，Position.Top 边从上方进入） */}
       <Handle
         id="top"
         type="target"
         position={Position.Top}
         className="!w-1.5 !h-1.5 !bg-slate-400 !border-0 !-top-[3px]"
+        style={{ left: '25%' }}
       />
-      {/* 内部出口 —— group → 首 task（source 类型，与 top 同位置） */}
+      {/* 内部出口 —— group → 首 task（source 类型，Position.Top 使边从顶部向下路由到子节点） */}
       <Handle
         id="top-out"
         type="source"
         position={Position.Top}
         className="!w-1.5 !h-1.5 !bg-slate-400 !border-0 !-top-[3px]"
+        style={{ left: '75%' }}
       />
       {/* 输出点 —— group → __end__ / 下游 group（source 类型） */}
       <Handle
@@ -76,13 +78,15 @@ export default function SubpipelineGroupNode({ data }: NodeProps) {
         type="source"
         position={Position.Bottom}
         className="!w-1.5 !h-1.5 !bg-slate-400 !border-0 !-bottom-[3px]"
+        style={{ left: '25%' }}
       />
-      {/* 内部汇聚点 —— 末 task / alt 路径汇入此点（target 类型，与 bottom 同位置） */}
+      {/* 内部汇聚点 —— 末 task / alt/no 路径汇入此点（target 类型，Position.Bottom 使边从上方子节点向下汇入底部） */}
       <Handle
         id="exit"
         type="target"
         position={Position.Bottom}
         className="!w-1.5 !h-1.5 !bg-slate-500 !border-0 !-bottom-[3px]"
+        style={{ left: '75%' }}
       />
     </div>
   );

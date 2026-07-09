@@ -1,9 +1,10 @@
 import dagre from 'dagre';
 import type { Node, Edge } from '@xyflow/react';
 
+// 以下常量应与 nodeTokens.ts 中的 NODE_SIZE 保持一致
 const NODE_WIDTH = 150;
 const NODE_HEIGHT = 36;
-const DECISION_SIZE = 60;
+const DECISION_SIZE = 76;
 
 function getNodeSize(node: Node, groupSizes?: Map<string, { width: number; height: number }>) {
   const custom = groupSizes?.get(node.id);
