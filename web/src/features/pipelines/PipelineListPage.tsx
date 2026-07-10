@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, useId } from 'react';
 import { Card, Table, Button, Input, Space, Tooltip, Tag } from 'antd';
 import { Search, RefreshCw, Play, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -17,8 +17,13 @@ type Row =
 /** Issue #184: 成功率 sparkline 折线图
  * 完成比 = success / (total - skipped)，fail 不算通过，skip 不计入总数，分母 0 时为 0
  * recentRuns 按时间倒序（最近在前），折线图左旧右新需反转
+ * 交互：悬停数据点显示 Tooltip（第N次 + 完成比%）
  */
 function SuccessSparkline({ recentRuns }: { recentRuns: { task_summary: Record<string, number> }[] }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const reactId = useId();
+  const gradId = `spark-grad-${reactId.replace(/:/g, '')}`;
+
   const points = [...recentRuns].reverse().map((r) => {
     const ts = r.task_summary || {};
     const success = ts.success || 0;
@@ -27,23 +32,78 @@ function SuccessSparkline({ recentRuns }: { recentRuns: { task_summary: Record<s
     const denominator = total - skipped;
     return denominator > 0 ? success / denominator : 0;
   });
+
   if (points.length === 0) return <span style={{ color: '#9ca3af' }}>--</span>;
-  const W = 120, H = 28, PAD = 2;
-  const stepX = points.length > 1 ? (W - PAD * 2) / (points.length - 1) : 0;
-  const pathD = points.map((p, i) => {
-    const x = PAD + i * stepX;
-    const y = H - PAD - p * (H - PAD * 2);
-    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+
+  const W = 130, H = 38, PAD_X = 4, PAD_TOP = 4, PAD_BOTTOM = 4;
+  const plotW = W - PAD_X * 2;
+  const plotH = H - PAD_TOP - PAD_BOTTOM;
+  const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
+  const xAt = (i: number) => PAD_X + i * stepX;
+  const yAt = (p: number) => PAD_TOP + (1 - p) * plotH;
+
+  const coords = points.map((p, i) => ({ x: xAt(i), y: yAt(p), value: p, index: i }));
+  const linePath = coords
+    .map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+    .join(' ');
+  const areaPath = `${linePath} L${coords[coords.length - 1].x.toFixed(1)},${(PAD_TOP + plotH).toFixed(1)} L${coords[0].x.toFixed(1)},${(PAD_TOP + plotH).toFixed(1)} Z`;
+
+  const avg = points.reduce((s, p) => s + p, 0) / points.length;
+  const tooltipText = hovered !== null
+    ? `第 ${points.length - hovered} 次（共 ${points.length} 次）：完成比 ${Math.round(points[hovered] * 100)}%`
+    : `最近 ${points.length} 次平均完成比 ${Math.round(avg * 100)}%`;
+
   return (
-    <svg width={W} height={H} style={{ display: 'block' }}>
-      <path d={pathD} fill="none" stroke="#3b82f6" strokeWidth={1.5} />
-      {points.map((p, i) => {
-        const x = PAD + i * stepX;
-        const y = H - PAD - p * (H - PAD * 2);
-        return <circle key={i} cx={x} cy={y} r={1.5} fill={p >= 1 ? '#16a34a' : p > 0 ? '#3b82f6' : '#ef4444'} />;
-      })}
-    </svg>
+    <Tooltip title={tooltipText} open={hovered !== null ? true : undefined} placement="top">
+      <svg
+        width={W}
+        height={H}
+        style={{ display: 'block', cursor: 'pointer' }}
+        onMouseLeave={() => setHovered(null)}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        {/* 100% 参考线 */}
+        <line
+          x1={PAD_X}
+          y1={PAD_TOP}
+          x2={W - PAD_X}
+          y2={PAD_TOP}
+          stroke="#e5e7eb"
+          strokeWidth={1}
+          strokeDasharray="3 2"
+        />
+        {/* 区域填充 */}
+        <path d={areaPath} fill={`url(#${gradId})`} />
+        {/* 折线 */}
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {/* 数据点 */}
+        {coords.map((c) => (
+          <circle
+            key={c.index}
+            cx={c.x}
+            cy={c.y}
+            r={hovered === c.index ? 3.5 : 2.2}
+            fill={c.value >= 1 ? '#16a34a' : c.value > 0 ? '#3b82f6' : '#ef4444'}
+            stroke="#fff"
+            strokeWidth={1.2}
+            style={{ cursor: 'pointer', transition: 'r 120ms ease-out' }}
+            onMouseEnter={() => setHovered(c.index)}
+          />
+        ))}
+      </svg>
+    </Tooltip>
   );
 }
 
