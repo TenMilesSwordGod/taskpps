@@ -71,10 +71,16 @@ async def list_pipelines(project_id: str | None = Query(None)):
                 elif spec.tasks:
                     task_count = len(spec.tasks)
 
-                runs = await run_repo.list_runs(pipeline_file=file, limit=1)
+                # Issue #184: 取最近 10 次运行 + task_summary，供前端折线图使用
+                recent_runs_data = await run_repo.list_runs(pipeline_file=file, limit=10)
+                recent_run_ids = [r.id for r in recent_runs_data]
+                recent_summaries = await run_repo.get_task_summaries(recent_run_ids) if recent_run_ids else {}
+                # recent_runs 按时间倒序（最近在前），前端折线图需反转
+                recent_runs = [{"task_summary": recent_summaries.get(r.id, {})} for r in recent_runs_data]
+
                 last_run = None
-                if runs:
-                    r = runs[0]
+                if recent_runs_data:
+                    r = recent_runs_data[0]
                     last_run = {
                         "id": r.id,
                         "status": r.status,
@@ -98,6 +104,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "subpipeline_count": subpipeline_count,
                         "last_run": last_run,
                         "success_rate": success_rate,
+                        "recent_runs": recent_runs,
                     }
                 )
 

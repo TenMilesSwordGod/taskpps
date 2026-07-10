@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Card, Table, Button, Input, Space, Progress, Tooltip, Tag } from 'antd';
-import { Search, RefreshCw, Play, Eye, ChevronRight } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Card, Table, Button, Input, Space, Tooltip, Tag } from 'antd';
+import { Search, RefreshCw, Play, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { usePipelines } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
@@ -14,10 +14,40 @@ type Row =
   | (PipelineSummary & { kind: 'folder'; children: PipelineSummary[]; pipelineCount: number })
   | (PipelineSummary & { kind: 'pipeline' });
 
-
+/** Issue #184: 成功率 sparkline 折线图
+ * 完成比 = success / (total - skipped)，fail 不算通过，skip 不计入总数，分母 0 时为 0
+ * recentRuns 按时间倒序（最近在前），折线图左旧右新需反转
+ */
+function SuccessSparkline({ recentRuns }: { recentRuns: { task_summary: Record<string, number> }[] }) {
+  const points = [...recentRuns].reverse().map((r) => {
+    const ts = r.task_summary || {};
+    const success = ts.success || 0;
+    const skipped = ts.skipped || 0;
+    const total = Object.values(ts).reduce((a, b) => a + b, 0);
+    const denominator = total - skipped;
+    return denominator > 0 ? success / denominator : 0;
+  });
+  if (points.length === 0) return <span style={{ color: '#9ca3af' }}>--</span>;
+  const W = 120, H = 28, PAD = 2;
+  const stepX = points.length > 1 ? (W - PAD * 2) / (points.length - 1) : 0;
+  const pathD = points.map((p, i) => {
+    const x = PAD + i * stepX;
+    const y = H - PAD - p * (H - PAD * 2);
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={W} height={H} style={{ display: 'block' }}>
+      <path d={pathD} fill="none" stroke="#3b82f6" strokeWidth={1.5} />
+      {points.map((p, i) => {
+        const x = PAD + i * stepX;
+        const y = H - PAD - p * (H - PAD * 2);
+        return <circle key={i} cx={x} cy={y} r={1.5} fill={p >= 1 ? '#16a34a' : p > 0 ? '#3b82f6' : '#ef4444'} />;
+      })}
+    </svg>
+  );
+}
 
 export default function PipelineListPage() {
-  const navigate = useNavigate();
   const { data, isLoading, refetch } = usePipelines();
   const [keyword, setKeyword] = useState('');
   const [triggerOpen, setTriggerOpen] = useState(false);
@@ -49,7 +79,9 @@ export default function PipelineListPage() {
 
     for (const pid of sortedProjects) {
       const projectPipelines = projectGroups.get(pid)!;
-      const projectLabel = pid === '__default__' ? '' : pid;
+      // Issue #184: 折叠行显示 project_name 而非 project_id
+      const projectName = projectPipelines[0]?.project_name || pid;
+      const projectLabel = pid === '__default__' ? '' : projectName;
 
       // 在 project 内按 folder 分组
       const folderGroups = new Map<string, PipelineSummary[]>();
@@ -81,6 +113,7 @@ export default function PipelineListPage() {
             last_run: null,
             success_rate:
               folderPipelines.reduce((s, c) => s + c.success_rate, 0) / Math.max(folderPipelines.length, 1),
+            recent_runs: [],
             kind: 'folder',
             children: folderPipelines.map((p) => ({ ...p, kind: 'pipeline' as const })),
             pipelineCount: folderPipelines.length,
@@ -100,13 +133,14 @@ export default function PipelineListPage() {
           file: '',
           folder: '',
           project_id: pid === '__default__' ? null : pid,
-          project_name: null,
+          project_name: projectName,
           task_count: projectPipelines.reduce((s, c) => s + c.task_count, 0),
           subpipeline_count: projectPipelines.reduce((s, c) => s + c.subpipeline_count, 0),
           last_run: null,
           success_rate: projectPipelines.length > 0
             ? projectPipelines.reduce((s, c) => s + c.success_rate, 0) / projectPipelines.length
             : 0,
+          recent_runs: [],
           kind: 'project',
           children,
           pipelineCount,
@@ -132,10 +166,6 @@ export default function PipelineListPage() {
     setExpandedRowKeys(keys);
   }, [rows]);
 
-  const handleOpenDetail = useCallback(
-    (file: string) => navigate(`/pipelines/${encodeURIComponent(file)}`),
-    [navigate],
-  );
   const handleOpenTrigger = useCallback((file?: string, projectId?: string | null) => {
     setTriggerPipeline(file);
     setTriggerProjectId(projectId ?? null);
@@ -178,7 +208,9 @@ export default function PipelineListPage() {
           );
         }
         return (
-          <span style={{ fontWeight: 500 }}>{record.name}</span>
+          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontWeight: 500, color: '#3b82f6' }}>
+            {record.name}
+          </Link>
         );
       },
     },
@@ -195,17 +227,6 @@ export default function PipelineListPage() {
       },
     },
     {
-      title: '项目',
-      key: 'project_id',
-      width: 110,
-      render: (_: unknown, record: Row) => {
-        if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>;
-        if (!record.project_id) return <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>;
-        const displayName = record.project_name || record.project_id;
-        return <Tag style={{ fontSize: 11 }}>{displayName}</Tag>;
-      },
-    },
-    {
       title: '任务',
       key: 'task_count',
       width: 60,
@@ -214,13 +235,13 @@ export default function PipelineListPage() {
     {
       title: '子流水线',
       key: 'subpipeline_count',
-      width: 72,
+      width: 80,
       render: (_: unknown, r: Row) => r.subpipeline_count,
     },
     {
       title: '最近运行时间',
       key: 'last_run_time',
-      width: 110,
+      width: 120,
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af' }}>--</span>;
         if (!record.last_run || !record.last_run.created_at) return '-';
@@ -230,7 +251,7 @@ export default function PipelineListPage() {
     {
       title: '最近运行状态',
       key: 'last_run_status',
-      width: 90,
+      width: 100,
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af' }}>--</span>;
         if (!record.last_run) return '-';
@@ -240,22 +261,20 @@ export default function PipelineListPage() {
     {
       title: '成功率',
       key: 'success_rate',
-      width: 160,
-      render: (_: unknown, record: Row) => (
-        <Progress percent={Math.round(record.success_rate || 0)} size="small" />
-      ),
+      width: 140,
+      render: (_: unknown, record: Row) => {
+        if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>;
+        return <SuccessSparkline recentRuns={record.recent_runs || []} />;
+      },
     },
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 80,
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return null;
         return (
           <Space>
-            <Tooltip title="查看详情">
-              <Button type="text" size="small" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.file)} />
-            </Tooltip>
             <Tooltip title="触发运行">
               <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.file, record.project_id)} />
             </Tooltip>
@@ -263,7 +282,7 @@ export default function PipelineListPage() {
         );
       },
     },
-  ], [handleOpenDetail, handleOpenTrigger]);
+  ], [handleOpenTrigger]);
 
   return (
     <div className="p-4">
@@ -295,6 +314,7 @@ export default function PipelineListPage() {
           loading={isLoading}
           pagination={{ pageSize: 50, showSizeChanger: false }}
           size="middle"
+          scroll={{ x: 'max-content' }}
           expandable={{
             childrenColumnName: 'children',
             expandedRowKeys: [...expandedRowKeys],

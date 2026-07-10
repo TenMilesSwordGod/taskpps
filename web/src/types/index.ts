@@ -104,6 +104,8 @@ export interface PipelineSummary {
     created_at: string | null;
   } | null;
   success_rate: number;
+  /** 最近 N 次运行的 task_summary（用于折线图，按时间倒序，最近在前） */
+  recent_runs: { task_summary: Record<string, number> }[];
 }
 
 /** 流水线列表响应 */
