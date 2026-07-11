@@ -3,7 +3,7 @@ import { Tooltip, Popconfirm, Tag, Popover } from 'antd';
 import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock, Timer,
+  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock, Timer, Terminal,
 } from 'lucide-react';
 import { useDeployAgent, usePendingCommands } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ interface ServerCardProps {
   detectedSystem?: string;
   detectedArch?: string;
   onShowDetail?: (agent: AgentWithConfig) => void;
+  onShowRepl?: (agent: AgentWithConfig) => void;
 }
 
 function getOsIcon(system: string): string {
@@ -294,7 +295,76 @@ function LastExecTime({ timestamp }: { timestamp: number }) {
   );
 }
 
-function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: ServerCardProps) {
+/** 操作按钮：统一的图标按钮样式 */
+function IconBtn({
+  icon, title, onClick, disabled, accent, spinIcon,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  onClick?: (e: React.MouseEvent) => void;
+  disabled?: boolean;
+  accent?: boolean;
+  spinIcon?: boolean;
+}) {
+  return (
+    <Tooltip title={title}>
+      <span
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        onClick={(e) => { e.stopPropagation(); if (disabled) return; onClick?.(e); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (!disabled) onClick?.(e as unknown as React.MouseEvent); } }}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 28, height: 28, borderRadius: 6, cursor: disabled ? 'not-allowed' : 'pointer',
+          color: disabled ? '#E3E4E8' : accent ? '#3D5BFF' : '#7C7F88',
+          transition: 'background 0.15s, color 0.15s',
+          opacity: disabled ? 0.6 : 1,
+        }}
+        onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = accent ? 'rgba(126, 173, 255, 0.1)' : '#F6F6F8'; e.currentTarget.style.color = accent ? '#3D5BFF' : '#121620'; } }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = disabled ? '#E3E4E8' : accent ? '#3D5BFF' : '#7C7F88'; }}
+      >
+        {spinIcon ? <span className="animate-spin" style={{ display: 'inline-flex' }}>{icon}</span> : icon}
+      </span>
+    </Tooltip>
+  );
+}
+
+/** 状态点：在线时呼吸动效 */
+function StatusDot({ online }: { online: boolean }) {
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 8, height: 8 }}>
+      {online && (
+        <span
+          style={{
+            position: 'absolute', width: 8, height: 8, borderRadius: '50%',
+            background: '#10b981', opacity: 0.35,
+            animation: 'serverDotPulse 1.8s ease-out infinite',
+          }}
+        />
+      )}
+      <span
+        style={{
+          width: 8, height: 8, borderRadius: '50%',
+          background: online ? '#10b981' : '#C9CBD3',
+          boxShadow: online ? '0 0 6px rgba(16, 185, 129, 0.45)' : 'none',
+          position: 'relative', zIndex: 1,
+        }}
+      />
+      <style>{`
+        @keyframes serverDotPulse {
+          0% { transform: scale(1); opacity: 0.35; }
+          70% { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes serverDotPulse { 0%,100% { opacity: 0; } }
+        }
+      `}</style>
+    </span>
+  );
+}
+
+function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowRepl }: ServerCardProps) {
   const online = agent.connected;
   const deploy = useDeployAgent();
   const navigate = useNavigate();
@@ -315,43 +385,50 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
   const versionDisplay = agent.agent_version ? `v${agent.agent_version}` : '—';
   const osArchText = osArchLabel(systemLabel, archLabel);
   const maxParallel = agent.max_parallel ?? 1;
+  const deployDisabled = !online && agent.net_status === 'unreachable';
 
   return (
     <div
       style={{
         background: '#FFFFFF',
         border: '1px solid #E3E4E8',
-        borderLeft: online ? '3px solid #10b981' : '3px solid #E3E4E8',
-        borderRadius: '3px 8px 8px 3px',
-        padding: '12px 14px',
-        transition: 'box-shadow 0.22s cubic-bezier(0.76, 0, 0.24, 1), transform 0.22s cubic-bezier(0.76, 0, 0.24, 1), border-color 0.22s cubic-bezier(0.76, 0, 0.24, 1)',
+        borderRadius: 8,
+        padding: '14px 16px 12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
         position: 'relative',
+        overflow: 'hidden',
+        transition: 'box-shadow 0.22s cubic-bezier(0.76, 0, 0.24, 1), transform 0.22s cubic-bezier(0.76, 0, 0.24, 1), border-color 0.22s cubic-bezier(0.76, 0, 0.24, 1)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = 'rgba(17, 26, 74, 0.1) 0px 1px 3px 0px';
         e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.borderColor = online ? 'rgba(16, 185, 129, 0.4)' : '#C9CBD3';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.boxShadow = '';
         e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.borderColor = '#E3E4E8';
       }}
     >
-      {/* 顶部：图标 + 名称 + 状态 + 连接 */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+      {/* 顶部：图标 + 名称 + 状态指示 */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div
           style={{
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             borderRadius: 8,
             background: '#F6F6F8',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            opacity: online ? 1 : 0.6,
+            opacity: online ? 1 : 0.55,
+            transition: 'opacity 0.22s',
           }}
         >
-          <img src={osIcon} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+          <img src={osIcon} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -359,7 +436,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: '#121620',
+                color: online ? '#121620' : '#7C7F88',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -375,13 +452,13 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
               {online ? '在线' : '离线'}
             </Tag>
           </div>
-          <div style={{ fontSize: 11, color: '#7C7F88', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, color: '#7C7F88', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
             <span title={agent.source_file || agent.agent_id}>{agent.agent_id}</span>
             <span style={{ color: '#E3E4E8' }}>·</span>
             <span>{typeLabel}</span>
             {agent.project_id && (
               <>
-<span style={{ color: '#E3E4E8' }}>·</span>
+                <span style={{ color: '#E3E4E8' }}>·</span>
                 <Tooltip title={`项目: ${agent.project_name || agent.project_id}`}>
                   <Tag
                     icon={<FolderOpen size={10} />}
@@ -395,47 +472,39 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, paddingTop: 4 }}>
+          <StatusDot online={online} />
           <Tooltip title={online ? 'Agent 已连接' : 'Agent 未连接'}>
-            {online ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="#7C7F88" />}
+            {online ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="#C9CBD3" />}
           </Tooltip>
           <NetStatusIcon netStatus={agent.net_status} />
         </div>
       </div>
 
-      {/* 信息行：简洁双行布局 */}
-      <div
-        style={{
-          background: '#F6F6F8',
-          borderRadius: 6,
-          padding: '8px 10px',
-          marginBottom: 8,
-        }}
-      >
-        <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#121620', minWidth: 0 }}>
-            <Globe size={11} style={{ flexShrink: 0, color: '#7C7F88' }} />
-            <span style={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {displayIp}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#121620', flexShrink: 0 }}>
-            <Hash size={11} style={{ flexShrink: 0, color: '#7C7F88' }} />
-            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{versionDisplay}</span>
-          </div>
+      {/* 信息区：标签 + 值，规整两行 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 7, columnGap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <Globe size={11} style={{ flexShrink: 0, color: '#9CA0AC' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#121620', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {displayIp}
+          </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 12, color: '#121620' }}>
-          <Cpu size={11} style={{ flexShrink: 0, color: '#7C7F88' }} />
-          <span style={{ fontSize: 12 }}>{osArchText}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Hash size={11} style={{ flexShrink: 0, color: '#9CA0AC' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#121620' }}>{versionDisplay}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, gridColumn: '1 / -1' }}>
+          <Cpu size={11} style={{ flexShrink: 0, color: '#9CA0AC' }} />
+          <span style={{ fontSize: 12, color: '#121620' }}>{osArchText}</span>
         </div>
       </div>
 
       {/* 上次执行时间 */}
       <LastExecTime timestamp={agent.last_execution_time} />
 
-      {/* 底部：运行命令数 / 最大并发 / 连接时间 + 操作按钮 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#7C7F88' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {/* 底部分隔线 + 队列/操作 */}
+      <div style={{ borderTop: '1px solid #F0F1F3', paddingTop: 9, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
           <Popover
             open={popoverOpen}
             onOpenChange={(open) => setPopoverOpen(open && hasQueue)}
@@ -457,74 +526,55 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
                 alignItems: 'center',
                 gap: 4,
                 cursor: hasQueue ? 'pointer' : 'default',
-                color: hasQueue ? '#3D5BFF' : '#7C7F88',
+                color: hasQueue ? '#3D5BFF' : '#9CA0AC',
+                fontSize: 11,
+                whiteSpace: 'nowrap',
               }}
             >
               <Activity size={11} />
               运行中 {agent.running_commands} / 等待中 {agent.queued_commands} / 并发 {maxParallel}
             </span>
           </Popover>
-          <span style={{ marginLeft: 8, color: '#E3E4E8' }}>|</span>
-          <span style={{ marginLeft: 4 }}>{online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}</span>
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Tooltip title="主机详情">
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); onShowDetail?.(agent); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onShowDetail?.(agent); } }}
-              style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 24, height: 24, borderRadius: 6, cursor: 'pointer',
-                color: '#7C7F88', transition: 'background 0.15s, color 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#E3E4E8'; e.currentTarget.style.color = '#121620'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#7C7F88'; }}
-            >
-              <Info size={14} />
-            </span>
-          </Tooltip>
+          <span style={{ color: '#E3E4E8', fontSize: 11 }}>|</span>
+          <span style={{ fontSize: 11, color: '#9CA0AC', whiteSpace: 'nowrap' }}>
+            {online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <IconBtn
+            icon={<Terminal size={15} />}
+            title={online ? 'Web REPL — 执行命令（不占用并发）' : 'Agent 离线，无法执行'}
+            disabled={!online}
+            accent
+            onClick={() => onShowRepl?.(agent)}
+          />
+          <IconBtn
+            icon={<Info size={15} />}
+            title="主机详情"
+            onClick={() => onShowDetail?.(agent)}
+          />
           {!online && (
-            <Tooltip title={agent.net_status === 'unreachable' ? 'TCP 不可达，无法部署' : '部署 agent'}>
-              <Popconfirm
-                title={`部署 Agent "${agent.agent_id}"?`}
-                description={
-                  agent.net_status === 'unreachable'
-                    ? '主机 TCP 不可达，部署可能失败。是否继续？'
-                    : '将在该主机部署并启动 agent，耗时数分钟。'
-                }
-                okText="部署"
-                cancelText="取消"
-                disabled={agent.net_status === 'unreachable'}
-                onConfirm={(e) => { e?.stopPropagation(); deploy.mutate(agent.agent_id); }}
-                onCancel={(e) => e?.stopPropagation()}
-              >
-                <span
-                  role="button"
-                  tabIndex={agent.net_status === 'unreachable' ? -1 : 0}
-                  onClick={(e) => { e.stopPropagation(); if (agent.net_status === 'unreachable') return; }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 24, height: 24, borderRadius: 6,
-                    cursor: agent.net_status === 'unreachable' ? 'not-allowed' : isDeploying ? 'wait' : 'pointer',
-                    color: agent.net_status === 'unreachable' ? '#E3E4E8' : '#3D5BFF',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (agent.net_status === 'unreachable' || isDeploying) return;
-                    e.currentTarget.style.background = 'rgba(126, 173, 255, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (agent.net_status === 'unreachable') return;
-                    e.currentTarget.style.background = '';
-                  }}
-                >
-                  {isDeploying ? <Loader2 size={13} className="animate-spin" /> : <CloudUpload size={14} />}
-                </span>
-              </Popconfirm>
-            </Tooltip>
+            <Popconfirm
+              title={`部署 Agent "${agent.agent_id}"?`}
+              description={
+                deployDisabled
+                  ? '主机 TCP 不可达，部署可能失败。是否继续？'
+                  : '将在该主机部署并启动 agent，耗时数分钟。'
+              }
+              okText="部署"
+              cancelText="取消"
+              disabled={deployDisabled}
+              onConfirm={(e) => { e?.stopPropagation(); deploy.mutate(agent.agent_id); }}
+              onCancel={(e) => e?.stopPropagation()}
+            >
+              <IconBtn
+                icon={isDeploying ? <Loader2 size={15} /> : <CloudUpload size={15} />}
+                title={deployDisabled ? 'TCP 不可达，无法部署' : '部署 agent'}
+                disabled={deployDisabled || isDeploying}
+                accent
+                spinIcon={isDeploying}
+              />
+            </Popconfirm>
           )}
         </div>
       </div>
@@ -537,6 +587,7 @@ export default memo(ServerCard, (prev, next) => {
     prev.agent === next.agent &&
     prev.detectedSystem === next.detectedSystem &&
     prev.detectedArch === next.detectedArch &&
-    prev.onShowDetail === next.onShowDetail
+    prev.onShowDetail === next.onShowDetail &&
+    prev.onShowRepl === next.onShowRepl
   );
 });

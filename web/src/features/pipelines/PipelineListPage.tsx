@@ -253,7 +253,7 @@ export default function PipelineListPage() {
   ], [handleOpenTrigger]);
 
   return (
-    <div className="p-6">
+    <div className="p-6 h-full overflow-auto">
       <Card
         style={{
           border: '1px solid #E3E4E8',
@@ -265,7 +265,7 @@ export default function PipelineListPage() {
         <Table
           title={() => (
             <div className="flex justify-between items-center px-1">
-              <Input.Search
+              <Input
                 placeholder="搜索流水线名称或文件"
                 allowClear
                 style={{ width: 300 }}

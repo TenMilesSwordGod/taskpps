@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -83,6 +85,61 @@ async def _recover_stale_runs() -> None:
         logger.info("已恢复 %d 个停滞运行", len(stale_runs))
 
 
+async def _sweep_stale_runs_background() -> None:
+    """后台循环任务：每隔 5 分钟扫描停滞的 RUNNING 运行并恢复为 FAILED。
+
+    正常情况下 heartbeat 过期检测 + agent 端结果缓存已足够防止僵尸运行，
+    但极端情况下（agent 进程崩溃、网络分区等）仍需此机制作为安全兜底。
+    """
+    from taskpps.config import get_settings
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository
+    from taskpps.models.run import RunStatus, TaskStatus
+
+    while True:
+        await asyncio.sleep(300)
+        try:
+            settings = get_settings()
+            stale_threshold = max(3600, settings.executor.default_timeout * 2)
+            async with get_session_factory()() as session:
+                run_repo = RunRepository(session)
+                stale_runs = await run_repo.list_runs_by_statuses([RunStatus.RUNNING])
+                now = datetime.now(timezone.utc)
+                recovered = 0
+                for run in stale_runs:
+                    if run.created_at is None:
+                        continue
+                    age = (now - run.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+                    if age < stale_threshold:
+                        continue
+                    logger.warning(
+                        "Sweeper: run %s stuck RUNNING for %.0fs, marking FAILED",
+                        run.id, age,
+                    )
+                    await run_repo.update_run_status(
+                        run.id, RunStatus.FAILED, finished_at=now,
+                        error=f"运行超时自动恢复：停滞 {int(age)} 秒后被后台检查标记为失败",
+                    )
+                    await run_repo.batch_update_stale_tasks(
+                        run.id, TaskStatus.FAILED,
+                        [TaskStatus.RUNNING, TaskStatus.PENDING],
+                        finished_at=now,
+                        error="后台恢复：任务状态重置为 FAILED",
+                    )
+                    await run_repo.batch_update_stale_retries(
+                        run.id, TaskStatus.FAILED,
+                        [TaskStatus.RUNNING, TaskStatus.PENDING],
+                        finished_at=now,
+                        error="后台恢复：重试记录状态重置为 FAILED",
+                    )
+                    recovered += 1
+                if recovered:
+                    await session.commit()
+                    logger.info("Sweeper: recovered %d stale runs", recovered)
+        except Exception:
+            logger.exception("Stale run sweeper failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _plugin_manager
@@ -116,6 +173,9 @@ async def lifespan(app: FastAPI):
         AgentManager.instance().configure_global_max_concurrent(global_max)
         logger.info("Global max concurrent tasks: %d", global_max)
 
+    # 启动后台停滞运行清理任务（每 5 分钟扫描一次）
+    sweeper_task = asyncio.create_task(_sweep_stale_runs_background())
+
     _plugin_manager = PluginManager()
     _plugin_manager.discover_plugins()
     _plugin_manager.start_triggers()
@@ -125,6 +185,11 @@ async def lifespan(app: FastAPI):
     await _plugin_center.discover_and_load()
 
     yield
+
+    # 停止后台停滞运行清理任务
+    sweeper_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await sweeper_task
 
     # Gracefully shutdown active pipeline runners
     from taskpps.engine.runner import _active_runs

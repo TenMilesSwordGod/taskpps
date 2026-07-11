@@ -2,11 +2,12 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Input, Empty, Tag, Tooltip, Alert, Button, Segmented } from 'antd';
 import {
   Search, Server, RefreshCw, AlertCircle, Radar,
-  ChevronRight, FolderOpen, CircleDot,
+  ChevronRight, FolderOpen,
 } from 'lucide-react';
 import { useAgentsWithConfig } from '@/api/agents';
 import ServerCard from './ServerCard';
 import HostInfoModal from './HostInfoModal';
+import ReplModal from './ReplModal';
 import apiClient from '@/api/client';
 import type { AgentCheckResult, AgentWithConfig } from '@/types';
 
@@ -170,6 +171,13 @@ export default function ServersPage() {
   }, []);
   const handleCloseDetail = useCallback(() => setDetailAgent(null), []);
 
+  // REPL modal 状态
+  const [replAgent, setReplAgent] = useState<AgentWithConfig | null>(null);
+  const handleShowRepl = useCallback((agent: AgentWithConfig) => {
+    setReplAgent(agent);
+  }, []);
+  const handleCloseRepl = useCallback(() => setReplAgent(null), []);
+
   return (
     <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F6F6F8' }}>
       {/* 顶部工具栏 */}
@@ -180,17 +188,17 @@ export default function ServersPage() {
             <span className="text-base font-semibold" style={{ color: '#121620' }}>服务器列表</span>
           </div>
           {/* 统计胶囊 */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
               总计 {totalCount}
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.08)', color: '#10b981' }}>
-              <CircleDot size={10} color="#10b981" />
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
               在线 {onlineCount}
             </span>
             {offlineCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
-                <CircleDot size={10} color="#7C7F88" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9CBD3', flexShrink: 0 }} />
                 离线 {offlineCount}
               </span>
             )}
@@ -351,6 +359,7 @@ export default function ServersPage() {
                             detectedSystem={det?.system}
                             detectedArch={det?.arch}
                             onShowDetail={handleShowDetail}
+                            onShowRepl={handleShowRepl}
                           />
                         );
                       })}
@@ -365,6 +374,9 @@ export default function ServersPage() {
 
       {/* Host 详情 modal */}
       <HostInfoModal open={!!detailAgent} agent={detailAgent} onClose={handleCloseDetail} />
+
+      {/* Web REPL modal */}
+      <ReplModal open={!!replAgent} agent={replAgent} onClose={handleCloseRepl} />
     </div>
   );
 }

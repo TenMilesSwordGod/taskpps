@@ -7,7 +7,7 @@ import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from taskpps.services.agent_manager import AgentManager
+from taskpps.services.agent_manager import HEARTBEAT_TIMEOUT, AgentManager
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,21 @@ async def agent_websocket(ws: WebSocket):
             try:
                 raw = await asyncio.wait_for(ws.receive_text(), timeout=45)
             except asyncio.TimeoutError:
-                await conn.send_msg("heartbeat_request", {})
+                now = time.time()
+                # 检测心跳是否过期：如果发了心跳请求但没收到回复，关闭连接
+                if conn._heartbeat_sent_at > 0 and (now - conn._heartbeat_sent_at) > HEARTBEAT_TIMEOUT:
+                    logger.warning(
+                        "Agent '%s' heartbeat timeout (%.0fs), closing connection",
+                        agent_id, now - conn._heartbeat_sent_at,
+                    )
+                    await ws.close(code=4004, reason="heartbeat timeout")
+                    break
+                try:
+                    await conn.send_msg("heartbeat_request", {})
+                    conn._heartbeat_sent_at = now
+                except Exception:
+                    logger.warning("Agent '%s' heartbeat request send failed", agent_id)
+                    break
                 continue
 
             try:
@@ -41,6 +55,7 @@ async def agent_websocket(ws: WebSocket):
 
             if msg_type == "heartbeat_response":
                 conn.last_heartbeat = time.time()
+                conn._heartbeat_sent_at = 0.0
 
             elif msg_type == "stdout_chunk" or msg_type == "stderr_chunk":
                 conn.handle_output(payload.get("command_id", ""), payload.get("data", ""))

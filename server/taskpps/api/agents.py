@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import json
 import time
 import uuid
 from pathlib import Path
@@ -7,9 +8,10 @@ from pathlib import Path
 import paramiko
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 
-from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.i18n import t
+from taskpps.loaders.agent_loader import AgentLoader
 
 # --- Agent 配置缓存 ---
 # 避免每次 /api/agents/all 请求都从磁盘读取 YAML 文件。
@@ -407,6 +409,84 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
         duration_ms=duration_ms,
         error=error_msg or None,
     )
+
+
+@router.post("/{agent_id}/exec/stream")
+async def agent_exec_stream(agent_id: str, body: AgentExecRequest):
+    """流式执行命令 — REPL 用途，不占用并发槽位，可与 pipeline 并存。
+
+    通过 SSE 实时推送 stdout/stderr 输出块和最终结果。
+    用于 Web REPL 调试场景，绕过 Issue #68 守卫。
+    """
+    manager = AgentManager.instance()
+    if not manager.is_connected(agent_id):
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not connected")
+    conn = manager.get_connection(agent_id)
+
+    cwd = body.cwd or ""
+    if not cwd:
+        agent_items, _ = await _load_agents_from_projects()
+        for item in agent_items:
+            if item.get("id") == agent_id and item.get("agent_work_dir"):
+                cwd = item["agent_work_dir"]
+                break
+
+    command_id = str(uuid.uuid4())
+    start_time = time.monotonic()
+
+    output_queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
+
+    def on_output(data: str) -> None:
+        output_queue.put_nowait(("output", data))
+
+    conn.register_output_callback(command_id, on_output)
+    fut = manager.create_pending(
+        agent_id, command_id, body.command, body.env or {}, cwd, body.timeout
+    )
+
+    try:
+        await manager.send_command(
+            agent_id, command_id, body.command, body.env or {}, cwd, body.timeout
+        )
+    except Exception as e:
+        conn.cleanup_command(command_id)
+        raise HTTPException(status_code=500, detail=f"Failed to send command: {e}") from e
+
+    async def wait_result():
+        try:
+            result = await asyncio.wait_for(fut, timeout=body.timeout + 10)
+            result["duration_ms"] = int((time.monotonic() - start_time) * 1000)
+            await output_queue.put(("result", json.dumps(result)))
+        except asyncio.TimeoutError:
+            await manager.cancel_command(agent_id, command_id)
+            await output_queue.put(
+                ("error", json.dumps({"error": "execution timeout exceeded"}))
+            )
+        except Exception as e:
+            await output_queue.put(("error", json.dumps({"error": str(e)})))
+        finally:
+            manager.cleanup_command(agent_id, command_id)
+            conn._output_callbacks.pop(command_id, None)
+            await output_queue.put(("done", "{}"))
+
+    result_task = asyncio.create_task(wait_result())
+
+    async def event_generator():
+        try:
+            while True:
+                event_type, data = await output_queue.get()
+                if event_type == "done":
+                    yield {"event": "done", "data": "{}"}
+                    break
+                yield {"event": event_type, "data": data}
+        finally:
+            if not result_task.done():
+                result_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await result_task
+            conn._output_callbacks.pop(command_id, None)
+
+    return EventSourceResponse(event_generator())
 
 
 @router.post("/deploy", response_model=AgentDeployResult)

@@ -54,6 +54,7 @@ class AgentConnection:
         self._pending_commands: dict[str, PendingCommandInfo] = {}
         self._output_callbacks: dict[str, Callable] = {}
         self._send_lock = asyncio.Lock()
+        self._heartbeat_sent_at = 0.0
 
     async def send_msg(self, msg_type: str, data: dict) -> None:
         async with self._send_lock:

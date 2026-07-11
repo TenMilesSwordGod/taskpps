@@ -11,20 +11,21 @@ import (
 )
 
 type WsClient struct {
-	url       string
-	agentID   string
-	secret    string
-	hostname  string
-	agentPID  int
-	osName    string
-	archName  string
-	conn      *websocket.Conn
-	mu        sync.Mutex
-	connected bool
-	done      chan struct{}
-	OnCommand func(ExecCommand)
-	OnCancel  func(string)
-	reconnect bool
+	url            string
+	agentID        string
+	secret         string
+	hostname       string
+	agentPID       int
+	osName         string
+	archName       string
+	conn           *websocket.Conn
+	mu             sync.Mutex
+	connected      bool
+	done           chan struct{}
+	OnCommand      func(ExecCommand)
+	OnCancel       func(string)
+	reconnect      bool
+	pendingResults []ExecResult
 }
 
 func NewWsClient(url, agentID, secret, hostname string, agentPID int, osName, archName string) *WsClient {
@@ -146,6 +147,12 @@ func (c *WsClient) readLoop() {
 		if conn == nil {
 			if c.reconnect {
 				c.tryReconnect()
+				c.mu.Lock()
+				isConnected := c.connected
+				c.mu.Unlock()
+				if isConnected {
+					c.flushPendingResults()
+				}
 				continue
 			}
 			return
@@ -211,7 +218,14 @@ func (c *WsClient) SendStderr(commandID, data string) error {
 }
 
 func (c *WsClient) SendResult(result ExecResult) error {
-	return c.sendMsg(MsgTypeExecResult, result)
+	err := c.sendMsg(MsgTypeExecResult, result)
+	if err != nil {
+		c.mu.Lock()
+		c.pendingResults = append(c.pendingResults, result)
+		c.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (c *WsClient) SendHeartbeatResponse() error {
@@ -277,6 +291,24 @@ func (c *WsClient) Close() {
 	c.reconnect = false
 	close(c.done)
 	c.handleDisconnect()
+}
+
+func (c *WsClient) flushPendingResults() {
+	c.mu.Lock()
+	results := c.pendingResults
+	c.pendingResults = nil
+	c.mu.Unlock()
+
+	for _, result := range results {
+		if err := c.sendMsg(MsgTypeExecResult, result); err != nil {
+			logger.Error("Failed to flush pending result %s: %v", result.CommandID, err)
+			c.mu.Lock()
+			c.pendingResults = append(c.pendingResults, result)
+			c.mu.Unlock()
+			return
+		}
+		logger.Info("Flushed pending result for command %s (exit_code=%d)", result.CommandID, result.ExitCode)
+	}
 }
 
 func (c *WsClient) writeJSON(v interface{}) error {
