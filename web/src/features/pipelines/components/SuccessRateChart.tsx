@@ -9,9 +9,9 @@ interface RunSummary {
 interface SuccessRateChartProps {
   /** 最近 N 次运行（按时间倒序，最近在前） */
   runs: RunSummary[];
-  /** 图表宽度，默认 150 */
+  /** 图表区域宽度，默认 150 */
   width?: number;
-  /** 图表高度，默认 44 */
+  /** 图表区域高度（不含底部统计），默认 36 */
   height?: number;
 }
 
@@ -32,6 +32,15 @@ function getPointColor(ratio: number): string {
   if (ratio >= 1) return '#16a34a';
   if (ratio > 0) return '#3b82f6';
   return '#ef4444';
+}
+
+/** 根据平均完成比返回徽章颜色 */
+function getAvgBadgeStyle(avg: number): CSSProperties {
+  const pct = Math.round(avg * 100);
+  if (pct >= 80) return { backgroundColor: '#dcfce7', color: '#15803d' };
+  if (pct >= 50) return { backgroundColor: '#dbeafe', color: '#1d4ed8' };
+  if (pct > 0) return { backgroundColor: '#fee2e2', color: '#b91c1c' };
+  return { backgroundColor: '#f3f4f6', color: '#6b7280' };
 }
 
 /** 生成平滑曲线路径（Catmull-Rom → Bezier） */
@@ -58,20 +67,50 @@ function EmptyState() {
   return <span style={{ color: '#9ca3af', fontSize: 12 }}>暂无运行</span>;
 }
 
+const containerStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  cursor: 'pointer',
+};
+
+const statsRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  fontSize: 11,
+  lineHeight: 1,
+};
+
+const badgeBaseStyle: CSSProperties = {
+  padding: '1px 6px',
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 11,
+  lineHeight: '16px',
+  whiteSpace: 'nowrap',
+};
+
+const passTextStyle: CSSProperties = {
+  color: '#6b7280',
+  fontSize: 10,
+};
+
 /**
  * 成功率折线图组件
  *
  * 展示最近 N 次运行的 task 完成比趋势：
  * - 渐变区域填充 + 平滑曲线
- * - 100% / 50% 参考线
- * - 悬停数据点显示 Tooltip（第N次 + 完成比%）
+ * - 悬停/点击数据点显示 Tooltip（第N次 + 完成比%）
  * - 数据点颜色编码（绿=100% 蓝=部分 红=0%）
- * - 底部显示最近 N 次平均完成比
+ * - 底部 HTML 徽章显示平均完成比 + 全通过次数
+ * - 支持 prefers-reduced-motion
+ * - aria-label 无障碍标签
  */
 export default function SuccessRateChart({
   runs,
   width = 150,
-  height = 44,
+  height = 36,
 }: SuccessRateChartProps) {
   const [hovered, setHovered] = useState<number | null>(null);
   const reactId = useId();
@@ -92,9 +131,9 @@ export default function SuccessRateChart({
 
   if (points.length === 0) return <EmptyState />;
 
-  const PAD_X = 6;
-  const PAD_TOP = 6;
-  const PAD_BOTTOM = 12; // 底部留白给平均文字
+  const PAD_X = 5;
+  const PAD_TOP = 4;
+  const PAD_BOTTOM = 4;
   const plotW = width - PAD_X * 2;
   const plotH = height - PAD_TOP - PAD_BOTTOM;
   const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
@@ -109,88 +148,85 @@ export default function SuccessRateChart({
   const smoothPath = buildSmoothPath(coords);
   const areaPath = `${smoothPath} L${coords[coords.length - 1].x.toFixed(1)},${(PAD_TOP + plotH).toFixed(1)} L${coords[0].x.toFixed(1)},${(PAD_TOP + plotH).toFixed(1)} Z`;
 
+  const avgPct = Math.round(stats!.avg * 100);
   const tooltipText = hovered !== null
     ? `第 ${points.length - hovered} 次（共 ${stats!.total} 次）：完成比 ${Math.round(points[hovered] * 100)}%`
-    : undefined;
-  const defaultTooltip = `最近 ${stats!.total} 次平均 ${Math.round(stats!.avg * 100)}% · 全通过 ${stats!.passCount}/${stats!.total}`;
-
-  const svgStyle: CSSProperties = { display: 'block', cursor: 'pointer' };
-  const labelStyle: CSSProperties = { fontSize: 9, fill: '#9ca3af', fontFamily: 'sans-serif' };
+    : `最近 ${stats!.total} 次平均 ${avgPct}% · 全通过 ${stats!.passCount}/${stats!.total}`;
+  const ariaLabel = `成功率折线图，最近${stats!.total}次运行，平均完成比${avgPct}%，全通过${stats!.passCount}次`;
 
   return (
-    <Tooltip title={tooltipText ?? defaultTooltip} placement="top">
-      <svg
-        width={width}
-        height={height}
-        style={svgStyle}
-        onMouseLeave={() => setHovered(null)}
-      >
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-
-        {/* 100% 参考线 */}
-        <line
-          x1={PAD_X} y1={PAD_TOP} x2={width - PAD_X} y2={PAD_TOP}
-          stroke="#e5e7eb" strokeWidth={1} strokeDasharray="3 2"
-        />
-        {/* 50% 参考线 */}
-        <line
-          x1={PAD_X} y1={PAD_TOP + plotH * 0.5} x2={width - PAD_X} y2={PAD_TOP + plotH * 0.5}
-          stroke="#f3f4f6" strokeWidth={1} strokeDasharray="2 3"
-        />
-        {/* Y 轴标签 */}
-        <text x={PAD_X} y={PAD_TOP - 1} style={labelStyle} textAnchor="start">100%</text>
-
-        {/* 区域填充 */}
-        <path d={areaPath} fill={`url(#${gradId})`} />
-        {/* 平滑折线 */}
-        <path
-          d={smoothPath}
-          fill="none"
-          stroke="#3b82f6"
-          strokeWidth={1.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-
-        {/* 悬停辅助竖线 */}
-        {hovered !== null && (
-          <line
-            x1={coords[hovered].x} y1={PAD_TOP}
-            x2={coords[hovered].x} y2={PAD_TOP + plotH}
-            stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" strokeOpacity={0.4}
-          />
-        )}
-
-        {/* 数据点 */}
-        {coords.map((c) => (
-          <circle
-            key={c.index}
-            cx={c.x}
-            cy={c.y}
-            r={hovered === c.index ? 3.5 : 2.2}
-            fill={getPointColor(c.value)}
-            stroke="#fff"
-            strokeWidth={1.2}
-            style={{ cursor: 'pointer', transition: 'r 120ms ease-out' }}
-            onMouseEnter={() => setHovered(c.index)}
-          />
-        ))}
-
-        {/* 底部平均完成比文字 */}
-        <text
-          x={width / 2}
-          y={height - 2}
-          style={labelStyle}
-          textAnchor="middle"
+    <Tooltip title={tooltipText} placement="top">
+      <div style={containerStyle} aria-label={ariaLabel} role="img">
+        <svg
+          width={width}
+          height={height}
+          style={{ display: 'block' }}
+          onMouseLeave={() => setHovered(null)}
         >
-          avg {Math.round(stats!.avg * 100)}%
-        </text>
-      </svg>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+
+          {/* 区域填充 */}
+          <path d={areaPath} fill={`url(#${gradId})`} />
+          {/* 平滑折线 */}
+          <path
+            d={smoothPath}
+            fill="none"
+            stroke="#3b82f6"
+            strokeWidth={1.8}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+
+          {/* 悬停辅助竖线 */}
+          {hovered !== null && (
+            <line
+              x1={coords[hovered].x} y1={PAD_TOP}
+              x2={coords[hovered].x} y2={PAD_TOP + plotH}
+              stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" strokeOpacity={0.35}
+            />
+          )}
+
+          {/* 数据点 + 透明热区（便于悬停/触摸） */}
+          {coords.map((c) => (
+            <g key={c.index}>
+              {/* 透明热区，扩大触摸范围 */}
+              <circle
+                cx={c.x}
+                cy={c.y}
+                r={8}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHovered(c.index)}
+                onClick={() => setHovered(c.index)}
+              />
+              <circle
+                cx={c.x}
+                cy={c.y}
+                r={hovered === c.index ? 3.5 : 2.5}
+                fill={getPointColor(c.value)}
+                stroke="#fff"
+                strokeWidth={1.2}
+                style={{ transition: 'r 120ms ease-out', pointerEvents: 'none' }}
+              />
+            </g>
+          ))}
+        </svg>
+
+        {/* 底部统计徽章 */}
+        <div style={statsRowStyle}>
+          <span style={{ ...badgeBaseStyle, ...getAvgBadgeStyle(stats!.avg) }}>
+            {avgPct}%
+          </span>
+          <span style={passTextStyle}>
+            {stats!.passCount}/{stats!.total} pass
+          </span>
+        </div>
+      </div>
     </Tooltip>
   );
 }
