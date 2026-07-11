@@ -64,7 +64,7 @@ export default function PluginListPage() {
       key: 'name',
       width: 280,
       render: (name: string) => (
-        <span className="font-mono text-xs">{name}</span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#121620' }}>{name}</span>
       ),
     },
     {
@@ -75,9 +75,9 @@ export default function PluginListPage() {
       render: (type: PluginType) => {
         const meta = TYPE_META[type];
         return meta ? (
-          <Tag color={meta.color}>{meta.label}</Tag>
+          <Tag color={meta.color} style={{ borderRadius: 3 }}>{meta.label}</Tag>
         ) : (
-          <Tag>{type}</Tag>
+          <Tag style={{ borderRadius: 3 }}>{type}</Tag>
         );
       },
     },
@@ -86,7 +86,7 @@ export default function PluginListPage() {
       dataIndex: 'version',
       key: 'version',
       width: 100,
-      render: (v: string) => <Tag>{v}</Tag>,
+      render: (v: string) => <Tag style={{ borderRadius: 3 }}>{v}</Tag>,
     },
     {
       title: '启用',
@@ -107,13 +107,13 @@ export default function PluginListPage() {
       key: 'status',
       width: 100,
       render: (status: string | undefined) => {
-        if (!status) return <Tag>unknown</Tag>;
+        if (!status) return <Tag style={{ borderRadius: 3 }}>unknown</Tag>;
         const colorMap: Record<string, string> = {
           loaded: 'green',
           crashed: 'red',
           db_only: 'yellow',
         };
-        return <Tag color={colorMap[status] ?? 'default'}>{status}</Tag>;
+        return <Tag color={colorMap[status] ?? 'default'} style={{ borderRadius: 3 }}>{status}</Tag>;
       },
     },
     {
@@ -136,12 +136,12 @@ export default function PluginListPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full p-4 gap-3 bg-gray-50">
-      <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F6F6F8' }}>
+      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-2">
-          <PlugZap size={18} className="text-gray-500" />
-          <span className="text-base font-semibold text-gray-800">插件管理</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs">
+          <PlugZap size={18} color="#7C7F88" />
+          <span className="text-base font-semibold" style={{ color: '#121620' }}>插件管理</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
             共 {plugins?.length ?? 0} 个
           </span>
         </div>
@@ -154,7 +154,7 @@ export default function PluginListPage() {
           />
           <Input
             allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
+            prefix={<Search size={14} color="#7C7F88" />}
             placeholder="搜索名称 / 类型 / 版本"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -187,7 +187,7 @@ export default function PluginListPage() {
         ) : filtered.length === 0 ? (
           <Empty
             description={
-              <span className="text-gray-500">
+              <span style={{ color: '#7C7F88' }}>
                 {plugins?.length === 0 ? '暂无已注册插件' : '无匹配的插件'}
               </span>
             }
@@ -200,7 +200,8 @@ export default function PluginListPage() {
             rowKey="id"
             pagination={false}
             size="middle"
-            className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+            className="overflow-hidden"
+            style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}
           />
         )}
       </div>

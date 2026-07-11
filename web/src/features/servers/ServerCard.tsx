@@ -71,20 +71,20 @@ function NetStatusIcon({ netStatus }: { netStatus: 'unknown' | 'reachable' | 'un
   if (netStatus === 'reachable') {
     return (
       <Tooltip title="网络可达">
-        <Plug size={14} color="#17b26a" />
+        <Plug size={14} color="#10b981" />
       </Tooltip>
     );
   }
   if (netStatus === 'unreachable') {
     return (
       <Tooltip title="网络不可达">
-        <Unplug size={14} color="#f04438" />
+        <Unplug size={14} color="#ef4444" />
       </Tooltip>
     );
   }
   return (
     <Tooltip title="网络状态未知">
-      <HelpCircle size={14} color="#98a2b3" />
+      <HelpCircle size={14} color="#7C7F88" />
     </Tooltip>
   );
 }
@@ -140,7 +140,7 @@ function CommandRow({
   return (
     <div
       key={cmd.command_id}
-      style={{ padding: '6px 12px', borderBottom: '1px solid #f2f4f7', fontSize: 12 }}
+      style={{ padding: '6px 12px', borderBottom: '1px solid #E3E4E8', fontSize: 12 }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -149,8 +149,8 @@ function CommandRow({
               width: 18,
               height: 18,
               borderRadius: 4,
-              background: isRunning ? '#eff8ff' : '#f2f4f7',
-              color: isRunning ? '#2e90fa' : '#667085',
+              background: isRunning ? 'rgba(126, 173, 255, 0.1)' : '#E3E4E8',
+              color: isRunning ? '#3D5BFF' : '#7C7F88',
               fontSize: 10,
               fontWeight: 600,
               display: 'inline-flex',
@@ -161,13 +161,13 @@ function CommandRow({
           >
             {index + 1}
           </span>
-          <span style={{ fontWeight: 600, color: '#1d2939' }}>
-            {cmd.task_name || <span style={{ color: '#98a2b3' }}>未知任务</span>}
+          <span style={{ fontWeight: 600, color: '#121620' }}>
+            {cmd.task_name || <span style={{ color: '#7C7F88' }}>未知任务</span>}
           </span>
         </span>
         <span
           style={{
-            color: isRunning ? '#2e90fa' : '#667085',
+            color: isRunning ? '#3D5BFF' : '#7C7F88',
             fontSize: 11,
             display: 'inline-flex',
             alignItems: 'center',
@@ -182,7 +182,7 @@ function CommandRow({
         style={{
           fontFamily: 'monospace',
           fontSize: 11,
-          color: '#475467',
+          color: '#121620',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -198,7 +198,7 @@ function CommandRow({
             tabIndex={0}
             onClick={() => onRunClick(cmd.run_id)}
             onKeyDown={(e) => { if (e.key === 'Enter') onRunClick(cmd.run_id); }}
-            style={{ fontSize: 11, color: '#2e90fa', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            style={{ fontSize: 11, color: '#3D5BFF', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
           >
             <ExternalLink size={10} />
             {cmd.run_id.slice(0, 8)}
@@ -211,14 +211,14 @@ function CommandRow({
 
 function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCommandItem[]; onRunClick: (runId: string) => void }) {
   if (!commands?.length) {
-    return <div style={{ padding: '8px 12px', color: '#98a2b3', fontSize: 12 }}>暂无运行中或等待中命令</div>;
+    return <div style={{ padding: '8px 12px', color: '#7C7F88', fontSize: 12 }}>暂无运行中或等待中命令</div>;
   }
   const running = commands.filter((c) => c.status === 'running');
   const queued = commands.filter((c) => c.status === 'queued');
   return (
     <div>
       {running.length > 0 && (
-        <div style={{ padding: '4px 12px', fontSize: 11, color: '#2e90fa', fontWeight: 600, background: '#f9fafb' }}>
+        <div style={{ padding: '4px 12px', fontSize: 11, color: '#3D5BFF', fontWeight: 600, background: '#F6F6F8' }}>
           运行中 ({running.length})
         </div>
       )}
@@ -226,7 +226,7 @@ function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCo
         <CommandRow key={cmd.command_id} cmd={cmd} index={index} status="running" onRunClick={onRunClick} />
       ))}
       {queued.length > 0 && (
-        <div style={{ padding: '4px 12px', fontSize: 11, color: '#667085', fontWeight: 600, background: '#f9fafb' }}>
+        <div style={{ padding: '4px 12px', fontSize: 11, color: '#7C7F88', fontWeight: 600, background: '#F6F6F8' }}>
           等待中 ({queued.length})
         </div>
       )}
@@ -251,7 +251,7 @@ function LastExecTime({ timestamp }: { timestamp: number }) {
 
   if (!timestamp) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#98a2b3', marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#7C7F88', marginBottom: 6 }}>
         <Timer size={12} style={{ flexShrink: 0 }} />
         <span>暂无执行记录</span>
       </div>
@@ -272,13 +272,13 @@ function LastExecTime({ timestamp }: { timestamp: number }) {
         alignItems: 'center',
         gap: 5,
         fontSize: 11,
-        color: '#475467',
+        color: '#121620',
         cursor: 'pointer',
         marginBottom: 6,
         userSelect: 'none',
       }}
     >
-      <Timer size={12} style={{ flexShrink: 0, color: '#98a2b3' }} />
+      <Timer size={12} style={{ flexShrink: 0, color: '#7C7F88' }} />
       <span
         style={{
           display: 'inline-block',
@@ -319,16 +319,16 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
   return (
     <div
       style={{
-        background: '#fff',
-        border: '1px solid #eaecf0',
-        borderLeft: online ? '3px solid #17b26a' : '3px solid #eaecf0',
-        borderRadius: '6px 8px 8px 6px',
+        background: '#FFFFFF',
+        border: '1px solid #E3E4E8',
+        borderLeft: online ? '3px solid #10b981' : '3px solid #E3E4E8',
+        borderRadius: '3px 8px 8px 3px',
         padding: '12px 14px',
-        transition: 'box-shadow 0.15s, transform 0.15s, border-color 0.15s',
+        transition: 'box-shadow 0.22s cubic-bezier(0.76, 0, 0.24, 1), transform 0.22s cubic-bezier(0.76, 0, 0.24, 1), border-color 0.22s cubic-bezier(0.76, 0, 0.24, 1)',
         position: 'relative',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+        e.currentTarget.style.boxShadow = 'rgba(17, 26, 74, 0.1) 0px 1px 3px 0px';
         e.currentTarget.style.transform = 'translateY(-1px)';
       }}
       onMouseLeave={(e) => {
@@ -343,7 +343,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
             width: 36,
             height: 36,
             borderRadius: 8,
-            background: '#f9fafb',
+            background: '#F6F6F8',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -359,7 +359,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: '#1d2939',
+                color: '#121620',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -370,18 +370,18 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
             </span>
             <Tag
               color={online ? 'green' : 'default'}
-              style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 5px', borderRadius: 4, border: 'none' }}
+              style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 5px', borderRadius: 3, border: 'none' }}
             >
               {online ? '在线' : '离线'}
             </Tag>
           </div>
-          <div style={{ fontSize: 11, color: '#667085', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, color: '#7C7F88', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
             <span title={agent.source_file || agent.agent_id}>{agent.agent_id}</span>
-            <span style={{ color: '#d0d5dd' }}>·</span>
+            <span style={{ color: '#E3E4E8' }}>·</span>
             <span>{typeLabel}</span>
             {agent.project_id && (
               <>
-                <span style={{ color: '#d0d5dd' }}>·</span>
+<span style={{ color: '#E3E4E8' }}>·</span>
                 <Tooltip title={`项目: ${agent.project_name || agent.project_id}`}>
                   <Tag
                     icon={<FolderOpen size={10} />}
@@ -397,7 +397,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 2 }}>
           <Tooltip title={online ? 'Agent 已连接' : 'Agent 未连接'}>
-            {online ? <Wifi size={14} color="#17b26a" /> : <WifiOff size={14} color="#98a2b3" />}
+            {online ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="#7C7F88" />}
           </Tooltip>
           <NetStatusIcon netStatus={agent.net_status} />
         </div>
@@ -406,26 +406,26 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
       {/* 信息行：简洁双行布局 */}
       <div
         style={{
-          background: '#f9fafb',
+          background: '#F6F6F8',
           borderRadius: 6,
           padding: '8px 10px',
           marginBottom: 8,
         }}
       >
         <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475467', minWidth: 0 }}>
-            <Globe size={11} style={{ flexShrink: 0, color: '#98a2b3' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#121620', minWidth: 0 }}>
+            <Globe size={11} style={{ flexShrink: 0, color: '#7C7F88' }} />
             <span style={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {displayIp}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475467', flexShrink: 0 }}>
-            <Hash size={11} style={{ flexShrink: 0, color: '#98a2b3' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#121620', flexShrink: 0 }}>
+            <Hash size={11} style={{ flexShrink: 0, color: '#7C7F88' }} />
             <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{versionDisplay}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 12, color: '#475467' }}>
-          <Cpu size={11} style={{ flexShrink: 0, color: '#98a2b3' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 12, color: '#121620' }}>
+          <Cpu size={11} style={{ flexShrink: 0, color: '#7C7F88' }} />
           <span style={{ fontSize: 12 }}>{osArchText}</span>
         </div>
       </div>
@@ -434,7 +434,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
       <LastExecTime timestamp={agent.last_execution_time} />
 
       {/* 底部：运行命令数 / 最大并发 / 连接时间 + 操作按钮 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#98a2b3' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#7C7F88' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <Popover
             open={popoverOpen}
@@ -442,7 +442,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
             trigger="click"
             placement="topLeft"
             title={
-              <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, color: '#1d2939', borderBottom: '1px solid #f2f4f7' }}>
+              <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, color: '#121620', borderBottom: '1px solid #E3E4E8' }}>
                 执行队列（运行中 {agent.running_commands} + 等待中 {agent.queued_commands} / 最大并发 {maxParallel}）
               </div>
             }
@@ -457,14 +457,14 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
                 alignItems: 'center',
                 gap: 4,
                 cursor: hasQueue ? 'pointer' : 'default',
-                color: hasQueue ? '#2e90fa' : '#98a2b3',
+                color: hasQueue ? '#3D5BFF' : '#7C7F88',
               }}
             >
               <Activity size={11} />
               运行中 {agent.running_commands} / 等待中 {agent.queued_commands} / 并发 {maxParallel}
             </span>
           </Popover>
-          <span style={{ marginLeft: 8, color: '#d0d5dd' }}>|</span>
+          <span style={{ marginLeft: 8, color: '#E3E4E8' }}>|</span>
           <span style={{ marginLeft: 4 }}>{online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}</span>
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -477,10 +477,10 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
               style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 width: 24, height: 24, borderRadius: 6, cursor: 'pointer',
-                color: '#667085', transition: 'background 0.15s, color 0.15s',
+                color: '#7C7F88', transition: 'background 0.15s, color 0.15s',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f2f4f7'; e.currentTarget.style.color = '#1d2939'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#667085'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#E3E4E8'; e.currentTarget.style.color = '#121620'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#7C7F88'; }}
             >
               <Info size={14} />
             </span>
@@ -509,12 +509,12 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail }: Serve
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     width: 24, height: 24, borderRadius: 6,
                     cursor: agent.net_status === 'unreachable' ? 'not-allowed' : isDeploying ? 'wait' : 'pointer',
-                    color: agent.net_status === 'unreachable' ? '#d0d5dd' : '#2e90fa',
+                    color: agent.net_status === 'unreachable' ? '#E3E4E8' : '#3D5BFF',
                     transition: 'background 0.15s',
                   }}
                   onMouseEnter={(e) => {
                     if (agent.net_status === 'unreachable' || isDeploying) return;
-                    e.currentTarget.style.background = '#eff8ff';
+                    e.currentTarget.style.background = 'rgba(126, 173, 255, 0.1)';
                   }}
                   onMouseLeave={(e) => {
                     if (agent.net_status === 'unreachable') return;

@@ -3,7 +3,22 @@
 @tailwind utilities;
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* Column design tokens */
+  --column-bg: #f6f6f8;
+  --column-bg-soft: #ffffff;
+  --column-ink: #121620;
+  --column-ink-soft: #7c7f88;
+  --column-accent: #7eadff;
+  --column-line: #e3e4e8;
+  --column-radius-sm: 3px;
+  --column-radius-md: 8px;
+  --column-radius-lg: 12px;
+  --column-shadow: rgba(1, 24, 33, 0.05) 0px 0px 0px 1px;
+  --column-shadow-hover: rgba(17, 26, 74, 0.1) 0px 1px 3px 0px;
+  --column-easing: cubic-bezier(0.76, 0, 0.24, 1);
+  --column-duration-micro: 220ms;
+
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -13,7 +28,9 @@
 }
 
 /* 确保 html/body/root 占满视口 */
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   padding: 0;
@@ -30,6 +47,24 @@ html, body, #root {
 }
 .ant-pro-layout .ant-pro-layout-children-content-wrap {
   height: 100%;
+}
+
+/* Column: ProLayout sidebar / header borders */
+.ant-layout-sider {
+  border-right: 1px solid var(--column-line);
+}
+.ant-pro-layout .ant-layout-header,
+.ant-layout-header {
+  border-bottom: 1px solid var(--column-line);
+}
+/* Column: logo area */
+.ant-pro-layout .ant-pro-layout-logo {
+  border-bottom: 1px solid var(--column-line);
+  padding: 0 16px;
+}
+/* Column: menu item font weight */
+.ant-menu-item {
+  font-weight: 500;
 }
 
 /* React Flow 画布占满父容器 */

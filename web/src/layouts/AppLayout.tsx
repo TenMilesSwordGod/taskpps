@@ -23,9 +23,9 @@ function CurrentTime() {
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   return (
-    <div style={{ fontFamily: 'monospace', lineHeight: 1.2, fontSize: 13 }}>
-      <div>{date}</div>
-      <div style={{ fontWeight: 600 }}>{time}</div>
+    <div style={{ fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace', lineHeight: 1.3, fontSize: 12 }}>
+      <div style={{ color: '#7C7F88' }}>{date}</div>
+      <div style={{ fontWeight: 500, color: '#121620' }}>{time}</div>
     </div>
   );
 }
@@ -72,6 +72,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <ProLayout
       title="TaskPPS"
+      logo={null}
       layout="mix"
       collapsed={collapsed}
       onCollapse={setCollapsed}
@@ -83,6 +84,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       actionsRender={() => [<CurrentTime key="clock" />]}
       contentStyle={{ padding: 0, height: '100%', overflow: 'hidden' }}
       style={{ height: '100vh' }}
+      siderWidth={220}
     >
       {children}
     </ProLayout>

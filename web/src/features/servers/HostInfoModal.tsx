@@ -27,7 +27,7 @@ function getOsShortLabel(osRelease: string, system: string): string {
 }
 
 function getPercentColor(p: number): string {
-  if (p < 0) return '#9ca3af';
+  if (p < 0) return '#7C7F88';
   if (p < 60) return '#10b981';
   if (p < 85) return '#f59e0b';
   return '#ef4444';
@@ -42,11 +42,11 @@ function SectionHeader({
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         marginTop: 16, marginBottom: 8, paddingBottom: 6,
-        borderBottom: '1px solid #e5e7eb',
+        borderBottom: '1px solid #E3E4E8',
       }}
     >
-      <span style={{ display: 'inline-flex', color: '#6b7280' }}>{icon}</span>
-      <span style={{ fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: 0.3 }}>{label}</span>
+      <span style={{ display: 'inline-flex', color: '#7C7F88' }}>{icon}</span>
+      <span style={{ fontSize: 12, fontWeight: 600, color: '#121620', letterSpacing: 0.3 }}>{label}</span>
       <span style={{ marginLeft: 'auto' }}>{extra}</span>
     </div>
   );
@@ -56,8 +56,8 @@ function SectionHeader({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '4px 0', fontSize: 12 }}>
-      <span style={{ color: '#9ca3af', width: 72, flexShrink: 0 }}>{label}</span>
-      <span style={{ color: '#111827', fontFamily: 'monospace', wordBreak: 'break-word', minWidth: 0 }}>{value}</span>
+      <span style={{ color: '#7C7F88', width: 72, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: '#121620', fontFamily: 'JetBrains Mono, monospace', wordBreak: 'break-word', minWidth: 0 }}>{value}</span>
     </div>
   );
 }
@@ -70,7 +70,7 @@ function DiskRow({ disk }: { disk: DiskInfo }) {
       <span
         title={disk.mount}
         style={{
-          fontFamily: 'monospace', fontSize: 12, color: '#374151',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#121620',
           width: 120, flexShrink: 0, whiteSpace: 'nowrap',
           overflow: 'hidden', textOverflow: 'ellipsis',
         }}
@@ -78,7 +78,7 @@ function DiskRow({ disk }: { disk: DiskInfo }) {
         {disk.mount}
       </span>
       {/* 使用率细条 */}
-      <div style={{ flex: 1, height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden', minWidth: 60 }}>
+      <div style={{ flex: 1, height: 6, background: '#F6F6F8', borderRadius: 3, overflow: 'hidden', minWidth: 60 }}>
         <div
           style={{
             width: `${pct}%`, height: '100%',
@@ -87,7 +87,7 @@ function DiskRow({ disk }: { disk: DiskInfo }) {
           }}
         />
       </div>
-      <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#6b7280', flexShrink: 0, textAlign: 'right' }}>
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#7C7F88', flexShrink: 0, textAlign: 'right' }}>
         {disk.used} / {disk.size}
       </span>
       <span style={{ fontSize: 11, width: 34, flexShrink: 0, textAlign: 'right', color: getPercentColor(pct) }}>
@@ -119,7 +119,7 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
       width={680}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Server size={18} color="#6b7280" />
+          <Server size={18} color="#7C7F88" />
           <span style={{ fontSize: 15, fontWeight: 600 }}>主机详情</span>
           {agent && (
             <Tag color={agent.connected ? 'green' : 'default'} style={{ marginLeft: 4 }}>
@@ -188,7 +188,7 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
               </Tag>
             ) : null}
           />
-          <div style={{ fontSize: 12, color: '#4b5563', fontFamily: 'monospace', wordBreak: 'break-word', padding: '4px 0' }}>
+          <div style={{ fontSize: 12, color: '#121620', fontFamily: 'JetBrains Mono, monospace', wordBreak: 'break-word', padding: '4px 0' }}>
             {data.cpu.model || '—'}
           </div>
 
@@ -202,7 +202,7 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
           />
           {data.memory.percent >= 0 ? (
             <div style={{ padding: '4px 0' }}>
-              <div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: 6, background: '#F6F6F8', borderRadius: 3, overflow: 'hidden' }}>
                 <div
                   style={{
                     width: `${data.memory.percent}%`, height: '100%',
@@ -210,14 +210,14 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
                   }}
                 />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginTop: 4, fontFamily: 'monospace' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#7C7F88', marginTop: 4, fontFamily: 'JetBrains Mono, monospace' }}>
                 <span>已用 {data.memory.used || '—'}</span>
                 <span>可用 {data.memory.free || '—'}</span>
                 <span>总计 {data.memory.total || '—'}</span>
               </div>
             </div>
           ) : (
-            <div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, margin: '4px 0' }} />
+            <div style={{ height: 6, background: '#F6F6F8', borderRadius: 3, margin: '4px 0' }} />
           )}
 
           {/* 磁盘 */}
@@ -238,7 +238,7 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
                     display: 'flex', alignItems: 'center', gap: 4,
                     marginTop: 4, padding: '4px 0',
                     background: 'none', border: 'none', cursor: 'pointer',
-                    color: '#2563eb', fontSize: 12,
+                    color: '#3D5BFF', fontSize: 12,
                   }}
                 >
                   <ChevronRight size={12} />
@@ -252,7 +252,7 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
                     display: 'flex', alignItems: 'center', gap: 4,
                     marginTop: 4, padding: '4px 0',
                     background: 'none', border: 'none', cursor: 'pointer',
-                    color: '#2563eb', fontSize: 12,
+                    color: '#3D5BFF', fontSize: 12,
                   }}
                 >
                   <ChevronDown size={12} />
@@ -263,7 +263,7 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
           )}
 
           {/* 底部操作 */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 8, borderTop: '1px solid #E3E4E8' }}>
             <Button
               icon={isRefetching ? <Activity size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               onClick={() => refetch()}

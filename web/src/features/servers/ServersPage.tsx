@@ -171,26 +171,26 @@ export default function ServersPage() {
   const handleCloseDetail = useCallback(() => setDetailAgent(null), []);
 
   return (
-    <div className="flex flex-col h-full p-4 gap-3 bg-gray-50">
+    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F6F6F8' }}>
       {/* 顶部工具栏 */}
-      <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <Server size={18} className="text-gray-500" />
-            <span className="text-base font-semibold text-gray-800">服务器列表</span>
+            <Server size={18} color="#7C7F88" />
+            <span className="text-base font-semibold" style={{ color: '#121620' }}>服务器列表</span>
           </div>
           {/* 统计胶囊 */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
               总计 {totalCount}
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
-              <CircleDot size={10} className="text-emerald-500" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.08)', color: '#10b981' }}>
+              <CircleDot size={10} color="#10b981" />
               在线 {onlineCount}
             </span>
             {offlineCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                <CircleDot size={10} className="text-gray-400" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+                <CircleDot size={10} color="#7C7F88" />
                 离线 {offlineCount}
               </span>
             )}
@@ -205,7 +205,7 @@ export default function ServersPage() {
           />
           <Input
             allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
+            prefix={<Search size={14} color="#7C7F88" />}
             placeholder="搜索 ID / 名称 / IP / 系统 / 架构 / 类型"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -245,7 +245,7 @@ export default function ServersPage() {
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                <span style={{ color: '#6b7280' }}>
+                <span style={{ color: '#7C7F88' }}>
                   {totalCount === 0 ? '暂无 agent 配置' : '无匹配的服务器'}
                 </span>
               }
@@ -262,13 +262,13 @@ export default function ServersPage() {
                     当前状态：{error ? `前端请求失败（${String(error)}）` : '后端返回空数组'}
                   </div>
                   {debugInfo && (
-                    <div className="font-mono text-xs bg-gray-50 p-2 rounded border border-gray-200 mt-1">
+                    <div className="font-mono text-xs p-2 rounded mt-1" style={{ background: '#F6F6F8', border: '1px solid #E3E4E8' }}>
                       <div>URL: {debugInfo.url}</div>
                       <div>HTTP {debugInfo.status} · type: {debugInfo.type}</div>
                       <div>preview: {debugInfo.preview}</div>
                     </div>
                   )}
-                  <div className="text-gray-500 mt-2">
+                  <div style={{ color: '#7C7F88' }} className="mt-2">
                     可能原因：
                     <ul className="list-disc pl-5 mt-1">
                       <li>后端 Python 进程未重启，<code>/api/agents/all</code> 路由未注册（HTTP 404）</li>
@@ -281,7 +281,8 @@ export default function ServersPage() {
               action={
                 <button
                   onClick={checkDebug}
-                  className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50"
+                  className="text-xs px-2 py-1 rounded"
+                  style={{ border: '1px solid #E3E4E8', background: '#FFFFFF' }}
                 >
                   检测 API 响应
                 </button>
@@ -301,26 +302,36 @@ export default function ServersPage() {
                   <button
                     type="button"
                     onClick={() => toggleProject(group.projectId)}
-                    className="group sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-white/95 backdrop-blur border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="group sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 transition-colors cursor-pointer"
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid #E3E4E8',
+                      borderRadius: 8,
+                      transitionTimingFunction: 'cubic-bezier(0.76, 0, 0.24, 1)',
+                      transitionDuration: '220ms',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F6F6F8'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; }}
                   >
                     <ChevronRight
                       size={14}
-                      className={`text-gray-400 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
+                      style={{ color: '#7C7F88', transition: 'transform 200ms cubic-bezier(0.76, 0, 0.24, 1)' }}
+                      className={isCollapsed ? '' : 'rotate-90'}
                     />
-                    <FolderOpen size={14} className={isDefault ? 'text-gray-400' : 'text-blue-500'} />
-                    <span className={`text-sm font-semibold ${isDefault ? 'text-gray-600' : 'text-gray-800'}`}>
+                    <FolderOpen size={14} color={isDefault ? '#7C7F88' : '#3D5BFF'} />
+                    <span className="text-sm font-semibold" style={{ color: isDefault ? '#7C7F88' : '#121620' }}>
                       {group.projectName}
                     </span>
-                    <Tag className="!m-0 !text-xs" color="default">
+                    <Tag className="!m-0 !text-xs" color="default" style={{ borderRadius: 3 }}>
                       {group.items.length} 台
                     </Tag>
                     {onlineInGroup > 0 && (
-                      <Tag className="!m-0 !text-xs" color="success">
+                      <Tag className="!m-0 !text-xs" color="success" style={{ borderRadius: 3 }}>
                         {onlineInGroup} 在线
                       </Tag>
                     )}
                     {offlineInGroup > 0 && (
-                      <Tag className="!m-0 !text-xs" color="default">
+                      <Tag className="!m-0 !text-xs" color="default" style={{ borderRadius: 3 }}>
                         {offlineInGroup} 离线
                       </Tag>
                     )}
@@ -363,9 +374,9 @@ function ServerCardSkeleton() {
   return (
     <div
       style={{
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 10,
+        background: '#FFFFFF',
+        border: '1px solid #E3E4E8',
+        borderRadius: 8,
         padding: 16,
         height: 158,
         overflow: 'hidden',
@@ -378,10 +389,10 @@ function ServerCardSkeleton() {
           100% { background-position: 200% 0; }
         }
         .server-card-skeleton-line {
-          background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+          background: linear-gradient(90deg, #F6F6F8 0%, #E3E4E8 50%, #F6F6F8 100%);
           background-size: 200% 100%;
           animation: serverCardShimmer 1.4s linear infinite;
-          border-radius: 4px;
+          border-radius: 3px;
         }
       `}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>

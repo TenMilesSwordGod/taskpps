@@ -147,36 +147,36 @@ export default function PipelineListPage() {
       render: (_: unknown, record: Row) => {
         if (record.kind === 'project') {
           return (
-            <span style={{ fontWeight: 600, color: '#1f2937', display: 'inline-flex', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, color: '#121620', display: 'inline-flex', alignItems: 'center' }}>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 18, height: 18, borderRadius: 4, background: '#3b82f6' + '18',
-                color: '#3b82f6', fontSize: 11, fontWeight: 600, marginRight: 6, flexShrink: 0,
+                width: 18, height: 18, borderRadius: 3, background: 'rgba(126, 173, 255, 0.15)',
+                color: '#3D5BFF', fontSize: 11, fontWeight: 600, marginRight: 6, flexShrink: 0,
               }}>
                 P
               </span>
               {record.name}
-              <Tag style={{ marginLeft: 8, fontSize: 11 }}>{record.pipelineCount}</Tag>
+              <Tag style={{ marginLeft: 8, fontSize: 11, borderRadius: 3 }}>{record.pipelineCount}</Tag>
             </span>
           );
         }
         if (record.kind === 'folder') {
           return (
-            <span style={{ fontWeight: 600, color: '#1f2937', display: 'inline-flex', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, color: '#121620', display: 'inline-flex', alignItems: 'center' }}>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 18, height: 18, borderRadius: 4, background: '#f59e0b' + '18',
-                color: '#d97706', fontSize: 11, fontWeight: 600, marginRight: 6, flexShrink: 0,
+                width: 18, height: 18, borderRadius: 3, background: 'rgba(124, 127, 136, 0.12)',
+                color: '#7C7F88', fontSize: 11, fontWeight: 600, marginRight: 6, flexShrink: 0,
               }}>
                 F
               </span>
               {record.name}/
-              <Tag style={{ marginLeft: 8, fontSize: 11 }}>{record.pipelineCount}</Tag>
+              <Tag style={{ marginLeft: 8, fontSize: 11, borderRadius: 3 }}>{record.pipelineCount}</Tag>
             </span>
           );
         }
         return (
-          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontWeight: 500, color: '#3b82f6' }}>
+          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontWeight: 500, color: '#3D5BFF' }}>
             {record.name}
           </Link>
         );
@@ -186,9 +186,9 @@ export default function PipelineListPage() {
       title: '文件',
       key: 'file',
       render: (_: unknown, record: Row) => {
-        if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>;
+        if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88', fontSize: 12 }}>--</span>;
         return (
-          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontFamily: 'monospace', fontSize: 12 }}>
+          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
             {record.file}
           </Link>
         );
@@ -211,7 +211,7 @@ export default function PipelineListPage() {
       key: 'last_run_time',
       width: 120,
       render: (_: unknown, record: Row) => {
-        if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af' }}>--</span>;
+        if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88' }}>--</span>;
         if (!record.last_run || !record.last_run.created_at) return '-';
         return dayjs(record.last_run.created_at).format('MM-DD HH:mm');
       },
@@ -221,7 +221,7 @@ export default function PipelineListPage() {
       key: 'last_run_status',
       width: 100,
       render: (_: unknown, record: Row) => {
-        if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af' }}>--</span>;
+        if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88' }}>--</span>;
         if (!record.last_run) return '-';
         return <StatusTag status={record.last_run.status as RunStatus} />;
       },
@@ -231,7 +231,7 @@ export default function PipelineListPage() {
       key: 'success_rate',
       width: 170,
       render: (_: unknown, record: Row) => {
-        if (record.kind !== 'pipeline') return <span style={{ color: '#9ca3af', fontSize: 12 }}>--</span>;
+        if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88', fontSize: 12 }}>--</span>;
         return <SuccessRateChart runs={record.recent_runs || []} />;
       },
     },
@@ -253,18 +253,25 @@ export default function PipelineListPage() {
   ], [handleOpenTrigger]);
 
   return (
-    <div className="p-4">
-      <Card>
+    <div className="p-6">
+      <Card
+        style={{
+          border: '1px solid #E3E4E8',
+          borderRadius: 8,
+          boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+        }}
+        styles={{ body: { padding: 0 } }}
+      >
         <Table
           title={() => (
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center px-1">
               <Input.Search
                 placeholder="搜索流水线名称或文件"
                 allowClear
                 style={{ width: 300 }}
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                prefix={<Search size={14} />}
+                prefix={<Search size={14} color="#7C7F88" />}
               />
               <Space>
                 <Button icon={<RefreshCw size={14} />} onClick={() => refetch()}>刷新</Button>
@@ -317,7 +324,7 @@ export default function PipelineListPage() {
                     cursor: 'pointer',
                     transition: 'transform 200ms ease-out, background 150ms ease-out',
                     transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                    color: '#6b7280',
+                    color: '#7C7F88',
                   }}
                   onClick={(e) => { e.stopPropagation(); handleToggle(); }}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggle(); } }}
@@ -356,8 +363,8 @@ export default function PipelineListPage() {
       {/* Issue #104: 展开/折叠动画样式 */}
       <style>{`
         .pipeline-expand-icon:hover {
-          background: rgba(59, 130, 246, 0.1);
-          color: #3b82f6;
+          background: rgba(126, 173, 255, 0.15);
+          color: #3D5BFF;
         }
         .ant-table-expanded-row > td {
           padding-top: 0 !important;

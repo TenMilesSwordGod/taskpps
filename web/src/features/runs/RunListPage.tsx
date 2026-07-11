@@ -36,8 +36,8 @@ function formatDuration(durationMs: number | null): string {
 
 /** 运行状态对应的行背景色（轻量提示） */
 function rowBackground(status: RunStatus): string | undefined {
-  if (status === 'running') return '#eff6ff'; // blue-50
-  if (status === 'failed') return '#fef2f2'; // red-50
+  if (status === 'running') return 'rgba(126, 173, 255, 0.08)';
+  if (status === 'failed') return 'rgba(239, 68, 68, 0.04)';
   return undefined;
 }
 
@@ -187,7 +187,7 @@ export default function RunListPage() {
       width: 140,
       render: (_: string, record: RunResponse) => (
         <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
-          <a onClick={() => handleOpenDetail(record.id)}>
+          <a onClick={() => handleOpenDetail(record.id)} style={{ color: '#3D5BFF', fontWeight: 500 }}>
             {record.display_name || record.id.slice(0, 8)}
           </a>
         </PipelineProgressPopover>
@@ -205,7 +205,7 @@ export default function RunListPage() {
       key: 'pipeline_file',
       width: 180,
       render: (file: string) => (
-        <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{file}</span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>{file}</span>
       ),
     },
     {
@@ -214,7 +214,7 @@ export default function RunListPage() {
       key: 'project_id',
       width: 110,
       render: (_: string | null, record: RunResponse) =>
-        record.project_name ? <Tag>{record.project_name}</Tag> : record.project_id ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{record.project_id}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
+        record.project_name ? <Tag style={{ borderRadius: 3 }}>{record.project_name}</Tag> : record.project_id ? <Tag style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, borderRadius: 3 }}>{record.project_id}</Tag> : <span style={{ color: '#7C7F88' }}>默认</span>,
     },
     {
       title: '状态',
@@ -265,52 +265,52 @@ export default function RunListPage() {
   ], [handleOpenDetail, handleDeleteConfirm]);
 
   return (
-    <div className="flex flex-col h-full p-4 gap-3 bg-gray-50 overflow-hidden">
+    <div className="flex flex-col h-full p-6 gap-3 overflow-hidden" style={{ background: '#F6F6F8' }}>
       {/* 顶部工具栏 */}
-      <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <History size={18} className="text-gray-500" />
-            <span className="text-base font-semibold text-gray-800">运行历史</span>
+            <History size={18} color="#7C7F88" />
+            <span className="text-base font-semibold" style={{ color: '#121620' }}>运行历史</span>
           </div>
           {/* 统计胶囊 */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
               总计 {stats.total}
             </span>
             {stats.pending > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-50 text-gray-500">
-                <CircleDot size={10} className="text-gray-400" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+                <CircleDot size={10} color="#7C7F88" />
                 等待中 {stats.pending}
               </span>
             )}
             {stats.running > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
-                <CircleDot size={10} className="text-blue-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(126, 173, 255, 0.12)', color: '#3D5BFF' }}>
+                <CircleDot size={10} color="#7EADFF" className="animate-pulse" />
                 运行中 {stats.running}
               </span>
             )}
             {stats.success > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
-                <CircleDot size={10} className="text-emerald-500" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.08)', color: '#10b981' }}>
+                <CircleDot size={10} color="#10b981" />
                 成功 {stats.success}
               </span>
             )}
             {stats.failed > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600">
-                <CircleDot size={10} className="text-red-500" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(239, 68, 68, 0.06)', color: '#ef4444' }}>
+                <CircleDot size={10} color="#ef4444" />
                 失败 {stats.failed}
               </span>
             )}
             {stats.cancelled > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
-                <CircleDot size={10} className="text-amber-500" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(249, 115, 22, 0.08)', color: '#f97316' }}>
+                <CircleDot size={10} color="#f97316" />
                 已取消 {stats.cancelled}
               </span>
             )}
             {stats.partial > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
-                <CircleDot size={10} className="text-purple-500" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(126, 173, 255, 0.08)', color: '#7EADFF' }}>
+                <CircleDot size={10} color="#7EADFF" />
                 部分完成 {stats.partial}
               </span>
             )}
@@ -337,14 +337,14 @@ export default function RunListPage() {
       </div>
 
       {/* 过滤栏 */}
-      <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-4 py-2.5 shadow-sm flex items-center gap-2 flex-wrap">
+      <div className="shrink-0 px-5 py-2.5 flex items-center gap-2 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8' }}>
         <Segmented
           size="small"
           options={STATUS_OPTIONS}
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as RunStatus | 'all')}
         />
-        <span className="text-gray-200">|</span>
+        <span style={{ color: '#E3E4E8' }}>|</span>
         <TreeSelect
           allowClear
           showSearch
@@ -365,7 +365,7 @@ export default function RunListPage() {
         <div className="flex-1" />
         <Input
           allowClear
-          prefix={<Search size={14} className="text-gray-400" />}
+          prefix={<Search size={14} color="#7C7F88" />}
           placeholder="搜索运行名称 / UUID / 项目 / 流水线"
           value={globalSearch}
           onChange={(e) => setGlobalSearch(e.target.value)}
@@ -450,7 +450,7 @@ export default function RunListPage() {
             }}
           </Form.Item>
 
-          <div style={{ color: '#999', fontSize: 12 }}>
+          <div style={{ color: '#7C7F88', fontSize: 12 }}>
             注意：删除操作会同时清理对应的任务日志文件，且不可恢复。
           </div>
         </Form>

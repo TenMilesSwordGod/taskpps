@@ -29,18 +29,18 @@ export function computeCompletionRatio(taskSummary: Record<string, number>): num
 
 /** 根据完成比返回数据点颜色 */
 function getPointColor(ratio: number): string {
-  if (ratio >= 1) return '#16a34a';
-  if (ratio > 0) return '#3b82f6';
+  if (ratio >= 1) return '#10b981';
+  if (ratio > 0) return '#3D5BFF';
   return '#ef4444';
 }
 
 /** 根据平均完成比返回徽章颜色 */
 function getAvgBadgeStyle(avg: number): CSSProperties {
   const pct = Math.round(avg * 100);
-  if (pct >= 80) return { backgroundColor: '#dcfce7', color: '#15803d' };
-  if (pct >= 50) return { backgroundColor: '#dbeafe', color: '#1d4ed8' };
-  if (pct > 0) return { backgroundColor: '#fee2e2', color: '#b91c1c' };
-  return { backgroundColor: '#f3f4f6', color: '#6b7280' };
+  if (pct >= 80) return { backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981' };
+  if (pct >= 50) return { backgroundColor: 'rgba(126, 173, 255, 0.12)', color: '#3D5BFF' };
+  if (pct > 0) return { backgroundColor: 'rgba(239, 68, 68, 0.06)', color: '#ef4444' };
+  return { backgroundColor: '#F6F6F8', color: '#7C7F88' };
 }
 
 /** 生成平滑曲线路径（Catmull-Rom → Bezier） */
@@ -64,7 +64,7 @@ function buildSmoothPath(pts: { x: number; y: number }[]): string {
 
 /** 空状态 */
 function EmptyState() {
-  return <span style={{ color: '#9ca3af', fontSize: 12 }}>暂无运行</span>;
+  return <span style={{ color: '#7C7F88', fontSize: 12 }}>暂无运行</span>;
 }
 
 const containerStyle: CSSProperties = {
@@ -92,7 +92,7 @@ const badgeBaseStyle: CSSProperties = {
 };
 
 const passTextStyle: CSSProperties = {
-  color: '#6b7280',
+  color: '#7C7F88',
   fontSize: 10,
 };
 
@@ -165,8 +165,8 @@ export default function SuccessRateChart({
         >
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="#3D5BFF" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="#3D5BFF" stopOpacity={0.02} />
             </linearGradient>
           </defs>
 
@@ -176,7 +176,7 @@ export default function SuccessRateChart({
           <path
             d={smoothPath}
             fill="none"
-            stroke="#3b82f6"
+            stroke="#3D5BFF"
             strokeWidth={1.8}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -187,7 +187,7 @@ export default function SuccessRateChart({
             <line
               x1={coords[hovered].x} y1={PAD_TOP}
               x2={coords[hovered].x} y2={PAD_TOP + plotH}
-              stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" strokeOpacity={0.35}
+              stroke="#3D5BFF" strokeWidth={1} strokeDasharray="2 2" strokeOpacity={0.35}
             />
           )}
 

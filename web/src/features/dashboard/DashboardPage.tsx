@@ -1,4 +1,5 @@
 import { Card, Col, Row, Statistic, Table, Tag, Button } from 'antd';
+import type { CSSProperties } from 'react';
 import { useMemo } from 'react';
 import { GitBranch, Play, Loader, AlertCircle, History } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -22,12 +23,19 @@ function formatDuration(durationMs: number | null): string {
   return `${m}分${remainSec}秒`;
 }
 
-/** 运行状态对应的行背景色 */
+/** 运行状态对应的行背景色 — Column 风格浅色提示 */
 function rowBackground(status: RunStatus): string | undefined {
-  if (status === 'running') return '#eff6ff';
-  if (status === 'failed') return '#fef2f2';
+  if (status === 'running') return 'rgba(126, 173, 255, 0.08)';
+  if (status === 'failed') return 'rgba(239, 68, 68, 0.04)';
   return undefined;
 }
+
+/** Column 风格统计卡片 */
+const statCardStyle: CSSProperties = {
+  border: '1px solid #E3E4E8',
+  borderRadius: 8,
+  boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+};
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -55,7 +63,7 @@ export default function DashboardPage() {
       width: 120,
       render: (_: string, record: RunResponse) => (
         <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
-          <a onClick={() => navigate(`/runs/${record.id}`)}>
+          <a onClick={() => navigate(`/runs/${record.id}`)} style={{ color: '#3D5BFF', fontWeight: 500 }}>
             {record.display_name || record.id.slice(0, 8)}
           </a>
         </PipelineProgressPopover>
@@ -66,6 +74,7 @@ export default function DashboardPage() {
       dataIndex: 'pipeline_name',
       key: 'pipeline_name',
       ellipsis: true,
+      render: (v: string) => <span style={{ color: '#121620' }}>{v}</span>,
     },
     {
       title: '项目',
@@ -73,7 +82,13 @@ export default function DashboardPage() {
       key: 'project_id',
       width: 100,
       render: (_: string | null, record: RunResponse) =>
-        record.project_name ? <Tag>{record.project_name}</Tag> : record.project_id ? <Tag style={{ fontFamily: 'monospace', fontSize: 11 }}>{record.project_id}</Tag> : <span style={{ color: '#9ca3af' }}>默认</span>,
+        record.project_name ? (
+          <Tag style={{ borderRadius: 3 }}>{record.project_name}</Tag>
+        ) : record.project_id ? (
+          <Tag style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, borderRadius: 3 }}>{record.project_id}</Tag>
+        ) : (
+          <span style={{ color: '#7C7F88' }}>默认</span>
+        ),
     },
     {
       title: '状态',
@@ -100,27 +115,47 @@ export default function DashboardPage() {
   ], [navigate]);
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-6 space-y-4 overflow-auto h-full">
       {/* 统计卡片 */}
-      <Row gutter={16}>
+      <Row gutter={24}>
         <Col span={6}>
-          <Card>
-            <Statistic title="流水线总数" value={pipelineCount} prefix={<GitBranch size={18} />} />
+          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
+            <Statistic
+              title="流水线总数"
+              value={pipelineCount}
+              prefix={<GitBranch size={18} color="#7C7F88" />}
+              valueStyle={{ color: '#121620', fontWeight: 500 }}
+            />
           </Card>
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="今日运行" value={todayRuns} prefix={<Play size={18} />} />
+          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
+            <Statistic
+              title="今日运行"
+              value={todayRuns}
+              prefix={<Play size={18} color="#7C7F88" />}
+              valueStyle={{ color: '#121620', fontWeight: 500 }}
+            />
           </Card>
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="运行中" value={runningCount} prefix={<Loader size={18} />} />
+          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
+            <Statistic
+              title="运行中"
+              value={runningCount}
+              prefix={<Loader size={18} color="#7EADFF" />}
+              valueStyle={{ color: '#3D5BFF', fontWeight: 500 }}
+            />
           </Card>
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="失败" value={failedCount} prefix={<AlertCircle size={18} />} valueStyle={failedCount > 0 ? { color: '#cf1322' } : undefined} />
+          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
+            <Statistic
+              title="失败"
+              value={failedCount}
+              prefix={<AlertCircle size={18} color={failedCount > 0 ? '#ef4444' : '#7C7F88'} />}
+              valueStyle={failedCount > 0 ? { color: '#ef4444', fontWeight: 500 } : { color: '#121620', fontWeight: 500 }}
+            />
           </Card>
         </Col>
       </Row>
@@ -133,6 +168,12 @@ export default function DashboardPage() {
             查看全部
           </Button>
         }
+        style={{
+          border: '1px solid #E3E4E8',
+          borderRadius: 8,
+          boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+        }}
+        styles={{ header: { borderBottom: '1px solid #E3E4E8', minHeight: 48 } }}
       >
         <Table
           rowKey="id"
@@ -148,19 +189,37 @@ export default function DashboardPage() {
       </Card>
 
       {/* 服务器健康状态 */}
-      <Card title="服务器状态" size="small" className="max-w-xs">
+      <Card
+        title="服务器状态"
+        size="small"
+        className="max-w-xs"
+        style={{
+          border: '1px solid #E3E4E8',
+          borderRadius: 8,
+          boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+        }}
+      >
         <div className="flex items-center gap-2">
           <span
-            className="inline-block w-3 h-3 rounded-full"
-            style={{ backgroundColor: healthData?.status === 'ok' ? '#52c41a' : '#ff4d4f' }}
+            className="inline-block w-2.5 h-2.5 rounded-full"
+            style={{
+              backgroundColor: healthData?.status === 'ok' ? '#10b981' : '#ef4444',
+              boxShadow: healthData?.status === 'ok' ? '0 0 6px rgba(16, 185, 129, 0.4)' : 'none',
+            }}
           />
-          <span>{healthData?.status === 'ok' ? '正常' : '异常'}</span>
+          <span style={{ color: '#121620', fontWeight: 500 }}>
+            {healthData?.status === 'ok' ? '正常' : '异常'}
+          </span>
           {healthData?.host && (
-            <span className="text-gray-500 text-xs font-mono">
+            <span style={{ color: '#7C7F88', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>
               {healthData.host}:{healthData.port}
             </span>
           )}
-          {healthData?.version && <span className="text-gray-400 ml-2">v{healthData.version}</span>}
+          {healthData?.version && (
+            <span style={{ color: '#7C7F88', fontSize: 12, marginLeft: 8 }}>
+              v{healthData.version}
+            </span>
+          )}
         </div>
       </Card>
     </div>
