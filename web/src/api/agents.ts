@@ -37,7 +37,8 @@ export function useUpdateDeployAgent() {
     mutationFn: async (agentId: string) => {
       const res = await apiClient.post<{ success: boolean; agent_id: string; message?: string }>(
         '/api/agents/update-deploy',
-        { agent_id: agentId, timeout: 30 },
+        { agent_id: agentId, timeout: 60 },
+        { timeout: 90000 },
       );
       return res.data;
     },

@@ -13,7 +13,7 @@ from taskpps.services.agent_manager import AgentManager
 
 logger = logging.getLogger(__name__)
 
-BOOTSTRAP_TIMEOUT = 30
+BOOTSTRAP_TIMEOUT = 60
 
 
 class AgentBootstrapError(Exception):
@@ -581,7 +581,7 @@ class AgentBootstrap:
                 ssh2 = await self._ssh_connect(host, port, username, password, key_path)
                 try:
                     _, log_out, _ = await self._ssh_exec(
-                        ssh2, f"tail -n 30 {agent_log_path} 2>/dev/null || echo '(no log file)'"
+                        ssh2, f"wc -l {agent_log_path} 2>/dev/null; tail -n 100 {agent_log_path} 2>/dev/null || echo '(no log file)'"
                     )
                     if log_out.strip():
                         log_tail = log_out.strip()
@@ -601,8 +601,21 @@ class AgentBootstrap:
     async def _wait_for_handshake(self, manager: AgentManager, agent_id: str, since: float) -> None:
         # Issue #70: 检查本次部署后的新连接，而非 is_connected()（有 5 分钟 grace period，
         # 会把残留旧连接误判为成功）。只有 connected_at >= since 才是本次部署产生的新连接。
+        _check_interval = 0.5
+        _log_interval = 5.0
+        _next_log = since + _log_interval
         while True:
             conn = manager.get_connection(agent_id)
             if conn is not None and conn.connected_at >= since and conn.last_heartbeat > 0:
                 return
-            await asyncio.sleep(0.5)
+            now = time.time()
+            if conn is None and now >= _next_log:
+                logger.info("等待 agent '%s' 握手: 尚无连接 (since=%s)", agent_id, since)
+                _next_log = now + _log_interval
+            elif conn is not None and now >= _next_log:
+                logger.info(
+                    "等待 agent '%s' 握手: 已连接但 connected_at=%s < since=%s 或 last_heartbeat=%s <= 0",
+                    agent_id, conn.connected_at, since, conn.last_heartbeat,
+                )
+                _next_log = now + _log_interval
+            await asyncio.sleep(_check_interval)
