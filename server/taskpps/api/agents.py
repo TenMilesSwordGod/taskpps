@@ -555,7 +555,12 @@ async def update_deploy_agent(body: AgentDeployRequest):
         return AgentDeployResult(success=True, agent_id=body.agent_id)
     except Exception as e:
         logger.exception("update_deploy 失败: agent=%s", body.agent_id)
-        detail = str(e)
+        parts = [f"{type(e).__name__}: {e}"]
+        for attr in ("code", "errno", "status"):
+            val = getattr(e, attr, None)
+            if val is not None:
+                parts.append(f"{attr}={val}")
+        detail = " | ".join(parts)
         status_code = 404 if "not found" in detail.lower() else 500
         raise HTTPException(status_code=status_code, detail=detail) from e
 

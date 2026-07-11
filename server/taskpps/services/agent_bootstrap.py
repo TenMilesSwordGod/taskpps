@@ -274,9 +274,16 @@ class AgentBootstrap:
         sftp = client.open_sftp()
         try:
             sftp.put(local_binary, dest_path)
-        except Exception:
+        except Exception as e:
             logger.exception("SFTP put 失败: local=%s, remote=%s:%s", local_binary, host, dest_path)
-            raise
+            extra = ""
+            for attr in ("code", "errno", "status"):
+                val = getattr(e, attr, None)
+                if val is not None:
+                    extra += f" {attr}={val}"
+            raise AgentBootstrapError(
+                t("SFTP 上传失败({path}): {error}{extra}", path=dest_path, error=str(e), extra=extra)
+            ) from e
         finally:
             sftp.close()
 
