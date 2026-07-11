@@ -123,3 +123,21 @@ secrets.yml
 .secrets/
 .env.*
 !.env.example
+
+# Node
+node_modules/
+web/node_modules/
+web/dist/
+
+# Editor & Tool artifacts
+.mimocode/
+.opencode/
+
+# Runtime state
+state/
+
+# Test artifacts
+server/tr*
+
+# Temp files from test runners
+web/*.mjs
