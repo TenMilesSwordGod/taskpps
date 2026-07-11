@@ -446,6 +446,136 @@ class AgentBootstrap:
         except Exception:
             return 26521
 
+    async def update_deploy(self, agent_id: str, agent_loader: AgentLoader | None = None, credential_loader: CredentialLoader | None = None) -> dict:
+        """强制更新部署 agent：重新上传二进制、终止旧进程、重启并等待新握手。"""
+        loader = agent_loader or self._agent_loader
+        if credential_loader is not None:
+            self._credential_loader = credential_loader
+        agent_data = loader.get(agent_id)
+        if agent_data is None:
+            raise AgentBootstrapError(t("Agent not found: {id}", id=agent_id))
+
+        if not agent_data.get("agent_auto_bootstrap", True):
+            raise AgentBootstrapError(t("Agent '{id}' has agent_auto_bootstrap disabled", id=agent_id))
+
+        host = agent_data.get("host", "")
+        port = agent_data.get("port", 22)
+        credential_id = agent_data.get("credential_id", "")
+
+        if not host or host in ("localhost", "127.0.0.1", "::1"):
+            raise AgentBootstrapError(t("Update deploy is not supported for local agents"))
+
+        username = None
+        password = None
+        key_path = None
+
+        if credential_id:
+            cred_data = self._credential_loader.get(credential_id)
+            if cred_data:
+                username = cred_data.get("username")
+                password = cred_data.get("password")
+                key_path = cred_data.get("key_path")
+
+        if username is None:
+            username = agent_data.get("username", "root")
+
+        if not password and not key_path:
+            raise AgentBootstrapError(
+                t(
+                    "No authentication method for agent '{id}' (host={host}). "
+                    "Set credential_id with password or key_path in agent config.",
+                    id=agent_id,
+                    host=host,
+                )
+            )
+
+        ssh = await self._ssh_connect(host, port, username, password, key_path)
+        try:
+            remote_home, is_root = await self._get_remote_user_info(ssh)
+
+            if is_root:
+                default_binary = "/usr/local/bin/taskpps-agent"
+                default_log_dir = "/var/log/taskpps"
+                default_pid_file = "/var/run/taskpps-agent.pid"
+            else:
+                work_dir = f"{remote_home}/.taskpps"
+                default_binary = f"{work_dir}/taskpps-agent"
+                default_log_dir = f"{work_dir}/logs"
+                default_pid_file = f"{work_dir}/agent.pid"
+
+            agent_binary_path = agent_data.get("agent_binary_path", default_binary)
+            agent_log_dir = agent_data.get("agent_log_dir", default_log_dir)
+            agent_pid_file = agent_data.get("agent_pid_file", default_pid_file)
+            agent_secret = agent_data.get("agent_secret", "")
+
+            server_host = self._get_server_host(agent_data)
+            server_port = self._get_ws_port()
+            server_url = f"ws://{server_host}:{server_port}/api/ws/agent"
+
+            self._check_server_reachability(ssh, host, server_host, server_port)
+
+            # 1. 强制重新上传二进制（忽略 _check_binary 跳过逻辑）
+            logger.info("Force-updating agent binary on %s to %s ...", host, agent_binary_path)
+            await self._ensure_remote_dir(ssh, agent_binary_path)
+            await self._ensure_remote_dir(ssh, f"{agent_log_dir}/_")
+            await self._deploy_binary(ssh, host, agent_binary_path)
+            await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
+
+            # 2. 终止旧进程并清理 PID 文件
+            existing_pid = await self._check_existing_agent(ssh, agent_pid_file)
+            if existing_pid:
+                logger.info("Terminating existing agent (PID %d) on %s for update", existing_pid, host)
+                await self._ssh_exec(ssh, f"kill {existing_pid} 2>/dev/null; rm -f {agent_pid_file}")
+                await asyncio.sleep(1)
+            else:
+                await self._ssh_exec(ssh, f"rm -f {agent_pid_file}")
+
+            # 3. 断开旧 WebSocket 连接
+            manager = AgentManager.instance()
+            await manager.disconnect(agent_id)
+
+            # 4. 启动新 agent 进程
+            pid = await self._start_agent_daemon(
+                ssh, agent_binary_path, agent_log_dir, agent_pid_file, agent_id, agent_secret, server_url, agent_data
+            )
+            if pid:
+                logger.info("Agent '%s' updated on %s with PID %d", agent_id, host, pid)
+        finally:
+            await self._ssh_close(ssh)
+
+        # 5. 等待新握手
+        deploy_started_at = time.time()
+        try:
+            await asyncio.wait_for(
+                self._wait_for_handshake(manager, agent_id, deploy_started_at),
+                timeout=BOOTSTRAP_TIMEOUT,
+            )
+            logger.info("Agent '%s' update handshake completed", agent_id)
+            return {"success": True, "agent_pid": 0}
+        except asyncio.TimeoutError as e:
+            agent_log_path = f"{agent_log_dir}/agent.log"
+            log_tail = ""
+            try:
+                ssh2 = await self._ssh_connect(host, port, username, password, key_path)
+                try:
+                    _, log_out, _ = await self._ssh_exec(
+                        ssh2, f"tail -n 30 {agent_log_path} 2>/dev/null || echo '(no log file)'"
+                    )
+                    if log_out.strip():
+                        log_tail = log_out.strip()
+                finally:
+                    await self._ssh_close(ssh2)
+            except Exception as log_err:
+                log_tail = f"(could not fetch logs: {log_err})"
+
+            error_msg = (
+                f"Agent '{agent_id}' update deploy failed to connect to {server_url} "
+                f"after {BOOTSTRAP_TIMEOUT}s. Check: "
+                f"Verify server is reachable from {host} and not bound to 127.0.0.1. "
+                f"Agent log tail:\n{log_tail}"
+            )
+            raise AgentBootstrapError(error_msg) from e
+
     async def _wait_for_handshake(self, manager: AgentManager, agent_id: str, since: float) -> None:
         # Issue #70: 检查本次部署后的新连接，而非 is_connected()（有 5 分钟 grace period，
         # 会把残留旧连接误判为成功）。只有 connected_at >= since 才是本次部署产生的新连接。

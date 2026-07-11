@@ -3,9 +3,9 @@ import { Tooltip, Popconfirm, Tag, Popover } from 'antd';
 import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock, Timer, Terminal,
+  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock, Timer, Terminal, RefreshCw,
 } from 'lucide-react';
-import { useDeployAgent, usePendingCommands } from '@/api/agents';
+import { useDeployAgent, useUpdateDeployAgent, usePendingCommands } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
 
 interface ServerCardProps {
@@ -367,8 +367,11 @@ function StatusDot({ online }: { online: boolean }) {
 function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowRepl }: ServerCardProps) {
   const online = agent.connected;
   const deploy = useDeployAgent();
+  const updateDeploy = useUpdateDeployAgent();
   const navigate = useNavigate();
   const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
+  const isUpdating = updateDeploy.isPending && updateDeploy.variables === agent.agent_id;
+  const isSshAgent = agent.type.startsWith('ssh-');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const hasQueue = agent.running_commands > 0 || agent.queued_commands > 0;
   const { data: pendingCommands } = usePendingCommands(agent.agent_id, popoverOpen && hasQueue);
@@ -553,6 +556,24 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
             title="主机详情"
             onClick={() => onShowDetail?.(agent)}
           />
+          {online && isSshAgent && (
+            <Popconfirm
+              title={`更新部署 Agent "${agent.agent_id}"？`}
+              description="将重新上传最新二进制并重启 agent 进程，耗时数分钟。"
+              okText="更新部署"
+              cancelText="取消"
+              onConfirm={(e) => { e?.stopPropagation(); updateDeploy.mutate(agent.agent_id); }}
+              onCancel={(e) => e?.stopPropagation()}
+            >
+              <IconBtn
+                icon={isUpdating ? <Loader2 size={15} /> : <RefreshCw size={15} />}
+                title={isUpdating ? '更新部署中...' : '更新部署（重新上传二进制并重启）'}
+                disabled={isUpdating}
+                accent
+                spinIcon={isUpdating}
+              />
+            </Popconfirm>
+          )}
           {!online && (
             <Popconfirm
               title={`部署 Agent "${agent.agent_id}"?`}

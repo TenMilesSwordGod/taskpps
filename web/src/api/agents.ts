@@ -30,6 +30,33 @@ export function useDeployAgent() {
   });
 }
 
+/** 强制更新已部署 agent（重新上传二进制并重启） */
+export function useUpdateDeployAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (agentId: string) => {
+      const res = await apiClient.post<{ success: boolean; agent_id: string; message?: string }>(
+        '/api/agents/update-deploy',
+        { agent_id: agentId, timeout: 30 },
+      );
+      return res.data;
+    },
+    onSuccess: (data, agentId) => {
+      if (data?.success) {
+        message.success(`Agent ${agentId} 更新部署成功`);
+      } else {
+        message.warning(`Agent ${agentId} 更新部署未完成：${data?.message ?? '请检查 agent 端日志'}`);
+      }
+      qc.invalidateQueries({ queryKey: ['agents', 'all'] });
+      qc.invalidateQueries({ queryKey: ['agents', 'list'] });
+    },
+    onError: (err: Error & { response?: { data?: { detail?: string } } }, agentId) => {
+      const detail = err?.response?.data?.detail ?? err?.message ?? '未知错误';
+      message.error(`Agent ${agentId} 更新部署失败：${detail}`);
+    },
+  });
+}
+
 /** 获取 agent host 详细信息（CPU/内存/磁盘/内核） */
 export function useAgentHostInfo(agentId: string | undefined) {
   return useQuery<AgentHostInfo>({
