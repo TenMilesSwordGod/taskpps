@@ -274,6 +274,9 @@ class AgentBootstrap:
         sftp = client.open_sftp()
         try:
             sftp.put(local_binary, dest_path)
+        except Exception:
+            logger.exception("SFTP put 失败: local=%s, remote=%s:%s", local_binary, host, dest_path)
+            raise
         finally:
             sftp.close()
 
@@ -518,26 +521,38 @@ class AgentBootstrap:
             logger.info("Force-updating agent binary on %s to %s ...", host, agent_binary_path)
             await self._ensure_remote_dir(ssh, agent_binary_path)
             await self._ensure_remote_dir(ssh, f"{agent_log_dir}/_")
-            await self._deploy_binary(ssh, host, agent_binary_path)
+            try:
+                await self._deploy_binary(ssh, host, agent_binary_path)
+            except Exception as e:
+                logger.exception("更新部署: 上传二进制失败(agent=%s, host=%s)", agent_id, host)
+                raise AgentBootstrapError(t("上传二进制失败: {error}", error=str(e))) from e
             await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
 
             # 2. 终止旧进程并清理 PID 文件
-            existing_pid = await self._check_existing_agent(ssh, agent_pid_file)
-            if existing_pid:
-                logger.info("Terminating existing agent (PID %d) on %s for update", existing_pid, host)
-                await self._ssh_exec(ssh, f"kill {existing_pid} 2>/dev/null; rm -f {agent_pid_file}")
-                await asyncio.sleep(1)
-            else:
-                await self._ssh_exec(ssh, f"rm -f {agent_pid_file}")
+            try:
+                existing_pid = await self._check_existing_agent(ssh, agent_pid_file)
+                if existing_pid:
+                    logger.info("Terminating existing agent (PID %d) on %s for update", existing_pid, host)
+                    await self._ssh_exec(ssh, f"kill {existing_pid} 2>/dev/null; rm -f {agent_pid_file}")
+                    await asyncio.sleep(1)
+                else:
+                    await self._ssh_exec(ssh, f"rm -f {agent_pid_file}")
+            except Exception as e:
+                logger.exception("更新部署: 终止旧进程失败(agent=%s)", agent_id)
+                raise AgentBootstrapError(t("终止旧进程失败: {error}", error=str(e))) from e
 
             # 3. 断开旧 WebSocket 连接
             manager = AgentManager.instance()
             await manager.disconnect(agent_id)
 
             # 4. 启动新 agent 进程
-            pid = await self._start_agent_daemon(
-                ssh, agent_binary_path, agent_log_dir, agent_pid_file, agent_id, agent_secret, server_url, agent_data
-            )
+            try:
+                pid = await self._start_agent_daemon(
+                    ssh, agent_binary_path, agent_log_dir, agent_pid_file, agent_id, agent_secret, server_url, agent_data
+                )
+            except Exception as e:
+                logger.exception("更新部署: 启动新 agent 进程失败(agent=%s)", agent_id)
+                raise AgentBootstrapError(t("启动新 agent 进程失败: {error}", error=str(e))) from e
             if pid:
                 logger.info("Agent '%s' updated on %s with PID %d", agent_id, host, pid)
         finally:

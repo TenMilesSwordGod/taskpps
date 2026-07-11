@@ -1,12 +1,15 @@
 import asyncio
 import contextlib
 import json
+import logging
 import time
 import uuid
 from pathlib import Path
 
 import paramiko
 from fastapi import APIRouter, HTTPException
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
@@ -551,6 +554,7 @@ async def update_deploy_agent(body: AgentDeployRequest):
         await bootstrap.update_deploy(body.agent_id, agent_loader=loader, credential_loader=cred_loader)
         return AgentDeployResult(success=True, agent_id=body.agent_id)
     except Exception as e:
+        logger.exception("update_deploy 失败: agent=%s", body.agent_id)
         detail = str(e)
         status_code = 404 if "not found" in detail.lower() else 500
         raise HTTPException(status_code=status_code, detail=detail) from e
