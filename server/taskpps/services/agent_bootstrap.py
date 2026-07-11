@@ -524,18 +524,7 @@ class AgentBootstrap:
 
             self._check_server_reachability(ssh, host, server_host, server_port)
 
-            # 1. 强制重新上传二进制（忽略 _check_binary 跳过逻辑）
-            logger.info("Force-updating agent binary on %s to %s ...", host, agent_binary_path)
-            await self._ensure_remote_dir(ssh, agent_binary_path)
-            await self._ensure_remote_dir(ssh, f"{agent_log_dir}/_")
-            try:
-                await self._deploy_binary(ssh, host, agent_binary_path)
-            except Exception as e:
-                logger.exception("更新部署: 上传二进制失败(agent=%s, host=%s)", agent_id, host)
-                raise AgentBootstrapError(t("上传二进制失败: {error}", error=str(e))) from e
-            await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
-
-            # 2. 终止旧进程并清理 PID 文件
+            # 1. 先终止旧进程并清理 PID 文件（避免二进制被占用导致 SFTP 上传失败）
             try:
                 existing_pid = await self._check_existing_agent(ssh, agent_pid_file)
                 if existing_pid:
@@ -548,9 +537,20 @@ class AgentBootstrap:
                 logger.exception("更新部署: 终止旧进程失败(agent=%s)", agent_id)
                 raise AgentBootstrapError(t("终止旧进程失败: {error}", error=str(e))) from e
 
-            # 3. 断开旧 WebSocket 连接
+            # 2. 断开旧 WebSocket 连接
             manager = AgentManager.instance()
             await manager.disconnect(agent_id)
+
+            # 3. 重新上传二进制（旧进程已终止，文件可安全覆盖）
+            logger.info("Force-updating agent binary on %s to %s ...", host, agent_binary_path)
+            await self._ensure_remote_dir(ssh, agent_binary_path)
+            await self._ensure_remote_dir(ssh, f"{agent_log_dir}/_")
+            try:
+                await self._deploy_binary(ssh, host, agent_binary_path)
+            except Exception as e:
+                logger.exception("更新部署: 上传二进制失败(agent=%s, host=%s)", agent_id, host)
+                raise AgentBootstrapError(t("上传二进制失败: {error}", error=str(e))) from e
+            await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
 
             # 4. 启动新 agent 进程
             try:
