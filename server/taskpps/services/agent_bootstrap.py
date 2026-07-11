@@ -524,15 +524,20 @@ class AgentBootstrap:
 
             self._check_server_reachability(ssh, host, server_host, server_port)
 
-            # 1. 先终止旧进程并清理 PID 文件（避免二进制被占用导致 SFTP 上传失败）
+            # 1. 终止所有同名 agent 进程并清理 PID 文件（避免残留旧进程抢占 WebSocket 连接）
             try:
+                killed_pids = []
                 existing_pid = await self._check_existing_agent(ssh, agent_pid_file)
                 if existing_pid:
-                    logger.info("Terminating existing agent (PID %d) on %s for update", existing_pid, host)
-                    await self._ssh_exec(ssh, f"kill {existing_pid} 2>/dev/null; rm -f {agent_pid_file}")
-                    await asyncio.sleep(1)
-                else:
-                    await self._ssh_exec(ssh, f"rm -f {agent_pid_file}")
+                    killed_pids.append(existing_pid)
+                # 再用 pkill 补杀所有同名 agent，覆盖 PID 文件之外的残留进程
+                await self._ssh_exec(
+                    ssh,
+                    f"pkill -f 'taskpps-agent.*--agent-id {agent_id}' 2>/dev/null; rm -f {agent_pid_file}",
+                )
+                if killed_pids:
+                    logger.info("Terminated agent PID(s) %s on %s for update", killed_pids, host)
+                await asyncio.sleep(2)
             except Exception as e:
                 logger.exception("更新部署: 终止旧进程失败(agent=%s)", agent_id)
                 raise AgentBootstrapError(t("终止旧进程失败: {error}", error=str(e))) from e
