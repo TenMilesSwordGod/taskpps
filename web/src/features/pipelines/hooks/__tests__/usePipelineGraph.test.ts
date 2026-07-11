@@ -1040,3 +1040,92 @@ describe('usePipelineGraph — START/END 通过 group IN/OUT handle', () => {
     expect(endEdge?.target).toBe('__end__')
   })
 })
+
+describe('usePipelineGraph — 健壮性（孤儿边/重复边）', () => {
+  it('空 subpipeline + subpipeline 级 post：不产生 source 为空字符串的孤儿边', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'empty',
+              tasks: null,
+              depends_on: [],
+              post: {
+                always: [{ name: 'cleanup', depends_on: [], env: {}, retry: 0 }],
+              },
+            },
+          ],
+        }),
+      }),
+    )
+    const nodeIds = new Set(result.current.nodes.map((n) => n.id))
+    const orphanSources = result.current.edges
+      .filter((e) => !nodeIds.has(e.source))
+      .map((e) => e.id)
+    expect(orphanSources).toEqual([])
+  })
+
+  it('depends_on 引用不存在的 task：跳过该孤儿边，不影响其他边', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'sub1',
+              tasks: [
+                { name: 'a', depends_on: ['nonexistent'], env: {}, retry: 0 },
+                { name: 'b', depends_on: [], env: {}, retry: 0 },
+              ],
+              depends_on: [],
+            },
+          ],
+        }),
+      }),
+    )
+    const nodeIds = new Set(result.current.nodes.map((n) => n.id))
+    const orphanSources = result.current.edges
+      .filter((e) => !nodeIds.has(e.source))
+      .map((e) => e.id)
+    expect(orphanSources).toEqual([])
+    // 隐式顺序边 a→b 仍应存在
+    const pairs = edgePairs(result.current.edges)
+    expect(pairs).toContainEqual(['sub1.a', 'sub1.b'])
+  })
+
+  it('sub 依赖多个 dep + 无 when：enter 边只创建一次（无重复 id）', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'sub1',
+              tasks: [{ name: 'a', depends_on: [], env: {}, retry: 0 }],
+              depends_on: [],
+            },
+            {
+              name: 'sub2',
+              tasks: [{ name: 'b', depends_on: [], env: {}, retry: 0 }],
+              depends_on: [],
+            },
+            {
+              name: 'sub3',
+              tasks: [{ name: 'c', depends_on: [], env: {}, retry: 0 }],
+              depends_on: ['sub1', 'sub2'],
+            },
+          ],
+        }),
+      }),
+    )
+    const idCounts = new Map<string, number>()
+    for (const e of result.current.edges) {
+      idCounts.set(e.id, (idCounts.get(e.id) ?? 0) + 1)
+    }
+    const dupIds = [...idCounts.entries()].filter(([, c]) => c > 1)
+    expect(dupIds).toEqual([])
+
+    // enter-__group__sub3 恰好存在一次
+    const enterEdges = result.current.edges.filter((e) => e.id === 'enter-__group__sub3')
+    expect(enterEdges).toHaveLength(1)
+  })
+})

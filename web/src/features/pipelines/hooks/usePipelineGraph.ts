@@ -85,6 +85,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const dependsOnMap = new Map<string, string[]>();
     // 收集所有隐式顺序关系
     const implicitEdges: [string, string][] = [];
+    // 收集所有有效 taskId，用于校验 depends_on 引用的 source 是否存在
+    const validTaskIds = new Set<string>();
 
     subpipelines.forEach((sub) => {
       const ids: string[] = [];
@@ -92,6 +94,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
       sub.tasks?.forEach((task) => {
         const taskId = `${sub.name}.${task.name}`;
+        validTaskIds.add(taskId);
         const status = taskStatuses?.[taskId];
         const whenExpr = task.when?.trim();
 
@@ -110,9 +113,10 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           taskWhenMap.set(taskId, whenExpr);
         }
 
-        // 收集显式 depends_on
+        // 收集显式 depends_on（跳过引用不存在 task 的孤儿边，避免 dagre 崩溃）
         task.depends_on?.forEach((dep) => {
           const sourceId = `${sub.name}.${dep}`;
+          if (!validTaskIds.has(sourceId)) return;
           if (!dependsOnMap.has(sourceId)) dependsOnMap.set(sourceId, []);
           dependsOnMap.get(sourceId)!.push(taskId);
         });
@@ -190,7 +194,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
               position: { x: 0, y: 0 },
               data: { when: whenExpr },
             });
-          decisionTargetMap.set(decisionId, targetId);
+            decisionTargetMap.set(decisionId, targetId);
 
             // source → decision
             pushPlainEdge(taskEdges, sourceId, decisionId, `dep-${sourceId}-${decisionId}`, RAIL_MARKER, RAIL_STYLE);
@@ -314,6 +318,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     }
 
     // 跨 subpipeline 边 —— 直接连接 group 节点（不经过 task），让 dagre 识别 group 拓扑顺序
+    // 跟踪已为哪些 targetGroup 创建过 enter 边，避免 sub 依赖多个 dep 时重复创建
+    const enterEdgeCreated = new Set<string>();
     subpipelines.forEach((sub, idx) => {
       sub.depends_on?.forEach((depSubName) => {
         const sourceIdx = subpipelines.findIndex((s) => s.name === depSubName);
@@ -374,8 +380,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 markerEnd: YES_MARKER,
                 style: YES_STYLE,
               });
-            } else {
-              // 无 when：targetGroup.top-out → 首 task（灰色内部边）
+            } else if (!enterEdgeCreated.has(targetGroup)) {
+              // 无 when：targetGroup.top-out → 首 task（灰色内部边，每个 targetGroup 只创建一次）
               taskEdges.push({
                 id: `enter-${targetGroup}`,
                 source: targetGroup,
@@ -386,6 +392,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 markerEnd: RAIL_MARKER,
                 style: RAIL_STYLE,
               });
+              enterEdgeCreated.add(targetGroup);
             }
           }
         }
@@ -427,7 +434,11 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
 
     subpipelines.forEach((sub, idx) => {
       const groupId = `__group__${sub.name}`;
-      addPostNodes(sub.post, subpipelineTaskIds[idx]?.[subpipelineTaskIds[idx].length - 1] ?? '', groupId);
+      const lastTaskId = subpipelineTaskIds[idx]?.[subpipelineTaskIds[idx].length - 1];
+      // subpipeline 级 post 需要挂在最后一个 task 上；空 subpipeline 无 task 可挂，跳过
+      if (lastTaskId) {
+        addPostNodes(sub.post, lastTaskId, groupId);
+      }
       sub.tasks?.forEach((task) => {
         addPostNodes(task.post, `${sub.name}.${task.name}`, groupId);
       });
