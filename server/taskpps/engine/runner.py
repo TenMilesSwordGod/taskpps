@@ -48,6 +48,23 @@ logger = logging.getLogger(__name__)
 _active_runs: dict[str, PipelineRunner] = {}
 
 _WHEN_PATTERN = re.compile(r'\$\{(?:env\.)?([^}]+)\}\s*(==|!=)\s*"?([^"]*)"?')
+_COLLECTOR_PLUGIN_NAME = "test_result_collector"
+_OUTPUT_MARKER_RE = re.compile(r"---TRC_OUTPUT_START---\n(.*?)\n---TRC_OUTPUT_END---", re.DOTALL)
+
+
+def _extract_collector_output(log_content: str) -> str | None:
+    match = _OUTPUT_MARKER_RE.search(log_content)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def _get_collector_output(pipeline_id: str, pipeline_version: str, run_id: str, task_name: str) -> str | None:
+    log_path = build_log_path(pipeline_id, pipeline_version, run_id, task_name)
+    if not log_path.exists():
+        return None
+    content = log_path.read_text(encoding="utf-8", errors="replace")
+    return _extract_collector_output(content)
 
 
 def _evaluate_when(when_expr: str | None, env: dict[str, str]) -> bool:
@@ -200,6 +217,7 @@ class PipelineRunner:
                     )
                 await self._execute_post_phase(RunStatus.SUCCESS)
                 try:
+                    collector_md = self._find_collector_output()
                     generate_result_page(
                         run_id=self.run_id,
                         pipeline_name=self.pipeline.name,
@@ -209,6 +227,8 @@ class PipelineRunner:
                         started_at=self._start_time.isoformat() if self._start_time else None,
                         finished_at=end_time.isoformat() if end_time else None,
                         tasks=[],
+                        collector_md=collector_md,
+                        collector_mode="replace" if collector_md else None,
                     )
                 except Exception as rp_err:
                     logger.warning("Failed to generate result page: %s", rp_err)
@@ -380,21 +400,6 @@ class PipelineRunner:
                     for t in task_runs
                 ]
 
-            try:
-                generate_result_page(
-                    run_id=self.run_id,
-                    pipeline_name=self.pipeline.name,
-                    pipeline_id=self._pipeline_id,
-                    pipeline_version=self._pipeline_version,
-                    status=final_status.value,
-                    started_at=self._start_time.isoformat() if self._start_time else None,
-                    finished_at=end_time.isoformat() if end_time else None,
-                    tasks=tasks_data,
-                )
-                self._write_pipeline_log("INFO", "Result page generated")
-            except Exception as rp_err:
-                self._write_pipeline_log("WARN", f"Failed to generate result page: {rp_err}")
-
             task_names = [f"{sub.name}.{t.name}" for sub in self.pipeline.subpipelines for t in sub.tasks]
             try:
                 await collect_default_artifacts(
@@ -426,6 +431,24 @@ class PipelineRunner:
                     self._write_pipeline_log("WARN", f"Failed to collect pipeline artifacts: {art_err}")
 
             await self._execute_post_phase(final_status)
+
+            try:
+                collector_md = self._find_collector_output()
+                generate_result_page(
+                    run_id=self.run_id,
+                    pipeline_name=self.pipeline.name,
+                    pipeline_id=self._pipeline_id,
+                    pipeline_version=self._pipeline_version,
+                    status=final_status.value,
+                    started_at=self._start_time.isoformat() if self._start_time else None,
+                    finished_at=end_time.isoformat() if end_time else None,
+                    tasks=tasks_data,
+                    collector_md=collector_md,
+                    collector_mode="replace" if collector_md else None,
+                )
+                self._write_pipeline_log("INFO", "Result page generated")
+            except Exception as rp_err:
+                self._write_pipeline_log("WARN", f"Failed to generate result page: {rp_err}")
 
             self._write_pipeline_log("PIPELINE:TEARDOWN", "")
             self._write_pipeline_log("SYSTEM", f"End Time: {end_time.isoformat()}")
@@ -788,6 +811,9 @@ class PipelineRunner:
         env = self.context.get_task_env(task)
         env["TASKPPS_RUN_ID"] = self.run_id
         env["TASKPPS_TASK_ID"] = task_run_id or qualified_name
+        env["TASKPPS_PIPELINE_ID"] = self._pipeline_id or ""
+        env["TASKPPS_PIPELINE_VERSION"] = self._pipeline_version or ""
+        env["TASKPPS_LOGS_DIR"] = str(get_logs_dir())
 
         for key, val in env.items():
             if isinstance(val, str) and "${artifact:" in val:
@@ -1096,10 +1122,75 @@ class PipelineRunner:
 
         return ExecutorResult(exit_code=0, stdout=combined_output)
 
+    def _find_collector_output(self) -> str | None:
+        for sub in self.pipeline.subpipelines:
+            for task in sub.tasks:
+                if task.plugin == _COLLECTOR_PLUGIN_NAME:
+                    qualified = f"{sub.name}.{task.name}"
+                    output = _get_collector_output(
+                        self._pipeline_id, self._pipeline_version or "", self.run_id, qualified
+                    )
+                    if output:
+                        logger.warning("[collector] found output in subpipeline task: %s", qualified)
+                        return output
+
+            if sub.post and sub.post.has_any:
+                for condition in ("on_fail", "on_success", "always"):
+                    for ptask in getattr(sub.post, condition):
+                        if ptask.plugin == _COLLECTOR_PLUGIN_NAME:
+                            qualified = f"POST.{condition}.{ptask.name}"
+                            output = _get_collector_output(
+                                self._pipeline_id, self._pipeline_version or "", self.run_id, qualified
+                            )
+                            if output:
+                                logger.warning("[collector] found output in sub post: %s", qualified)
+                                return output
+
+            for task in sub.tasks:
+                if task.post and task.post.has_any:
+                    for condition in ("on_fail", "on_success", "always"):
+                        for ptask in getattr(task.post, condition):
+                            if ptask.plugin == _COLLECTOR_PLUGIN_NAME:
+                                qualified = f"POST.{condition}.{ptask.name}"
+                                output = _get_collector_output(
+                                    self._pipeline_id, self._pipeline_version or "", self.run_id, qualified
+                                )
+                                if output:
+                                    logger.warning("[collector] found output in task post: %s", qualified)
+                                    return output
+
+        if self.pipeline.post and self.pipeline.post.has_any:
+            for condition in ("on_fail", "on_success", "always"):
+                for task in getattr(self.pipeline.post, condition):
+                    if task.plugin == _COLLECTOR_PLUGIN_NAME:
+                        qualified = f"POST.{condition}.{task.name}"
+                        log_path = build_log_path(
+                            self._pipeline_id, self._pipeline_version or "", self.run_id, qualified
+                        )
+                        output = _get_collector_output(
+                            self._pipeline_id, self._pipeline_version or "", self.run_id, qualified
+                        )
+                        if output:
+                            logger.warning("[collector] found output in pipeline post: %s", qualified)
+                            return output
+                        else:
+                            logger.warning(
+                                "[collector] pipeline post task '%s' has no TRC output. log_path=%s exists=%s",
+                                qualified,
+                                log_path,
+                                log_path.exists(),
+                            )
+
+        logger.warning("[collector] no output found for run_id=%s", self.run_id)
+        return None
+
     async def _execute_post_phase(self, final_status: RunStatus) -> None:
         post = self.pipeline.post
+        logger.warning("[post_phase] self.pipeline.post is None: %s", post is None)
         if post is None:
             return
+        logger.warning("[post_phase] has_any=%s on_fail=%s on_success=%s always=%s",
+                       post.has_any, len(post.on_fail), len(post.on_success), len(post.always))
         if not post.has_any:
             return
 
@@ -1200,6 +1291,10 @@ class PipelineRunner:
 
         env = self.context.get_task_env(task)
         env["TASKPPS_RUN_ID"] = self.run_id
+        env["TASKPPS_TASK_ID"] = post_task_run_id or qualified_name
+        env["TASKPPS_PIPELINE_ID"] = self._pipeline_id or ""
+        env["TASKPPS_PIPELINE_VERSION"] = self._pipeline_version or ""
+        env["TASKPPS_LOGS_DIR"] = str(get_logs_dir())
         env["TASKPPS_LEVEL"] = level
         env["TASKPPS_LEVEL_NAME"] = level_name
         env["TASKPPS_POST_CONDITION"] = condition
@@ -1241,6 +1336,7 @@ class PipelineRunner:
             )
 
         try:
+            task.host = None
             executor = create_executor(task, self.context.project_workdir)
             effective_cwd = task.cwd or self.context.get_workspace()
 
@@ -1348,6 +1444,10 @@ class PipelineRunner:
 
         env = self.context.get_task_env(task)
         env["TASKPPS_RUN_ID"] = self.run_id
+        env["TASKPPS_TASK_ID"] = qualified_name
+        env["TASKPPS_PIPELINE_ID"] = self._pipeline_id or ""
+        env["TASKPPS_PIPELINE_VERSION"] = self._pipeline_version or ""
+        env["TASKPPS_LOGS_DIR"] = str(get_logs_dir())
         env["TASKPPS_PIPELINE_STATUS"] = self._cancelled and "cancelled" or "success"
 
         for key, val in env.items():
@@ -1380,6 +1480,7 @@ class PipelineRunner:
         timeout = task.timeout or get_settings().executor.default_timeout
 
         try:
+            task.host = None
             executor = create_executor(task, self.context.project_workdir)
             effective_cwd = task.cwd or self.context.get_workspace()
 

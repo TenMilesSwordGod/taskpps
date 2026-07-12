@@ -792,3 +792,50 @@ class TestPluginCenterRealBinary:
         assert "clone" in result.stdout
 
         await pc.shutdown()
+
+
+class TestPluginCenterPythonHelpMsg:
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S1146", domain="server/plugin_center", priority="P1")
+    async def test_python_plugin_docstring_is_dedented(self, tmp_project):
+        plugin_dir = tmp_project / "official_plugins" / "sample"
+        plugin_dir.mkdir(parents=True)
+        plugin_file = plugin_dir / "plugin.py"
+        plugin_file.write_text(
+            'class SamplePlugin:\n'
+            '    """## Sample 插件\n'
+            '\n'
+            '    这是一段带 4 空格缩进的描述。\n'
+            '\n'
+            '    ### YAML 用法\n'
+            '\n'
+            '    ```yaml\n'
+            '    tasks:\n'
+            '      - name: demo\n'
+            '        plugin: sample\n'
+            '    ```\n'
+            '\n'
+            '    | 参数 | 说明 |\n'
+            '    |------|------|\n'
+            '    | x | 测试 |\n'
+            '    """\n'
+            '    type = "executor"\n'
+            '    version = "1.0.0"\n'
+            '    params_schema = {}\n'
+        )
+
+        pc = PluginCenter(tmp_project)
+        await pc._load_python_plugin(plugin_file)
+
+        assert "sample" in pc._plugins
+        help_msg = pc._plugins["sample"].help_msg
+        lines = help_msg.splitlines()
+        assert lines[0] == "## Sample 插件"
+        for line in lines:
+            stripped = line.lstrip()
+            if not stripped:
+                continue
+            if stripped.startswith(("#", "|", "```")):
+                assert line == stripped, f"markdown 结构行不应带前导缩进: {line!r}"
+        assert "```yaml" in help_msg
+        assert "| 参数 | 说明 |" in help_msg

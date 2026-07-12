@@ -168,7 +168,22 @@ async def save_pipeline(file: str, body: SavePipelineRequest, project_id: str | 
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
         pipelines_dir = get_pipelines_dir(project_workdir)
     else:
-        pipelines_dir = get_pipelines_dir()
+        # 与 GET 一致的逻辑: 遍历所有已注册项目，找到第一个匹配的
+        async with get_session_factory()() as session:
+            from taskpps.db.repository import ProjectRepository
+
+            repo = ProjectRepository(session)
+            projects = await repo.list_projects()
+
+        pipelines_dir = None
+        for proj in projects:
+            project_pipelines = get_pipelines_dir(proj.workdir)
+            if (project_pipelines / file).resolve().exists():
+                pipelines_dir = project_pipelines
+                break
+
+        if pipelines_dir is None:
+            pipelines_dir = get_pipelines_dir()
 
     file_path = (pipelines_dir / file).resolve()
     # 安全检查：路径不能逃逸出 pipelines 目录

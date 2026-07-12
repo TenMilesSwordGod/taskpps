@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import os
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -146,7 +147,7 @@ class PluginCenter:
         name = plugin_py.parent.name
         p_type = getattr(plugin_cls, "type", "executor")
         version = getattr(plugin_cls, "version", "0.0.0")
-        help_msg = (plugin_cls.__doc__ or "").strip()
+        help_msg = textwrap.dedent(plugin_cls.__doc__ or "").strip()
         params_schema = getattr(plugin_cls, "params_schema", {})
         hooks = getattr(plugin_cls, "hooks", [])
 

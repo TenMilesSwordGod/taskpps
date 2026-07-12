@@ -242,6 +242,7 @@ def generate_result_page(
     collector_html: str | None = None,
     collector_md: str | None = None,
     collector_mode: str | None = None,
+    collector_data: list[dict] | None = None,
 ) -> dict:
     stats = _build_default_stats(tasks, status, started_at, finished_at)
     html = _generate_html(stats, pipeline_name)
@@ -272,7 +273,8 @@ def generate_result_page(
         "html_content": html,
         "md_content": md,
         "collector_mode": collector_mode,
-        "has_collector": bool(collector_html or collector_md),
+        "has_collector": bool(collector_html or collector_md or collector_data),
+        "collector_data": collector_data,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     with open(result_path, "w") as f:

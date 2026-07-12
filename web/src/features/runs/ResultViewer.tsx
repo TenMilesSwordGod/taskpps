@@ -57,7 +57,7 @@ export default function ResultViewer({ data }: ResultViewerProps) {
       </div>
       <div className="flex-1 overflow-auto bg-white">
         <div
-          className="p-6"
+          className="p-6 prose prose-sm max-w-none prose-table:w-full [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-50 [&_td]:border [&_td]:border-gray-200"
           dangerouslySetInnerHTML={{ __html: htmlContent }}
         />
       </div>

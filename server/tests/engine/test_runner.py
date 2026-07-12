@@ -1,5 +1,6 @@
 import asyncio
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1322,4 +1323,239 @@ class TestPipelineRunnerExitCodeCoverage:
             await runner.run()
 
         assert runner._unexpected_error is True
+
+
+class TestFindCollectorOutput:
+    def _make_runner(self, pipeline):
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_collector")
+        runner = PipelineRunner(run_id="test_collector", pipeline=pipeline, context=ctx)
+        runner._pipeline_id = "test-pipeline"
+        runner._pipeline_version = "v1"
+        return runner
+
+    def test_no_collector_returns_none(self):
+        pipeline = ResolvedPipeline(
+            name="test",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="sub1",
+                    tasks=[ResolvedTask(name="t1", task_type="command", command="echo hi")],
+                    config=PipelineConfig(),
+                )
+            ],
+        )
+        runner = self._make_runner(pipeline)
+        assert runner._find_collector_output() is None
+
+    def test_collector_in_subpipeline_task(self):
+        pipeline = ResolvedPipeline(
+            name="test",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="sub1",
+                    tasks=[ResolvedTask(name="collect", task_type="plugin", plugin="test_result_collector")],
+                    config=PipelineConfig(),
+                )
+            ],
+        )
+        runner = self._make_runner(pipeline)
+        with patch("taskpps.engine.runner._get_collector_output") as mock_gco:
+            mock_gco.return_value = "# report"
+            result = runner._find_collector_output()
+        assert result == "# report"
+        mock_gco.assert_called_once_with("test-pipeline", "v1", "test_collector", "sub1.collect")
+
+    def test_collector_in_pipeline_post_always(self):
+        from taskpps.domain.pipeline import ResolvedPostConfig as RPC
+
+        pipeline = ResolvedPipeline(
+            name="test",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="sub1",
+                    tasks=[ResolvedTask(name="t1", task_type="command", command="echo hi")],
+                    config=PipelineConfig(),
+                )
+            ],
+        )
+        pipeline.post = RPC(
+            always=[ResolvedTask(name="collect-report", task_type="plugin", plugin="test_result_collector")]
+        )
+        runner = self._make_runner(pipeline)
+        with patch("taskpps.engine.runner._get_collector_output") as mock_gco:
+            mock_gco.return_value = "| Task | passed |"
+            result = runner._find_collector_output()
+        assert result == "| Task | passed |"
+        mock_gco.assert_called_once_with("test-pipeline", "v1", "test_collector", "POST.always.collect-report")
+
+    def test_collector_in_pipeline_post_on_fail(self):
+        from taskpps.domain.pipeline import ResolvedPostConfig as RPC
+
+        pipeline = ResolvedPipeline(
+            name="test",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="sub1",
+                    tasks=[ResolvedTask(name="t1", task_type="command", command="echo hi")],
+                    config=PipelineConfig(),
+                )
+            ],
+        )
+        pipeline.post = RPC(
+            on_fail=[ResolvedTask(name="collect-report", task_type="plugin", plugin="test_result_collector")]
+        )
+        runner = self._make_runner(pipeline)
+        with patch("taskpps.engine.runner._get_collector_output") as mock_gco:
+            mock_gco.return_value = "fails"
+            result = runner._find_collector_output()
+        assert result == "fails"
+        mock_gco.assert_called_once_with("test-pipeline", "v1", "test_collector", "POST.on_fail.collect-report")
+
+    def test_collector_in_subpipeline_post_always(self):
+        from taskpps.domain.pipeline import ResolvedPostConfig as RPC
+
+        pipeline = ResolvedPipeline(
+            name="test",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="sub1",
+                    tasks=[ResolvedTask(name="t1", task_type="command", command="echo hi")],
+                    config=PipelineConfig(),
+                    post=RPC(always=[ResolvedTask(name="collect", task_type="plugin", plugin="test_result_collector")]),
+                )
+            ],
+        )
+        runner = self._make_runner(pipeline)
+        with patch("taskpps.engine.runner._get_collector_output") as mock_gco:
+            mock_gco.return_value = "sub post"
+            result = runner._find_collector_output()
+        assert result == "sub post"
+        mock_gco.assert_called_once_with("test-pipeline", "v1", "test_collector", "POST.always.collect")
+
+    def test_collector_in_task_post_always(self):
+        from taskpps.domain.pipeline import ResolvedPostConfig as RPC
+
+        pipeline = ResolvedPipeline(
+            name="test",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="sub1",
+                    tasks=[
+                        ResolvedTask(
+                            name="t1",
+                            task_type="command",
+                            command="echo hi",
+                            post=RPC(always=[ResolvedTask(name="collect", task_type="plugin", plugin="test_result_collector")]),
+                        )
+                    ],
+                    config=PipelineConfig(),
+                )
+            ],
+        )
+        runner = self._make_runner(pipeline)
+        with patch("taskpps.engine.runner._get_collector_output") as mock_gco:
+            mock_gco.return_value = "task post"
+            result = runner._find_collector_output()
+        assert result == "task post"
+        mock_gco.assert_called_once_with("test-pipeline", "v1", "test_collector", "POST.always.collect")
+
+
+class TestPostTaskEnvVars:
+    def _make_post_runner(self):
+        pipeline = ResolvedPipeline(
+            name="test",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="sub1",
+                    tasks=[ResolvedTask(name="t1", task_type="command", command="echo hi")],
+                    config=PipelineConfig(),
+                )
+            ],
+        )
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_post_env")
+        runner = PipelineRunner(run_id="test_post_env", pipeline=pipeline, context=ctx)
+        runner._pipeline_id = "test-pipeline"
+        runner._pipeline_version = "v1"
+        return runner
+
+    @pytest.mark.asyncio
+    async def test_execute_post_task_sets_all_env_vars(self):
+        runner = self._make_post_runner()
+        task = ResolvedTask(name="collect", task_type="plugin", plugin="test_result_collector")
+
+        captured_env = {}
+
+        class FakeExecutor:
+            async def execute(self, command, env, log_path, timeout, cwd=None):
+                captured_env.update(env)
+                return ExecutorResult(exit_code=0, stdout="ok")
+
+        with (
+            patch("taskpps.engine.runner.get_settings") as mock_settings,
+            patch("taskpps.engine.runner.create_executor", return_value=FakeExecutor()),
+            patch("taskpps.engine.runner.build_log_path", return_value=Path("/tmp/test.log")),
+            patch("taskpps.engine.runner.get_logs_dir", return_value="/fake/logs"),
+        ):
+            mock_settings.return_value.executor.default_timeout = 60
+
+            await runner._execute_post_task("always", task)
+
+        assert captured_env.get("TASKPPS_RUN_ID") == "test_post_env"
+        assert captured_env.get("TASKPPS_TASK_ID") == "POST.always.collect"
+        assert captured_env.get("TASKPPS_PIPELINE_ID") == "test-pipeline"
+        assert captured_env.get("TASKPPS_PIPELINE_VERSION") == "v1"
+        assert captured_env.get("TASKPPS_LOGS_DIR") == "/fake/logs"
+
+    @pytest.mark.asyncio
+    async def test_post_collector_flow_with_real_file(self):
+        """端到端测试: post phase 执行 collector 后 _find_collector_output 能读取输出."""
+        import tempfile
+        from datetime import datetime, timezone
+
+        from taskpps.domain.pipeline import ResolvedPostConfig as RPC
+        from taskpps.models.run import RunStatus
+
+        pipeline = ResolvedPipeline(
+            name="deploy-steps",
+            subpipelines=[
+                ResolvedSubPipeline(
+                    name="steps-pipeline",
+                    tasks=[ResolvedTask(name="t1", task_type="command", command="echo hi")],
+                    config=PipelineConfig(host="test-agent01"),
+                )
+            ],
+        )
+        pipeline.post = RPC(
+            always=[ResolvedTask(name="collect-report", task_type="plugin", plugin="test_result_collector")]
+        )
+
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_full_flow")
+        runner = PipelineRunner(run_id="test_full_flow", pipeline=pipeline, context=ctx)
+        runner._pipeline_id = "test-pipe"
+        runner._pipeline_version = "v1"
+        runner._start_time = datetime.now(timezone.utc)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            trc_log_dir = Path(tmpdir) / "test-pipe" / "v_v1" / "builds" / "test_full_flow" / "POST.always.collect-report"
+            trc_log_dir.mkdir(parents=True)
+            trc_log_path = trc_log_dir / "task.log"
+            trc_log_path.write_text(
+                "some header\n---TRC_OUTPUT_START---\n| Task | passed |\n|------|--------|\n| t1 | 5 |\n---TRC_OUTPUT_END---\ntrailer"
+            )
+
+            class FakeExecutor:
+                async def execute(self, command, env, log_path, timeout, cwd=None):
+                    return ExecutorResult(exit_code=0, stdout="ok")
+
+            with (
+                patch("taskpps.engine.runner.build_log_path", return_value=trc_log_path),
+                patch("taskpps.engine.runner.create_executor", return_value=FakeExecutor()),
+                patch("taskpps.engine.runner.get_settings") as mock_settings,
+            ):
+                mock_settings.return_value.executor.default_timeout = 60
+                await runner._execute_post_phase(RunStatus.FAILED)
+                result = runner._find_collector_output()
+
+            assert result is not None
+            assert "| Task | passed |" in result
 

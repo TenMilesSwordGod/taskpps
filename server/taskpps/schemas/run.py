@@ -177,6 +177,7 @@ class ResultPageResponse(BaseModel):
     stats: dict[str, Any]
     html_content: str
     md_content: str
+    format: str = "html"
     collector_mode: str | None = None
     has_collector: bool = False
     generated_at: str | None = None
