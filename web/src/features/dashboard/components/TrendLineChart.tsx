@@ -201,7 +201,7 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <svg
         ref={svgRef}
-        width={width}
+        width="100%"
         height={chartH}
         style={{ display: 'block', cursor: clickable ? 'pointer' : hover != null ? 'crosshair' : 'default' }}
         onMouseMove={handleMove}
