@@ -136,7 +136,7 @@ class AgentBootstrap:
                 timeout=BOOTSTRAP_TIMEOUT,
             )
             logger.info("Agent '%s' handshake completed", agent_id)
-            return {"success": True, "agent_pid": 0}
+            return {"success": True, "agent_pid": pid}
         except asyncio.TimeoutError as e:
             agent_log_path = f"{agent_log_dir}/agent.log"
             log_tail = ""
@@ -557,7 +557,8 @@ class AgentBootstrap:
                 raise AgentBootstrapError(t("上传二进制失败: {error}", error=str(e))) from e
             await self._ssh_exec(ssh, f"chmod 755 {agent_binary_path}")
 
-            # 4. 启动新 agent 进程
+            # 4. 启动新 agent 进程（在 start 前记录时间，避免 agent 连上后 since 还没设置）
+            deploy_started_at = time.time()
             try:
                 pid = await self._start_agent_daemon(
                     ssh, agent_binary_path, agent_log_dir, agent_pid_file, agent_id, agent_secret, server_url, agent_data
@@ -571,14 +572,13 @@ class AgentBootstrap:
             await self._ssh_close(ssh)
 
         # 5. 等待新握手
-        deploy_started_at = time.time()
         try:
             await asyncio.wait_for(
                 self._wait_for_handshake(manager, agent_id, deploy_started_at),
                 timeout=BOOTSTRAP_TIMEOUT,
             )
             logger.info("Agent '%s' update handshake completed", agent_id)
-            return {"success": True, "agent_pid": 0}
+            return {"success": True, "agent_pid": pid}
         except asyncio.TimeoutError as e:
             agent_log_path = f"{agent_log_dir}/agent.log"
             log_tail = ""

@@ -3,7 +3,7 @@ import { Tooltip, Popconfirm, Tag, Popover } from 'antd';
 import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
-  CloudUpload, Loader2, Info, FolderOpen, ExternalLink, Clock, Timer, Terminal, RefreshCw,
+  CloudUpload, Loader2, Info, ExternalLink, Clock, Timer, Terminal, RefreshCw,
 } from 'lucide-react';
 import { useDeployAgent, useUpdateDeployAgent, usePendingCommands } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
@@ -459,20 +459,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
             <span title={agent.source_file || agent.agent_id}>{agent.agent_id}</span>
             <span style={{ color: '#E3E4E8' }}>·</span>
             <span>{typeLabel}</span>
-            {agent.project_id && (
-              <>
-                <span style={{ color: '#E3E4E8' }}>·</span>
-                <Tooltip title={`项目: ${agent.project_name || agent.project_id}`}>
-                  <Tag
-                    icon={<FolderOpen size={10} />}
-                    style={{ margin: 0, fontSize: 10, lineHeight: '16px', paddingInline: 4, borderRadius: 4 }}
-                    color="blue"
-                  >
-                    {agent.project_id}
-                  </Tag>
-                </Tooltip>
-              </>
-            )}
+
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, paddingTop: 4 }}>

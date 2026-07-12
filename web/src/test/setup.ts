@@ -47,6 +47,16 @@ if (!('getBoundingClientRect' in HTMLElement.prototype)) {
   }
 }
 
+// jsdom 不实现 SVG 几何接口（SVGPathElement/SVGGeometryElement），
+// 折线图绘制动画调用 path.getTotalLength()，在 SVGElement 原型上统一桩
+if (typeof SVGElement !== 'undefined' && typeof SVGElement.prototype.getTotalLength !== 'function') {
+  Object.defineProperty(SVGElement.prototype, 'getTotalLength', {
+    value: () => 0,
+    configurable: true,
+    writable: true,
+  })
+}
+
 // jsdom 不实现 ClipboardItem，仅测试需要
 class ClipboardItemStub {
   private readonly types: Record<string, Blob>

@@ -129,7 +129,7 @@ async def try_connect(body: AgentCheckRequest):
 @router.post("/check", response_model=AgentCheckResponse)
 async def check(body: AgentCheckRequest):
     try:
-        result = _agent_service.check(body)
+        result = await _agent_service.check(body)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

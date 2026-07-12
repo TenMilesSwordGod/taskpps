@@ -1,14 +1,15 @@
-import { Card, Col, Row, Statistic, Table, Tag, Button } from 'antd';
+import { Card, Col, Row, Statistic, Table, Tag, Button, Select, Segmented } from 'antd';
 import type { CSSProperties } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { GitBranch, Play, Loader, AlertCircle, History } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { usePipelines } from '@/api/pipelines';
 import { useRuns } from '@/api/runs';
-import { useHealthCheck } from '@/api/health';
+import { useProjects } from '@/api/projects';
 import StatusTag from '@/components/StatusTag';
 import PipelineProgressPopover from '@/components/PipelineProgressPopover';
+import TrendLineChart from '@/features/dashboard/components/TrendLineChart';
 import type { RunResponse, RunStatus } from '@/types';
 
 /** 计算耗时（基于服务端返回的 duration_ms） */
@@ -30,6 +31,37 @@ function rowBackground(status: RunStatus): string | undefined {
   return undefined;
 }
 
+/** 运行状态的配色（用于 tooltip） */
+function runStatusColor(status: string): string {
+  switch (status) {
+    case 'success':
+      return '#10b981';
+    case 'failed':
+      return '#ef4444';
+    case 'running':
+      return '#3D5BFF';
+    case 'cancelled':
+      return '#7C7F88';
+    case 'partial':
+      return '#f59e0b';
+    default:
+      return '#7C7F88';
+  }
+}
+
+/**
+ * 单次运行的任务成功率（%）
+ * 成功率 = success / (总任务数 - skipped)，分母为 0 时返回 0
+ */
+function taskSuccessRatePct(summary: Record<string, number> | undefined | null): number {
+  if (!summary) return 0;
+  const total = Object.values(summary).reduce((a, b) => a + b, 0);
+  const skipped = summary.skipped ?? 0;
+  const denom = total - skipped;
+  if (denom <= 0) return 0;
+  return Math.round(((summary.success ?? 0) / denom) * 100);
+}
+
 /** Column 风格统计卡片 */
 const statCardStyle: CSSProperties = {
   border: '1px solid #E3E4E8',
@@ -37,14 +69,23 @@ const statCardStyle: CSSProperties = {
   boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
 };
 
+const TREND_DAYS = 14;
+const RECENT_RUNS_COUNT = 15;
+
+type TrendView = 'daily' | 'recent';
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { data: pipelinesData } = usePipelines();
-  const { data: runsData } = useRuns({ limit: 100 });
-  const { data: healthData } = useHealthCheck();
+  const { data: runsData } = useRuns({ limit: 500 });
+  const { data: projectsData } = useProjects();
 
-  const pipelines = pipelinesData?.items ?? [];
-  const runs = runsData?.items ?? [];
+  const pipelines = useMemo(() => pipelinesData?.items ?? [], [pipelinesData]);
+  const runs = useMemo(() => runsData?.items ?? [], [runsData]);
+  const projects = projectsData ?? [];
+
+  const [selectedProject, setSelectedProject] = useState<string>('all');
+  const [trendView, setTrendView] = useState<TrendView>('recent');
 
   // 统计数据
   const pipelineCount = pipelines.length;
@@ -55,12 +96,79 @@ export default function DashboardPage() {
   // 最近 10 条运行
   const recentRuns = runs.slice(0, 10);
 
+  // 按天聚合的任务成功率（支持按项目过滤）：每日内所有运行的 pass 任务 / 总任务（剔除 skipped）
+  const trend = (() => {
+    const days = Array.from({ length: TREND_DAYS }, (_, i) =>
+      dayjs().startOf('day').subtract(TREND_DAYS - 1 - i, 'day'),
+    );
+    const pass = new Array(TREND_DAYS).fill(0);
+    const denom = new Array(TREND_DAYS).fill(0);
+    // 收集每天出现的运行名（去重），供 tooltip 显示
+    const dayNames: string[][] = Array.from({ length: TREND_DAYS }, () => []);
+    for (const r of runs) {
+      const d = dayjs(r.created_at).startOf('day');
+      const idx = days.findIndex((day) => day.isSame(d, 'day'));
+      if (idx < 0) continue;
+      if (selectedProject !== 'all' && (r.project_id || '') !== selectedProject) continue;
+      const total = Object.values(r.task_summary ?? {}).reduce((a, b) => a + b, 0);
+      const skipped = r.task_summary?.skipped ?? 0;
+      pass[idx] += r.task_summary?.success ?? 0;
+      denom[idx] += Math.max(0, total - skipped);
+      dayNames[idx].push(r.display_name || r.pipeline_name || r.id.slice(0, 8));
+    }
+    return days.map((day, i) => {
+      const names = dayNames[i];
+      const count = names.length;
+      // 取前 3 个不重复名字，加「…」缩略
+      let detail: string | undefined;
+      if (count > 0) {
+        const uniq = [...new Set(names)];
+        detail = `共 ${count} 次${uniq.length > 0 ? '：' + uniq.slice(0, 3).join('、') : ''}${uniq.length > 3 ? '…' : ''}`;
+      }
+      return {
+        label: day.format('MM-DD'),
+        value: denom[i] > 0 ? Math.round((pass[i] / denom[i]) * 100) : 0,
+        detail,
+      };
+    });
+  })();
+
+  // 最近 N 次运行（按时间正序，左→右为从早到晚），纵坐标为单次运行的任务成功率，
+  // 每点附带运行状态/时间，供 tooltip 展示“跑的情况”
+  const recentTrend = useMemo(() => {
+    const filtered = runs.filter(
+      (r) => selectedProject === 'all' || (r.project_id || '') === selectedProject,
+    );
+    return filtered
+      .slice(0, RECENT_RUNS_COUNT)
+      .map((r) => ({
+        label: r.display_name || r.pipeline_name || r.id,
+        value: taskSuccessRatePct(r.task_summary),
+        status: r.status,
+        statusColor: runStatusColor(r.status),
+        time: r.started_at
+          ? dayjs(r.started_at).format('MM-DD HH:mm')
+          : dayjs(r.created_at).format('MM-DD HH:mm'),
+        id: r.id,
+      }))
+      .reverse();
+  }, [runs, selectedProject]);
+
+  const trendData = trendView === 'daily' ? trend : recentTrend;
+  const trendUnit = trendView === 'daily' ? '每日任务成功率' : '单次运行任务成功率';
+  const trendUnitShort = '%';
+
+  const projectOptions = [
+    { value: 'all', label: '全部项目' },
+    ...projects.map((p) => ({ value: p.id, label: p.name })),
+  ];
+
   const columns = useMemo(() => [
     {
       title: '运行名',
       dataIndex: 'display_name',
       key: 'display_name',
-      width: 120,
+      width: 220,
       render: (_: string, record: RunResponse) => (
         <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
           <a onClick={() => navigate(`/runs/${record.id}`)} style={{ color: '#3D5BFF', fontWeight: 500 }}>
@@ -116,46 +224,106 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-4 overflow-auto h-full">
-      {/* 统计卡片 */}
-      <Row gutter={24}>
-        <Col span={6}>
-          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
-            <Statistic
-              title="流水线总数"
-              value={pipelineCount}
-              prefix={<GitBranch size={18} color="#7C7F88" />}
-              valueStyle={{ color: '#121620', fontWeight: 500 }}
-            />
-          </Card>
+      <Row gutter={[16, 16]} align="stretch">
+        {/* 左侧：2×2 统计卡片 */}
+        <Col xs={24} lg={8}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gridTemplateRows: '1fr 1fr',
+              gap: 12,
+              height: '100%',
+            }}
+          >
+            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
+              <Statistic
+                title="流水线总数"
+                value={pipelineCount}
+                prefix={<GitBranch size={18} color="#7C7F88" />}
+                valueStyle={{ color: '#121620', fontWeight: 500 }}
+              />
+            </Card>
+            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
+              <Statistic
+                title="今日运行"
+                value={todayRuns}
+                prefix={<Play size={18} color="#7C7F88" />}
+                valueStyle={{ color: '#121620', fontWeight: 500 }}
+              />
+            </Card>
+            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
+              <Statistic
+                title="运行中"
+                value={runningCount}
+                prefix={<Loader size={18} color="#7EADFF" />}
+                valueStyle={{ color: '#3D5BFF', fontWeight: 500 }}
+              />
+            </Card>
+            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
+              <Statistic
+                title="失败"
+                value={failedCount}
+                prefix={<AlertCircle size={18} color={failedCount > 0 ? '#ef4444' : '#7C7F88'} />}
+                valueStyle={failedCount > 0 ? { color: '#ef4444', fontWeight: 500 } : { color: '#121620', fontWeight: 500 }}
+              />
+            </Card>
+          </div>
         </Col>
-        <Col span={6}>
-          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
-            <Statistic
-              title="今日运行"
-              value={todayRuns}
-              prefix={<Play size={18} color="#7C7F88" />}
-              valueStyle={{ color: '#121620', fontWeight: 500 }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
-            <Statistic
-              title="运行中"
-              value={runningCount}
-              prefix={<Loader size={18} color="#7EADFF" />}
-              valueStyle={{ color: '#3D5BFF', fontWeight: 500 }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card style={statCardStyle} styles={{ body: { padding: 20 } }}>
-            <Statistic
-              title="失败"
-              value={failedCount}
-              prefix={<AlertCircle size={18} color={failedCount > 0 ? '#ef4444' : '#7C7F88'} />}
-              valueStyle={failedCount > 0 ? { color: '#ef4444', fontWeight: 500 } : { color: '#121620', fontWeight: 500 }}
-            />
+
+        {/* 右侧：运行走势 */}
+        <Col xs={24} lg={16} style={{ display: 'flex' }}>
+          <Card
+            title="运行走势"
+            extra={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Segmented
+                  size="small"
+                  value={trendView}
+                  onChange={(v) => setTrendView(v as TrendView)}
+                  options={[
+                    { label: '近日', value: 'daily' },
+                    { label: '近十五次', value: 'recent' },
+                  ]}
+                />
+                <Select
+                  size="small"
+                  value={selectedProject}
+                  onChange={setSelectedProject}
+                  options={projectOptions}
+                  style={{ width: 160 }}
+                />
+              </div>
+            }
+            style={{
+              border: '1px solid #E3E4E8',
+              borderRadius: 8,
+              boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            styles={{
+              header: { borderBottom: '1px solid #E3E4E8', minHeight: 48, flex: 'none' },
+              body: {
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: 12,
+            } }}
+          >
+            <div style={{ flex: 1, minHeight: 180, position: 'relative' }}>
+              <TrendLineChart
+                data={trendData}
+                height={220}
+                unit={trendUnitShort}
+                onPointClick={(id) => navigate(`/runs/${id}`)}
+              />
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: '#7C7F88', textAlign: 'right', flex: 'none' }}>
+              {trendUnit}
+            </div>
           </Card>
         </Col>
       </Row>
@@ -186,41 +354,6 @@ export default function DashboardPage() {
             onClick: () => navigate(`/runs/${record.id}`),
           })}
         />
-      </Card>
-
-      {/* 服务器健康状态 */}
-      <Card
-        title="服务器状态"
-        size="small"
-        className="max-w-xs"
-        style={{
-          border: '1px solid #E3E4E8',
-          borderRadius: 8,
-          boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded-full"
-            style={{
-              backgroundColor: healthData?.status === 'ok' ? '#10b981' : '#ef4444',
-              boxShadow: healthData?.status === 'ok' ? '0 0 6px rgba(16, 185, 129, 0.4)' : 'none',
-            }}
-          />
-          <span style={{ color: '#121620', fontWeight: 500 }}>
-            {healthData?.status === 'ok' ? '正常' : '异常'}
-          </span>
-          {healthData?.host && (
-            <span style={{ color: '#7C7F88', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>
-              {healthData.host}:{healthData.port}
-            </span>
-          )}
-          {healthData?.version && (
-            <span style={{ color: '#7C7F88', fontSize: 12, marginLeft: 8 }}>
-              v{healthData.version}
-            </span>
-          )}
-        </div>
       </Card>
     </div>
   );

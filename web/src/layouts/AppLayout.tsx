@@ -9,6 +9,7 @@ import {
   ApiOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
+import TaskPpsLogo from '@/components/TaskPpsLogo';
 
 function CurrentTime() {
   const [now, setNow] = useState(() => new Date());
@@ -72,7 +73,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <ProLayout
       title="TaskPPS"
-      logo={null}
+      logo={<TaskPpsLogo size={28} />}
       layout="mix"
       collapsed={collapsed}
       onCollapse={setCollapsed}

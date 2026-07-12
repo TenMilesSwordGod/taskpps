@@ -73,34 +73,8 @@ class AgentService:
             raise ValueError(t("Agent not found: {id}", id=agent_id))
         return self._check_one(agent_data, timeout)
 
-    def check(self, request: AgentCheckRequest) -> AgentCheckResponse:
-        all_agents = self._load_all_from_projects()
-        results = []
-
-        for agent_id, agent_data in all_agents.items():
-            if request.agent_id and agent_id != request.agent_id:
-                continue
-
-            file_filter = request.file_filter
-            if file_filter:
-                source_file = agent_data.get("_source_file", "")
-                if not _match_file_filter(source_file, file_filter):
-                    continue
-
-            results.append(self._check_one(agent_data, request.timeout))
-
-        total = len(results)
-        connected = sum(1 for r in results if r.status not in ("failed", "disconnected"))
-        failed = total - connected
-
-        return AgentCheckResponse(
-            results=results,
-            summary=AgentCheckSummary(total=total, connected=connected, failed=failed),
-        )
-
-    async def check_stream(self, request: AgentCheckRequest) -> AsyncGenerator[str, None]:
-        all_agents = await self._load_all_from_projects_async()
-
+    def _select_targets(self, all_agents: dict[str, dict], request: AgentCheckRequest) -> list[dict]:
+        """按 agent_id / file_filter 过滤出需要检查的 agent 配置。"""
         target: list[dict] = []
         for agent_id, agent_data in all_agents.items():
             if request.agent_id and agent_id != request.agent_id:
@@ -111,6 +85,37 @@ class AgentService:
                 if not _match_file_filter(source_file, file_filter):
                     continue
             target.append(agent_data)
+        return target
+
+    async def check(self, request: AgentCheckRequest) -> AgentCheckResponse:
+        # 并行检查：把每个 agent 的阻塞式 socket/SSH 检查丢到线程池，
+        # 总耗时约等于最慢单个 agent，而非各 agent 串行之和。
+        all_agents = await self._load_all_from_projects_async()
+        target = self._select_targets(all_agents, request)
+
+        total = len(target)
+        if total == 0:
+            return AgentCheckResponse(
+                results=[],
+                summary=AgentCheckSummary(total=0, connected=0, failed=0),
+            )
+
+        results = await asyncio.gather(
+            *(asyncio.to_thread(self._check_one, a, request.timeout) for a in target)
+        )
+
+        connected = sum(1 for r in results if r.status not in ("failed", "disconnected"))
+        failed = total - connected
+
+        return AgentCheckResponse(
+            results=list(results),
+            summary=AgentCheckSummary(total=total, connected=connected, failed=failed),
+        )
+
+    async def check_stream(self, request: AgentCheckRequest) -> AsyncGenerator[str, None]:
+        all_agents = await self._load_all_from_projects_async()
+
+        target = self._select_targets(all_agents, request)
 
         total = len(target)
         connected = 0

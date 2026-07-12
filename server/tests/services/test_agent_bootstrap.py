@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import socket
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -700,4 +701,162 @@ class TestAgentBootstrapFlow:
         ):
             result = await bootstrap.bootstrap("remote-3", agent_loader=loader)
         assert result["success"] is True
+
+
+class TestUpdateDeploy:
+    """update_deploy 方法测试"""
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0324", domain="server/services", priority="P1")
+    async def test_success(self):
+        """update_deploy 端到端成功：终止旧进程 → 上传 → 启动 → 握手。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = {
+            "id": "remote-u1",
+            "host": "10.0.0.1",
+            "port": 22,
+            "credential_id": "cred-1",
+        }
+        cred_loader = MagicMock()
+        cred_loader.get.return_value = {"id": "cred-1", "username": "admin", "password": "secret"}
+        bootstrap._credential_loader = cred_loader
+
+        client = _make_paramiko_client()
+
+        # 记录 _start_agent_daemon 调用时的时间
+        start_daemon_time = [None]
+
+        async def record_start_time(*args, **kwargs):
+            start_daemon_time[0] = time.time()
+            return 99
+
+        # 捕获 _wait_for_handshake 的 since 参数
+        captured_since = [None]
+
+        async def capture_since(manager, agent_id, since):
+            captured_since[0] = since
+            return
+
+        # _ssh_exec 调用顺序:
+        #   echo $HOME, id -u, pkill -f ...; rm -f ..., chmod 755
+        ssh_results = [
+            (0, "/home/admin\n", ""),  # echo $HOME
+            (0, "1000", ""),           # id -u
+            (0, "", ""),               # pkill -f
+            (0, "", ""),               # chmod 755
+        ]
+
+        with (
+            patch.object(AgentBootstrap, "_ssh_connect", return_value=client),
+            patch.object(AgentBootstrap, "_ssh_close", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_ssh_exec", side_effect=ssh_results),
+            patch.object(AgentBootstrap, "_check_server_reachability"),
+            patch.object(AgentBootstrap, "_ensure_remote_dir", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_deploy_binary", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_check_existing_agent", new=AsyncMock(return_value=1234)),
+            patch.object(AgentBootstrap, "_start_agent_daemon", new=AsyncMock(side_effect=record_start_time)),
+            patch.object(AgentManager, "disconnect", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_wait_for_handshake", new=AsyncMock(side_effect=capture_since)),
+        ):
+            result = await bootstrap.update_deploy("remote-u1", agent_loader=loader)
+
+        assert result["success"] is True
+        assert captured_since[0] is not None
+        assert start_daemon_time[0] is not None
+        assert captured_since[0] <= start_daemon_time[0], (
+            f"deploy_started_at ({captured_since[0]}) 应在 _start_agent_daemon ({start_daemon_time[0]}) 之前设置"
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0325", domain="server/services", priority="P1")
+    async def test_timeout_raises(self):
+        """update_deploy 握手超时 → 抛 AgentBootstrapError，附 log tail。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = {
+            "id": "remote-u2",
+            "host": "10.0.0.1",
+            "port": 22,
+            "credential_id": "cred-1",
+        }
+        cred_loader = MagicMock()
+        cred_loader.get.return_value = {"id": "cred-1", "username": "admin", "password": "secret"}
+        bootstrap._credential_loader = cred_loader
+
+        client = _make_paramiko_client()
+
+        # _ssh_exec: echo $HOME, id -u, pkill, chmod, (second ssh for log) tail
+        ssh_results = [
+            (0, "/home/admin\n", ""),
+            (0, "1000", ""),
+            (0, "", ""),
+            (0, "", ""),
+            (0, "log content here", ""),
+        ]
+
+        with (
+            patch.object(AgentBootstrap, "_ssh_connect", return_value=client),
+            patch.object(AgentBootstrap, "_ssh_close", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_ssh_exec", side_effect=ssh_results),
+            patch.object(AgentBootstrap, "_check_server_reachability"),
+            patch.object(AgentBootstrap, "_ensure_remote_dir", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_deploy_binary", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_check_existing_agent", new=AsyncMock(return_value=1234)),
+            patch.object(AgentBootstrap, "_start_agent_daemon", new=AsyncMock(return_value=88)),
+            patch.object(AgentManager, "disconnect", new=AsyncMock()),
+            patch.object(AgentBootstrap, "_wait_for_handshake", new=AsyncMock(side_effect=asyncio.TimeoutError())),
+        ):
+            with pytest.raises(AgentBootstrapError, match="failed to connect"):
+                await bootstrap.update_deploy("remote-u2", agent_loader=loader)
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0320", domain="server/services", priority="P1")
+    async def test_local_agent_raises(self):
+        """本地 agent 不支持更新部署。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = {"id": "local", "host": "127.0.0.1"}
+        with pytest.raises(AgentBootstrapError, match="Update deploy is not supported"):
+            await bootstrap.update_deploy("local", agent_loader=loader)
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0321", domain="server/services", priority="P1")
+    async def test_no_auth_raises(self):
+        """缺少认证方式应报错。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = {
+            "id": "remote-noauth",
+            "host": "10.0.0.1",
+            "port": 22,
+            "credential_id": "",
+            "username": "",
+        }
+        with pytest.raises(AgentBootstrapError, match="No authentication method"):
+            await bootstrap.update_deploy("remote-noauth", agent_loader=loader)
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0322", domain="server/services", priority="P1")
+    async def test_agent_not_found_raises(self):
+        """agent 不存在应报错。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = None
+        with pytest.raises(AgentBootstrapError, match="not found"):
+            await bootstrap.update_deploy("ghost", agent_loader=loader)
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0323", domain="server/services", priority="P2")
+    async def test_auto_bootstrap_disabled_raises(self):
+        """auto_bootstrap 禁用应报错。"""
+        bootstrap = AgentBootstrap()
+        loader = MagicMock()
+        loader.get.return_value = {
+            "id": "disabled",
+            "host": "10.0.0.1",
+            "agent_auto_bootstrap": False,
+        }
+        with pytest.raises(AgentBootstrapError, match="auto_bootstrap"):
+            await bootstrap.update_deploy("disabled", agent_loader=loader)
 
