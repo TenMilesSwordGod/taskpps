@@ -118,6 +118,93 @@ describe('useSSELogs()', () => {
     expect(result.current.logs.length).toBeGreaterThan(0)
   })
 
+  it('多 task 超过上限：每个 task 都保留日志（按 task 裁剪，非全局 slice）', () => {
+    // 回归：5万行+多 task 场景，全局 slice 会丢弃前面 task 的全部日志，
+    // 导致切换到前面 task 时显示"无匹配日志"。改为按 task 保留后每个 task 都有日志。
+    const { result } = renderHook(() => useSSELogs('run-1'))
+    const es = MockEventSource.instances[0]
+    // 3 个 task，总共超过 MAX_LOG_LINES(50000)
+    const linesA: string[] = []
+    for (let i = 0; i < 20001; i++) linesA.push(`task-a: line${i}`)
+    act(() => es.emit('log', linesA.join('\n')))
+    const linesB: string[] = []
+    for (let i = 0; i < 20001; i++) linesB.push(`task-b: line${i}`)
+    act(() => es.emit('log', linesB.join('\n')))
+    const linesC: string[] = []
+    for (let i = 0; i < 10001; i++) linesC.push(`task-c: line${i}`)
+    act(() => es.emit('log', linesC.join('\n')))
+
+    // 裁剪后总行数 <= 37500
+    expect(result.current.logs.length).toBeLessThanOrEqual(37500)
+    // 核心：每个 task 都应保留日志，不会因全局 slice 丢失前面 task
+    const taskNames = new Set(result.current.logs.map((l) => l.taskName))
+    expect(taskNames.has('task-a')).toBe(true)
+    expect(taskNames.has('task-b')).toBe(true)
+    expect(taskNames.has('task-c')).toBe(true)
+  })
+
+  it('5万行大日志（13 task × 4000 行）：每个 task 都保留日志', () => {
+    // 模拟生产环境场景：13 个 task，每个约 4000 行，总共 52000 行
+    const { result } = renderHook(() => useSSELogs('run-1'))
+    const es = MockEventSource.instances[0]
+
+    const taskCount = 13
+    const linesPerTask = 4000
+
+    for (let i = 0; i < taskCount; i++) {
+      const taskName = `task-${i.toString().padStart(2, '0')}`
+      const lines: string[] = []
+      for (let j = 0; j < linesPerTask; j++) {
+        lines.push(`${taskName}: line-${j.toString().padStart(5, '0')}`)
+      }
+      act(() => es.emit('log', lines.join('\n')))
+    }
+
+    // 裁剪后总行数 <= 37500
+    expect(result.current.logs.length).toBeLessThanOrEqual(37500)
+
+    // 核心：每个 task 都应保留日志
+    const taskNames = new Set(result.current.logs.map((l) => l.taskName))
+    for (let i = 0; i < taskCount; i++) {
+      const expectedTaskName = `task-${i.toString().padStart(2, '0')}`
+      expect(taskNames.has(expectedTaskName)).toBe(true)
+    }
+
+    // 验证前面的 task（task-00）有日志，不会被全局 slice 丢弃
+    const firstTaskLogs = result.current.logs.filter((l) => l.taskName === 'task-00')
+    expect(firstTaskLogs.length).toBeGreaterThan(0)
+  })
+
+  it('task 数量很多（50 个）：perTask 不会变成 0', () => {
+    // 边界测试：37500 / 50 = 750，每个 task 应保留 750 行
+    // 如果 perTask 变成 0，所有日志都会丢失
+    const { result } = renderHook(() => useSSELogs('run-1'))
+    const es = MockEventSource.instances[0]
+
+    const taskCount = 50
+    const linesPerTask = 1000
+
+    for (let i = 0; i < taskCount; i++) {
+      const taskName = `task-${i}`
+      const lines: string[] = []
+      for (let j = 0; j < linesPerTask; j++) {
+        lines.push(`${taskName}: line${j}`)
+      }
+      act(() => es.emit('log', lines.join('\n')))
+    }
+
+    // 裁剪后总行数 <= 37500
+    expect(result.current.logs.length).toBeLessThanOrEqual(37500)
+
+    // 每个 task 至少保留 1 行（perTask >= 1）
+    const taskNames = new Set(result.current.logs.map((l) => l.taskName))
+    expect(taskNames.size).toBe(taskCount)
+
+    // 验证任意一个 task 有日志
+    const sampleLogs = result.current.logs.filter((l) => l.taskName === 'task-0')
+    expect(sampleLogs.length).toBeGreaterThan(0)
+  })
+
   it('done 事件：关闭连接并把 connected 置为 false', () => {
     const { result } = renderHook(() => useSSELogs('run-1'))
     const es = MockEventSource.instances[0]

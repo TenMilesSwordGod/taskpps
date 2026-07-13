@@ -193,6 +193,106 @@ class TestRunLogs:
         assert "text/event-stream" in response.headers.get("content-type", "")
 
     @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0986", domain="server/api", priority="P1")
+    async def test_logs_follow_batch_push(self, client, db_engine, tmp_path):
+        """follow 模式应批量推送：一个 log event 包含多行，减少 yield 次数。
+
+        回归：5万行日志逐行 yield 导致 SSE 接口 18 秒未推完。
+        改为按 task 批量推送后，N 行只需 1 次 yield。
+        """
+        from taskpps.db.engine import get_session_factory
+        from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus, TaskType
+
+        log_file = tmp_path / "multi.log"
+        log_file.write_text("line1\nline2\nline3\n")
+
+        async with get_session_factory()() as session:
+            run = PipelineRun(
+                id="test-batch-push",
+                pipeline_name="deploy",
+                status=RunStatus.SUCCESS,
+            )
+            session.add(run)
+            await session.commit()
+            task_run = TaskRun(
+                run_id="test-batch-push",
+                task_name="step1",
+                task_type=TaskType.COMMAND,
+                status=TaskStatus.SUCCESS,
+                log_path=str(log_file),
+            )
+            session.add(task_run)
+            await session.commit()
+
+        response = await client.get("/api/runs/test-batch-push/logs?follow=true")
+        assert response.status_code == 200
+
+        # 批量推送：3 行应在 1 个 log event 中（而非 3 个独立 event）
+        log_event_count = response.text.count("event: log")
+        assert log_event_count == 1, (
+            f"应批量推送（1 个 event 含 3 行），实际 {log_event_count} 个 log event; "
+            f"response: {response.text[:500]}"
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0987", domain="server/api", priority="P1")
+    async def test_logs_follow_large_logs_batch_push(self, client, db_engine, tmp_path):
+        """follow 模式处理 5 万行日志：应批量推送，log event 数量是 task 级别而非行级别。
+
+        回归：13 个 task × 4000 行 = 52000 行，逐行推送需 52000 次 yield，耗时 > 18 秒。
+        批量推送后只需 13 次 yield，响应时间大幅降低。
+        """
+        from taskpps.db.engine import get_session_factory
+        from taskpps.models.run import PipelineRun, RunStatus, TaskRun, TaskStatus, TaskType
+
+        task_count = 13
+        lines_per_task = 4000
+        total_lines = task_count * lines_per_task
+
+        async with get_session_factory()() as session:
+            run = PipelineRun(
+                id="test-large-batch",
+                pipeline_name="deploy",
+                status=RunStatus.SUCCESS,
+            )
+            session.add(run)
+            await session.commit()
+
+            for i in range(task_count):
+                task_name = f"task-{i:02d}"
+                log_file = tmp_path / f"{task_name}.log"
+                lines = [f"[{task_name}] line-{j:05d}\n" for j in range(lines_per_task)]
+                log_file.write_text("".join(lines))
+
+                task_run = TaskRun(
+                    run_id="test-large-batch",
+                    task_name=task_name,
+                    task_type=TaskType.COMMAND,
+                    status=TaskStatus.SUCCESS,
+                    log_path=str(log_file),
+                )
+                session.add(task_run)
+            await session.commit()
+
+        response = await client.get("/api/runs/test-large-batch/logs?follow=true")
+        assert response.status_code == 200
+
+        text = response.text
+
+        log_event_count = text.count("event: log")
+        # 批量推送：log event 数量 = task 数量，而非总行数
+        assert log_event_count == task_count, (
+            f"应批量推送（{task_count} 个 event），实际 {log_event_count} 个 log event"
+        )
+
+        # 验证所有日志行都被包含
+        total_line_count = text.count("\n") - text.count("event: ") - text.count("data: ")
+        # SSE 格式中 data: 行包含换行，粗略校验
+        assert total_line_count >= total_lines, (
+            f"期望至少 {total_lines} 行日志，实际 {total_line_count} 行"
+        )
+
+    @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0957", domain="server/api", priority="P1")
     async def test_logs_follow_emits_status_events(self, client, db_engine, tmp_path):
         """SSE follow 模式应在任务状态变更时推送 status 事件。

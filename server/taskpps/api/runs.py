@@ -267,8 +267,9 @@ async def get_run_logs(
                     if lines:
                         had_output = True
                         positions[task_name] = new_pos
-                        for line in lines:
-                            yield {"event": "log", "data": f"{task_name}: {line}"}
+                        # 批量推送：一个 SSE event 包含多行，减少 yield 次数
+                        # （5万行日志从5万次 yield 降到几百次）
+                        yield {"event": "log", "data": f"{task_name}: " + "\n".join(lines)}
 
                     task_status = statuses.get(task_name)
                     is_active = task_status and task_status not in (
@@ -285,8 +286,7 @@ async def get_run_logs(
                             lines, new_pos = _read_log_lines(log_path, positions[task_name])  # pragma: no cover
                             if lines:  # pragma: no cover
                                 positions[task_name] = new_pos  # pragma: no cover
-                                for line in lines:  # pragma: no cover
-                                    yield {"event": "log", "data": f"{task_name}: {line}"}  # pragma: no cover
+                                yield {"event": "log", "data": f"{task_name}: " + "\n".join(lines)}  # pragma: no cover
                     elif (
                         task_name not in flushed
                         and task_status
@@ -297,8 +297,7 @@ async def get_run_logs(
                         lines, new_pos = _read_log_lines(log_path, positions[task_name], include_partial=True)
                         if lines:
                             positions[task_name] = new_pos
-                            for line in lines:
-                                yield {"event": "log", "data": f"{task_name}: {line}"}
+                            yield {"event": "log", "data": f"{task_name}: " + "\n".join(lines)}
 
                 if active:  # pragma: no cover
                     # 等待事件总线推送（即时）或超时后轮询（兜底）

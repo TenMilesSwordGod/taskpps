@@ -79,12 +79,22 @@ export function useSSELogs(runId: string | undefined) {
           content,
           timestamp: Date.now(),
         }));
-        // 上限保护：超过 MAX 时丢弃最早的 1/4，避免 DOM 节点无限增长
         const next = [...prev, ...appended];
-        if (next.length > MAX_LOG_LINES) {
-          return next.slice(next.length - Math.floor(MAX_LOG_LINES * 0.75));
+        if (next.length <= MAX_LOG_LINES) return next;
+        // 按 task 保留：每个 task 保留最后 N 行，避免顺序执行时
+        // 前面 task 的日志被全局 slice 完全丢弃（"无匹配日志"问题）
+        const buckets = new Map<string, LogEntry[]>();
+        for (const l of next) {
+          if (!buckets.has(l.taskName)) buckets.set(l.taskName, []);
+          buckets.get(l.taskName)!.push(l);
         }
-        return next;
+        const perTask = Math.max(1, Math.floor((MAX_LOG_LINES * 0.75) / buckets.size));
+        const kept: LogEntry[] = [];
+        for (const arr of buckets.values()) {
+          kept.push(...arr.slice(-perTask));
+        }
+        kept.sort((a, b) => a.seq - b.seq);
+        return kept;
       });
     });
 
