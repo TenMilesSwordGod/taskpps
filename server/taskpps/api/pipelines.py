@@ -151,7 +151,9 @@ async def list_pipelines(project_id: str | None = Query(None)):
                     task_count = len(spec.tasks)
 
                 # Issue #184: 取最近 10 次运行 + task_summary，供前端折线图使用
-                recent_runs_data = await run_repo.list_runs(pipeline_file=file, limit=10)
+                # Phase 2 (2026-07): 加 project_id 过滤，防止不同项目同名文件共享运行历史
+                # 注意: pid=None 时 repo 内 if project_id: 为 False，不追加过滤条件
+                recent_runs_data = await run_repo.list_runs(pipeline_file=file, project_id=pid, limit=10)
                 recent_run_ids = [r.id for r in recent_runs_data]
                 recent_summaries = await run_repo.get_task_summaries(recent_run_ids) if recent_run_ids else {}
                 # recent_runs 按时间倒序（最近在前），前端折线图需反转
@@ -166,8 +168,8 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "created_at": r.created_at.isoformat() if r.created_at else None,
                     }
 
-                total_count = await run_repo.count_runs(pipeline_file=file)
-                success_count = await run_repo.count_runs(pipeline_file=file, status="success")
+                total_count = await run_repo.count_runs(pipeline_file=file, project_id=pid)
+                success_count = await run_repo.count_runs(pipeline_file=file, project_id=pid, status="success")
                 success_rate = round(success_count / total_count * 100) if total_count > 0 else 0
 
                 folder = os.path.dirname(file)
