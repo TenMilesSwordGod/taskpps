@@ -150,17 +150,11 @@ async def list_pipelines(project_id: str | None = Query(None)):
                 elif spec.tasks:
                     task_count = len(spec.tasks)
 
-                # Issue #184: 取最近 10 次运行 + task_summary，供前端折线图使用
-                # Phase 2 (2026-07): 用 definition_id 定位，代替 pipeline_file+project_id
-                # definition_id 是流水线的全局唯一 UUID，确保不同项目的同名文件不会共享运行历史
-                # 旧 run（Phase1 前）无 definition_id，回退用 pipeline_file+project_id
+                # Phase 2 (2026-07): 用 definition_id 定位 run 历史
+                # 列表API已通过 _sync_pipeline_definitions 确保每个pipeline都有UUID
+                # 不存在 definition_id 的 pipeline 不会出现在列表中
                 def_id = definitions.get(file, "")
-                recent_runs_data = await run_repo.list_runs(
-                    pipeline_file=file if not def_id else None,
-                    project_id=pid if not def_id else None,
-                    definition_id=def_id if def_id else None,
-                    limit=10,
-                )
+                recent_runs_data = await run_repo.list_runs(definition_id=def_id, limit=10) if def_id else []
                 recent_run_ids = [r.id for r in recent_runs_data]
                 recent_summaries = await run_repo.get_task_summaries(recent_run_ids) if recent_run_ids else {}
                 recent_runs = [{"task_summary": recent_summaries.get(r.id, {})} for r in recent_runs_data]
@@ -174,17 +168,8 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "created_at": r.created_at.isoformat() if r.created_at else None,
                     }
 
-                total_count = await run_repo.count_runs(
-                    pipeline_file=file if not def_id else None,
-                    project_id=pid if not def_id else None,
-                    definition_id=def_id if def_id else None,
-                )
-                success_count = await run_repo.count_runs(
-                    pipeline_file=file if not def_id else None,
-                    project_id=pid if not def_id else None,
-                    definition_id=def_id if def_id else None,
-                    status="success",
-                )
+                total_count = await run_repo.count_runs(definition_id=def_id) if def_id else 0
+                success_count = await run_repo.count_runs(definition_id=def_id, status="success") if def_id else 0
                 success_rate = round(success_count / total_count * 100) if total_count > 0 else 0
 
                 folder = os.path.dirname(file)
