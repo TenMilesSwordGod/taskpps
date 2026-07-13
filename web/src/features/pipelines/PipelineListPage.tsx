@@ -122,6 +122,40 @@ export default function PipelineListPage() {
 
   const isExpandable = (r: Row) => r.kind === 'project' || r.kind === 'folder';
 
+  /**
+   * 统一的行 key 生成。
+   * pipeline 使用 record.id（唯一），不能用 record.file — 不同项目下可能有同名文件，
+   * 会导致 React key 冲突，使只有最后一个 project 的展开/折叠正常工作。
+   * folder 加入 project_id 防止跨项目同名文件夹 key 冲突。
+   */
+  const getRowKey = useCallback((record: Row): string => {
+    if (record.kind === 'project') return `__proj__${record.name}`;
+    if (record.kind === 'folder') return `__folder__${record.project_id}__${record.name}`;
+    return record.id;
+  }, []);
+
+  /**
+   * 自定义展开/折叠切换，不依赖 Ant Design 内部状态。
+   * 折叠父行时同时清除子行展开状态，防止重新展开时子文件夹自动展开（"展开多出来内容"）。
+   */
+  const toggleExpand = useCallback((key: string, record?: Row) => {
+    setExpandedRowKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+        // 折叠 project 时，清除其下所有 folder 的展开状态
+        if (record?.kind === 'project') {
+          for (const child of record.children) {
+            if (child.kind === 'folder') next.delete(getRowKey(child));
+          }
+        }
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, [getRowKey]);
+
   // 首次加载时按 pipelineCount 决定默认展开（≤10 展开，>10 收起）
   const defaultedRef = useRef(false);
   useEffect(() => {
@@ -130,11 +164,11 @@ export default function PipelineListPage() {
     const keys = new Set<string>();
     for (const r of rows) {
       if (r.kind === 'project' && (r.pipelineCount ?? 0) <= 10) {
-        keys.add(`__proj__${r.name}`);
+        keys.add(getRowKey(r));
       }
     }
     setExpandedRowKeys(keys);
-  }, [rows]);
+  }, [rows, getRowKey]);
 
   const handleOpenTrigger = useCallback((definitionId?: string, projectId?: string | null) => {
     setTriggerDefinitionId(definitionId);
@@ -281,11 +315,7 @@ export default function PipelineListPage() {
               </Space>
             </div>
           )}
-          rowKey={(record: Row) =>
-            record.kind === 'project' ? `__proj__${record.name}`
-              : record.kind === 'folder' ? `__folder__${record.name}`
-              : record.file
-          }
+          rowKey={getRowKey}
           columns={columns}
           dataSource={rows}
           loading={isLoading}
@@ -295,22 +325,12 @@ export default function PipelineListPage() {
           expandable={{
             childrenColumnName: 'children',
             expandedRowKeys: [...expandedRowKeys],
-            onExpandedRowsChange: (keys) => {
-              setExpandedRowKeys(new Set(keys as string[]));
-            },
-            defaultExpandAllRows: true,
+            // onExpandedRowsChange 为 noop：完全由 toggleExpand 控制，不受 Ant Design 内部状态干扰
+            onExpandedRowsChange: () => {},
             rowExpandable: isExpandable,
             expandIcon: ({ expanded, record }) => {
               if (!isExpandable(record as Row)) return <span style={{ display: 'inline-block', width: 18 }} />;
-              const key = (record as Row).kind === 'project' ? `__proj__${(record as Row).name}`
-                : `__folder__${(record as Row).name}`;
-              const handleToggle = () => {
-                setExpandedRowKeys((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(key)) next.delete(key); else next.add(key);
-                  return next;
-                });
-              };
+              const key = getRowKey(record as Row);
               return (
                 <span
                   role="button"
@@ -328,8 +348,8 @@ export default function PipelineListPage() {
                     transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
                     color: '#7C7F88',
                   }}
-                  onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggle(); } }}
+                  onClick={(e) => { e.stopPropagation(); toggleExpand(key, record as Row); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } }}
                 >
                   <ChevronRight size={14} />
                 </span>
@@ -339,17 +359,10 @@ export default function PipelineListPage() {
           }}
           onRow={(record: Row) => {
             if (!isExpandable(record)) return {};
-            const key = record.kind === 'project' ? `__proj__${record.name}`
-              : `__folder__${record.name}`;
+            const key = getRowKey(record);
             return {
               style: { cursor: 'pointer' },
-              onClick: () => {
-                setExpandedRowKeys((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(key)) next.delete(key); else next.add(key);
-                  return next;
-                });
-              },
+              onClick: () => toggleExpand(key, record),
             };
           }}
         />

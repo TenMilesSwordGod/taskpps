@@ -307,3 +307,47 @@ describe('<PipelineListPage /> Issue #104 - 展开/折叠动画', () => {
     expect(hasAnimation).toBe(true)
   })
 })
+
+describe('<PipelineListPage /> 多项目展开/折叠 bug — 重复 file 导致 key 冲突', () => {
+  beforeEach(() => {
+    mockUsePipelines.mockReset()
+  })
+
+  it('多个项目含相同 file 的 pipeline 时，各项目可独立展开/折叠', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({ id: 'pipe-1', name: 'p1', file: 'example.yaml', project_id: 'proj1', project_name: 'Proj1' }),
+          makePipeline({ id: 'pipe-2', name: 'p2', file: 'example.yaml', project_id: 'proj2', project_name: 'Proj2' }),
+        ],
+      },
+      isLoading: false,
+    })
+
+    const { container } = render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // 等待 useEffect 初始展开（pipelineCount=1 ≤ 10）
+    await waitFor(() => {
+      expect(screen.getByText('p1')).toBeInTheDocument()
+      expect(screen.getByText('p2')).toBeInTheDocument()
+    })
+
+    // 两个 project 行各有一个展开图标
+    const expandIcons = container.querySelectorAll('.pipeline-expand-icon')
+    expect(expandIcons.length).toBe(2)
+
+    // 折叠第一个项目 → p1 应消失，p2 应保留
+    fireEvent.click(expandIcons[0])
+    await waitFor(() => {
+      expect(screen.queryByText('p1')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('p2')).toBeInTheDocument()
+
+    // 重新展开第一个项目 → p1 应回来
+    fireEvent.click(expandIcons[0])
+    await waitFor(() => {
+      expect(screen.getByText('p1')).toBeInTheDocument()
+    })
+    expect(screen.getByText('p2')).toBeInTheDocument()
+  })
+})
