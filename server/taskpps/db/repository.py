@@ -85,6 +85,7 @@ class RunRepository:
         pipeline_id: str | None = None,
         project_id: str | None = None,
         pipeline_file: str | None = None,
+        definition_id: str | None = None,
     ) -> int:
         stmt = select(func.count(PipelineRun.id))
         if pipeline:
@@ -97,6 +98,8 @@ class RunRepository:
             stmt = stmt.where(PipelineRun.status == status)
         if project_id:
             stmt = stmt.where(PipelineRun.project_id == project_id)
+        if definition_id:
+            stmt = stmt.where(PipelineRun.definition_id == definition_id)
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -107,6 +110,7 @@ class RunRepository:
         project_id: str | None = None,
         limit: int = 50,
         pipeline_file: str | None = None,
+        definition_id: str | None = None,
     ) -> Sequence[PipelineRun]:
         stmt = select(PipelineRun).order_by(PipelineRun.created_at.desc())
         if pipeline:
@@ -117,6 +121,8 @@ class RunRepository:
             stmt = stmt.where(PipelineRun.status == status)
         if project_id:
             stmt = stmt.where(PipelineRun.project_id == project_id)
+        if definition_id:
+            stmt = stmt.where(PipelineRun.definition_id == definition_id)
         stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return result.scalars().all()
