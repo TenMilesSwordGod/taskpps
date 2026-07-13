@@ -7,7 +7,7 @@ from taskpps.models.run import RunStatus, TaskStatus, TaskType
 
 
 class CreateRunRequest(BaseModel):
-    pipeline: str
+    definition_id: str
     params: dict[str, Any] = {}
     project_id: str | None = None
 

@@ -46,6 +46,7 @@ class PipelineRun(SQLModel, table=True):
     display_name: str = ""
     status: RunStatus = RunStatus.PENDING
     error: str | None = Field(default=None)
+    snapshot_content: str | None = Field(default=None)
     params: str = "{}"
     started_at: datetime | None = None
     finished_at: datetime | None = None

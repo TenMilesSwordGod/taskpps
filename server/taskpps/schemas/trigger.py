@@ -9,7 +9,7 @@ from taskpps.models.trigger import TriggerType
 class CreateTriggerRequest(BaseModel):
     type: TriggerType = TriggerType.CRON
     config: dict[str, Any] = {}
-    pipeline_file: str
+    definition_id: str
     project_id: str | None = None
     enabled: bool = True
 
@@ -18,7 +18,7 @@ class TriggerResponse(BaseModel):
     id: str
     type: TriggerType
     config: dict[str, Any] = {}
-    pipeline_file: str
+    definition_id: str
     project_id: str | None = None
     enabled: bool
     created_at: datetime
@@ -33,7 +33,7 @@ class TriggerResponse(BaseModel):
             "id": obj.id,
             "type": obj.type,
             "config": json.loads(obj.config) if isinstance(obj.config, str) else obj.config,
-            "pipeline_file": obj.pipeline_file,
+            "definition_id": obj.definition_id,
             "project_id": getattr(obj, "project_id", None),
             "enabled": obj.enabled,
             "created_at": obj.created_at,

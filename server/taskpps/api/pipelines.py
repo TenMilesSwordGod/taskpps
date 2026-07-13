@@ -186,132 +186,62 @@ async def list_pipelines(project_id: str | None = Query(None)):
     return {"items": items}
 
 
-@router.get("/{file:path}")
-async def get_pipeline(file: str, project_id: str | None = Query(None), definition_id: str | None = Query(None)):
-    """返回 YAML 解析后的完整 JSON
-
-    支持 definition_id 参数，指定后返回 pipeline_definitions 中缓存的 content。
-    """
-    if definition_id:
-        async with get_session_factory()() as session:
-            repo = PipelineDefinitionRepository(session)
-            d = await repo.get(definition_id)
-            if d is None:
-                raise HTTPException(status_code=404, detail=f"Definition not found: {definition_id}")
-            return json.loads(d.content)
-
-    if project_id:
-        project_workdir = get_project_workdir_by_id(project_id)
-        if project_workdir:
-            loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
-        else:
-            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-        try:
-            spec = loader.load(file)
-        except FileNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        return spec.model_dump()
-
-    # 未指定 project_id 时，遍历所有已注册项目查找 pipeline
+@router.get("/by-id/{definition_id}")
+async def get_pipeline_by_id(definition_id: str, project_id: str = Query(...)):
+    """通过 definition_id 返回流水线完整 JSON"""
     async with get_session_factory()() as session:
-        from taskpps.db.repository import ProjectRepository
-
-        repo = ProjectRepository(session)
-        projects = await repo.list_projects()
-
-    for proj in projects:
-        loader = PipelineLoader(base_dir=get_pipelines_dir(proj.workdir))
-        try:
-            spec = loader.load(file)
-            return spec.model_dump()
-        except FileNotFoundError:
-            continue
-
-    # 回退到默认目录
-    loader = PipelineLoader()
-    try:
-        spec = loader.load(file)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    return spec.model_dump()
+        repo = PipelineDefinitionRepository(session)
+        d = await repo.get(definition_id)
+        if d is None:
+            raise HTTPException(status_code=404, detail=f"Definition not found: {definition_id}")
+        if d.project_id != project_id:
+            raise HTTPException(status_code=404, detail="Definition not found in project")
+        return json.loads(d.content)
 
 
-class SavePipelineRequest(BaseModel):
+class SavePipelineByIdRequest(BaseModel):
     content: str
 
 
-@router.put("/{file:path}")
-async def save_pipeline(file: str, body: SavePipelineRequest, project_id: str | None = Query(None)):
-    """保存 pipeline YAML 内容到文件，并同步 pipeline_definitions 表"""
-    if project_id:
-        project_workdir = get_project_workdir_by_id(project_id)
-        if not project_workdir:
-            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-        pipelines_dir = get_pipelines_dir(project_workdir)
-    else:
-        # 与 GET 一致的逻辑: 遍历所有已注册项目，找到第一个匹配的
-        async with get_session_factory()() as session:
-            from taskpps.db.repository import ProjectRepository
+@router.put("/by-id/{definition_id}")
+async def save_pipeline_by_id(definition_id: str, body: SavePipelineByIdRequest):
+    """保存 pipeline YAML：查定义→定位文件→写磁盘→同步DB"""
+    async with get_session_factory()() as session:
+        repo = PipelineDefinitionRepository(session)
+        d = await repo.get(definition_id)
+        if d is None:
+            raise HTTPException(status_code=404, detail=f"Definition not found: {definition_id}")
 
-            repo = ProjectRepository(session)
-            projects = await repo.list_projects()
+    project_workdir = get_project_workdir_by_id(d.project_id)
+    if not project_workdir:
+        raise HTTPException(status_code=404, detail=f"Project not found: {d.project_id}")
+    pipelines_dir = get_pipelines_dir(project_workdir)
+    file_path = (pipelines_dir / d.file_path).resolve()
 
-        project_workdir = None
-        pipelines_dir = None
-        for proj in projects:
-            project_pipelines = get_pipelines_dir(proj.workdir)
-            if (project_pipelines / file).resolve().exists():
-                pipelines_dir = project_pipelines
-                project_workdir = proj.workdir
-                project_id = proj.id
-                break
-
-        if pipelines_dir is None:
-            pipelines_dir = get_pipelines_dir()
-            project_workdir = None
-            project_id = None
-
-    file_path = (pipelines_dir / file).resolve()
-    # 安全检查：路径不能逃逸出 pipelines 目录
     if not str(file_path).startswith(str(pipelines_dir.resolve())):
         raise HTTPException(status_code=400, detail="Invalid file path")
 
-    # 验证 YAML 格式合法
+    import yaml as _yaml
     try:
-        yaml.safe_load(body.content)
-    except yaml.YAMLError as e:
+        _yaml.safe_load(body.content)
+    except _yaml.YAMLError as e:
         raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}") from e
 
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(body.content, encoding="utf-8")
 
-    # 同步 pipeline_definitions 表
-    if project_id is not None:
-        file_hash = hashlib.sha256(body.content.encode()).hexdigest()[:8]
-        data = yaml.safe_load(body.content)
-        if data is not None:
-            loader = PipelineLoader(base_dir=pipelines_dir)
-            spec = loader.parse_dict(data)
-            content = json.dumps(spec.model_dump(), ensure_ascii=False)
-            name = data.get("name", "")
-            try:
-                rel = str(Path(file).relative_to(pipelines_dir.resolve()))
-            except ValueError:
-                rel = file
-            async with get_session_factory()() as session:
-                repo = PipelineDefinitionRepository(session)
-                await repo.upsert(
-                    project_id=project_id,
-                    file_path=rel,
-                    name=name,
-                    content=content,
-                    raw_content=body.content,
-                    file_hash=file_hash,
-                )
+    file_hash_val = hashlib.sha256(body.content.encode()).hexdigest()[:8]
+    data = _yaml.safe_load(body.content)
+    if data is not None:
+        loader = PipelineLoader(base_dir=pipelines_dir)
+        spec = loader.parse_dict(data)
+        content_json = json.dumps(spec.model_dump(), ensure_ascii=False)
+        name = data.get("name", "")
+        async with get_session_factory()() as session:
+            repo = PipelineDefinitionRepository(session)
+            await repo.upsert(
+                project_id=d.project_id, file_path=d.file_path,
+                name=name, content=content_json, raw_content=body.content, file_hash=file_hash_val,
+            )
 
-    return {"status": "ok", "file": file}
+    return {"status": "ok", "definition_id": definition_id, "file_path": d.file_path}

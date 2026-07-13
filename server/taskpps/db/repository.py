@@ -29,6 +29,7 @@ class RunRepository:
         params: dict | None = None,
         project_id: str | None = None,
         display_name: str = "",
+        definition_id: str | None = None,
     ) -> PipelineRun:
         logger.debug("Creating run: pipeline=%s project=%s", pipeline_name, project_id)
         run = PipelineRun(
@@ -38,6 +39,7 @@ class RunRepository:
             pipeline_version=pipeline_version,
             project_id=project_id,
             display_name=display_name,
+            definition_id=definition_id,
             params=json.dumps(params or {}),
             status=RunStatus.PENDING,
         )
@@ -245,6 +247,13 @@ class RunRepository:
         result = await self.session.execute(stmt)
         await self.session.commit()
         return result.rowcount
+
+    async def update_snapshot(self, run_id: str, snapshot_content: str) -> None:
+        run = await self.get_run(run_id)
+        if run is None:
+            return
+        run.snapshot_content = snapshot_content
+        await self.session.commit()
 
 
 class TaskRunRepository:
@@ -462,12 +471,12 @@ class TriggerRepository:
         self.session = session
 
     async def create_trigger(
-        self, type: str, config: dict, pipeline_file: str, enabled: bool = True, project_id: str | None = None
+        self, type: str, config: dict, definition_id: str, enabled: bool = True, project_id: str | None = None
     ) -> Trigger:
         trigger = Trigger(
             type=type,
             config=json.dumps(config),
-            pipeline_file=pipeline_file,
+            definition_id=definition_id,
             project_id=project_id,
             enabled=enabled,
         )

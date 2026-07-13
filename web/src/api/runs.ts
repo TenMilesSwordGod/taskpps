@@ -76,7 +76,7 @@ export function useCreateRun() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: { pipeline: string; params?: Record<string, unknown>; project_id?: string | null }) => {
+    mutationFn: async (body: { definition_id: string; params?: Record<string, unknown>; project_id?: string | null }) => {
       const res = await apiClient.post('/api/runs/', body);
       return res.data as { id: string; pipeline_name: string; status: string };
     },

@@ -16,7 +16,7 @@ class Trigger(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12], primary_key=True)
     type: TriggerType = TriggerType.CRON
     config: str = "{}"
-    pipeline_file: str = ""
+    definition_id: str = ""
     project_id: str | None = None
     enabled: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

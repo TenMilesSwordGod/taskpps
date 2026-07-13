@@ -9,7 +9,7 @@ import {
   CodeOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
-import { usePipeline, useSavePipeline } from '@/api/pipelines';
+import { usePipelineById, useSavePipelineById } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
 import YamlEditor from './YamlEditor';
 import type { YamlEditorRef } from './YamlEditor';
@@ -22,9 +22,9 @@ import type { PipelineDetail } from '@/types';
 
 /** 流水线详情页 */
 export default function PipelineDetailPage() {
-  const { file } = useParams<{ file: string }>();
+  const { projectId, definitionId } = useParams<{ projectId: string; definitionId: string }>();
   const navigate = useNavigate();
-  const { data: pipeline, isLoading } = usePipeline(file);
+  const { data: pipeline, isLoading } = usePipelineById(definitionId);
   const graphWrapperRef = useRef<HTMLDivElement>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const helpPanelMinimized = useAppStore((s) => s.helpPanelMinimized);
@@ -37,15 +37,15 @@ export default function PipelineDetailPage() {
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const saveMutation = useSavePipeline(file);
+  const saveMutation = useSavePipelineById(definitionId);
 
   const handleSave = useCallback(() => {
-    if (!yamlText || !file) return;
+    if (!yamlText || !definitionId) return;
     saveMutation.mutate(yamlText, {
       onSuccess: () => message.success('已保存'),
       onError: (err: Error) => message.error(`保存失败: ${err.message}`),
     });
-  }, [yamlText, file, saveMutation]);
+  }, [yamlText, definitionId, saveMutation]);
 
   // 当 API 数据加载后，初始化 YAML 编辑器内容
   useEffect(() => {
@@ -184,7 +184,7 @@ export default function PipelineDetailPage() {
         <Breadcrumb
           items={[
             { title: <a onClick={() => navigate('/pipelines')}>流水线</a> },
-            { title: file },
+            { title: definitionId },
           ]}
         />
       </div>
@@ -261,7 +261,7 @@ export default function PipelineDetailPage() {
       <TriggerRunModal
         open={triggerOpen}
         onClose={() => setTriggerOpen(false)}
-        defaultPipeline={file}
+        defaultDefinitionId={definitionId}
         pipelineData={pipeline}
       />
     </div>

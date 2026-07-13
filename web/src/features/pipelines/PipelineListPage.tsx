@@ -19,7 +19,7 @@ export default function PipelineListPage() {
   const { data, isLoading, refetch } = usePipelines();
   const [keyword, setKeyword] = useState('');
   const [triggerOpen, setTriggerOpen] = useState(false);
-  const [triggerPipeline, setTriggerPipeline] = useState<string | undefined>();
+  const [triggerDefinitionId, setTriggerDefinitionId] = useState<string | undefined>();
   const [triggerProjectId, setTriggerProjectId] = useState<string | null>(null);
   const [expandedRowKeys, setExpandedRowKeys] = useState<Set<string>>(new Set());
 
@@ -71,6 +71,7 @@ export default function PipelineListPage() {
           }
         } else {
           children.push({
+            id: '',
             name: folder,
             file: '',
             folder,
@@ -97,6 +98,7 @@ export default function PipelineListPage() {
         out.push(...children);
       } else {
         out.push({
+          id: '',
           name: projectLabel || '(default)',
           file: '',
           folder: '',
@@ -134,8 +136,8 @@ export default function PipelineListPage() {
     setExpandedRowKeys(keys);
   }, [rows]);
 
-  const handleOpenTrigger = useCallback((file?: string, projectId?: string | null) => {
-    setTriggerPipeline(file);
+  const handleOpenTrigger = useCallback((definitionId?: string, projectId?: string | null) => {
+    setTriggerDefinitionId(definitionId);
     setTriggerProjectId(projectId ?? null);
     setTriggerOpen(true);
   }, []);
@@ -176,7 +178,7 @@ export default function PipelineListPage() {
           );
         }
         return (
-          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontWeight: 500, color: '#3D5BFF' }}>
+          <Link to={`/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`} style={{ fontWeight: 500, color: '#3D5BFF' }}>
             {record.name}
           </Link>
         );
@@ -188,7 +190,7 @@ export default function PipelineListPage() {
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88', fontSize: 12 }}>--</span>;
         return (
-          <Link to={`/pipelines/${encodeURIComponent(record.file)}`} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
+          <Link to={`/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
             {record.file}
           </Link>
         );
@@ -244,7 +246,7 @@ export default function PipelineListPage() {
         return (
           <Space>
             <Tooltip title="触发运行">
-              <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.file, record.project_id)} />
+              <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.id, record.project_id)} />
             </Tooltip>
           </Space>
         );
@@ -356,7 +358,7 @@ export default function PipelineListPage() {
       <TriggerRunModal
         open={triggerOpen}
         onClose={() => setTriggerOpen(false)}
-        defaultPipeline={triggerPipeline}
+        defaultDefinitionId={triggerDefinitionId}
         defaultProjectId={triggerProjectId}
       />
 

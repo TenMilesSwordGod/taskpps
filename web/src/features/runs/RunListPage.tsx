@@ -204,8 +204,10 @@ export default function RunListPage() {
       dataIndex: 'pipeline_file',
       key: 'pipeline_file',
       width: 180,
-      render: (file: string) => (
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>{file}</span>
+      render: (_file: string, record: RunResponse) => (
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
+          {record.definition_id || _file}
+        </span>
       ),
     },
     {

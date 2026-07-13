@@ -79,6 +79,7 @@ function makeRun(overrides: Partial<RunResponse> = {}): RunResponse {
     id: 'run-abc',
     pipeline_name: 'demo',
     pipeline_file: 'demo.yaml',
+    definition_id: 'abc123def456',
     project_id: null,
     status: 'success',
     error: null,

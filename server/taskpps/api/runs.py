@@ -113,7 +113,7 @@ def _read_log_lines(log_path: Path, position: int = 0, include_partial: bool = F
 @router.post("/", status_code=201)
 async def create_run(body: CreateRunRequest):
     try:
-        result = await _pipeline_service.create_run(body.pipeline, body.params, project_id=body.project_id)
+        result = await _pipeline_service.create_run(body.definition_id, params=body.params, project_id=body.project_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

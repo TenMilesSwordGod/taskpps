@@ -36,6 +36,7 @@ export interface RunResponse {
   pipeline_version: string;
   project_id: string | null;
   project_name: string | null;
+  definition_id?: string | null;
   display_name: string;
   version_changed: boolean;
   status: RunStatus;
@@ -88,6 +89,7 @@ export interface RunStatsResponse {
 
 /** 流水线摘要 */
 export interface PipelineSummary {
+  id: string;
   name: string;
   file: string;
   /** 父文件夹（如 "debug"），根目录文件为 "" */

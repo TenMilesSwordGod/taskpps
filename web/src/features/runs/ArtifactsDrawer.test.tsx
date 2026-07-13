@@ -358,7 +358,7 @@ describe('<RunDetailPage /> — Issue #134 artifacts 按钮', () => {
 
     mockUseRun.mockReturnValue({
       data: {
-        id: 'run-1', pipeline_name: 'demo', pipeline_file: 'demo.yaml',
+        id: 'run-1', pipeline_name: 'demo', pipeline_file: 'demo.yaml', definition_id: 'abc123def456',
         project_id: null, status: 'success', error: null,
         started_at: '2026-01-01T00:00:00Z', finished_at: '2026-01-01T00:01:00Z',
         created_at: '2026-01-01T00:00:00Z', params: {}, tasks: [],

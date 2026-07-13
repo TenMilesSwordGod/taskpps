@@ -12,6 +12,7 @@ function makeRun(i: number): RunResponse {
     display_name: `run-${i}`,
     pipeline_name: 'demo',
     pipeline_file: 'demo.yaml',
+    definition_id: 'abc123def456',
     project_id: null,
     project_name: null,
     status: 'success',

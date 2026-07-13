@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Modal, Form, Input, message, Spin } from 'antd';
 import { useCreateRun } from '@/api/runs';
 import { useNavigate } from 'react-router-dom';
-import { usePipeline } from '@/api/pipelines';
+import { usePipelineById } from '@/api/pipelines';
 import { useAgentsWithConfig } from '@/api/agents';
 import type { PipelineDetail } from '@/types';
 import ParamsForm, { buildInitialValues, buildOverrideParams } from './ParamsForm';
@@ -10,7 +10,7 @@ import ParamsForm, { buildInitialValues, buildOverrideParams } from './ParamsFor
 interface TriggerRunModalProps {
   open: boolean;
   onClose: () => void;
-  defaultPipeline?: string;
+  defaultDefinitionId?: string;
   defaultProjectId?: string | null;
   pipelineData?: PipelineDetail | null;
 }
@@ -18,7 +18,7 @@ interface TriggerRunModalProps {
 export default function TriggerRunModal({
   open,
   onClose,
-  defaultPipeline,
+  defaultDefinitionId,
   defaultProjectId,
   pipelineData,
 }: TriggerRunModalProps) {
@@ -26,9 +26,9 @@ export default function TriggerRunModal({
   const createRun = useCreateRun();
   const navigate = useNavigate();
 
-  const shouldFetch = !pipelineData && !!defaultPipeline;
-  const { data: fetchedPipeline, isLoading: isFetching } = usePipeline(
-    shouldFetch ? defaultPipeline : undefined,
+  const shouldFetch = !pipelineData && !!defaultDefinitionId;
+  const { data: fetchedPipeline, isLoading: isFetching } = usePipelineById(
+    shouldFetch ? defaultDefinitionId : undefined,
   );
   const effectivePipeline = pipelineData || fetchedPipeline || null;
 
@@ -38,11 +38,10 @@ export default function TriggerRunModal({
     if (open && effectivePipeline) {
       form.resetFields();
       form.setFieldsValue({
-        pipeline: defaultPipeline || '',
         ...buildInitialValues(effectivePipeline),
       });
     }
-  }, [open, effectivePipeline, form, defaultPipeline]);
+  }, [open, effectivePipeline, form]);
 
   const handleOk = async () => {
     try {
@@ -52,7 +51,7 @@ export default function TriggerRunModal({
         : {};
 
       const result = await createRun.mutateAsync({
-        pipeline: values.pipeline,
+        definition_id: defaultDefinitionId || values.definition_id,
         params,
         project_id: defaultProjectId,
       });
@@ -82,15 +81,16 @@ export default function TriggerRunModal({
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ pipeline: defaultPipeline || '' }}
       >
-        <Form.Item
-          name="pipeline"
-          label="流水线文件"
-          rules={[{ required: true, message: '请输入流水线文件名' }]}
-        >
-          <Input placeholder="例如: deploy.yaml" />
-        </Form.Item>
+        {!defaultDefinitionId && (
+          <Form.Item
+            name="definition_id"
+            label="流水线 ID"
+            rules={[{ required: true, message: '请输入流水线 ID' }]}
+          >
+            <Input placeholder="例如: a1b2c3d4e5f6" />
+          </Form.Item>
+        )}
 
         {shouldFetch && isFetching ? (
           <div style={{ textAlign: 'center', padding: 24 }}>

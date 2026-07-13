@@ -170,7 +170,7 @@ class TestIntegrationEndToEnd:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             create_resp = await client.post(
                 "/api/plugins/triggers/",
-                json={"type": "cron", "config": {"schedule": "0 * * * *"}, "pipeline_file": "deploy.yaml"},
+                json={"type": "cron", "config": {"schedule": "0 * * * *"}, "definition_id": "deploy.yaml"},
             )
             assert create_resp.status_code in (200, 201)
 
