@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,7 +61,9 @@ def default_artifacts(artifacts_dir):
 
     meta = {
         "run_id": "test_run_001",
-        "pipeline": "test-pipeline",
+        "definition_id": "test-def-001",
+        # v2 (2026-07): 旧的 pipeline 字段已废弃，改为 definition_id
+        # "pipeline": "test-pipeline",
         "start_at": "2026-06-25T10:00:00+00:00",
         "end_at": "2026-06-25T10:05:00+00:00",
         "status": "success",

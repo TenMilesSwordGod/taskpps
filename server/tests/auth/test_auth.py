@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.conftest import resolve_def_id
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -88,7 +89,7 @@ async def test_auth_create_run(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/runs/",
-            json={"pipeline": "deploy.yaml", "params": {}},
+            json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
         )
         assert response.status_code in (200, 201)
 

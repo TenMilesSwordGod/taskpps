@@ -8,14 +8,14 @@ from taskpps.db.repository import TriggerRepository
 
 class TriggerService:
     async def create_trigger(
-        self, type: str, config: dict[str, Any], pipeline_file: str, enabled: bool = True, project_id: str | None = None
+        self, type: str, config: dict[str, Any], definition_id: str, enabled: bool = True, project_id: str | None = None
     ):
         async with get_session_factory()() as session:
             repo = TriggerRepository(session)
             trigger = await repo.create_trigger(
                 type=type,
                 config=config,
-                pipeline_file=pipeline_file,
+                definition_id=definition_id,
                 enabled=enabled,
                 project_id=project_id,
             )

@@ -14,7 +14,7 @@ async def create_trigger(body: CreateTriggerRequest):
     result = await _trigger_service.create_trigger(
         type=body.type,
         config=body.config,
-        pipeline_file=body.pipeline_file,
+        definition_id=body.definition_id,
         enabled=body.enabled,
         project_id=body.project_id,
     )

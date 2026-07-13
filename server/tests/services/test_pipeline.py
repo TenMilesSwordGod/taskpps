@@ -400,21 +400,25 @@ class TestPipelineService:
 
 class TestPipelineServiceMore:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0345", domain="server/services", priority="P2")
+    @pytest.mark.zcustom("TC-S0345", domain="server/services", priority="P2")
+    # v2 (2026-07): Phase 2 快照从磁盘改存 DB，断言改为查 runs.snapshot_content 非空。旧磁盘断言保留注释以供参考
     async def test_save_pipeline_snapshot(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
-        from taskpps.config import get_logs_dir
+        from taskpps.db.engine import get_session_factory
+        from taskpps.db.repository import RunRepository
 
         svc = PipelineService()
         result = await svc.create_run("deploy.yaml")
-        snapshot_dir = (
-            get_logs_dir() / result["pipeline_id"] / f"v_{result['pipeline_version']}" / "builds" / result["id"]
-        )
-        snapshot = snapshot_dir / "pipeline-snapshot.yaml"
-        assert snapshot.exists()
+
+        # Phase 2: 快照存 DB，验证 snapshot_content 非空
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            run = await run_repo.get_run(result["id"])
+            assert run is not None
+            assert getattr(run, "snapshot_content", None), "snapshot_content 不应为空"
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0346", domain="server/services", priority="P2")
+    @pytest.mark.zcustom("TC-S0346", domain="server/services", priority="P2")
     async def test_save_pipeline_snapshot_nonexistent_file(self, tmp_project, db_engine):
         _setup_config(tmp_project)
 
@@ -425,14 +429,14 @@ class TestPipelineServiceMore:
         assert "id" in result
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0347", domain="server/services", priority="P2")
+    @pytest.mark.zcustom("TC-S0347", domain="server/services", priority="P2")
+    # v2 (2026-07): Phase 2 快照从磁盘改存 DB，断言改为查 runs.snapshot_content 非空
     async def test_save_pipeline_snapshot_multi_project(self, tmp_project, db_engine):
-        """Issue #58: 非默认项目的 pipeline 快照应能正确保存"""
+        """Issue #58: 非默认项目的 pipeline 快照应能正确存入 DB"""
         import taskpps.config as cfg
         from pathlib import Path
-        from taskpps.config import get_logs_dir
         from taskpps.db.engine import get_session_factory
-        from taskpps.db.repository import ProjectRepository
+        from taskpps.db.repository import ProjectRepository, RunRepository
 
         _setup_config(tmp_project)
 
@@ -452,11 +456,12 @@ class TestPipelineServiceMore:
         svc = PipelineService()
         result = await svc.create_run("other_deploy.yaml", project_id=project_id)
 
-        snapshot_dir = (
-            get_logs_dir() / result["pipeline_id"] / f"v_{result['pipeline_version']}" / "builds" / result["id"]
-        )
-        snapshot = snapshot_dir / "pipeline-snapshot.yaml"
-        assert snapshot.exists(), f"快照文件不存在: {snapshot}"
+        # Phase 2: 快照存 DB，验证 snapshot_content 非空
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            run = await run_repo.get_run(result["id"])
+            assert run is not None
+            assert getattr(run, "snapshot_content", None), f"snapshot_content 不应为空"
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0348", domain="server/services", priority="P2")

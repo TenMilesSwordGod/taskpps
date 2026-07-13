@@ -71,6 +71,8 @@ Rules:
     - python should use uv to manage dependencies, if do not want use uv, can use local: .venv
     - **当原定方案无法完成用户任务时，必须先与用户确认替代方案，禁止擅自切换方案或执行不可逆操作（如 commit/push/创建 PR）**
     - all debug tmp files should store in current folder .debug folder.
+    - **所有新增/修改的函数和设计必须有中文注释**：注释解释"为什么这么写"而非"做了什么"（如设计决策、边界条件、兼容考虑）
+    - **多次改动叠加注释，不删旧说明**：同一段代码经历多次修改时，在原有注释下方追加新注释，格式 `# v2 (2026-07): 说明` / `# 注意(2026-07): 说明`，保留完整的演进上下文
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

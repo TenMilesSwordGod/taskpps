@@ -7,7 +7,8 @@ from taskpps.models.run import RunStatus, TaskStatus, TaskType
 
 
 class CreateRunRequest(BaseModel):
-    pipeline: str
+    # Phase 2 (2026-07): pipeline 文件路径改为 definition_id 的 UUID 标识
+    definition_id: str
     params: dict[str, Any] = {}
     project_id: str | None = None
 

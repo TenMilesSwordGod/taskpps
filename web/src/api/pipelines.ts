@@ -13,28 +13,30 @@ export function usePipelines() {
   });
 }
 
-/** 获取单个流水线详情 */
-export function usePipeline(file: string | undefined) {
+/** 通过 definition_id 获取单个流水线详情 */
+export function usePipelineById(definitionId: string | undefined, projectId?: string | null) {
   return useQuery<PipelineDetail>({
-    queryKey: ['pipeline', file],
+    queryKey: ['pipeline', definitionId],
     queryFn: async () => {
-      const res = await apiClient.get(`/api/pipelines/${encodeURIComponent(file!)}`);
+      const params: Record<string, string> = {};
+      if (projectId) params.project_id = projectId;
+      const res = await apiClient.get(`/api/pipelines/by-id/${encodeURIComponent(definitionId!)}`, { params });
       return res.data;
     },
-    enabled: !!file,
+    enabled: !!definitionId,
   });
 }
 
-/** 保存 pipeline YAML */
-export function useSavePipeline(file: string | undefined) {
+/** 通过 definition_id 保存 pipeline YAML */
+export function useSavePipelineById(definitionId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (content: string) => {
-      const res = await apiClient.put(`/api/pipelines/${encodeURIComponent(file!)}`, { content });
+      const res = await apiClient.put(`/api/pipelines/by-id/${encodeURIComponent(definitionId!)}`, { content });
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pipeline', file] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline', definitionId] });
     },
   });
 }

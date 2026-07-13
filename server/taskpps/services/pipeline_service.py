@@ -17,6 +17,7 @@ from taskpps.config import (
     compute_pipeline_version,
     get_logs_dir,
     get_pipelines_dir,
+    get_project_workdir_by_id,
 )
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import ProjectRepository, RetryRecordRepository, RunRepository, TaskRunRepository
@@ -135,56 +136,42 @@ class PipelineService:
             cls._pipeline_locks[pipeline_id] = lock
         return lock
 
+    # Phase 2 (2026-07): definition_id 替代 pipeline_file 文件路径
+    # create_run 通过 UUID 查 pipeline_definitions 获取 file_path，再走 loader.load
     async def create_run(
-        self, pipeline_file: str, params: dict[str, Any] | None = None, project_id: str | None = None
+        self,
+        definition_id: str,
+        params: dict[str, Any] | None = None,
+        project_id: str | None = None,
     ) -> dict:
+        from taskpps.db.repository import PipelineDefinitionRepository
+
+        async with get_session_factory()() as session:
+            def_repo = PipelineDefinitionRepository(session)
+            d = await def_repo.get(definition_id)
+            if d is None:
+                raise ValueError(f"Definition not found: {definition_id}")
+            pipeline_file = d.file_path
+            project_id = project_id or d.project_id
+
         try:
-            # 构建完整的 env 字典, 包含从 settings 和 params 提取的环境变量
             from taskpps.config import get_settings
 
             settings = get_settings()
             loader_env = settings.env.copy()
 
-            # 如果有 params, 提取其中的 config.env
             if params:
                 config_env = _extract_env_overrides(params)
                 if config_env:
                     loader_env.update(config_env)
 
-            project_workdir = None
-            if project_id:
-                from taskpps.config import get_project_workdir_by_id
+            # Phase 2 (2026-07): 项目必须已注册，不存在的项目直接报错
+            project_workdir = get_project_workdir_by_id(project_id)
+            if not project_workdir:
+                raise ValueError(f"Project not found: {project_id}")
 
-                project_workdir = get_project_workdir_by_id(project_id)
-                if project_workdir:
-                    from taskpps.config import get_pipelines_dir
-
-                    loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
-                else:
-                    raise ValueError(f"Project not found: {project_id}")
-                spec = loader.load(pipeline_file, loader_env, project_workdir=project_workdir)
-            else:
-                # 未指定 project_id 时，遍历所有已注册项目查找 pipeline
-                from taskpps.db.repository import ProjectRepository
-
-                async with get_session_factory()() as session:
-                    repo = ProjectRepository(session)
-                    projects = await repo.list_projects()
-
-                spec = None
-                for proj in projects:
-                    loader = PipelineLoader(base_dir=get_pipelines_dir(proj.workdir))
-                    try:
-                        spec = loader.load(pipeline_file, loader_env, project_workdir=Path(proj.workdir))
-                        project_id = proj.id
-                        project_workdir = Path(proj.workdir)
-                        break
-                    except FileNotFoundError:
-                        continue
-
-                if spec is None:
-                    # 回退到默认 loader
-                    spec = self.loader.load(pipeline_file, loader_env)
+            loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
+            spec = loader.load(pipeline_file, loader_env, project_workdir=project_workdir)
         except FileNotFoundError as e:
             raise ValueError(str(e)) from e
         except Exception as e:
@@ -217,6 +204,7 @@ class PipelineService:
             return await self._create_run_locked(
                 resolved=resolved,
                 pipeline_file=pipeline_file,
+                definition_id=definition_id,
                 params=params,
                 pipeline_id=pipeline_id,
                 pipeline_version=pipeline_version,
@@ -229,6 +217,7 @@ class PipelineService:
         *,
         resolved: ResolvedPipeline,
         pipeline_file: str,
+        definition_id: str,
         params: dict[str, Any] | None,
         pipeline_id: str,
         pipeline_version: str,
@@ -271,6 +260,7 @@ class PipelineService:
                 params=params,
                 project_id=project_id,
                 display_name=display_name,
+                definition_id=definition_id,
             )
 
             task_run_ids = {}
@@ -288,7 +278,18 @@ class PipelineService:
                     )
                     task_run_ids[qualified_name] = task_run.id
 
-        self._save_pipeline_snapshot(pipeline_file, pipeline_id, pipeline_version, run.id, project_workdir)
+        src = (get_pipelines_dir(Path(project_workdir) if project_workdir else None) /
+               (Path(pipeline_file).relative_to(Path(project_workdir) / "pipelines") if project_workdir and Path(project_workdir).resolve() in Path(pipeline_file).resolve().parents else Path(pipeline_file)))
+        # Simpler: just use the pipeline_file relative to pipelines_dir
+        pipelines_dir = get_pipelines_dir(Path(project_workdir) if project_workdir else None)
+        p = Path(pipeline_file)
+        if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:
+            p = Path(*p.parts[1:])
+        src = pipelines_dir / p
+        raw_yaml = ""
+        if src.exists():
+            raw_yaml = src.read_text(encoding="utf-8")
+        await self._save_pipeline_snapshot(run.id, raw_yaml)
 
         context = ExecutionContext(
             pipeline=resolved,
@@ -320,20 +321,10 @@ class PipelineService:
         }
 
     @staticmethod
-    def _save_pipeline_snapshot(
-        pipeline_file: str, pipeline_id: str, pipeline_version: str, run_id: str, project_workdir: str | None = None
-    ) -> None:
-        pipelines_dir = get_pipelines_dir(Path(project_workdir) if project_workdir else None)
-        p = Path(pipeline_file)
-        if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:
-            p = Path(*p.parts[1:])
-        src = pipelines_dir / p
-        if not src.exists():
-            return
-        snapshot_dir = get_logs_dir() / pipeline_id / f"v_{pipeline_version}" / "builds" / run_id
-        snapshot_dir.mkdir(parents=True, exist_ok=True)
-        dst = snapshot_dir / "pipeline-snapshot.yaml"
-        shutil.copy2(src, dst)
+    async def _save_pipeline_snapshot(run_id: str, raw_yaml: str) -> None:
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            await run_repo.update_snapshot(run_id, raw_yaml)
 
     @staticmethod
     def _write_cancel_signal(pipeline_id: str, pipeline_version: str, run_id: str) -> None:
@@ -997,20 +988,13 @@ class PipelineService:
         """加载 pipeline 定义用于重试。仅使用执行时保存的快照，禁止回退到当前磁盘文件。"""
         import yaml
 
-        if not run.pipeline_id:
-            logger.error("Run %s has no pipeline_id, cannot locate snapshot", run.id)
-            return None
-
-        v = run.pipeline_version or ""
-        snapshot_path = get_logs_dir() / run.pipeline_id / f"v_{v}" / "builds" / run.id / "pipeline-snapshot.yaml"
-
-        if not snapshot_path.exists():
-            logger.error("Pipeline snapshot not found for run %s: %s", run.id, snapshot_path)
+        snapshot_content = getattr(run, "snapshot_content", None)
+        if not snapshot_content:
+            logger.error("Run %s has no snapshot_content in DB", run.id)
             return None
 
         try:
-            with open(snapshot_path) as f:
-                data = yaml.safe_load(f)
+            data = yaml.safe_load(snapshot_content)
             if data is None:
                 logger.error("Pipeline snapshot is empty for run %s", run.id)
                 return None

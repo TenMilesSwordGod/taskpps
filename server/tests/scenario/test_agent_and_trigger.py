@@ -80,7 +80,7 @@ class TestTriggerLifecycle:
                 json={
                     "type": "cron",
                     "config": {"schedule": "*/5 * * * *"},
-                    "pipeline_file": "deploy.yaml",
+                    "definition_id": "deploy.yaml",
                     "enabled": True,
                 },
             )
@@ -101,7 +101,7 @@ class TestTriggerLifecycle:
                 json={
                     "type": "cron",
                     "config": {"schedule": "0 * * * *"},
-                    "pipeline_file": "hourly.yaml",
+                    "definition_id": "hourly.yaml",
                     "enabled": True,
                 },
             )
@@ -129,7 +129,7 @@ class TestTriggerLifecycle:
                 json={
                     "type": "cron",
                     "config": {"schedule": "*/10 * * * *"},
-                    "pipeline_file": "backup.yaml",
+                    "definition_id": "backup.yaml",
                     "enabled": False,
                 },
             )
@@ -161,7 +161,7 @@ class TestTriggerLifecycle:
                     json={
                         "type": "cron",
                         "config": {"schedule": f"*/{i + 1} * * * *"},
-                        "pipeline_file": f"pipeline_{i}.yaml",
+                        "definition_id": f"pipeline_{i}.yaml",
                         "enabled": True,
                     },
                 )

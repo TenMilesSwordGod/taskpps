@@ -7,6 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskpps.models.artifact import Artifact
+from taskpps.models.definition import PipelineDefinition
 from taskpps.models.project import Project
 from taskpps.models.run import PipelineRun, RunStatus, TaskRetryRecord, TaskRun, TaskStatus
 from taskpps.models.trigger import Trigger
@@ -28,6 +29,7 @@ class RunRepository:
         params: dict | None = None,
         project_id: str | None = None,
         display_name: str = "",
+        definition_id: str | None = None,
     ) -> PipelineRun:
         logger.debug("Creating run: pipeline=%s project=%s", pipeline_name, project_id)
         run = PipelineRun(
@@ -37,6 +39,7 @@ class RunRepository:
             pipeline_version=pipeline_version,
             project_id=project_id,
             display_name=display_name,
+            definition_id=definition_id,
             params=json.dumps(params or {}),
             status=RunStatus.PENDING,
         )
@@ -82,6 +85,7 @@ class RunRepository:
         pipeline_id: str | None = None,
         project_id: str | None = None,
         pipeline_file: str | None = None,
+        definition_id: str | None = None,
     ) -> int:
         stmt = select(func.count(PipelineRun.id))
         if pipeline:
@@ -94,6 +98,8 @@ class RunRepository:
             stmt = stmt.where(PipelineRun.status == status)
         if project_id:
             stmt = stmt.where(PipelineRun.project_id == project_id)
+        if definition_id:
+            stmt = stmt.where(PipelineRun.definition_id == definition_id)
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -104,6 +110,7 @@ class RunRepository:
         project_id: str | None = None,
         limit: int = 50,
         pipeline_file: str | None = None,
+        definition_id: str | None = None,
     ) -> Sequence[PipelineRun]:
         stmt = select(PipelineRun).order_by(PipelineRun.created_at.desc())
         if pipeline:
@@ -114,6 +121,8 @@ class RunRepository:
             stmt = stmt.where(PipelineRun.status == status)
         if project_id:
             stmt = stmt.where(PipelineRun.project_id == project_id)
+        if definition_id:
+            stmt = stmt.where(PipelineRun.definition_id == definition_id)
         stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return result.scalars().all()
@@ -244,6 +253,13 @@ class RunRepository:
         result = await self.session.execute(stmt)
         await self.session.commit()
         return result.rowcount
+
+    async def update_snapshot(self, run_id: str, snapshot_content: str) -> None:
+        run = await self.get_run(run_id)
+        if run is None:
+            return
+        run.snapshot_content = snapshot_content
+        await self.session.commit()
 
 
 class TaskRunRepository:
@@ -461,12 +477,12 @@ class TriggerRepository:
         self.session = session
 
     async def create_trigger(
-        self, type: str, config: dict, pipeline_file: str, enabled: bool = True, project_id: str | None = None
+        self, type: str, config: dict, definition_id: str, enabled: bool = True, project_id: str | None = None
     ) -> Trigger:
         trigger = Trigger(
             type=type,
             config=json.dumps(config),
-            pipeline_file=pipeline_file,
+            definition_id=definition_id,
             project_id=project_id,
             enabled=enabled,
         )
@@ -602,3 +618,92 @@ class ArtifactRepository:
         result = await self.session.execute(stmt)
         await self.session.commit()
         return result.rowcount
+
+
+class PipelineDefinitionRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def upsert(
+        self,
+        project_id: str,
+        file_path: str,
+        name: str,
+        content: str,
+        raw_content: str,
+        file_hash: str,
+    ) -> tuple[PipelineDefinition, bool]:
+        stmt = select(PipelineDefinition).where(
+            PipelineDefinition.project_id == project_id,
+            PipelineDefinition.file_path == file_path,
+            PipelineDefinition.active == True,  # noqa: E712
+        )
+        result = await self.session.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing is not None:
+            if existing.file_hash == file_hash:
+                return existing, False
+            existing.name = name
+            existing.content = content
+            existing.raw_content = raw_content
+            existing.file_hash = file_hash
+            existing.updated_at = datetime.now(timezone.utc)
+            await self.session.commit()
+            await self.session.refresh(existing)
+            return existing, True
+
+        definition = PipelineDefinition(
+            project_id=project_id,
+            file_path=file_path,
+            name=name,
+            content=content,
+            raw_content=raw_content,
+            file_hash=file_hash,
+        )
+        self.session.add(definition)
+        await self.session.commit()
+        await self.session.refresh(definition)
+        return definition, True
+
+    async def deactivate_others(self, project_id: str, active_paths: set[str]) -> int:
+        now = datetime.now(timezone.utc)
+        stmt = select(PipelineDefinition).where(
+            PipelineDefinition.project_id == project_id,
+            PipelineDefinition.active == True,  # noqa: E712
+            PipelineDefinition.file_path.notin_(active_paths),
+        )
+        result = await self.session.execute(stmt)
+        records = result.scalars().all()
+        count = 0
+        for r in records:
+            r.active = False
+            r.updated_at = now
+            count += 1
+        await self.session.commit()
+        return count
+
+    async def get(self, definition_id: str) -> PipelineDefinition | None:
+        result = await self.session.execute(
+            select(PipelineDefinition).where(PipelineDefinition.id == definition_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_project_and_file(self, project_id: str, file_path: str) -> PipelineDefinition | None:
+        result = await self.session.execute(
+            select(PipelineDefinition).where(
+                PipelineDefinition.project_id == project_id,
+                PipelineDefinition.file_path == file_path,
+                PipelineDefinition.active == True,  # noqa: E712
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_project(self, project_id: str, active_only: bool = True) -> list[PipelineDefinition]:
+        stmt = select(PipelineDefinition).where(
+            PipelineDefinition.project_id == project_id
+        ).order_by(PipelineDefinition.file_path)
+        if active_only:
+            stmt = stmt.where(PipelineDefinition.active == True)  # noqa: E712
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

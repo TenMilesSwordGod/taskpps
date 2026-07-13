@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.conftest import resolve_def_id
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -53,7 +54,7 @@ async def test_create_run(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/runs/",
-            json={"pipeline": "deploy.yaml", "params": {}},
+            json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
         )
         assert response.status_code in (200, 201)
         data = response.json()
@@ -73,7 +74,7 @@ async def test_get_run(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_resp = await client.post(
             "/api/runs/",
-            json={"pipeline": "deploy.yaml", "params": {}},
+            json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
         )
         run_id = create_resp.json()["id"]
 
@@ -111,7 +112,7 @@ async def test_create_run_invalid(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/runs/",
-            json={"pipeline": "nonexistent.yaml", "params": {}},
+            json={"definition_id": "deadbeef1234", "params": {}},
         )
         assert response.status_code in (400, 404, 422)
 
@@ -129,7 +130,7 @@ async def test_cancel_run(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_resp = await client.post(
             "/api/runs/",
-            json={"pipeline": "deploy.yaml", "params": {}},
+            json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
         )
         run_id = create_resp.json()["id"]
 
@@ -148,8 +149,8 @@ async def test_list_runs_filter(app, setup_project, tmp_project, db_engine):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
-        await client.post("/api/runs/", json={"pipeline": "simple.yaml", "params": {}})
+        await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
+        await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml"), "params": {}})
 
         response = await client.get("/api/runs/?pipeline=deploy")
         assert response.status_code == 200
@@ -189,7 +190,7 @@ async def test_get_run_logs(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_resp = await client.post(
             "/api/runs/",
-            json={"pipeline": "deploy.yaml", "params": {}},
+            json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
         )
         run_id = create_resp.json()["id"]
 
@@ -239,8 +240,12 @@ async def test_clean_runs_older_than(app, setup_project, tmp_project, db_engine)
 
 @pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0993", domain="server/api", priority="P2")
+@pytest.mark.zcustom("TC-S0993", domain="server/api", priority="P1")
+# v2 (2026-07): Phase 2 CreateRunRequest 改用 definition_id，部分测试直接调列表API
+# resolve_def_id 内自动注册项目，确保列表API有注册项目可同步 pipeline_definitions
+# v2 (2026-07): Phase 2 快照只从 DB 读取，不存在则 404
 async def test_pipeline_snapshot(app, setup_project, tmp_project, db_engine):
-    """Issue #58: 获取运行的流水线快照"""
+    """获取运行的流水线快照"""
     import taskpps.config as cfg
 
     cfg.set_project_root(tmp_project)
@@ -249,9 +254,12 @@ async def test_pipeline_snapshot(app, setup_project, tmp_project, db_engine):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # resolve_def_id 内自动注册项目，此后列表API可正常同步 definitions
+        def_id = await resolve_def_id(client, "deploy.yaml")
+
         create_resp = await client.post(
             "/api/runs/",
-            json={"pipeline": "deploy.yaml", "params": {}},
+            json={"definition_id": def_id, "params": {}},
         )
         run_id = create_resp.json()["id"]
 
@@ -291,7 +299,7 @@ async def test_delete_single_run(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_resp = await client.post(
             "/api/runs/",
-            json={"pipeline": "deploy.yaml", "params": {}},
+            json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
         )
         run_id = create_resp.json()["id"]
 
@@ -348,8 +356,8 @@ async def test_run_stats(app, setup_project, tmp_project, db_engine):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # 创建几条运行记录
-        await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
-        await client.post("/api/runs/", json={"pipeline": "simple.yaml", "params": {}})
+        await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
+        await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml"), "params": {}})
 
         response = await client.get("/api/runs/stats")
         assert response.status_code == 200
@@ -381,8 +389,8 @@ async def test_run_stats_with_pipeline_filter(app, setup_project, tmp_project, d
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
-        await client.post("/api/runs/", json={"pipeline": "simple.yaml", "params": {}})
+        await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
+        await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml"), "params": {}})
 
         response = await client.get("/api/runs/stats?pipeline=deploy")
         assert response.status_code == 200
@@ -404,7 +412,7 @@ async def test_cancel_retry_run_api(app, setup_project, tmp_project, db_engine):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        create_resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        create_resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = create_resp.json()["id"]
 
         mock_runner = AsyncMock()
@@ -429,7 +437,7 @@ async def test_cancel_retry_run_api_no_active_retry(app, setup_project, tmp_proj
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        create_resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        create_resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = create_resp.json()["id"]
 
         response = await client.post(f"/api/runs/{run_id}/retry/cancel")

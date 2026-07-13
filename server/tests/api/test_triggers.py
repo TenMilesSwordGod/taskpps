@@ -21,7 +21,7 @@ async def test_create_trigger(app, db_engine):
             json={
                 "type": "cron",
                 "config": {"schedule": "*/5 * * * *"},
-                "pipeline_file": "deploy.yaml",
+                "definition_id": "deploy.yaml",
                 "enabled": True,
             },
         )
@@ -47,7 +47,7 @@ async def test_delete_trigger(app, db_engine):
             json={
                 "type": "cron",
                 "config": {"schedule": "*/5 * * * *"},
-                "pipeline_file": "deploy.yaml",
+                "definition_id": "deploy.yaml",
                 "enabled": True,
             },
         )
@@ -92,7 +92,7 @@ async def test_create_trigger_disabled(app, db_engine):
             json={
                 "type": "cron",
                 "config": {"schedule": "*/5 * * * *"},
-                "pipeline_file": "deploy.yaml",
+                "definition_id": "deploy.yaml",
                 "enabled": False,
             },
         )

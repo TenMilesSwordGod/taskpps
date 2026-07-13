@@ -68,16 +68,16 @@ class TestTaskRun:
 
 class TestTrigger:
     def test_create_with_required_fields(self):
-        trigger = Trigger(type=TriggerType.CRON, config="{}", pipeline_file="test.yaml")
+        trigger = Trigger(type=TriggerType.CRON, config="{}", definition_id="test.yaml")
         assert trigger.id is not None
         assert trigger.type == TriggerType.CRON
-        assert trigger.pipeline_file == "test.yaml"
+        assert trigger.definition_id == "test.yaml"
 
     def test_create_with_all_fields(self):
         trigger = Trigger(
             type=TriggerType.WEBHOOK,
             config='{"url": "https://example.com"}',
-            pipeline_file="webhook.yaml",
+            definition_id="webhook.yaml",
             project_id="proj001",
             enabled=False,
         )
@@ -86,7 +86,7 @@ class TestTrigger:
         assert trigger.enabled is False
 
     def test_project_id_default_none(self):
-        trigger = Trigger(type=TriggerType.CRON, config="{}", pipeline_file="test.yaml")
+        trigger = Trigger(type=TriggerType.CRON, config="{}", definition_id="test.yaml")
         assert trigger.project_id is None
 
 

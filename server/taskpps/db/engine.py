@@ -129,6 +129,8 @@ _MIGRATIONS = {
         ("project_id", "TEXT"),
         ("error", "TEXT"),
         ("display_name", "TEXT NOT NULL DEFAULT ''"),
+        ("definition_id", "TEXT"),
+        ("snapshot_content", "TEXT"),
     ],
     "task_runs": [
         ("subpipeline_name", "TEXT NOT NULL DEFAULT ''"),
@@ -142,6 +144,10 @@ _MIGRATIONS = {
         ("last_used_at", "TIMESTAMP"),
     ],
 }
+
+_RAW_MIGRATIONS = [
+    "ALTER TABLE triggers RENAME COLUMN pipeline_file TO definition_id",
+]
 
 # 性能优化索引：为高频查询列添加索引
 # 仅在索引不存在时创建（IF NOT EXISTS），对已有数据库安全
@@ -203,6 +209,14 @@ async def _migrate_schema() -> None:
         for idx_sql in _INDEX_MIGRATIONS:
             logger.debug("Creating index: %s", idx_sql)
             await conn.execute(text(idx_sql))
+
+        # 执行原始 SQL 迁移（如 RENAME COLUMN）
+        for stmt in _RAW_MIGRATIONS:
+            try:
+                logger.debug("Executing raw migration: %s", stmt)
+                await conn.execute(text(stmt))
+            except Exception as e:
+                logger.debug("Raw migration skip: %s", e)
 
 
 async def init_db() -> None:

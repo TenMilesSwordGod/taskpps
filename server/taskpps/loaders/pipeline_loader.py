@@ -251,3 +251,18 @@ class PipelineLoader:
                 log.warning("跳过无效 pipeline 文件 %s: %s", path, e)
                 continue
         return result
+
+    def parse_dict(self, data: dict, env: dict[str, str] | None = None, project_workdir: Path | None = None) -> PipelineYAML:
+        if env is None:
+            env = {}
+
+        config_env = (data.get("config") or {}).get("env") or {}
+        if isinstance(config_env, dict) and config_env:
+            merged = dict(config_env)
+            merged.update(env)
+            env = merged
+
+        effective_workdir = project_workdir or (self.base_dir.parent if self._base_dir is not None else None)
+        data = substitute_env_vars(data, env, effective_workdir)
+
+        return PipelineYAML(**data)

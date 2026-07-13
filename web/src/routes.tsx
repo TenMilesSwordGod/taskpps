@@ -26,7 +26,7 @@ const wrap = (el: React.ReactNode) => <Suspense fallback={<RouteFallback />}>{el
 const routes: RouteObject[] = [
   { path: '/', element: wrap(<DashboardPage />) },
   { path: '/pipelines', element: wrap(<PipelineListPage />) },
-  { path: '/pipelines/:file', element: wrap(<PipelineDetailPage />) },
+  { path: '/pipelines/:projectId/:definitionId', element: wrap(<PipelineDetailPage />) },
   { path: '/runs', element: wrap(<RunListPage />) },
   { path: '/runs/:id', element: wrap(<RunDetailPage />) },
   { path: '/servers', element: wrap(<ServersPage />) },
