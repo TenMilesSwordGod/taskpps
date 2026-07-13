@@ -46,7 +46,16 @@ export default function EnvEditor({ value, onChange }: EnvEditorProps) {
     if (JSON.stringify(value) !== JSON.stringify(prev)) {
       valueRef.current = value;
       syncingRef.current = true;
-      setEntries(buildEntries(value));
+      setEntries((prevEntries) => {
+        if (!value || Object.keys(value).length === 0) {
+          return [{ id: genId(), key: '', value: '' }];
+        }
+        const prevMap = new Map(prevEntries.map((e) => [e.key, e]));
+        return Object.entries(value).map(([k, v]) => {
+          const existing = k ? prevMap.get(k) : undefined;
+          return existing ? { ...existing, value: v } : { id: genId(), key: k, value: v };
+        });
+      });
     }
   }, [value]);
 
