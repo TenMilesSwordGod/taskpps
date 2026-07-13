@@ -29,6 +29,7 @@ export default function TriggerRunModal({
   const shouldFetch = !pipelineData && !!defaultDefinitionId;
   const { data: fetchedPipeline, isLoading: isFetching } = usePipelineById(
     shouldFetch ? defaultDefinitionId : undefined,
+    defaultProjectId,
   );
   const effectivePipeline = pipelineData || fetchedPipeline || null;
 

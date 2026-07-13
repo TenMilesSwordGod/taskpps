@@ -14,11 +14,13 @@ export function usePipelines() {
 }
 
 /** 通过 definition_id 获取单个流水线详情 */
-export function usePipelineById(definitionId: string | undefined) {
+export function usePipelineById(definitionId: string | undefined, projectId?: string | null) {
   return useQuery<PipelineDetail>({
     queryKey: ['pipeline', definitionId],
     queryFn: async () => {
-      const res = await apiClient.get(`/api/pipelines/by-id/${encodeURIComponent(definitionId!)}`);
+      const params: Record<string, string> = {};
+      if (projectId) params.project_id = projectId;
+      const res = await apiClient.get(`/api/pipelines/by-id/${encodeURIComponent(definitionId!)}`, { params });
       return res.data;
     },
     enabled: !!definitionId,

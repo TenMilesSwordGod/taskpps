@@ -187,14 +187,14 @@ async def list_pipelines(project_id: str | None = Query(None)):
 
 
 @router.get("/by-id/{definition_id}")
-async def get_pipeline_by_id(definition_id: str, project_id: str = Query(...)):
+async def get_pipeline_by_id(definition_id: str, project_id: str | None = Query(None)):
     """通过 definition_id 返回流水线完整 JSON"""
     async with get_session_factory()() as session:
         repo = PipelineDefinitionRepository(session)
         d = await repo.get(definition_id)
         if d is None:
             raise HTTPException(status_code=404, detail=f"Definition not found: {definition_id}")
-        if d.project_id != project_id:
+        if project_id and d.project_id != project_id:
             raise HTTPException(status_code=404, detail="Definition not found in project")
         return json.loads(d.content)
 

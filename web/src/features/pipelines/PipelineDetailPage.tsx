@@ -24,7 +24,7 @@ import type { PipelineDetail } from '@/types';
 export default function PipelineDetailPage() {
   const { projectId, definitionId } = useParams<{ projectId: string; definitionId: string }>();
   const navigate = useNavigate();
-  const { data: pipeline, isLoading } = usePipelineById(definitionId);
+  const { data: pipeline, isLoading } = usePipelineById(definitionId, projectId);
   const graphWrapperRef = useRef<HTMLDivElement>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const helpPanelMinimized = useAppStore((s) => s.helpPanelMinimized);
