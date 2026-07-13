@@ -241,8 +241,9 @@ async def test_clean_runs_older_than(app, setup_project, tmp_project, db_engine)
 @pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0993", domain="server/api", priority="P2")
 @pytest.mark.zcustom("TC-S0993", domain="server/api", priority="P1")
-# v2 (2026-07): Phase 2 CreateRunRequest 改用 definition_id，先调列表API同步定义获取UUID
-# v2 (2026-07): Phase 2 快照从磁盘改存 DB（runs.snapshot_content），端点优先读DB，空时回退读旧磁盘文件
+# v2 (2026-07): Phase 2 CreateRunRequest 改用 definition_id，部分测试直接调列表API
+# resolve_def_id 内自动注册项目，确保列表API有注册项目可同步 pipeline_definitions
+# v2 (2026-07): Phase 2 快照只从 DB 读取，不存在则 404
 async def test_pipeline_snapshot(app, setup_project, tmp_project, db_engine):
     """获取运行的流水线快照"""
     import taskpps.config as cfg
@@ -253,13 +254,9 @@ async def test_pipeline_snapshot(app, setup_project, tmp_project, db_engine):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        list_resp = await client.get("/api/pipelines/")
-        items = list_resp.json().get("items", [])
-        deploy_items = [i for i in items if i.get("file") == "deploy.yaml" and i.get("id")]
-        assert deploy_items, "列表API应返回deploy.yaml的definition_id"
-        def_id = deploy_items[0]["id"]
+        # resolve_def_id 内自动注册项目，此后列表API可正常同步 definitions
+        def_id = await resolve_def_id(client, "deploy.yaml")
 
-        # 用 definition_id 创建运行
         create_resp = await client.post(
             "/api/runs/",
             json={"definition_id": def_id, "params": {}},

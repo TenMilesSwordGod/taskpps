@@ -133,13 +133,8 @@ async def list_pipelines(project_id: str | None = Query(None)):
             all_pipelines = loader.load_all_with_files()
 
             definitions: dict[str, str] = {}
-            # Phase 2 (2026-07): fallback 路径（无注册项目）也需同步 definition，
-            # 否则列表 API 返回的 item.id 为空，前端通过 UUID 路由无法访问详情
             if pid is not None and pdir is not None:
                 definitions = await _sync_pipeline_definitions(pid, pdir, loader)
-            elif pdir is None and pid is None and all_pipelines:
-                # 无注册项目时使用默认 pipelines/ 目录，以 workdir 最后一段作 project_id
-                definitions = await _sync_pipeline_definitions("__default__", get_pipelines_dir(), loader)
 
             for file, spec in all_pipelines.items():
                 task_count = 0

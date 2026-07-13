@@ -622,8 +622,8 @@ async def get_result_page(run_id: str):
 async def get_pipeline_snapshot(run_id: str):
     """获取历史运行时的流水线快照（执行时的版本）
 
-    Phase 2 (2026-07): 快照主存储从磁盘文件迁移到 DB (runs.snapshot_content)。
-    优先读 DB，DB 为空时回退读旧磁盘文件，兼容历史 runs。
+    Phase 2 (2026-07): 快照已从磁盘文件迁移到 DB (runs.snapshot_content)。
+    只从 DB 读取，不存在则 404。
     """
     import json as _json
 
@@ -633,31 +633,10 @@ async def get_pipeline_snapshot(run_id: str):
         if run is None:
             raise HTTPException(status_code=404, detail=t("Run not found"))
 
-        # Phase 2: 优先从 DB 读取快照
-        if getattr(run, "snapshot_content", None):
-            data = yaml.safe_load(run.snapshot_content)
-            if data is None:
-                raise HTTPException(status_code=404, detail=t("Pipeline snapshot is empty"))
-            params = _json.loads(run.params) if run.params else {}
-            project_workdir = getattr(run, "project_workdir", None)
-            data = substitute_env_vars(data, params, Path(project_workdir) if project_workdir else None)
-            spec = PipelineYAML(**data)
-            return spec.model_dump()
-
-        # 回退读旧磁盘快照（Phase 1 及之前创建的 runs，snapshot_content 为空）
-        if not run.pipeline_id:
+        if not getattr(run, "snapshot_content", None):
             raise HTTPException(status_code=404, detail=t("Pipeline snapshot not available"))
 
-        v = run.pipeline_version if run.pipeline_version else ""
-        logs_dir = get_logs_dir()
-        snapshot_path = logs_dir / run.pipeline_id / f"v_{v}" / "builds" / run_id / "pipeline-snapshot.yaml"
-
-        if not snapshot_path.exists():
-            raise HTTPException(status_code=404, detail=t("Pipeline snapshot not found"))
-
-        with open(snapshot_path) as f:
-            data = yaml.safe_load(f)
-
+        data = yaml.safe_load(run.snapshot_content)
         if data is None:
             raise HTTPException(status_code=404, detail=t("Pipeline snapshot is empty"))
 

@@ -165,15 +165,13 @@ class PipelineService:
                 if config_env:
                     loader_env.update(config_env)
 
-            # Phase 2 (2026-07): 项目不存在时回退到默认 pipelines 目录
-            # 场景：测试环境无注册项目，list API 同步用 "__default__" 作 project_id
+            # Phase 2 (2026-07): 项目必须已注册，不存在的项目直接报错
             project_workdir = get_project_workdir_by_id(project_id)
-            if project_workdir is None:
-                loader = PipelineLoader()
-                spec = loader.load(pipeline_file, loader_env)
-            else:
-                loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
-                spec = loader.load(pipeline_file, loader_env, project_workdir=project_workdir)
+            if not project_workdir:
+                raise ValueError(f"Project not found: {project_id}")
+
+            loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
+            spec = loader.load(pipeline_file, loader_env, project_workdir=project_workdir)
         except FileNotFoundError as e:
             raise ValueError(str(e)) from e
         except Exception as e:
