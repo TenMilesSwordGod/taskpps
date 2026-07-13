@@ -42,6 +42,7 @@ class PipelineRun(SQLModel, table=True):
     pipeline_id: str = Field(default="", index=True)
     pipeline_version: str = ""
     project_id: str | None = Field(default=None, index=True)
+    definition_id: str | None = Field(default=None, foreign_key="pipeline_definitions.id")
     display_name: str = ""
     status: RunStatus = RunStatus.PENDING
     error: str | None = Field(default=None)

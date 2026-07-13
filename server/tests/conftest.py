@@ -251,4 +251,5 @@ async def clean_db(db_engine):
         await conn.execute(text("DELETE FROM task_runs"))
         await conn.execute(text("DELETE FROM runs"))
         await conn.execute(text("DELETE FROM triggers"))
+        await conn.execute(text("DELETE FROM pipeline_definitions"))
         await conn.execute(text("DELETE FROM projects"))
