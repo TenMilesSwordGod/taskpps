@@ -33,47 +33,53 @@ async def _sync_pipeline_definitions(
                 rel = str(path.relative_to(base_dir))
             except ValueError:
                 continue
-            raw = path.read_text(encoding="utf-8")
-            file_hash = hashlib.sha256(raw.encode()).hexdigest()[:8]
-            data = yaml.safe_load(raw)
-            if data is None:
+            try:
+                raw = path.read_text(encoding="utf-8")
+                file_hash = hashlib.sha256(raw.encode()).hexdigest()[:8]
+                data = yaml.safe_load(raw)
+                if data is None:
+                    continue
+                spec = loader.parse_dict(data)
+                content = json.dumps(spec.model_dump(), ensure_ascii=False)
+                name = data.get("name", "")
+                definition, _ = await repo.upsert(
+                    project_id=project_id,
+                    file_path=rel,
+                    name=name,
+                    content=content,
+                    raw_content=raw,
+                    file_hash=file_hash,
+                )
+                definitions[rel] = definition.id
+                active_paths.add(rel)
+            except Exception:
                 continue
-            spec = loader.parse_dict(data)
-            content = json.dumps(spec.model_dump(), ensure_ascii=False)
-            name = data.get("name", "")
-            definition, _ = await repo.upsert(
-                project_id=project_id,
-                file_path=rel,
-                name=name,
-                content=content,
-                raw_content=raw,
-                file_hash=file_hash,
-            )
-            definitions[rel] = definition.id
-            active_paths.add(rel)
         for path in sorted(base_dir.glob("**/*.yml")):
             try:
                 rel = str(path.relative_to(base_dir))
             except ValueError:
                 continue
-            raw = path.read_text(encoding="utf-8")
-            file_hash = hashlib.sha256(raw.encode()).hexdigest()[:8]
-            data = yaml.safe_load(raw)
-            if data is None:
+            try:
+                raw = path.read_text(encoding="utf-8")
+                file_hash = hashlib.sha256(raw.encode()).hexdigest()[:8]
+                data = yaml.safe_load(raw)
+                if data is None:
+                    continue
+                spec = loader.parse_dict(data)
+                content = json.dumps(spec.model_dump(), ensure_ascii=False)
+                name = data.get("name", "")
+                definition, _ = await repo.upsert(
+                    project_id=project_id,
+                    file_path=rel,
+                    name=name,
+                    content=content,
+                    raw_content=raw,
+                    file_hash=file_hash,
+                )
+                definitions[rel] = definition.id
+                active_paths.add(rel)
+            except Exception:
                 continue
-            spec = loader.parse_dict(data)
-            content = json.dumps(spec.model_dump(), ensure_ascii=False)
-            name = data.get("name", "")
-            definition, _ = await repo.upsert(
-                project_id=project_id,
-                file_path=rel,
-                name=name,
-                content=content,
-                raw_content=raw,
-                file_hash=file_hash,
-            )
-            definitions[rel] = definition.id
-            active_paths.add(rel)
         await repo.deactivate_others(project_id, active_paths)
     return definitions
 
