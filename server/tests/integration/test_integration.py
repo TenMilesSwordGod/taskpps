@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.conftest import resolve_def_id
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -145,7 +146,7 @@ class TestIntegrationEndToEnd:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             create_resp = await client.post(
                 "/api/runs/",
-                json={"pipeline": "deploy.yaml", "params": {}},
+                json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
             )
             assert create_resp.status_code in (200, 201)
             run_id = create_resp.json()["id"]
@@ -236,7 +237,7 @@ class TestCoverageGaps:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/runs/",
-                json={"pipeline": "nonexistent.yaml", "params": {}},
+                json={"definition_id": "deadbeef1234", "params": {}},
             )
             assert resp.status_code in (400, 404, 422)
 

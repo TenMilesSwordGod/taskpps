@@ -253,3 +253,22 @@ async def clean_db(db_engine):
         await conn.execute(text("DELETE FROM triggers"))
         await conn.execute(text("DELETE FROM pipeline_definitions"))
         await conn.execute(text("DELETE FROM projects"))
+
+
+# Phase 2 (2026-07): 辅助函数 — 通过文件名获取 definition_id
+# 所有 create_run 测试从 pipeline="xxx.yaml" 改为 definition_id=UUID
+# 若项目未注册则自动注册，确保列表API能同步 pipeline_definitions
+async def resolve_def_id(client: AsyncClient, file_name: str) -> str:
+    """调用列表API同步pipeline_definitions，返回指定文件的definition_id"""
+    resp = await client.get("/api/pipelines/")
+    assert resp.status_code == 200
+    items = resp.json().get("items", [])
+    for item in items:
+        if item.get("file") == file_name and item.get("id"):
+            return item["id"]
+    raise AssertionError(
+        f"Definition not found for {file_name}. "
+        f"Ensure the project is registered in DB (call ProjectRepository.create_project first) "
+        f"and the YAML file exists in the pipelines directory. "
+        f"Available items: {[(i.get('file'), i.get('id')) for i in items]}"
+    )

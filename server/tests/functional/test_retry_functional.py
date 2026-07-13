@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.conftest import resolve_def_id
 import asyncio
 
 import pytest
@@ -21,7 +22,7 @@ async def _wait_run_done(client, run_id, timeout=6):
 class TestRetryFunctional:
     @pytest.mark.zentao("TC-S0041", domain="server/functional", priority="P0")
     async def test_retry_full_flow(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         assert resp.status_code in (200, 201)
         run_id = resp.json()["id"]
 
@@ -46,7 +47,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0042", domain="server/functional", priority="P1")
     async def test_retry_with_dependencies(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -62,7 +63,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0043", domain="server/functional", priority="P1")
     async def test_retry_whole_subpipeline(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -78,7 +79,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0044", domain="server/functional", priority="P1")
     async def test_retry_after_failure_fixes_task(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "fail_test.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "fail_test.yaml"), "params": {}})
         run_id = resp.json()["id"]
         status = await _wait_run_done(client, run_id)
         assert status == "failed"
@@ -108,7 +109,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0045", domain="server/functional", priority="P1")
     async def test_retry_continue_pipeline(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "continue_test.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "continue_test.yaml"), "params": {}})
         run_id = resp.json()["id"]
         status = await _wait_run_done(client, run_id)
         assert status in ("failed", "partial")
@@ -133,7 +134,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0046", domain="server/functional", priority="P2")
     async def test_multiple_retries_increment_version(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -165,7 +166,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0048", domain="server/functional", priority="P1")
     async def test_retry_nonexistent_task(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -177,7 +178,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0049", domain="server/functional", priority="P1")
     async def test_retry_both_tasks_and_subpipeline_rejected(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -189,7 +190,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0050", domain="server/functional", priority="P1")
     async def test_retry_missing_both_tasks_and_subpipeline(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -201,7 +202,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0051", domain="server/functional", priority="P2")
     async def test_dependency_tree_api(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -224,7 +225,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0052", domain="server/functional", priority="P2")
     async def test_dependency_tree_upstream_of_first_task(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -239,7 +240,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0053", domain="server/functional", priority="P1")
     async def test_retry_command_edit_flow(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -413,7 +414,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0057", domain="server/functional", priority="P1")
     async def test_retry_get_record(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -432,7 +433,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0058", domain="server/functional", priority="P1")
     async def test_retry_get_nonexistent_record(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -441,7 +442,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0059", domain="server/functional", priority="P1")
     async def test_retry_log_api(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -459,7 +460,7 @@ class TestRetryFunctional:
 
     @pytest.mark.zentao("TC-S0060", domain="server/functional", priority="P1")
     async def test_retry_log_with_tail(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "deploy.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -552,7 +553,7 @@ class TestRetryFunctional:
 class TestRetryDAGScenarios:
     @pytest.mark.zentao("TC-S0063", domain="server/functional", priority="P1")
     async def test_diamond_retry_middle_task(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         status = await _wait_run_done(client, run_id)
         assert status == "success"
@@ -568,7 +569,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0064", domain="server/functional", priority="P1")
     async def test_diamond_retry_last_task_includes_all_upstream(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -583,7 +584,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0065", domain="server/functional", priority="P1")
     async def test_diamond_retry_all_tasks(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -597,7 +598,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0066", domain="server/functional", priority="P2")
     async def test_diamond_dependency_tree(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -619,7 +620,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0067", domain="server/functional", priority="P1")
     async def test_diamond_retry_command_override(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -636,7 +637,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0068", domain="server/functional", priority="P1")
     async def test_continue_diamond_partial_failure(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "continue_diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "continue_diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         status = await _wait_run_done(client, run_id)
         assert status in ("failed", "partial")
@@ -655,7 +656,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0069", domain="server/functional", priority="P1")
     async def test_continue_diamond_retry_failed_branch(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "continue_diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "continue_diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -672,7 +673,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0070", domain="server/functional", priority="P1")
     async def test_multi_subpipeline_retry(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "multi_sub.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "multi_sub.yaml"), "params": {}})
         run_id = resp.json()["id"]
         status = await _wait_run_done(client, run_id)
         assert status == "success"
@@ -690,7 +691,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0071", domain="server/functional", priority="P1")
     async def test_multi_subpipeline_retry_all(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "multi_sub.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "multi_sub.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -705,7 +706,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0072", domain="server/functional", priority="P2")
     async def test_multi_subpipeline_dependency_tree_cross_sub(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "multi_sub.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "multi_sub.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -719,7 +720,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0073", domain="server/functional", priority="P1")
     async def test_diamond_retry_then_versions(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 
@@ -743,7 +744,7 @@ class TestRetryDAGScenarios:
 
     @pytest.mark.zentao("TC-S0074", domain="server/functional", priority="P1")
     async def test_diamond_retry_logs(self, client, setup_project, tmp_project, db_engine, clean_db):
-        resp = await client.post("/api/runs/", json={"pipeline": "diamond.yaml", "params": {}})
+        resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "diamond.yaml"), "params": {}})
         run_id = resp.json()["id"]
         await _wait_run_done(client, run_id)
 

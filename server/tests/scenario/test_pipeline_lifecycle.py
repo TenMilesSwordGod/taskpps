@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.conftest import resolve_def_id
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -28,7 +29,7 @@ class TestPipelineCreateAndFetch:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             create_resp = await client.post(
                 "/api/runs/",
-                json={"pipeline": "deploy.yaml"},
+                json={"definition_id": await resolve_def_id(client, "deploy.yaml")},
             )
             assert create_resp.status_code == 201
             run_data = create_resp.json()
@@ -47,7 +48,8 @@ class TestPipelineCreateAndFetch:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             for name in ["simple.yaml", "deploy.yaml", "fail_test.yaml"]:
-                await client.post("/api/runs/", json={"pipeline": name})
+                def_id = await resolve_def_id(client, name)
+                await client.post("/api/runs/", json={"definition_id": def_id})
 
             list_resp = await client.get("/api/runs/")
             assert list_resp.status_code == 200
@@ -59,8 +61,8 @@ class TestPipelineCreateAndFetch:
     async def test_list_runs_filter_by_pipeline(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            await client.post("/api/runs/", json={"pipeline": "simple.yaml"})
-            await client.post("/api/runs/", json={"pipeline": "deploy.yaml"})
+            await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml")})
+            await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "deploy.yaml")})
 
             list_resp = await client.get("/api/runs/", params={"pipeline": "simple"})
             assert list_resp.status_code == 200
@@ -73,7 +75,7 @@ class TestPipelineCreateAndFetch:
     async def test_list_runs_filter_by_status(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            await client.post("/api/runs/", json={"pipeline": "simple.yaml"})
+            await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml")})
 
             list_resp = await client.get("/api/runs/", params={"status": "pending"})
             assert list_resp.status_code == 200
@@ -89,7 +91,7 @@ class TestPipelineCreateAndFetch:
             create_resp = await client.post(
                 "/api/runs/",
                 json={
-                    "pipeline": "deploy.yaml",
+                    "definition_id": await resolve_def_id(client, "deploy.yaml"),
                     "params": {"config": {"env": {"version": "1.0", "env": "staging"}}},
                 },
             )
@@ -112,7 +114,7 @@ class TestPipelineCancel:
     async def test_cancel_pending_run(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            create_resp = await client.post("/api/runs/", json={"pipeline": "simple.yaml"})
+            create_resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml")})
             assert create_resp.status_code == 201
             run_id = create_resp.json()["id"]
 
@@ -138,7 +140,7 @@ class TestPipelineCleanup:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             for _i in range(3):
-                await client.post("/api/runs/", json={"pipeline": "simple.yaml"})
+                await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml")})
 
             cleanup_resp = await client.delete(
                 "/api/runs/",
@@ -153,7 +155,7 @@ class TestPipelineCleanup:
     async def test_cleanup_no_force_no_delete_recent(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            await client.post("/api/runs/", json={"pipeline": "simple"})
+            await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "simple.yaml")})
 
             cleanup_resp = await client.delete(
                 "/api/runs/",
@@ -178,7 +180,7 @@ class TestPipelineErrorHandling:
     async def test_create_run_empty_pipeline_name(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post("/api/runs/", json={"pipeline": ""})
+            resp = await client.post("/api/runs/", json={"definition_id": ""})
             assert resp.status_code == 400
 
     @pytest.mark.asyncio
@@ -186,7 +188,7 @@ class TestPipelineErrorHandling:
     async def test_create_run_nonexistent_pipeline(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post("/api/runs/", json={"pipeline": "nonexistent_pipeline_xyz"})
+            resp = await client.post("/api/runs/", json={"definition_id": "deadbeef1234", "params": {}})
             assert resp.status_code == 400
 
     @pytest.mark.asyncio
@@ -206,6 +208,6 @@ class TestPipelineErrorHandling:
     async def test_create_run_with_cycle_detection(self, app, project_env, db_engine):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post("/api/runs/", json={"pipeline": "cycle"})
+            resp = await client.post("/api/runs/", json={"definition_id": await resolve_def_id(client, "cycle.yaml")})
             assert resp.status_code == 400
 

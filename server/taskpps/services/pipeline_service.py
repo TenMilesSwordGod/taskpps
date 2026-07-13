@@ -136,8 +136,13 @@ class PipelineService:
             cls._pipeline_locks[pipeline_id] = lock
         return lock
 
+    # Phase 2 (2026-07): definition_id 替代 pipeline_file 文件路径
+    # create_run 通过 UUID 查 pipeline_definitions 获取 file_path，再走 loader.load
     async def create_run(
-        self, definition_id: str, params: dict[str, Any] | None = None, project_id: str | None = None
+        self,
+        definition_id: str,
+        params: dict[str, Any] | None = None,
+        project_id: str | None = None,
     ) -> dict:
         from taskpps.db.repository import PipelineDefinitionRepository
 
@@ -146,9 +151,8 @@ class PipelineService:
             d = await def_repo.get(definition_id)
             if d is None:
                 raise ValueError(f"Definition not found: {definition_id}")
-
             pipeline_file = d.file_path
-            project_id = d.project_id
+            project_id = project_id or d.project_id
 
         try:
             from taskpps.config import get_settings
@@ -161,12 +165,15 @@ class PipelineService:
                 if config_env:
                     loader_env.update(config_env)
 
+            # Phase 2 (2026-07): 项目不存在时回退到默认 pipelines 目录
+            # 场景：测试环境无注册项目，list API 同步用 "__default__" 作 project_id
             project_workdir = get_project_workdir_by_id(project_id)
-            if not project_workdir:
-                raise ValueError(f"Project not found: {project_id}")
-
-            loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
-            spec = loader.load(pipeline_file, loader_env, project_workdir=project_workdir)
+            if project_workdir is None:
+                loader = PipelineLoader()
+                spec = loader.load(pipeline_file, loader_env)
+            else:
+                loader = PipelineLoader(base_dir=get_pipelines_dir(project_workdir))
+                spec = loader.load(pipeline_file, loader_env, project_workdir=project_workdir)
         except FileNotFoundError as e:
             raise ValueError(str(e)) from e
         except Exception as e:
