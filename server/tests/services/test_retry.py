@@ -11,7 +11,7 @@ from taskpps.config import build_retry_log_path
 from taskpps.db.engine import get_session_factory
 from taskpps.db.repository import RetryRecordRepository, RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext
-from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.domain.pipeline import ResolvedPipeline, ResolvedStep, ResolvedTask
 from taskpps.engine.retry_runner import RetryRunner
 from taskpps.executors.base import ExecutorResult
 from taskpps.models.run import RunStatus, TaskStatus
@@ -549,6 +549,127 @@ class TestRetryRunner:
             if events[i].startswith("start:"):
                 # 每个 start 后必须紧跟 end
                 assert events[i + 1] == f"end:{events[i].split(':')[1]}"
+
+    @pytest.mark.zentao("TC-S0413", domain="server/services", priority="P0")
+    async def test_retry_steps_task_executes_each_step(self):
+        """v2 (2026-07): retry_runner 修复后，steps 任务应逐条送 step.run 到 executor，
+        而非传 command="" 导致空跑。
+        """
+        steps = [
+            ResolvedStep(run="echo step1"),
+            ResolvedStep(run="echo step2"),
+            ResolvedStep(run="echo step3"),
+        ]
+        tasks = [ResolvedTask(name="t1", task_type="steps", steps=steps)]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_steps_retry")
+
+        runner = RetryRunner(run_id="r1", pipeline=pipeline, context=ctx)
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+
+        task_plan = [
+            {
+                "name": "sub.t1",
+                "command": "",  # steps 任务 retry_record 的 command 为空（无单命令）
+                "retry_record_id": "rec_1",
+                "log_path": "/tmp/steps_retry.log",
+            }
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            results = await runner.retry_tasks(task_plan)
+
+        assert "sub.t1" in results
+        assert results["sub.t1"].success
+
+        # 核心断言：executor.execute 被调用 3 次（每个 step 一次），
+        # 而非原来传 command="" 仅被调用 1 次
+        assert mock_executor.execute.call_count == 3
+
+        # 每次调用的 command kwarg 应对应各个 step.run
+        calls = [call.kwargs["command"] for call in mock_executor.execute.call_args_list]
+        assert calls == ["echo step1", "echo step2", "echo step3"]
+
+    @pytest.mark.zentao("TC-S0414", domain="server/services", priority="P0")
+    async def test_retry_commands_task_executes_each_command(self):
+        """v2 (2026-07): retry_runner 修复后，commands 任务应逐条送 cmd 到 executor，
+        而非 "\n".join 后仅送一条多行命令。
+        """
+        tasks = [ResolvedTask(name="t1", task_type="command", commands=["echo cmd1", "echo cmd2"])]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cmds_retry")
+
+        runner = RetryRunner(run_id="r2", pipeline=pipeline, context=ctx)
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+
+        task_plan = [
+            {
+                "name": "sub.t1",
+                "command": "",  # commands 任务 retry_record 的 command 为空
+                "retry_record_id": "rec_2",
+                "log_path": "/tmp/cmds_retry.log",
+            }
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            results = await runner.retry_tasks(task_plan)
+
+        assert "sub.t1" in results
+        assert results["sub.t1"].success
+
+        # 每个 command 一条 execute 调用
+        assert mock_executor.execute.call_count == 2
+        calls = [call.kwargs["command"] for call in mock_executor.execute.call_args_list]
+        assert calls == ["echo cmd1", "echo cmd2"]
+
+    @pytest.mark.zentao("TC-S0415", domain="server/services", priority="P1")
+    async def test_retry_steps_task_with_per_step_cd_and_env(self):
+        """v2 (2026-07): steps 任务重试时，每步的 cd 和 env 覆盖应正确传递到 executor。"""
+        steps = [
+            ResolvedStep(run="echo step1", cd="/tmp", env={"A": "1"}),
+            ResolvedStep(run="echo step2", cd="/var", env={"B": "2"}),
+        ]
+        tasks = [ResolvedTask(name="t1", task_type="steps", steps=steps)]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_steps_per")
+        runner = RetryRunner(run_id="r3", pipeline=pipeline, context=ctx)
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+
+        task_plan = [
+            {"name": "sub.t1", "command": "", "retry_record_id": "rec_3", "log_path": "/tmp/sp.log"}
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            await runner.retry_tasks(task_plan)
+
+        calls = mock_executor.execute.call_args_list
+        # Step 1: cwd="/tmp", env contains A=1
+        assert calls[0].kwargs["cwd"] == "/tmp"
+        assert calls[0].kwargs["env"].get("A") == "1"
+        # Step 2: cwd="/var", env contains B=2
+        assert calls[1].kwargs["cwd"] == "/var"
+        assert calls[1].kwargs["env"].get("B") == "2"
 
 
 @pytest.mark.asyncio

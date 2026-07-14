@@ -21,6 +21,7 @@ from taskpps.db.repository import RunRepository, TaskRunRepository
 from taskpps.domain.context import ExecutionContext
 from taskpps.domain.dag import DAG, DAGCycleError
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedSubPipeline, ResolvedTask
+from taskpps.engine.step_executor import run_commands, run_steps
 from taskpps.events.bus import (
     SIGNAL_PIPELINE_STARTED,
     SIGNAL_RUN_CANCELLED,
@@ -1038,40 +1039,11 @@ class PipelineRunner:
         timeout: int | None,
         effective_cwd: str | None = None,
     ) -> ExecutorResult:
-        if not task.commands:
-            return ExecutorResult(exit_code=0)
-
-        combined_output = ""
-        cmd_timeout = None
-        if timeout:
-            cmd_timeout = timeout // max(len(task.commands), 1)
-            if cmd_timeout < 1:
-                cmd_timeout = 1
-
-        for i, cmd in enumerate(task.commands):
-            self._write_pipeline_log("CMD", f"  [{i + 1}/{len(task.commands)}] {cmd}")
-            with open(log_path, "a") as f:
-                f.write(t("Command {n}/{total}: {cmd}\n", n=i + 1, total=len(task.commands), cmd=cmd[:80]))
-
-            result = await executor.execute(
-                command=cmd,
-                env=env,
-                log_path=log_path,
-                timeout=cmd_timeout,
-                cwd=effective_cwd,
-            )
-
-            combined_output += result.stdout or ""
-
-            if not result.success:
-                combined_output += result.stderr or ""
-                return ExecutorResult(
-                    exit_code=result.exit_code,
-                    stdout=combined_output,
-                    stderr=t("Command {n} failed: {error}", n=i + 1, error=result.stderr),
-                )
-
-        return ExecutorResult(exit_code=0, stdout=combined_output)
+        """委托给共享 helper run_commands，减少与 RetryRunner 的重复代码。"""
+        return await run_commands(
+            executor, task.commands, env, log_path, timeout, effective_cwd,
+            on_log=self._write_pipeline_log,
+        )
 
     async def _execute_steps(
         self,
@@ -1082,45 +1054,11 @@ class PipelineRunner:
         timeout: int | None,
         effective_cwd: str | None = None,
     ) -> ExecutorResult:
-        combined_output = ""
-        step_timeout = None
-        if timeout and task.steps:
-            step_timeout = timeout // max(len(task.steps), 1)
-            if step_timeout < 1:
-                step_timeout = 1
-
-        for i, step in enumerate(task.steps):
-            step_env = {**env, **step.env}
-            step_cwd = step.cd or effective_cwd
-
-            step_desc = f"  [{i + 1}/{len(task.steps)}]"
-            if step.cd:
-                step_desc += f" cd {step.cd} &&"
-            step_desc += f" {step.run}"
-            self._write_pipeline_log("CMD", step_desc)
-
-            with open(log_path, "a") as f:
-                f.write(t("Step {n}/{total}: {cmd}", n=i + 1, total=len(task.steps), cmd=step.run[:80]))
-
-            result = await executor.execute(
-                command=step.run,
-                env=step_env,
-                log_path=log_path,
-                timeout=step_timeout,
-                cwd=step_cwd,
-            )
-
-            combined_output += result.stdout or ""
-
-            if not result.success:
-                combined_output += result.stderr or ""
-                return ExecutorResult(
-                    exit_code=result.exit_code,
-                    stdout=combined_output,
-                    stderr=t("Step {n} failed: {error}", n=i + 1, error=result.stderr),
-                )
-
-        return ExecutorResult(exit_code=0, stdout=combined_output)
+        """委托给共享 helper run_steps，减少与 RetryRunner 的重复代码。"""
+        return await run_steps(
+            executor, task.steps, env, log_path, timeout, effective_cwd,
+            on_log=self._write_pipeline_log,
+        )
 
     def _find_collector_output(self) -> str | None:
         for sub in self.pipeline.subpipelines:
@@ -1448,7 +1386,7 @@ class PipelineRunner:
         env["TASKPPS_PIPELINE_ID"] = self._pipeline_id or ""
         env["TASKPPS_PIPELINE_VERSION"] = self._pipeline_version or ""
         env["TASKPPS_LOGS_DIR"] = str(get_logs_dir())
-        env["TASKPPS_PIPELINE_STATUS"] = self._cancelled and "cancelled" or "success"
+        env["TASKPPS_PIPELINE_STATUS"] = (self._cancelled and "cancelled") or "success"
 
         for key, val in env.items():
             if isinstance(val, str) and "${artifact:" in val:

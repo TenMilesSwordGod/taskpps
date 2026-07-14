@@ -11,6 +11,7 @@ from taskpps.db.repository import RetryRecordRepository
 from taskpps.domain.context import ExecutionContext
 from taskpps.domain.dag import DAG
 from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
+from taskpps.engine.step_executor import run_commands, run_steps
 from taskpps.events.bus import SIGNAL_RETRY_FINISHED, SIGNAL_RETRY_STARTED, get_event_bus
 from taskpps.executors import create_executor
 from taskpps.executors.agent_executor import AgentExecutor
@@ -211,21 +212,13 @@ class RetryRunner:
         elif isinstance(executor, PluginExecutor):
             return await executor.execute(command="", env=env, log_path=log_path, timeout=timeout)
         elif task.task_type == "steps" and task.steps:
-            return await executor.execute(
-                command="",
-                env=env,
-                log_path=log_path,
-                timeout=timeout,
-                cwd=effective_cwd,
-            )
+            # v2 (2026-07): 修复 steps 任务重试时 command="" 导致空跑的问题（原 dispatcher 只处理单 command 任务）
+            # 改为逐条送 step.run 到 executor，与 PipelineRunner._execute_steps 行为一致
+            return await run_steps(executor, task.steps, env, log_path, timeout, effective_cwd)
         elif task.commands:
-            return await executor.execute(
-                command="\n".join(task.commands),
-                env=env,
-                log_path=log_path,
-                timeout=timeout,
-                cwd=effective_cwd,
-            )
+            # v2 (2026-07): 改为逐条执行，与 PipelineRunner._execute_commands 行为一致
+            # 原实现 "\n".join 对 AgentExecutor 仅送一条多行命令，缺少分段超时和错误定位
+            return await run_commands(executor, task.commands, env, log_path, timeout, effective_cwd)
         else:
             cmd = command or task.command or ""
             return await executor.execute(

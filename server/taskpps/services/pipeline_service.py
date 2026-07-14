@@ -27,7 +27,7 @@ from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.engine.retry_runner import RetryRunner, get_active_retry_runner
 from taskpps.engine.runner import PipelineRunner
 from taskpps.i18n import t
-from taskpps.loaders.pipeline_loader import PipelineLoader
+from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
 from taskpps.naming import generate_display_name
 
 logger = logging.getLogger("taskpps.services.pipeline_service")
@@ -607,7 +607,15 @@ class PipelineService:
             if tasks and subpipeline:
                 raise ValueError("Cannot specify both tasks and subpipeline")
 
-            resolved = self._load_resolved_pipeline(run)
+            # v2 (2026-07): 提取 run_params 和 project_workdir 用于 substitute_env_vars，
+            # 使重试时快照中的模板变量能被解析
+            run_params = json.loads(run.params) if isinstance(run.params, str) else (run.params or {})
+            project_workdir = getattr(run, "project_workdir", None)
+            resolved = self._load_resolved_pipeline(
+                run,
+                env=_extract_env_overrides(run_params),
+                project_workdir=Path(project_workdir) if project_workdir else None,
+            )
             if resolved is None:
                 if not run.pipeline_id:
                     raise ValueError(t("Run has no pipeline snapshot, retry is not available"))
@@ -654,7 +662,6 @@ class PipelineService:
                 if pending:
                     raise ValueError(t("Task has a retry already in progress"))
 
-            run_params = json.loads(run.params) if isinstance(run.params, str) else (run.params or {})
             context = ExecutionContext(
                 pipeline=resolved,
                 run_id=run_id,
@@ -984,8 +991,18 @@ class PipelineService:
             "tree": [n.model_dump() for n in tree],
         }
 
-    def _load_resolved_pipeline(self, run) -> ResolvedPipeline | None:
-        """加载 pipeline 定义用于重试。仅使用执行时保存的快照，禁止回退到当前磁盘文件。"""
+    def _load_resolved_pipeline(
+        self,
+        run,
+        *,
+        env: dict[str, str] | None = None,
+        project_workdir: Path | None = None,
+    ) -> ResolvedPipeline | None:
+        """加载 pipeline 定义用于重试。从 DB snapshot_content 读取执行时保存的快照。
+
+        v2 (2026-07): 增加 substitute_env_vars 调用，使快照中的 ${env.X}/${credential:X.Y}/${agent:X.Y}
+        模板在重试路径也被解析。此前仅 PipelineLoader.load() 会做替换，重试路径遗漏了这一步。
+        """
         import yaml
 
         snapshot_content = getattr(run, "snapshot_content", None)
@@ -998,6 +1015,17 @@ class PipelineService:
             if data is None:
                 logger.error("Pipeline snapshot is empty for run %s", run.id)
                 return None
+
+            # 提取 pipeline 自身的 config.env，合并到 env 中
+            # 与 PipelineLoader.load() 保持一致：config.env 可在命令中通过 ${env.X} 引用
+            config_env = (data.get("config") or {}).get("env") or {}
+            if isinstance(config_env, dict) and config_env:
+                merged = dict(config_env)
+                merged.update(env or {})
+                env = merged
+
+            data = substitute_env_vars(data, env or {}, project_workdir)
+
             spec = PipelineYAML(**data)
             return ResolvedPipeline.from_yaml(spec, pipeline_file=run.pipeline_file)
         except Exception:
