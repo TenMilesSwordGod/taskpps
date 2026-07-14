@@ -422,7 +422,14 @@ export default function RunDetailPage() {
           runId={id}
           taskName={retryTaskName}
           taskStatus={run.tasks.find((t) => t.task_name === retryTaskName)?.status}
-          taskCommand={findTaskDef(retryTaskName)?.command ?? findTaskDef(retryTaskName)?.commands?.join('\n') ?? undefined}
+          taskCommand={
+            findTaskDef(retryTaskName)?.command ??
+            findTaskDef(retryTaskName)?.commands?.join('\n') ??
+            findTaskDef(retryTaskName)?.steps?.map(
+              (s, i) => `[step ${i + 1}]${s.cd ? ` cd ${s.cd} &&` : ''} ${s.run}`,
+            ).join('\n') ??
+            undefined
+          }
           onClose={() => setRetryTaskName(null)}
         />
       )}
