@@ -142,13 +142,14 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
     return () => ro.disconnect();
   }, []);
 
-  if (!data || data.length === 0) {
-    return (
-      <div style={{ height: '100%', minHeight: height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C7F88', fontSize: 12 }}>
-        暂无数据
-      </div>
-    );
-  }
+  // v2 (2026-07): 空数据不再 early-return 一个「无 containerRef 的占位 div」。
+  // 之前写法在首次挂载 data 为空（仪表盘 useRuns 异步、首挂 trendData 为空）时，
+  // 渲染的占位 div 没有 containerRef → 测量用的 useLayoutEffect / ResizeObserver
+  // 读到 containerRef.current===null 直接 return，且 deps=[] 不随数据到达重跑 →
+  // size.w 恒为默认 600 → 折线只画半宽（issue #193, zentao bug #31）。
+  // 改为：始终渲染带 ref 的最外层容器，「暂无数据」作为容器内的内联内容，
+  // 保证挂载时 containerRef 必然存在、测量 effect 必能拿到真实宽度。
+  const isEmpty = !data || data.length === 0;
 
   // 实际渲染所用宽高：优先取容器实测值，回退到 props（避免初次 0）
   const width = size.w > 0 ? size.w : 600;
@@ -180,7 +181,10 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
   const yTop = PAD_T;
   const yBottom = PAD_T + plotH;
   const smoothPath = buildSmoothPath(coords, yTop, yBottom);
-  const areaPath = `${smoothPath} L${coords[n - 1].x.toFixed(1)},${yBottom.toFixed(1)} L${coords[0].x.toFixed(1)},${yBottom.toFixed(1)} Z`;
+  // v2 (2026-07): 空数据时 coords 为空，coords[n-1] 会越界；仅在有数据时构造区域路径
+  const areaPath = n > 0
+    ? `${smoothPath} L${coords[n - 1].x.toFixed(1)},${yBottom.toFixed(1)} L${coords[0].x.toFixed(1)},${yBottom.toFixed(1)} Z`
+    : '';
   const labelStep = Math.max(1, Math.ceil(n / 6));
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -212,6 +216,14 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* v2 (2026-07): 「暂无数据」内联在带 ref 的容器内，容器本身始终挂载，测量 effect 恒生效 */}
+      {isEmpty && (
+        <div style={{ height: '100%', minHeight: height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C7F88', fontSize: 12 }}>
+          暂无数据
+        </div>
+      )}
+      {!isEmpty && (
+      <>
       <svg
         ref={svgRef}
         width="100%"
@@ -312,6 +324,8 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
           {active.detail && <div style={{ opacity: 0.6, fontSize: 10, marginTop: 1 }}>{active.detail}</div>}
           {clickable && <div style={{ opacity: 0.6, fontSize: 10, marginTop: 2 }}>点击查看详情 →</div>}
         </div>
+      )}
+      </>
       )}
     </div>
   );
