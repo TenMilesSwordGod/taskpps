@@ -76,6 +76,9 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
   );
 
   // 折线“绘制”动画：用 stroke-dashoffset 从路径长度收到 0；区域/数据点随后淡入
+  // 依赖 dataSignature + size.w：宽度变化（如首次 ResizeObserver 上报真实宽度、
+  // 或窗口/布局 resize）后必须基于“最新 path 实际长度”重设 dash 并重播，
+  // 否则旧 dash 长度与新 path 失配 → 右侧留白 / 绘制方向异常（issue #193）。
   useEffect(() => {
     const path = lineRef.current;
     if (!path) return;
@@ -99,17 +102,27 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
       window.clearTimeout(t1);
       window.clearTimeout(t2);
     };
-  }, [dataSignature]);
+  }, [dataSignature, size.w]);
 
-  // 挂载即用真实尺寸测量一次，避免初始默认值的闪烁/错位
+  // 挂载即用真实尺寸测量一次，避免初始默认值的闪烁/错位。
+  // 首帧布局未就绪时 getBoundingClientRect 可能返回 0（父级 flex 尚未完成），
+  // 此时不回退到默认 600 半宽，而是用 rAF 在下一帧再测一次拿真实宽度，
+  // 配合上面 size.w 依赖的绘制动画，确保折线铺满真实容器宽度（issue #193）。
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    if (rect.width > 0 || rect.height > 0) {
-      setSize({ w: rect.width || size.w, h: rect.height || size.h });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 || rect.height > 0) {
+        setSize((prev) => ({
+          w: rect.width > 0 ? rect.width : prev.w,
+          h: rect.height > 0 ? rect.height : prev.h,
+        }));
+      }
+    };
+    measure();
+    const raf = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   // 容器尺寸变化时同步宽高，真正自适应铺满（含高度）
@@ -129,13 +142,14 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
     return () => ro.disconnect();
   }, []);
 
-  if (!data || data.length === 0) {
-    return (
-      <div style={{ height: '100%', minHeight: height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C7F88', fontSize: 12 }}>
-        暂无数据
-      </div>
-    );
-  }
+  // v2 (2026-07): 空数据不再 early-return 一个「无 containerRef 的占位 div」。
+  // 之前写法在首次挂载 data 为空（仪表盘 useRuns 异步、首挂 trendData 为空）时，
+  // 渲染的占位 div 没有 containerRef → 测量用的 useLayoutEffect / ResizeObserver
+  // 读到 containerRef.current===null 直接 return，且 deps=[] 不随数据到达重跑 →
+  // size.w 恒为默认 600 → 折线只画半宽（issue #193, zentao bug #31）。
+  // 改为：始终渲染带 ref 的最外层容器，「暂无数据」作为容器内的内联内容，
+  // 保证挂载时 containerRef 必然存在、测量 effect 必能拿到真实宽度。
+  const isEmpty = !data || data.length === 0;
 
   // 实际渲染所用宽高：优先取容器实测值，回退到 props（避免初次 0）
   const width = size.w > 0 ? size.w : 600;
@@ -167,7 +181,10 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
   const yTop = PAD_T;
   const yBottom = PAD_T + plotH;
   const smoothPath = buildSmoothPath(coords, yTop, yBottom);
-  const areaPath = `${smoothPath} L${coords[n - 1].x.toFixed(1)},${yBottom.toFixed(1)} L${coords[0].x.toFixed(1)},${yBottom.toFixed(1)} Z`;
+  // v2 (2026-07): 空数据时 coords 为空，coords[n-1] 会越界；仅在有数据时构造区域路径
+  const areaPath = n > 0
+    ? `${smoothPath} L${coords[n - 1].x.toFixed(1)},${yBottom.toFixed(1)} L${coords[0].x.toFixed(1)},${yBottom.toFixed(1)} Z`
+    : '';
   const labelStep = Math.max(1, Math.ceil(n / 6));
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -199,6 +216,14 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* v2 (2026-07): 「暂无数据」内联在带 ref 的容器内，容器本身始终挂载，测量 effect 恒生效 */}
+      {isEmpty && (
+        <div style={{ height: '100%', minHeight: height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C7F88', fontSize: 12 }}>
+          暂无数据
+        </div>
+      )}
+      {!isEmpty && (
+      <>
       <svg
         ref={svgRef}
         width="100%"
@@ -299,6 +324,8 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
           {active.detail && <div style={{ opacity: 0.6, fontSize: 10, marginTop: 1 }}>{active.detail}</div>}
           {clickable && <div style={{ opacity: 0.6, fontSize: 10, marginTop: 2 }}>点击查看详情 →</div>}
         </div>
+      )}
+      </>
       )}
     </div>
   );
