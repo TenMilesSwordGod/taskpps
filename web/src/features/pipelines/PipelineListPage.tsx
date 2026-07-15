@@ -1,13 +1,13 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Card, Table, Button, Input, Space, Tooltip, Tag } from 'antd';
-import { Search, RefreshCw, Play, ChevronRight } from 'lucide-react';
+import { Search, RefreshCw, Play, ChevronRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { usePipelines } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import SuccessRateChart from './components/SuccessRateChart';
-import type { PipelineSummary, RunStatus } from '@/types';
+import type { PipelineSummary, RunStatus, ValidationError } from '@/types';
 
 /** 行类型 */
 type Row =
@@ -83,6 +83,9 @@ export default function PipelineListPage() {
             success_rate:
               folderPipelines.reduce((s, c) => s + c.success_rate, 0) / Math.max(folderPipelines.length, 1),
             recent_runs: [],
+            // project/folder 行不需要合法性状态，默认 valid
+            valid: true,
+            validation_error: null,
             kind: 'folder',
             children: folderPipelines.map((p) => ({ ...p, kind: 'pipeline' as const })),
             pipelineCount: folderPipelines.length,
@@ -111,6 +114,8 @@ export default function PipelineListPage() {
             ? projectPipelines.reduce((s, c) => s + c.success_rate, 0) / projectPipelines.length
             : 0,
           recent_runs: [],
+          valid: true,
+          validation_error: null,
           kind: 'project',
           children,
           pipelineCount,
@@ -212,9 +217,42 @@ export default function PipelineListPage() {
           );
         }
         return (
-          <Link to={`/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`} style={{ fontWeight: 500, color: '#3D5BFF' }}>
-            {record.name}
-          </Link>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {/* v1 (2026-07): issue #195 — 列表页 YAML 合法性图标 */}
+            <Tooltip
+              title={
+                record.validation_error ? (
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>YAML 校验失败</div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+                      {record.validation_error.path ? `${record.validation_error.path}: ` : ''}
+                      {record.validation_error.line != null ? `行 ${record.validation_error.line}` : ''}
+                      {record.validation_error.column != null ? `:${record.validation_error.column} ` : ''}
+                      — {record.validation_error.message}
+                    </div>
+                  </div>
+                ) : record.valid === false ? (
+                  'YAML 校验失败'
+                ) : (
+                  'YAML 合法'
+                )
+              }
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                {record.valid !== false ? (
+                  <CheckCircle2 size={14} color="#52c41a" />
+                ) : (
+                  <AlertTriangle size={14} color="#ff4d4f" />
+                )}
+              </span>
+            </Tooltip>
+            <Link to={record.valid !== false
+              ? `/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`
+              : `/pipelines/${record.project_id}/_file_/${encodeURIComponent(record.file)}`
+            } style={{ fontWeight: 500, color: '#3D5BFF' }}>
+              {record.name}
+            </Link>
+          </span>
         );
       },
     },
@@ -224,7 +262,10 @@ export default function PipelineListPage() {
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88', fontSize: 12 }}>--</span>;
         return (
-          <Link to={`/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
+          <Link to={record.valid !== false
+            ? `/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`
+            : `/pipelines/${record.project_id}/_file_/${encodeURIComponent(record.file)}`
+          } style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
             {record.file}
           </Link>
         );

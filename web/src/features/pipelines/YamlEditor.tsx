@@ -10,6 +10,7 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintGutter } from '@codemirror/lint';
 import { Alert, Button, Tooltip, Space } from 'antd';
 import { FormatPainterOutlined, UndoOutlined, RedoOutlined, SaveOutlined } from '@ant-design/icons';
+import type { ValidationError } from '@/types';
 
 export interface YamlEditorRef {
   /** 滚动到指定行（1-indexed），并临时高亮 2s */
@@ -21,8 +22,8 @@ export interface YamlEditorProps {
   value: string;
   /** 内容变化回调（已 debounce） */
   onChange: (value: string) => void;
-  /** YAML 解析错误 */
-  error?: { message: string; line: number; column: number } | null;
+  /** YAML 校验错误（统一结构：message, line?, column?, path?） */
+  error?: ValidationError | null;
   /** 编辑器高度 */
   height?: string | number;
   /** 是否只读 */
@@ -207,7 +208,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
       {/* 编辑器区域 */}
       <div ref={editorRef} className="flex-1 min-h-0 overflow-auto" style={{ height }} />
 
-      {/* 错误信息 */}
+      {/* v1 (2026-07): issue #195 — 错误信息统一展示 message + 可选 line/column/path */}
       {displayError && (
         <div className="shrink-0 border-t border-[#333]">
           <Alert
@@ -216,7 +217,11 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
             banner
             message={
               <span className="text-xs font-mono">
-                行 {displayError.line}:{displayError.column} — {displayError.message}
+                {displayError.line != null && displayError.column != null
+                  ? `行 ${displayError.line}:${displayError.column} — `
+                  : ''}
+                {displayError.path ? `${displayError.path}: ` : ''}
+                {displayError.message}
               </span>
             }
             className="!bg-[#2d1b1b] !border-[#5a2020]"

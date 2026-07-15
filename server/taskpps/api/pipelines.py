@@ -130,7 +130,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
         run_repo = RunRepository(session)
         for pid, pdir in project_dirs:
             loader = PipelineLoader(base_dir=pdir)
-            all_pipelines = loader.load_all_with_files()
+            all_pipelines, invalid_pipelines = loader.load_all_with_files_and_errors()
 
             definitions: dict[str, str] = {}
             if pid is not None and pdir is not None:
@@ -182,6 +182,34 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "last_run": last_run,
                         "success_rate": success_rate,
                         "recent_runs": recent_runs,
+                        # v1 (2026-07): issue #195 — 合法 pipeline 的校验字段
+                        "valid": True,
+                        "validation_error": None,
+                    }
+                )
+
+            # v1 (2026-07): issue #195 — 将非法 pipeline 也纳入返回列表
+            # 非法项无 DB 记录、无运行历史，仅展示文件+校验错误
+            # v2 (2026-07): 增加 raw_content 字段，让前端能拿到原始 YAML 填入编辑器
+            for inv in invalid_pipelines:
+                inv_file = inv["file"]
+                inv_folder = os.path.dirname(inv_file)
+                items.append(
+                    {
+                        "id": "",
+                        "name": inv.get("name", inv_file),
+                        "file": inv_file,
+                        "folder": inv_folder,
+                        "project_id": pid,
+                        "project_name": project_name_map.get(pid),
+                        "task_count": 0,
+                        "subpipeline_count": 0,
+                        "last_run": None,
+                        "success_rate": 0,
+                        "recent_runs": [],
+                        "valid": False,
+                        "validation_error": inv.get("validation_error"),
+                        "raw_content": inv.get("raw_content", ""),
                     }
                 )
 
@@ -247,3 +275,92 @@ async def save_pipeline_by_id(definition_id: str, body: SavePipelineByIdRequest)
             )
 
     return {"status": "ok", "definition_id": definition_id, "file_path": d.file_path}
+
+
+# v2 (2026-07): issue #195 补充 — 按文件路径读/写 pipeline YAML
+# 非法 pipeline 无 definition_id，无法用 /by-id/{id} 加载
+# 新增 /by-file 端点通过 file 查询参数定位文件，支持读取原始 YAML 和保存
+
+class PipelineByFileResponse(BaseModel):
+    name: str
+    file: str
+    raw_content: str
+
+
+class SavePipelineByFileRequest(BaseModel):
+    file: str
+    content: str
+
+
+@router.get("/by-file/{project_id}", response_model=PipelineByFileResponse)
+async def get_pipeline_by_file(project_id: str, file: str = Query(..., description="相对 pipelines 目录的文件路径")):
+    """通过文件路径读取原始 YAML 内容，用于非法 pipeline 的编辑器加载"""
+    project_workdir = get_project_workdir_by_id(project_id)
+    if not project_workdir:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    pipelines_dir = get_pipelines_dir(project_workdir)
+    file_path = (pipelines_dir / file).resolve()
+
+    if not str(file_path).startswith(str(pipelines_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {file}")
+
+    raw_content = file_path.read_text(encoding="utf-8")
+    data = yaml.safe_load(raw_content)
+    name = data.get("name", file_path.stem) if isinstance(data, dict) else file_path.stem
+
+    return PipelineByFileResponse(name=name, file=file, raw_content=raw_content)
+
+
+@router.put("/by-file/{project_id}")
+async def save_pipeline_by_file(project_id: str, body: SavePipelineByFileRequest):
+    """通过文件路径保存 pipeline YAML：写磁盘 + 同步 DB"""
+    import yaml as _yaml
+
+    project_workdir = get_project_workdir_by_id(project_id)
+    if not project_workdir:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    pipelines_dir = get_pipelines_dir(project_workdir)
+    file_path = (pipelines_dir / body.file).resolve()
+
+    if not str(file_path).startswith(str(pipelines_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    # 保存时做 YAML 语法校验（不阻止 pydantic 结构非法，让用户能保存后继续修改）
+    try:
+        _yaml.safe_load(body.content)
+    except _yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML syntax: {e}") from e
+
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(body.content, encoding="utf-8")
+
+    file_hash_val = hashlib.sha256(body.content.encode()).hexdigest()[:8]
+    data = _yaml.safe_load(body.content)
+
+    # 尝试同步到 DB：如果 YAML 结构合法则写入 DB，非法则只写磁盘
+    definition_id = None
+    if data is not None:
+        try:
+            loader = PipelineLoader(base_dir=pipelines_dir)
+            spec = loader.parse_dict(data)
+            content_json = json.dumps(spec.model_dump(), ensure_ascii=False)
+            name = data.get("name", file_path.stem)
+            async with get_session_factory()() as session:
+                repo = PipelineDefinitionRepository(session)
+                definition_id = await repo.upsert(
+                    project_id=project_id, file_path=body.file,
+                    name=name, content=content_json, raw_content=body.content, file_hash=file_hash_val,
+                )
+        except Exception:
+            # pydantic 校验失败：只写磁盘，不同步 DB
+            # 等用户修复 YAML 再次保存时，会自动同步
+            pass
+
+    return {
+        "status": "ok",
+        "file": body.file,
+        "definition_id": definition_id,
+    }
