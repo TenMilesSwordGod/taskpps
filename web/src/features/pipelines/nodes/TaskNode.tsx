@@ -23,11 +23,11 @@ function inferTaskType(task: TaskYAML): TaskType {
   return 'command';
 }
 
-/** 运行中边框脉冲（状态驱动整卡，不再用左侧条 + 底部流光） */
+/** 运行中脉冲动画 — v2 (2026-07) 对齐 design-tokens: animation.node_pulse */
 const pulseStyle = `
 @keyframes task-border-pulse {
-  0%, 100% { border-color: #0EA5E9; box-shadow: 0 0 0 2px rgba(14,165,233,0.12); }
-  50% { border-color: #7DD3FC; box-shadow: 0 0 0 4px rgba(14,165,233,0.06); }
+  0%, 100% { border-color: #0EA5E9; box-shadow: 0 0 0 0 rgba(14,165,233,0.4); }
+  50% { border-color: #7DD3FC; box-shadow: 0 0 0 6px rgba(14,165,233,0); }
 }
 `;
 

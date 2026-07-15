@@ -227,6 +227,15 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
         backgroundColor: INK.canvas,
       }}
     >
+      {/* v2 (2026-07): 运行中连线流动动画 */}
+      <style>{`
+        @keyframes edge-dash-flow {
+          to { stroke-dashoffset: -24; }
+        }
+        .edge-running .react-flow__edge-path {
+          animation: edge-dash-flow 0.8s linear infinite;
+        }
+      `}</style>
       <ReactFlow
         nodes={allNodes}
         edges={edges}

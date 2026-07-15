@@ -644,6 +644,51 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       }
     }
 
+    // v2 (2026-07): 运行态边动画 — source 或 target 任务为 running 的边加上流动动画
+    const runningTaskIds = new Set<string>();
+    if (taskStatuses) {
+      for (const [taskId, status] of Object.entries(taskStatuses)) {
+        if (status === 'running') runningTaskIds.add(taskId);
+      }
+    }
+    if (runningTaskIds.size > 0) {
+      for (const edge of taskEdges) {
+        if (runningTaskIds.has(edge.source) || runningTaskIds.has(edge.target)) {
+          edge.animated = true;
+          edge.className = 'edge-running';
+          edge.style = {
+            ...((edge.style as object) || {}),
+            stroke: '#339AF0',
+            strokeWidth: 2.5,
+            strokeDasharray: '8 4',
+          };
+        }
+      }
+    }
+
+    // v2 (2026-07): SubPipeline 进度指示 — 仅在 taskStatuses 存在时统计
+    if (taskStatuses && Object.keys(taskStatuses).length > 0) {
+      const groupProgressMap = new Map<string, { done: number; total: number }>();
+      for (const gn of groupNodes) {
+        groupProgressMap.set(gn.id, { done: 0, total: (gn.data as { taskCount?: number }).taskCount ?? 0 });
+      }
+      for (const [taskId, status] of Object.entries(taskStatuses)) {
+        if (status === 'pending' || status === 'running') continue;
+        const parts = taskId.split('.');
+        if (parts.length === 2) {
+          const gid = `__group__${parts[0]}`;
+          const cur = groupProgressMap.get(gid);
+          if (cur) cur.done++;
+        }
+      }
+      for (const gn of groupNodes) {
+        const progress = groupProgressMap.get(gn.id);
+        if (progress && progress.total > 0) {
+          gn.data = { ...(gn.data as Record<string, unknown>), runProgress: progress };
+        }
+      }
+    }
+
     // 子节点位置转为相对于 group 的 offset
     const layoutedMap = new Map(layoutedNodes.map((n) => [n.id, n]));
 

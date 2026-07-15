@@ -5,14 +5,17 @@ import { INK, FONT_MONO } from './nodeTokens';
 interface SubpipelineGroupData extends Record<string, unknown> {
   label: string;
   taskCount: number;
+  /** 运行态进度 { done: number, total: number } — v2 (2026-07) */
+  runProgress?: { done: number; total: number };
 }
 
 /**
  * 子流水线分组容器 —— 工程蓝图风格"规格框"
  * 点状发丝边框，无填充，顶部等宽标签（spec stamp 风格）
+ * v2 (2026-07): 添加运行态进度指示
  */
 export default function SubpipelineGroupNode({ data }: NodeProps) {
-  const { label, taskCount } = data as unknown as SubpipelineGroupData;
+  const { label, taskCount, runProgress } = data as unknown as SubpipelineGroupData;
 
   return (
     <div
@@ -26,6 +29,32 @@ export default function SubpipelineGroupNode({ data }: NodeProps) {
         pointerEvents: 'none',
       }}
     >
+      {/* v2 (2026-07): 运行中进度条（容器 header 下方 3px 细线） */}
+      {runProgress && runProgress.total > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            backgroundColor: '#E9ECEF',
+            borderRadius: '6px 6px 0 0',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${Math.round((runProgress.done / runProgress.total) * 100)}%`,
+              backgroundColor: '#4C6EF5',
+              borderRadius: '6px 0 0 0',
+              transition: 'width 300ms ease',
+            }}
+          />
+        </div>
+      )}
+
       {/* 顶部"规格印章"标签 —— 等宽，覆盖上边框 */}
       <div
         style={{
@@ -46,14 +75,25 @@ export default function SubpipelineGroupNode({ data }: NodeProps) {
         }}
       >
         <span>{label}</span>
-        <span
-          style={{
-            color: INK.textMuted,
-            fontWeight: 400,
-          }}
-        >
-          / {taskCount}
-        </span>
+        {runProgress ? (
+          <span
+            style={{
+              color: '#4C6EF5',
+              fontWeight: 600,
+            }}
+          >
+            {runProgress.done}/{runProgress.total}
+          </span>
+        ) : (
+          <span
+            style={{
+              color: INK.textMuted,
+              fontWeight: 400,
+            }}
+          >
+            / {taskCount}
+          </span>
+        )}
       </div>
 
       {/* 输入点 —— START / 上游 group 连入（target 类型，Position.Top 边从上方进入） */}
