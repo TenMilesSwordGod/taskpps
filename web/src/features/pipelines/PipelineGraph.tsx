@@ -15,8 +15,10 @@ import SubpipelineGroupNode from './nodes/SubpipelineGroupNode';
 import PostTaskNode from './nodes/PostTaskNode';
 import { StartNode, EndNode } from './nodes/StartEndNode';
 import DecisionNode from './nodes/DecisionNode';
+import NodeContextMenu from './NodeContextMenu';
 import { usePipelineGraph } from './hooks/usePipelineGraph';
 import { useAppStore } from '@/stores/appStore';
+import { usePipelineEditorStore } from './stores/pipelineEditorStore';
 import { TYPE_COLOR, STATUS_COLOR, INK } from './nodes/nodeTokens';
 import type { PipelineDetail, TaskStatus, TaskType } from '@/types';
 
@@ -85,6 +87,7 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
   const setSelectedNodeId = useAppStore((s) => s.setSelectedNodeId);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
+  const setContextMenu = usePipelineEditorStore((s) => s.setContextMenu);
 
   /** editMode 下允许在画布上放置从 NodePanel 拖入的节点 */
   const onDragOverHandler = useCallback(
@@ -132,6 +135,34 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
     onNodeClick?.('');
   }, [setSelectedNodeId, onNodeClick]);
 
+  /** 节点右键 → 弹出上下文菜单 */
+  const handleNodeContextMenu: NodeMouseHandler = useCallback(
+    (event, node) => {
+      event.preventDefault();
+      setContextMenu({
+        open: true,
+        x: (event as unknown as MouseEvent).clientX,
+        y: (event as unknown as MouseEvent).clientY,
+        nodeId: node.id,
+      });
+    },
+    [setContextMenu],
+  );
+
+  /** 画布空白处右键 → 弹出上下文菜单 */
+  const handlePaneContextMenu = useCallback(
+    (event: React.MouseEvent | MouseEvent) => {
+      event.preventDefault();
+      setContextMenu({
+        open: true,
+        x: (event as MouseEvent).clientX,
+        y: (event as MouseEvent).clientY,
+        nodeId: null,
+      });
+    },
+    [setContextMenu],
+  );
+
   // 同步外部选中状态到 store
   const syncedNodes = selectedTaskId !== undefined
     ? nodes.map((n) => ({ ...n, selected: n.id === selectedTaskId }))
@@ -151,7 +182,9 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
+        onNodeContextMenu={handleNodeContextMenu}
         onPaneClick={onPaneClick}
+        onPaneContextMenu={handlePaneContextMenu as never}
         onDragOver={editMode ? onDragOverHandler : undefined}
         onDrop={editMode ? onDropHandler : undefined}
         onInit={(instance) => { reactFlowInstanceRef.current = instance; }}
@@ -187,6 +220,7 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
           pannable
         />
       </ReactFlow>
+      <NodeContextMenu />
     </div>
   );
 }
