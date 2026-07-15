@@ -189,3 +189,102 @@ async def test_list_pipelines_invalid_missing_name(app, setup_project, tmp_proje
         verr = no_name_items[0]["validation_error"]
         assert verr.get("path") is not None, \
             f"pydantic 校验错误应含 path: {verr}"
+
+
+# v2 (2026-07): issue #195 补充 — raw_content 字段和 /by-file API 测试
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1001", domain="server/api", priority="P2")
+async def test_list_invalid_pipeline_includes_raw_content(app, setup_project, tmp_project, db_engine, clean_db):
+    """非法 YAML 列表项应包含 raw_content 字段，内容为原始文件文本"""
+    pipelines_dir = tmp_project / "pipelines"
+    raw = "name: bad\n  tasks: broken\n"
+    bad_yaml = pipelines_dir / "bad_raw.yaml"
+    bad_yaml.write_text(raw)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        response = await client.get("/api/pipelines/")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        bad = [i for i in items if i.get("file") == "bad_raw.yaml"][0]
+        assert bad["raw_content"] == raw
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_by_file_returns_raw_content(app, setup_project, tmp_project, db_engine, clean_db):
+    """GET /by-file/{project_id}?file=... 返回原始 YAML 内容"""
+    pipelines_dir = tmp_project / "pipelines"
+    raw = "name: my_pipe\ntasks:\n  - name: step1\n    command: echo ok\n"
+    valid_yaml = pipelines_dir / "pipe.yaml"
+    valid_yaml.write_text(raw)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        assert create_resp.status_code == 201
+        pid = create_resp.json()["id"]
+
+        resp = await client.get(f"/api/pipelines/by-file/{pid}", params={"file": "pipe.yaml"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "my_pipe"
+        assert data["file"] == "pipe.yaml"
+        assert data["raw_content"] == raw
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_by_file_not_found(app, setup_project, tmp_project, db_engine, clean_db):
+    """GET /by-file/{project_id}?file=... 文件不存在 → 404"""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        pid = create_resp.json()["id"]
+
+        resp = await client.get(f"/api/pipelines/by-file/{pid}", params={"file": "nonexistent.yaml"})
+        assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_save_pipeline_by_file_writes_disk(app, setup_project, tmp_project, db_engine, clean_db):
+    """PUT /by-file/{project_id} 写入 YAML 到磁盘并返回 status ok"""
+    pipelines_dir = tmp_project / "pipelines"
+    raw = "name: new_pipe\ntasks:\n  - name: step1\n    command: echo hi\n"
+    # 先创建一个空文件
+    target = pipelines_dir / "new.yaml"
+    target.write_text("")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        pid = create_resp.json()["id"]
+
+        resp = await client.put(
+            f"/api/pipelines/by-file/{pid}",
+            json={"file": "new.yaml", "content": raw},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+    # 验证文件内容已写入
+    assert target.read_text() == raw
+
+
+@pytest.mark.asyncio
+async def test_save_pipeline_by_file_yaml_syntax_error(app, setup_project, tmp_project, db_engine, clean_db):
+    """PUT /by-file/{project_id} 非法 YAML 语法 → 400"""
+    pipelines_dir = tmp_project / "pipelines"
+    target = pipelines_dir / "syntax.yaml"
+    target.write_text("")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        pid = create_resp.json()["id"]
+
+        resp = await client.put(
+            f"/api/pipelines/by-file/{pid}",
+            json={"file": "syntax.yaml", "content": "name: bad\n  bad indent: yes\n"},
+        )
+        assert resp.status_code == 400

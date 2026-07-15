@@ -255,11 +255,13 @@ class PipelineLoader:
     # v1 (2026-07): issue #195 — 列表页需要展示非法 pipeline，因此新增此方法
     # 原 load_all_with_files 静默跳过非法文件，此方法同时返回 valid + invalid 两类数据
     # invalid_items 使用统一的 error 结构: {message, line?, column?, path?}
+    # v2 (2026-07): issue #195 补充 — invalid_items 增加 raw_content 字段
+    #   让前端能拿到原始 YAML 文本填入编辑器，用户可看到并修改错误内容
     def load_all_with_files_and_errors(self) -> tuple[dict[str, PipelineYAML], list[dict]]:
         """加载所有流水线，返回 (valid_specs, invalid_items)
 
         valid_specs: 以文件相对路径为 key 的合法 PipelineYAML 映射
-        invalid_items: 非法文件列表，每项含 file/name/validation_error 字段
+        invalid_items: 非法文件列表，每项含 file/name/validation_error/raw_content 字段
         """
         from pydantic import ValidationError
 
@@ -280,6 +282,7 @@ class PipelineLoader:
                         "file": rel,
                         "name": path.stem,
                         "validation_error": {"message": "YAML 文件为空", "line": 1, "column": 1},
+                        "raw_content": raw_text,
                     })
                     continue
                 spec = self.load(str(rel))
@@ -292,6 +295,7 @@ class PipelineLoader:
                     "file": rel,
                     "name": path.stem,
                     "validation_error": {"message": e.problem or str(e), "line": line, "column": column},
+                    "raw_content": raw_text,
                 })
             except ValidationError as e:
                 # pydantic schema 校验错误：提取错误路径与消息
@@ -309,6 +313,7 @@ class PipelineLoader:
                         "message": msg,
                         "path": loc_path if isinstance(first_err["loc"], (list, tuple)) and len(first_err["loc"]) > 0 else None,
                     },
+                    "raw_content": raw_text,
                 })
             except Exception as e:
                 name = (data.get("name", path.stem)
@@ -317,6 +322,7 @@ class PipelineLoader:
                     "file": rel,
                     "name": name,
                     "validation_error": {"message": str(e)},
+                    "raw_content": raw_text,
                 })
 
         return valid, invalid

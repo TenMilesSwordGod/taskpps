@@ -9,7 +9,7 @@ import {
   CodeOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
-import { usePipelineById, useSavePipelineById } from '@/api/pipelines';
+import { usePipelineById, usePipelineByFile, useSavePipelineById, useSavePipelineByFile } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
 import YamlEditor from './YamlEditor';
 import type { YamlEditorRef } from './YamlEditor';
@@ -20,39 +20,78 @@ import { useAppStore } from '@/stores/appStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
 import type { PipelineDetail, ValidationError } from '@/types';
 
+// v2 (2026-07): issue #195 补充 — 非法 pipeline 无 definition_id
+// 通过 _file_/* 路由参数获取文件路径，从文件系统加载原始 YAML
+// 画布区域显示错误 banner，编辑器展示原始 YAML 供用户修改
+
 /** 流水线详情页 */
 export default function PipelineDetailPage() {
   const { projectId, definitionId } = useParams<{ projectId: string; definitionId: string }>();
+  // React Router v6 splat param：_file_/* 路由的剩余路径
+  const splat = useParams<{ '*': string }>()['*'];
   const navigate = useNavigate();
-  const { data: pipeline, isLoading } = usePipelineById(definitionId, projectId);
+
+  // 判断是否为文件路径模式：当 URL 匹配 /pipelines/:projectId/_file_/* 时
+  const filePath = splat ? decodeURIComponent(splat) : (definitionId && definitionId !== '_file_' ? undefined : undefined);
+  // 额外检测：如果 definitionId 看起来是文件路径（含 .yaml/.yml）且 route 无 splat 时，也用文件模式
+  const isFileMode = !!(splat || (definitionId && !definitionId.match(/^[0-9a-fA-F]{8,}$/) && (definitionId.endsWith('.yaml') || definitionId.endsWith('.yml'))));
+  const actualFilePath = splat ? decodeURIComponent(splat) : (isFileMode && definitionId ? definitionId : undefined);
+
+  // 正常模式：通过 definition_id 加载
+  const { data: pipeline, isLoading: pipelineLoading } = usePipelineById(
+    !isFileMode ? definitionId : undefined, projectId
+  );
+  // 文件模式：通过文件路径加载原始 YAML
+  const { data: fileData, isLoading: fileLoading } = usePipelineByFile(
+    isFileMode ? projectId : undefined,
+    isFileMode ? actualFilePath : undefined,
+  );
+
   const graphWrapperRef = useRef<HTMLDivElement>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const helpPanelMinimized = useAppStore((s) => s.helpPanelMinimized);
   const toggleHelpPanel = useAppStore((s) => s.toggleHelpPanel);
 
   // YAML 编辑器状态
-  const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
+  const [yamlEditorOpen, setYamlEditorOpen] = useState(isFileMode);
   const [yamlText, setYamlText] = useState('');
   const [yamlError, setYamlError] = useState<ValidationError | null>(null);
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const saveMutation = useSavePipelineById(definitionId);
+
+  // 保存：正常模式用 by-id，文件模式用 by-file
+  const saveByIdMutation = useSavePipelineById(!isFileMode ? definitionId : undefined);
+  const saveByFileMutation = useSavePipelineByFile(isFileMode ? projectId : undefined);
 
   const handleSave = useCallback(() => {
-    if (!yamlText || !definitionId) return;
-    saveMutation.mutate(yamlText, {
-      onSuccess: () => message.success('已保存'),
-      onError: (err: Error) => message.error(`保存失败: ${err.message}`),
-    });
-  }, [yamlText, definitionId, saveMutation]);
-
-  // 当 API 数据加载后，初始化 YAML 编辑器内容
-  useEffect(() => {
-    if (pipeline && !yamlEditorOpen) {
-      // 首次加载时不需要设置 yamlText，等用户打开编辑器时再生成
+    if (!yamlText) return;
+    if (isFileMode && actualFilePath) {
+      saveByFileMutation.mutate({ file: actualFilePath, content: yamlText }, {
+        onSuccess: () => message.success('已保存'),
+        onError: (err: Error) => message.error(`保存失败: ${err.message}`),
+      });
+    } else if (definitionId) {
+      saveByIdMutation.mutate(yamlText, {
+        onSuccess: () => message.success('已保存'),
+        onError: (err: Error) => message.error(`保存失败: ${err.message}`),
+      });
     }
-  }, [pipeline, yamlEditorOpen]);
+  }, [yamlText, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
+
+  const saving = isFileMode ? saveByFileMutation.isPending : saveByIdMutation.isPending;
+
+  // v2 (2026-07): 文件模式下，数据加载后自动填充编辑器
+  useEffect(() => {
+    if (isFileMode && fileData && !yamlText) {
+      setYamlText(fileData.raw_content);
+      // 对原始 YAML 做一次解析，生成 yamlError（但不阻止编辑器显示）
+      const result = parseYamlToPipeline(fileData.raw_content);
+      if (!result.success) {
+        setYamlError(result.error!);
+      }
+    }
+  }, [isFileMode, fileData, yamlText]);
 
   // 打开 YAML 编辑器时，用当前 pipeline 生成 YAML
   const handleToggleEditor = useCallback(() => {
@@ -125,6 +164,9 @@ export default function PipelineDetailPage() {
     setSelectedTaskId(nodeId);
   }, [taskNameToNodeId]);
 
+  // 加载状态
+  const isLoading = isFileMode ? fileLoading : pipelineLoading;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -133,7 +175,8 @@ export default function PipelineDetailPage() {
     );
   }
 
-  if (!pipeline) {
+  // 正常模式：pipeline 未找到
+  if (!isFileMode && !pipeline) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
         流水线未找到
@@ -141,12 +184,23 @@ export default function PipelineDetailPage() {
     );
   }
 
+  // 文件模式：文件未找到
+  if (isFileMode && !fileData) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400">
+        文件未找到: {actualFilePath}
+      </div>
+    );
+  }
+
+  const pageTitle = isFileMode ? (fileData?.name || actualFilePath) : pipeline!.name;
+
   /** 导出 PNG */
   const handleExportPng = async () => {
     const el = graphWrapperRef.current?.querySelector('.react-flow') as HTMLElement | null;
     if (!el) return;
     try {
-      await exportAsPng(el, `${pipeline.name}.png`);
+      await exportAsPng(el, `${pageTitle}.png`);
       message.success('PNG 已导出');
     } catch {
       message.error('导出失败');
@@ -158,7 +212,7 @@ export default function PipelineDetailPage() {
     const el = graphWrapperRef.current?.querySelector('.react-flow') as HTMLElement | null;
     if (!el) return;
     try {
-      await exportAsSvg(el, `${pipeline.name}.svg`);
+      await exportAsSvg(el, `${pageTitle}.svg`);
       message.success('SVG 已导出');
     } catch {
       message.error('导出失败');
@@ -184,7 +238,7 @@ export default function PipelineDetailPage() {
         <Breadcrumb
           items={[
             { title: <a onClick={() => navigate('/pipelines')}>流水线</a> },
-            { title: definitionId },
+            { title: isFileMode ? actualFilePath : definitionId },
           ]}
         />
       </div>
@@ -201,30 +255,44 @@ export default function PipelineDetailPage() {
               {yamlEditorOpen ? '关闭编辑器' : 'YAML 编辑器'}
             </Button>
           </Tooltip>
-          <Tooltip title="导出 PNG">
-            <Button icon={<FileImageOutlined />} onClick={handleExportPng}>
-              导出 PNG
-            </Button>
-          </Tooltip>
-          <Tooltip title="导出 SVG">
-            <Button icon={<ExportOutlined />} onClick={handleExportSvg}>
-              导出 SVG
-            </Button>
-          </Tooltip>
-          <Tooltip title="复制到剪贴板">
-            <Button icon={<CopyOutlined />} onClick={handleCopy}>
-              复制图片
-            </Button>
-          </Tooltip>
+          {!isFileMode && (
+            <>
+              <Tooltip title="导出 PNG">
+                <Button icon={<FileImageOutlined />} onClick={handleExportPng}>
+                  导出 PNG
+                </Button>
+              </Tooltip>
+              <Tooltip title="导出 SVG">
+                <Button icon={<ExportOutlined />} onClick={handleExportSvg}>
+                  导出 SVG
+                </Button>
+              </Tooltip>
+              <Tooltip title="复制到剪贴板">
+                <Button icon={<CopyOutlined />} onClick={handleCopy}>
+                  复制图片
+                </Button>
+              </Tooltip>
+            </>
+          )}
         </Space>
         <Space>
-          <Button
-            type="primary"
-            icon={<PlayCircleOutlined />}
-            onClick={() => setTriggerOpen(true)}
-          >
-            触发运行
-          </Button>
+          {isFileMode && (
+            <Alert
+              type="warning"
+              showIcon
+              message="YAML 校验失败 — 画布无法渲染，请直接在编辑器中修改"
+              style={{ padding: '4px 12px', fontSize: 13 }}
+            />
+          )}
+          {!isFileMode && (
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              onClick={() => setTriggerOpen(true)}
+            >
+              触发运行
+            </Button>
+          )}
         </Space>
       </div>
 
@@ -232,7 +300,7 @@ export default function PipelineDetailPage() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* YAML 编辑器面板 */}
         {yamlEditorOpen && (
-          <div className="flex-shrink-0 border-r border-gray-200 bg-[#1e1e1e]" style={{ width: '40%', minWidth: 300 }}>
+          <div className="flex-shrink-0 border-r border-gray-200 bg-[#1e1e1e]" style={{ width: isFileMode ? '100%' : '40%', minWidth: 300 }}>
             <YamlEditor
               ref={yamlEditorRef}
               value={yamlText}
@@ -240,36 +308,38 @@ export default function PipelineDetailPage() {
               error={yamlError}
               onCursorTaskChange={handleCursorTaskChange}
               onSave={handleSave}
-              saving={saveMutation.isPending}
+              saving={saving}
             />
           </div>
         )}
 
-        {/* DAG 画布 */}
-        <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden flex flex-col">
-          {/* v1 (2026-07): issue #195 — 画布错误态横幅：YAML 非法时提示当前展示的是旧版本 */}
-          {yamlEditorOpen && yamlError && (
-            <Alert
-              type="error"
-              showIcon
-              banner
-              message="当前 YAML 非法，画布展示的是上一次有效版本"
-              description={
-                <span className="text-xs">
-                  {yamlError.path ? `${yamlError.path}: ` : ''}
-                  {yamlError.line != null ? `行 ${yamlError.line}` : ''}
-                  {yamlError.column != null ? `:${yamlError.column} ` : ' '}
-                  — {yamlError.message}
-                </span>
-              }
-              style={{ margin: 0, flexShrink: 0 }}
-              closable
-            />
-          )}
-          <div className="flex-1 min-h-0">
-            <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
+        {/* DAG 画布 — 文件模式下隐藏，只显示 YAML 编辑器 */}
+        {!isFileMode && (
+          <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden flex flex-col">
+            {/* v1 (2026-07): issue #195 — 画布错误态横幅：YAML 非法时提示当前展示的是旧版本 */}
+            {yamlEditorOpen && yamlError && (
+              <Alert
+                type="error"
+                showIcon
+                banner
+                message="当前 YAML 非法，画布展示的是上一次有效版本"
+                description={
+                  <span className="text-xs">
+                    {yamlError.path ? `${yamlError.path}: ` : ''}
+                    {yamlError.line != null ? `行 ${yamlError.line}` : ''}
+                    {yamlError.column != null ? `:${yamlError.column} ` : ' '}
+                    — {yamlError.message}
+                  </span>
+                }
+                style={{ margin: 0, flexShrink: 0 }}
+                closable
+              />
+            )}
+            <div className="flex-1 min-h-0">
+              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 帮助面板 */}
         <HelpPanel
@@ -278,13 +348,15 @@ export default function PipelineDetailPage() {
         />
       </div>
 
-      {/* 触发运行弹窗 */}
-      <TriggerRunModal
-        open={triggerOpen}
-        onClose={() => setTriggerOpen(false)}
-        defaultDefinitionId={definitionId}
-        pipelineData={pipeline}
-      />
+      {/* 触发运行弹窗 — 仅正常模式 */}
+      {!isFileMode && (
+        <TriggerRunModal
+          open={triggerOpen}
+          onClose={() => setTriggerOpen(false)}
+          defaultDefinitionId={definitionId}
+          pipelineData={pipeline!}
+        />
+      )}
     </div>
   );
 }

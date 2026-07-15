@@ -120,6 +120,8 @@ export interface PipelineSummary {
   valid: boolean;
   /** 校验错误详情，合法时为 null（v1 2026-07: issue #195） */
   validation_error: ValidationError | null;
+  /** 原始 YAML 文本内容，仅非法 pipeline 有值（v2 2026-07: issue #195 补充） */
+  raw_content?: string;
 }
 
 /** 流水线列表响应 */

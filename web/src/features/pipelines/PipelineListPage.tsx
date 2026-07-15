@@ -246,7 +246,10 @@ export default function PipelineListPage() {
                 )}
               </span>
             </Tooltip>
-            <Link to={`/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`} style={{ fontWeight: 500, color: '#3D5BFF' }}>
+            <Link to={record.valid !== false
+              ? `/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`
+              : `/pipelines/${record.project_id}/_file_/${encodeURIComponent(record.file)}`
+            } style={{ fontWeight: 500, color: '#3D5BFF' }}>
               {record.name}
             </Link>
           </span>
@@ -259,7 +262,10 @@ export default function PipelineListPage() {
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88', fontSize: 12 }}>--</span>;
         return (
-          <Link to={`/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
+          <Link to={record.valid !== false
+            ? `/pipelines/${record.project_id}/${encodeURIComponent(record.id)}`
+            : `/pipelines/${record.project_id}/_file_/${encodeURIComponent(record.file)}`
+          } style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
             {record.file}
           </Link>
         );

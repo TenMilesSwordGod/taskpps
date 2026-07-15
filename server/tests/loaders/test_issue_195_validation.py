@@ -1,5 +1,6 @@
 # v1 (2026-07): issue #195 — PipelineLoader.load_all_with_files_and_errors 的校验测试
 # 覆盖：合法 YAML 正确归类 / YAML 语法错误纳入 invalid / 空文件纳入 invalid / pydantic 校验错误纳入 invalid
+# v2 (2026-07): 增加 raw_content 字段验证
 
 from __future__ import annotations
 
@@ -111,3 +112,41 @@ class TestLoadAllWithFilesAndErrors:
         valid_specs, invalid_items = loader.load_all_with_files_and_errors()
         assert valid_specs == {}
         assert invalid_items == []
+
+    # v2 (2026-07): raw_content 字段测试 — 非法 YAML 应同时返回原始文本
+    def test_invalid_syntax_includes_raw_content(self, tmp_path):
+        """语法错误的 YAML — invalid 项应包含 raw_content 字段与写入的原始文本"""
+        pipelines_dir = tmp_path / "pipelines"
+        pipelines_dir.mkdir()
+        raw = "name: bad\n  tasks:    \n  - name: broken\n   indent: wrong\n"
+        bad_yaml = pipelines_dir / "bad_raw.yaml"
+        bad_yaml.write_text(raw)
+        loader = PipelineLoader(pipelines_dir)
+        _, invalid_items = loader.load_all_with_files_and_errors()
+        bad = [i for i in invalid_items if i["file"] == "bad_raw.yaml"][0]
+        assert "raw_content" in bad
+        assert bad["raw_content"] == raw
+
+    def test_empty_yaml_includes_raw_content(self, tmp_path):
+        """空 YAML — invalid 项 raw_content 为空字符串"""
+        pipelines_dir = tmp_path / "pipelines"
+        pipelines_dir.mkdir()
+        f = pipelines_dir / "empty.yaml"
+        f.write_text("")
+        loader = PipelineLoader(pipelines_dir)
+        _, invalid_items = loader.load_all_with_files_and_errors()
+        empty = [i for i in invalid_items if i["file"] == "empty.yaml"][0]
+        assert "raw_content" in empty
+        assert empty["raw_content"] == ""
+
+    def test_schema_error_includes_raw_content(self, tmp_path):
+        """pydantic 校验错误 — invalid 项 raw_content 为原始文本"""
+        pipelines_dir = tmp_path / "pipelines"
+        pipelines_dir.mkdir()
+        raw = "tasks:\n  - name: step1\n    command: echo ok\n"
+        f = pipelines_dir / "no_name.yaml"
+        f.write_text(raw)
+        loader = PipelineLoader(pipelines_dir)
+        _, invalid_items = loader.load_all_with_files_and_errors()
+        item = [i for i in invalid_items if i["file"] == "no_name.yaml"][0]
+        assert item.get("raw_content") == raw
