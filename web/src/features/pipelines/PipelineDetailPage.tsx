@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Breadcrumb, Button, Space, Tooltip, message, Spin } from 'antd';
+import { Breadcrumb, Button, Space, Tooltip, message, Spin, Alert } from 'antd';
 import {
   ExportOutlined,
   FileImageOutlined,
@@ -18,7 +18,7 @@ import TriggerRunModal from '@/components/TriggerRunModal';
 import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 import { useAppStore } from '@/stores/appStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
-import type { PipelineDetail } from '@/types';
+import type { PipelineDetail, ValidationError } from '@/types';
 
 /** 流水线详情页 */
 export default function PipelineDetailPage() {
@@ -33,7 +33,7 @@ export default function PipelineDetailPage() {
   // YAML 编辑器状态
   const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
   const [yamlText, setYamlText] = useState('');
-  const [yamlError, setYamlError] = useState<{ message: string; line: number; column: number } | null>(null);
+  const [yamlError, setYamlError] = useState<ValidationError | null>(null);
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -246,8 +246,29 @@ export default function PipelineDetailPage() {
         )}
 
         {/* DAG 画布 */}
-        <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden">
-          <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
+        <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden flex flex-col">
+          {/* v1 (2026-07): issue #195 — 画布错误态横幅：YAML 非法时提示当前展示的是旧版本 */}
+          {yamlEditorOpen && yamlError && (
+            <Alert
+              type="error"
+              showIcon
+              banner
+              message="当前 YAML 非法，画布展示的是上一次有效版本"
+              description={
+                <span className="text-xs">
+                  {yamlError.path ? `${yamlError.path}: ` : ''}
+                  {yamlError.line != null ? `行 ${yamlError.line}` : ''}
+                  {yamlError.column != null ? `:${yamlError.column} ` : ' '}
+                  — {yamlError.message}
+                </span>
+              }
+              style={{ margin: 0, flexShrink: 0 }}
+              closable
+            />
+          )}
+          <div className="flex-1 min-h-0">
+            <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
+          </div>
         </div>
 
         {/* 帮助面板 */}

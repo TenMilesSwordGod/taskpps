@@ -87,6 +87,14 @@ export interface RunStatsResponse {
   partial: number;
 }
 
+/** 校验错误信息结构，编辑器和列表页共用 */
+export interface ValidationError {
+  message: string;
+  line?: number;
+  column?: number;
+  path?: string;
+}
+
 /** 流水线摘要 */
 export interface PipelineSummary {
   id: string;
@@ -108,6 +116,10 @@ export interface PipelineSummary {
   success_rate: number;
   /** 最近 N 次运行的 task_summary（用于折线图，按时间倒序，最近在前） */
   recent_runs: { task_summary: Record<string, number> }[];
+  /** YAML 校验是否通过（v1 2026-07: issue #195） */
+  valid: boolean;
+  /** 校验错误详情，合法时为 null（v1 2026-07: issue #195） */
+  validation_error: ValidationError | null;
 }
 
 /** 流水线列表响应 */

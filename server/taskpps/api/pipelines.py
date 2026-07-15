@@ -130,7 +130,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
         run_repo = RunRepository(session)
         for pid, pdir in project_dirs:
             loader = PipelineLoader(base_dir=pdir)
-            all_pipelines = loader.load_all_with_files()
+            all_pipelines, invalid_pipelines = loader.load_all_with_files_and_errors()
 
             definitions: dict[str, str] = {}
             if pid is not None and pdir is not None:
@@ -182,6 +182,32 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "last_run": last_run,
                         "success_rate": success_rate,
                         "recent_runs": recent_runs,
+                        # v1 (2026-07): issue #195 — 合法 pipeline 的校验字段
+                        "valid": True,
+                        "validation_error": None,
+                    }
+                )
+
+            # v1 (2026-07): issue #195 — 将非法 pipeline 也纳入返回列表
+            # 非法项无 DB 记录、无运行历史，仅展示文件+校验错误
+            for inv in invalid_pipelines:
+                inv_file = inv["file"]
+                inv_folder = os.path.dirname(inv_file)
+                items.append(
+                    {
+                        "id": "",
+                        "name": inv.get("name", inv_file),
+                        "file": inv_file,
+                        "folder": inv_folder,
+                        "project_id": pid,
+                        "project_name": project_name_map.get(pid),
+                        "task_count": 0,
+                        "subpipeline_count": 0,
+                        "last_run": None,
+                        "success_rate": 0,
+                        "recent_runs": [],
+                        "valid": False,
+                        "validation_error": inv.get("validation_error"),
                     }
                 )
 
