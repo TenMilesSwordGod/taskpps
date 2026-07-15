@@ -7,6 +7,7 @@ import {
   MiniMap,
   type NodeMouseHandler,
   type Node,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import TaskNode from './nodes/TaskNode';
@@ -58,6 +59,13 @@ function miniMapNodeColor(node: Node): string {
   return '#CBD5E1';
 }
 
+/** 拖拽放置回调数据 */
+export interface DropData {
+  taskType: string;
+  label: string;
+  color: string;
+}
+
 interface PipelineGraphProps {
   pipeline: PipelineDetail | undefined;
   taskStatuses?: Record<string, TaskStatus>;
@@ -67,13 +75,47 @@ interface PipelineGraphProps {
   onNodeClick?: (taskId: string) => void;
   /** 是否处于编辑模式 */
   editMode?: boolean;
+  /** 拖拽放置回调（编辑模式下从 NodePanel 拖入节点时触发） */
+  onNodeDrop?: (data: DropData, position: { x: number; y: number }) => void;
 }
 
 /** DAG 画布组件，封装 ReactFlow —— 工程蓝图风格 */
-export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, onNodeClick, editMode = false }: PipelineGraphProps) {
+export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, onNodeClick, editMode = false, onNodeDrop }: PipelineGraphProps) {
   const { nodes, edges } = usePipelineGraph({ pipeline, taskStatuses });
   const setSelectedNodeId = useAppStore((s) => s.setSelectedNodeId);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
+
+  /** editMode 下允许在画布上放置从 NodePanel 拖入的节点 */
+  const onDragOverHandler = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    },
+    [],
+  );
+
+  const onDropHandler = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      if (!editMode) return;
+      const raw = event.dataTransfer.getData('application/reactflow');
+      if (!raw) return;
+      try {
+        const data: DropData = JSON.parse(raw);
+        const instance = reactFlowInstanceRef.current;
+        if (!instance) return;
+        const position = instance.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        onNodeDrop?.(data, position);
+      } catch {
+        // 忽略非法拖拽数据
+      }
+    },
+    [editMode, onNodeDrop],
+  );
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_, node) => {
@@ -110,6 +152,9 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
         onPaneClick={onPaneClick}
+        onDragOver={editMode ? onDragOverHandler : undefined}
+        onDrop={editMode ? onDropHandler : undefined}
+        onInit={(instance) => { reactFlowInstanceRef.current = instance; }}
         fitView
         fitViewOptions={{ padding: 0.3, includeHiddenNodes: false }}
         onlyRenderVisibleElements

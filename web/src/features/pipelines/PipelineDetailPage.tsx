@@ -11,6 +11,8 @@ import {
 } from '@ant-design/icons';
 import { usePipelineById, usePipelineByFile, useSavePipelineById, useSavePipelineByFile } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
+import type { DropData } from './PipelineGraph';
+import NodePanel from './NodePanel';
 import YamlEditor from './YamlEditor';
 import type { YamlEditorRef } from './YamlEditor';
 import { HelpPanel } from './HelpPanel';
@@ -20,7 +22,7 @@ import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 import { useAppStore } from '@/stores/appStore';
 import { usePipelineEditorStore } from './stores/pipelineEditorStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
-import type { PipelineDetail, ValidationError } from '@/types';
+import type { PipelineDetail, ValidationError, SubPipeline, TaskYAML } from '@/types';
 
 // v2 (2026-07): issue #195 补充 — 非法 pipeline 无 definition_id
 // 通过 _file_/* 路由参数获取文件路径，从文件系统加载原始 YAML
@@ -145,6 +147,34 @@ export default function PipelineDetailPage() {
     if (yamlEditorOpen && editedPipeline) return editedPipeline;
     return pipeline;
   }, [yamlEditorOpen, editedPipeline, pipeline]);
+
+  /** 从 NodePanel 拖入新 Task 节点 — 编辑模式下创建新 SubPipeline 包裹 */
+  const handleNodeDrop = useCallback(
+    (_data: DropData, _position: { x: number; y: number }) => {
+      const pipeline = displayPipeline;
+      if (!pipeline) return;
+      const subName = `子流水线_${(pipeline.pipelines?.length ?? 0) + 1}`;
+      const taskName = `${_data.taskType}_${Date.now().toString(36)}`;
+      const newTask: TaskYAML = { name: taskName, depends_on: [], env: {}, retry: 0 };
+      switch (_data.taskType) {
+        case 'command': newTask.command = 'echo "new task"'; break;
+        case 'invoke': newTask.invoke = { task: 'default', args: [], kwargs: {} }; break;
+        case 'steps': newTask.steps = [{ run: 'echo "step"', env: {} }]; break;
+        case 'plugin': newTask.plugin = ''; break;
+        case 'git': newTask.git = { repo: '', dest: '', depth: 1, submodules: false }; break;
+        case 'nexus': newTask.nexus = { action: '', url: '', repository: '', packaging: '' }; break;
+        case 'ssh': newTask.command = 'hostname'; break;
+      }
+      const newSub: SubPipeline = { name: subName, depends_on: [], tasks: [newTask] };
+      const updated: PipelineDetail = {
+        ...pipeline,
+        pipelines: [...(pipeline.pipelines || []), newSub],
+      };
+      setEditedPipeline(updated);
+      message.success(`已添加 "${taskName}" 到 "${subName}"`);
+    },
+    [displayPipeline],
+  );
 
   // YAML 光标所在行 → DAG 节点高亮（taskName → node ID 映射）
   const taskNameToNodeId = useMemo(() => {
@@ -343,8 +373,11 @@ export default function PipelineDetailPage() {
         </Space>
       </div>
 
-      {/* 主内容区：YAML 编辑器（可选） + DAG 画布 + 属性面板 */}
+      {/* 主内容区：节点面板（编辑模式） + YAML 编辑器（可选） + DAG 画布 + 属性面板 */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* 左侧节点面板 — 仅在编辑模式 + 非文件模式下显示 */}
+        {!isFileMode && <NodePanel />}
+
         {/* YAML 编辑器面板 */}
         {yamlEditorOpen && (
           <div className="flex-shrink-0 border-r border-gray-200 bg-[#1e1e1e]" style={{ width: isFileMode ? '100%' : '40%', minWidth: 300 }}>
@@ -383,7 +416,7 @@ export default function PipelineDetailPage() {
               />
             )}
             <div className="flex-1 min-h-0">
-              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} editMode={editMode} />
+              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} editMode={editMode} onNodeDrop={handleNodeDrop} />
             </div>
           </div>
         )}
