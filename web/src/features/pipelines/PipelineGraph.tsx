@@ -15,10 +15,12 @@ import SubpipelineGroupNode from './nodes/SubpipelineGroupNode';
 import PostTaskNode from './nodes/PostTaskNode';
 import { StartNode, EndNode } from './nodes/StartEndNode';
 import DecisionNode from './nodes/DecisionNode';
+import StickyNote from './StickyNote';
 import NodeContextMenu from './NodeContextMenu';
 import { usePipelineGraph } from './hooks/usePipelineGraph';
 import { useAppStore } from '@/stores/appStore';
 import { usePipelineEditorStore } from './stores/pipelineEditorStore';
+import type { StickyColor } from './stores/pipelineEditorStore';
 import { TYPE_COLOR, STATUS_COLOR, INK } from './nodes/nodeTokens';
 import type { PipelineDetail, TaskStatus, TaskType } from '@/types';
 
@@ -36,6 +38,7 @@ const nodeTypes = {
   postTask: PostTaskNode,
   startEnd: StartEndNodeWrapper,
   decisionNode: DecisionNode,
+  stickyNote: StickyNote,
 };
 
 /** MiniMap 节点颜色 —— 按类型/状态着色，与节点强调色一致 */
@@ -88,6 +91,10 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const setContextMenu = usePipelineEditorStore((s) => s.setContextMenu);
+  const stickyNotes = usePipelineEditorStore((s) => s.stickyNotes);
+  const removeStickyNote = usePipelineEditorStore((s) => s.removeStickyNote);
+  const updateStickyNote = usePipelineEditorStore((s) => s.updateStickyNote);
+  const addStickyNote = usePipelineEditorStore((s) => s.addStickyNote);
 
   /** editMode 下允许在画布上放置从 NodePanel 拖入的节点 */
   const onDragOverHandler = useCallback(
@@ -141,8 +148,8 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
       event.preventDefault();
       setContextMenu({
         open: true,
-        x: (event as unknown as MouseEvent).clientX,
-        y: (event as unknown as MouseEvent).clientY,
+        x: event.clientX,
+        y: event.clientY,
         nodeId: node.id,
       });
     },
@@ -155,18 +162,57 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
       event.preventDefault();
       setContextMenu({
         open: true,
-        x: (event as MouseEvent).clientX,
-        y: (event as MouseEvent).clientY,
+        x: event.clientX,
+        y: event.clientY,
         nodeId: null,
       });
     },
     [setContextMenu],
   );
 
+  /** 从右键菜单或节点面板添加便签 */
+  const handleAddStickyNote = useCallback(
+    (nodeId: string | null) => {
+      if (!editMode) return;
+      const id = `sticky-${Date.now().toString(36)}`;
+      const note = {
+        id,
+        position: nodeId ? { x: 0, y: 0 } : { x: Math.random() * 200, y: Math.random() * 200 },
+        content: '',
+        color: 'yellow' as StickyColor,
+        width: 240,
+        height: 160,
+        snapToNodeId: nodeId ?? null,
+      };
+      addStickyNote(note);
+    },
+    [editMode, addStickyNote],
+  );
+
   // 同步外部选中状态到 store
   const syncedNodes = selectedTaskId !== undefined
     ? nodes.map((n) => ({ ...n, selected: n.id === selectedTaskId }))
     : nodes;
+
+  // 将便签从 store 转为 ReactFlow 节点并合并
+  const stickyNoteNodes: Node[] = stickyNotes.map((note) => ({
+    id: note.id,
+    type: 'stickyNote',
+    position: note.position,
+    draggable: true,
+    selectable: true,
+    data: {
+      content: note.content,
+      color: note.color,
+      width: note.width || 240,
+      height: note.height || 160,
+      snapToNodeId: note.snapToNodeId,
+      onDelete: (id: string) => removeStickyNote(id),
+      onUpdate: (id: string, d: Partial<typeof note>) => updateStickyNote(id, d),
+    } as Record<string, unknown>,
+  }));
+
+  const allNodes = [...syncedNodes, ...stickyNoteNodes];
 
   return (
     <div
@@ -178,13 +224,13 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
       }}
     >
       <ReactFlow
-        nodes={syncedNodes}
+        nodes={allNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
         onNodeContextMenu={handleNodeContextMenu}
         onPaneClick={onPaneClick}
-        onPaneContextMenu={handlePaneContextMenu as never}
+        onPaneContextMenu={handlePaneContextMenu}
         onDragOver={editMode ? onDragOverHandler : undefined}
         onDrop={editMode ? onDropHandler : undefined}
         onInit={(instance) => { reactFlowInstanceRef.current = instance; }}
@@ -220,7 +266,9 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
           pannable
         />
       </ReactFlow>
-      <NodeContextMenu />
+      <NodeContextMenu
+        onAddStickyNote={handleAddStickyNote}
+      />
     </div>
   );
 }

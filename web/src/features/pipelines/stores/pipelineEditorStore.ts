@@ -1,5 +1,28 @@
 import { create } from 'zustand';
 
+/** 便签颜色类型 */
+export type StickyColor = 'yellow' | 'blue' | 'green' | 'pink' | 'orange';
+
+/** 便签 5 色配色方案（N8N 风格） */
+export const STICKY_COLORS: Record<StickyColor, { bg: string; border: string; dot: string; label: string }> = {
+  yellow: { bg: '#FFF9DB', border: '#FCC419', dot: '#F59F00', label: '黄' },
+  blue: { bg: '#E7F5FF', border: '#74C0FC', dot: '#339AF0', label: '蓝' },
+  green: { bg: '#EBFBEE', border: '#69DB7C', dot: '#40C057', label: '绿' },
+  pink: { bg: '#FFF0F6', border: '#F783AC', dot: '#E64980', label: '粉' },
+  orange: { bg: '#FFF4E6', border: '#FFA94D', dot: '#F76707', label: '橙' },
+};
+
+/** 便签数据（纯视觉，不参与 Pipeline 数据模型） */
+export interface StickyNoteItem {
+  id: string;
+  position: { x: number; y: number };
+  content: string;
+  color: StickyColor;
+  width: number;
+  height: number;
+  snapToNodeId?: string | null;
+}
+
 /**
  * 流水线编辑器状态 — 管理编辑/只读模式、节点面板、运行态锁定
  *
@@ -36,6 +59,12 @@ export interface PipelineEditorState {
   } | null;
   setContextMenu: (menu: PipelineEditorState['contextMenu']) => void;
   closeContextMenu: () => void;
+
+  /** 便签管理（纯视觉元素） */
+  stickyNotes: StickyNoteItem[];
+  addStickyNote: (note: StickyNoteItem) => void;
+  removeStickyNote: (id: string) => void;
+  updateStickyNote: (id: string, data: Partial<StickyNoteItem>) => void;
 }
 
 export const usePipelineEditorStore = create<PipelineEditorState>((set) => ({
@@ -74,4 +103,13 @@ export const usePipelineEditorStore = create<PipelineEditorState>((set) => ({
   contextMenu: null,
   setContextMenu: (menu) => set({ contextMenu: menu }),
   closeContextMenu: () => set({ contextMenu: null }),
+
+  /** 便签列表 */
+  stickyNotes: [] as StickyNoteItem[],
+  addStickyNote: (note) => set((s) => ({ stickyNotes: [...s.stickyNotes, note] })),
+  removeStickyNote: (id) => set((s) => ({ stickyNotes: s.stickyNotes.filter((n) => n.id !== id) })),
+  updateStickyNote: (id, data) =>
+    set((s) => ({
+      stickyNotes: s.stickyNotes.map((n) => (n.id === id ? { ...n, ...data } : n)),
+    })),
 }));
