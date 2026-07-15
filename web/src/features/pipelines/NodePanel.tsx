@@ -1,15 +1,17 @@
 import { useCallback, useRef } from 'react';
-import { Terminal, Braces, Layers, Puzzle, GitBranch, Package, Key, Search, ChevronLeft } from 'lucide-react';
+import { Terminal, Braces, Layers, Puzzle, Package, Key, Search, ChevronLeft } from 'lucide-react';
 import { usePipelineEditorStore } from './stores/pipelineEditorStore';
 
 /**
- * 左侧节点面板 — N8N 风格暗色侧边栏，按 Task 类型分组展示可拖拽节点
+ * 左侧节点面板 — N8N 风格暗色侧边栏，按 Task 类型分组展示可拖拽/可点击节点
  *
  * 设计决策：
  * - 使用 @xyflow/react 的 application/reactflow MIME 类型传递拖拽数据
- * - 分组逻辑：按语义归为 4 组（命令/调用、步骤/插件、版本控制/仓库、远程连接）
+ * - 分组逻辑：按语义归为 3 组（命令与调用、步骤与插件、仓库与远程）
  * - 颜色从 design-tokens.json task_type_colors 读取
  * - 面板宽度 260px（展开）/ 40px（折叠），使用 CSS transition 动画
+ * - v2 (2026-07): git 已归入 plugin 子类型，不再独立展示
+ * - v2 (2026-07): 支持点击添加 — 除拖拽外，点击也可触发 pipeline-add-node 事件
  */
 
 interface TaskTypeItem {
@@ -19,7 +21,7 @@ interface TaskTypeItem {
   icon: typeof Terminal;
 }
 
-/** 7 种 Task 类型按 4 组组织 */
+/** 6 种 Task 类型按 3 组组织（v2 2026-07: git 已归入 plugin 子类型） */
 const TASK_TYPE_GROUPS: { key: string; label: string; items: TaskTypeItem[] }[] = [
   {
     key: 'cmd-invoke',
@@ -38,17 +40,10 @@ const TASK_TYPE_GROUPS: { key: string; label: string; items: TaskTypeItem[] }[] 
     ],
   },
   {
-    key: 'vcs-repo',
-    label: '版本控制与仓库',
+    key: 'repo-remote',
+    label: '仓库与远程',
     items: [
-      { type: 'git', label: 'Git', color: '#F76707', icon: GitBranch },
       { type: 'nexus', label: 'Nexus', color: '#20C997', icon: Package },
-    ],
-  },
-  {
-    key: 'remote',
-    label: '远程连接',
-    items: [
       { type: 'ssh', label: 'SSH', color: '#74B816', icon: Key },
     ],
   },
@@ -71,6 +66,18 @@ export default function NodePanel() {
         }),
       );
       event.dataTransfer.effectAllowed = 'move';
+    },
+    [],
+  );
+
+  // v2 (2026-07): 点击添加 — 通过自定义事件通知 PipelineGraph 在画布中心创建节点
+  const onClickHandler = useCallback(
+    (_event: React.MouseEvent<HTMLDivElement>, item: TaskTypeItem) => {
+      window.dispatchEvent(
+        new CustomEvent('pipeline-add-node', {
+          detail: { taskType: item.type, label: item.label, color: item.color, position: null },
+        }),
+      );
     },
     [],
   );
@@ -149,6 +156,8 @@ export default function NodePanel() {
                 key={item.type}
                 draggable
                 onDragStart={(e) => onDragStartHandler(e, item)}
+                // v2 (2026-07): 点击添加节点到画布
+                onClick={(e) => onClickHandler(e, item)}
                 className="flex items-center gap-3 px-3 cursor-grab active:cursor-grabbing select-none rounded-lg my-0.5 transition-colors"
                 style={{ height: 40 }}
                 onMouseEnter={(e) => {

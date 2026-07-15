@@ -147,13 +147,13 @@ export default function PipelineDetailPage() {
     }
   }, [yamlEditorOpen, yamlText]);
 
-  // 显示的 pipeline：编辑器打开时用编辑后的版本，否则用 API 版本
+  // 显示的 pipeline：编辑模式下的改动优先，否则用 API 版本
+  // v2 (2026-07): 之前只在 yamlEditorOpen 时用 editedPipeline，拖放节点在编辑器关闭时不渲染
   const displayPipeline: PipelineDetail | undefined = useMemo(() => {
-    if (yamlEditorOpen && editedPipeline) return editedPipeline;
+    if (editedPipeline) return editedPipeline;
     return pipeline;
-  }, [yamlEditorOpen, editedPipeline, pipeline]);
+  }, [editedPipeline, pipeline]);
 
-  // v2 (2026-07): 视觉编辑（拖放、删除）→ YAML 双向同步
   // changedFromYamlRef 防止死循环：YAML 编辑器变更无需反向同步
   useEffect(() => {
     if (changedFromYamlRef.current) {
@@ -209,8 +209,8 @@ export default function PipelineDetailPage() {
         case 'command': newTask.command = 'echo "new task"'; break;
         case 'invoke': newTask.invoke = { task: 'default', args: [], kwargs: {} }; break;
         case 'steps': newTask.steps = [{ run: 'echo "step"', env: {} }]; break;
+        // v2 (2026-07): plugin 类型统管所有插件（含 git/nexus 子类型）
         case 'plugin': newTask.plugin = ''; break;
-        case 'git': newTask.git = { repo: '', dest: '', depth: 1, submodules: false }; break;
         case 'nexus': newTask.nexus = { action: '', url: '', repository: '', packaging: '' }; break;
         case 'ssh': newTask.command = 'hostname'; break;
       }
@@ -224,6 +224,17 @@ export default function PipelineDetailPage() {
     },
     [displayPipeline],
   );
+
+  // v2 (2026-07): 点击节点面板时通过自定义事件创建节点（拖拽外的第二种添加方式）
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as DropData & { position: { x: number; y: number } | null };
+      const pos = detail.position || { x: 250 + Math.random() * 100, y: 100 + Math.random() * 100 };
+      handleNodeDrop(detail, pos);
+    };
+    window.addEventListener('pipeline-add-node', handler);
+    return () => window.removeEventListener('pipeline-add-node', handler);
+  }, [handleNodeDrop]);
 
   // YAML 光标所在行 → DAG 节点高亮（taskName → node ID 映射）
   const taskNameToNodeId = useMemo(() => {
