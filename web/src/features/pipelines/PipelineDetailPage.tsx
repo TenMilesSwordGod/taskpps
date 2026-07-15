@@ -18,6 +18,7 @@ import TriggerRunModal from '@/components/TriggerRunModal';
 import PipelineBreadcrumb from '@/components/PipelineBreadcrumb';
 import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 import { useAppStore } from '@/stores/appStore';
+import { usePipelineEditorStore } from './stores/pipelineEditorStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
 import type { PipelineDetail, ValidationError } from '@/types';
 
@@ -52,6 +53,11 @@ export default function PipelineDetailPage() {
   const [triggerOpen, setTriggerOpen] = useState(false);
   const helpPanelMinimized = useAppStore((s) => s.helpPanelMinimized);
   const toggleHelpPanel = useAppStore((s) => s.toggleHelpPanel);
+
+  // 编辑模式 store
+  const editMode = usePipelineEditorStore((s) => s.editMode);
+  const setEditMode = usePipelineEditorStore((s) => s.setEditMode);
+  const isRunning = usePipelineEditorStore((s) => s.isRunning);
 
   // YAML 编辑器状态
   const [yamlEditorOpen, setYamlEditorOpen] = useState(isFileMode);
@@ -258,6 +264,45 @@ export default function PipelineDetailPage() {
             </Button>
           </Tooltip>
           {!isFileMode && (
+            <Tooltip title={isRunning ? '运行中，不可切换编辑模式' : (editMode ? '切换到只读模式' : '切换到编辑模式')}>
+              <span
+                className="inline-flex items-center rounded-md p-0.5 cursor-pointer select-none"
+                style={{
+                  backgroundColor: editMode ? '#DBE4FF' : '#F1F3F5',
+                  transition: 'background-color 200ms ease',
+                  pointerEvents: isRunning ? 'none' : 'auto',
+                  opacity: isRunning ? 0.5 : 1,
+                }}
+                onClick={() => setEditMode(!editMode)}
+              >
+                <span
+                  className="px-2.5 py-1 text-xs rounded-md"
+                  style={{
+                    fontWeight: 500,
+                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace',
+                    backgroundColor: !editMode ? '#4C6EF5' : 'transparent',
+                    color: !editMode ? '#FFFFFF' : '#868E96',
+                    transition: 'all 200ms ease',
+                  }}
+                >
+                  只读
+                </span>
+                <span
+                  className="px-2.5 py-1 text-xs rounded-md"
+                  style={{
+                    fontWeight: 500,
+                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace',
+                    backgroundColor: editMode ? '#4C6EF5' : 'transparent',
+                    color: editMode ? '#FFFFFF' : '#868E96',
+                    transition: 'all 200ms ease',
+                  }}
+                >
+                  编辑
+                </span>
+              </span>
+            </Tooltip>
+          )}
+          {!isFileMode && (
             <>
               <Tooltip title="导出 PNG">
                 <Button icon={<FileImageOutlined />} onClick={handleExportPng}>
@@ -338,7 +383,7 @@ export default function PipelineDetailPage() {
               />
             )}
             <div className="flex-1 min-h-0">
-              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
+              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} editMode={editMode} />
             </div>
           </div>
         )}

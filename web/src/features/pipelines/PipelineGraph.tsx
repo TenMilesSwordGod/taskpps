@@ -65,10 +65,12 @@ interface PipelineGraphProps {
   selectedTaskId?: string | null;
   /** 点击节点回调 */
   onNodeClick?: (taskId: string) => void;
+  /** 是否处于编辑模式 */
+  editMode?: boolean;
 }
 
 /** DAG 画布组件，封装 ReactFlow —— 工程蓝图风格 */
-export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, onNodeClick }: PipelineGraphProps) {
+export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, onNodeClick, editMode = false }: PipelineGraphProps) {
   const { nodes, edges } = usePipelineGraph({ pipeline, taskStatuses });
   const setSelectedNodeId = useAppStore((s) => s.setSelectedNodeId);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -115,6 +117,8 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ type: 'smoothstep' }}
+        nodesDraggable={editMode}
+        nodesConnectable={editMode}
       >
         {/* 点状网格背景 —— 工程蓝图栅格 */}
         <Background
