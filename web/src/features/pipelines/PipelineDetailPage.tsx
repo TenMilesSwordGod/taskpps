@@ -68,6 +68,11 @@ export default function PipelineDetailPage() {
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // v2 (2026-07): 防止 YAML 双向同步死循环 — 标记当前变更来源
+  // changedFromYamlRef=true 表示变更来自 YAML 编辑器（handleYamlChange），跳过反向同步
+  const changedFromYamlRef = useRef(false);
+  // 视觉编辑 → YAML 的防抖定时器
+  const visualSyncTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // 保存：正常模式用 by-id，文件模式用 by-file
   const saveByIdMutation = useSavePipelineById(!isFileMode ? definitionId : undefined);
@@ -116,13 +121,13 @@ export default function PipelineDetailPage() {
   // YAML 内容变化时解析并更新流程图
   const handleYamlChange = useCallback((text: string) => {
     setYamlText(text);
+    changedFromYamlRef.current = true;
     const result = parseYamlToPipeline(text);
     if (result.success) {
       setEditedPipeline(result.pipeline!);
       setYamlError(null);
     } else {
       setYamlError(result.error!);
-      // 保留上一次有效的 pipeline，不更新
     }
   }, []);
 
@@ -147,6 +152,50 @@ export default function PipelineDetailPage() {
     if (yamlEditorOpen && editedPipeline) return editedPipeline;
     return pipeline;
   }, [yamlEditorOpen, editedPipeline, pipeline]);
+
+  // v2 (2026-07): 视觉编辑（拖放、删除）→ YAML 双向同步
+  // changedFromYamlRef 防止死循环：YAML 编辑器变更无需反向同步
+  useEffect(() => {
+    if (changedFromYamlRef.current) {
+      changedFromYamlRef.current = false;
+      return;
+    }
+    if (!yamlEditorOpen || !editedPipeline) return;
+    // 防抖：连续视觉编辑合并为一次 YAML 同步（如快速拖入多个节点）
+    if (visualSyncTimerRef.current) clearTimeout(visualSyncTimerRef.current);
+    visualSyncTimerRef.current = setTimeout(() => {
+      const yaml = pipelineToYaml(editedPipeline);
+      setYamlText(yaml);
+    }, 400);
+    return () => {
+      if (visualSyncTimerRef.current) clearTimeout(visualSyncTimerRef.current);
+    };
+  }, [yamlEditorOpen, editedPipeline]);
+
+  /** 删除 Task 节点 */
+  /** 从右键菜单删除节点 */
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      const pipeline = displayPipeline;
+      if (!pipeline) return;
+      // nodeId 格式: "subpipeline.taskname"
+      const parts = nodeId.split('.');
+      const updated = { ...pipeline };
+      if (parts.length === 2 && updated.pipelines) {
+        updated.pipelines = updated.pipelines
+          .map((sub) => {
+            if (sub.name !== parts[0]) return sub;
+            const remaining = sub.tasks.filter((t) => t.name !== parts[1]);
+            if (remaining.length === 0) return null; // 空 SubPipeline 移除
+            return { ...sub, tasks: remaining };
+          })
+          .filter((s): s is SubPipeline => s !== null);
+      }
+      setEditedPipeline(updated);
+      message.success(`已删除节点`);
+    },
+    [displayPipeline],
+  );
 
   /** 从 NodePanel 拖入新 Task 节点 — 编辑模式下创建新 SubPipeline 包裹 */
   const handleNodeDrop = useCallback(
@@ -416,7 +465,7 @@ export default function PipelineDetailPage() {
               />
             )}
             <div className="flex-1 min-h-0">
-              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} editMode={editMode} onNodeDrop={handleNodeDrop} />
+              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} editMode={editMode} onNodeDrop={handleNodeDrop} onDeleteNode={handleDeleteNode} />
             </div>
           </div>
         )}

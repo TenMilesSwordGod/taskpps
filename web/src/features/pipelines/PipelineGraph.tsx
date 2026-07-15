@@ -82,10 +82,14 @@ interface PipelineGraphProps {
   editMode?: boolean;
   /** 拖拽放置回调（编辑模式下从 NodePanel 拖入节点时触发） */
   onNodeDrop?: (data: DropData, position: { x: number; y: number }) => void;
+  /** 删除节点回调（从右键菜单触发） */
+  onDeleteNode?: (nodeId: string) => void;
+  /** 复制节点回调（从右键菜单触发） */
+  onCopyNode?: (nodeId: string) => void;
 }
 
 /** DAG 画布组件，封装 ReactFlow —— 工程蓝图风格 */
-export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, onNodeClick, editMode = false, onNodeDrop }: PipelineGraphProps) {
+export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, onNodeClick, editMode = false, onNodeDrop, onDeleteNode, onCopyNode }: PipelineGraphProps) {
   const { nodes, edges } = usePipelineGraph({ pipeline, taskStatuses });
   const setSelectedNodeId = useAppStore((s) => s.setSelectedNodeId);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -268,6 +272,8 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
       </ReactFlow>
       <NodeContextMenu
         onAddStickyNote={handleAddStickyNote}
+        onDeleteNode={onDeleteNode}
+        onCopyNode={onCopyNode}
       />
     </div>
   );
