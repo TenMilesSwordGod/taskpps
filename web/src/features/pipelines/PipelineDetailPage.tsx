@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Breadcrumb, Button, Space, Tooltip, message, Spin, Alert } from 'antd';
+import { Button, Space, Tooltip, message, Spin, Alert } from 'antd';
 import {
   ExportOutlined,
   FileImageOutlined,
@@ -15,6 +15,7 @@ import YamlEditor from './YamlEditor';
 import type { YamlEditorRef } from './YamlEditor';
 import { HelpPanel } from './HelpPanel';
 import TriggerRunModal from '@/components/TriggerRunModal';
+import PipelineBreadcrumb from '@/components/PipelineBreadcrumb';
 import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 import { useAppStore } from '@/stores/appStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
@@ -233,13 +234,14 @@ export default function PipelineDetailPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 面包屑 */}
+      {/* 面包屑 — 显示项目名/流水线名 + 悬浮切换 */}
       <div className="px-4 py-2 border-b border-gray-200 bg-white shrink-0">
-        <Breadcrumb
-          items={[
-            { title: <a onClick={() => navigate('/pipelines')}>流水线</a> },
-            { title: isFileMode ? actualFilePath : definitionId },
-          ]}
+        <PipelineBreadcrumb
+          projectId={projectId!}
+          definitionId={definitionId}
+          pipelineName={pipeline?.name}
+          isFileMode={isFileMode}
+          filePath={actualFilePath}
         />
       </div>
 

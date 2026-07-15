@@ -12,3 +12,15 @@ export function useProjects() {
     },
   });
 }
+
+/** 获取单个项目详情（页面加载时获取项目名称） */
+export function useProject(projectId: string | undefined) {
+  return useQuery<ProjectResponse>({
+    queryKey: ['project', projectId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/api/projects/${encodeURIComponent(projectId!)}`);
+      return res.data;
+    },
+    enabled: !!projectId,
+  });
+}
