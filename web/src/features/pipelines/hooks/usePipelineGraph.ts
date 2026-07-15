@@ -38,14 +38,22 @@ function countPostTasks(post: PostConfig | null | undefined): number {
 const RAIL_STYLE = { stroke: '#94A3B8', strokeWidth: 1.5 };
 const RAIL_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
 
-/** Yes 路径边样式（绿色实线） */
-const YES_STYLE = { stroke: '#16A34A', strokeWidth: 1.5 };
-const YES_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#16A34A' };
+/** Yes 路径边样式 — v2 (2026-07) design token: conditional_yes #12B886 */
+const YES_STYLE = { stroke: '#12B886', strokeWidth: 2 };
+const YES_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#12B886' };
 
-/** alt 路径边样式（灰色虚线，表示带 when 的孤立 task 执行后经 group 输出点退出） */
-const ALT_STYLE = { stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '3 3' };
-const ALT_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
+/** No 路径边样式 — v2 (2026-07) design token: conditional_no #ADB5BD 虚线 5,5 */
+const NO_STYLE = { stroke: '#ADB5BD', strokeWidth: 2, strokeDasharray: '5 5' };
+const NO_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#ADB5BD' };
+
+/** alt 路径边样式 — 与 no 统一为灰色虚线 */
+const ALT_STYLE = { stroke: '#ADB5BD', strokeWidth: 2, strokeDasharray: '5 5' };
+const ALT_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#ADB5BD' };
 const ALT_LABEL_FILL = '#64748B';
+
+/** 后置连线样式 — v2 (2026-07) design token: post #DEE2E6 */
+const POST_STYLE = { stroke: '#DEE2E6', strokeWidth: 1.5, strokeDasharray: '3 3' };
+const POST_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#DEE2E6' };
 
 function pushPlainEdge(
   taskEdges: Edge[],
@@ -208,8 +216,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
               type: 'smoothstep',
               animated: false,
               label: 'yes',
-              labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
-              labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
+              labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#12B886' },
+              labelBgStyle: { fill: '#C3FAE8', fillOpacity: 1 },
               labelBgPadding: [2, 4] as [number, number],
               labelBgBorderRadius: 3,
               markerEnd: YES_MARKER,
@@ -252,8 +260,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             type: 'smoothstep',
             animated: false,
             label: 'yes',
-            labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
-            labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
+            labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#12B886' },
+            labelBgStyle: { fill: '#C3FAE8', fillOpacity: 1 },
             labelBgPadding: [2, 4] as [number, number],
             labelBgBorderRadius: 3,
             markerEnd: YES_MARKER,
@@ -312,8 +320,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         labelBgStyle: { fill: '#F1F5F9', fillOpacity: 1 },
         labelBgPadding: [2, 4] as [number, number],
         labelBgBorderRadius: 3,
-        markerEnd: RAIL_MARKER,
-        style: RAIL_STYLE,
+        markerEnd: NO_MARKER,
+        style: NO_STYLE,
       });
     }
 
@@ -373,8 +381,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 type: 'smoothstep',
                 animated: false,
                 label: 'yes',
-                labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
-                labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
+                labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#12B886' },
+                labelBgStyle: { fill: '#C3FAE8', fillOpacity: 1 },
                 labelBgPadding: [2, 4] as [number, number],
                 labelBgBorderRadius: 3,
                 markerEnd: YES_MARKER,
@@ -425,8 +433,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             target: postId,
             type: 'smoothstep',
             animated: false,
-            markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' },
-            style: { stroke: '#CBD5E1', strokeWidth: 1.2, strokeDasharray: '3 3' },
+            markerEnd: POST_MARKER,
+            style: POST_STYLE,
           });
         }
       }
@@ -498,8 +506,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const rootGroupIds = allGroupIds.filter((id) => !groupHasIncoming.has(id));
     const leafGroupIds = allGroupIds.filter((id) => !groupHasOutgoing.has(id));
 
-    const START_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#10B981' };
-    const END_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
+    const START_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#12B886' };
+    const END_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#868E96' };
     for (const gid of rootGroupIds) {
       const firstTaskId = groupFirstTask.get(gid);
       // START → group.top（绿色，进入 group 的 IN handle）
@@ -520,7 +528,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           type: 'smoothstep',
           animated: false,
           markerEnd: START_MARKER,
-          style: { stroke: '#10B981', strokeWidth: 1.5 },
+          style: { stroke: '#12B886', strokeWidth: 1.5 },
         });
         // group.top-out → 首 task/decision（灰色内部边）
         taskEdges.push({
@@ -543,7 +551,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           type: 'smoothstep',
           animated: false,
           markerEnd: START_MARKER,
-          style: { stroke: '#10B981', strokeWidth: 1.5 },
+          style: { stroke: '#12B886', strokeWidth: 1.5 },
         });
       }
     }
@@ -599,7 +607,7 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           type: 'smoothstep',
           animated: false,
           markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#10B981' },
-          style: { stroke: '#10B981', strokeWidth: 1.5 },
+          style: { stroke: '#12B886', strokeWidth: 1.5 },
         });
       }
       for (const tid of allTaskIds.filter((id) => !taskHasOutgoing.has(id))) {

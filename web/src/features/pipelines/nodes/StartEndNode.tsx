@@ -13,7 +13,7 @@ interface StartEndNodeData {
  */
 function StartEndNodeComponent({ data }: { data: StartEndNodeData }) {
   const isStart = data.variant === 'start';
-  const dotColor = isStart ? '#10B981' : '#94A3B8';
+  const dotColor = isStart ? '#12B886' : '#868E96';
 
   return (
     <>

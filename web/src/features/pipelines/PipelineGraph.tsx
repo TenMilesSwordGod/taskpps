@@ -44,7 +44,7 @@ const nodeTypes = {
 /** MiniMap 节点颜色 —— 按类型/状态着色，与节点强调色一致 */
 function miniMapNodeColor(node: Node): string {
   if (node.type === 'startEnd') {
-    return node.data?.variant === 'start' ? '#10B981' : '#94A3B8';
+    return node.data?.variant === 'start' ? '#12B886' : '#868E96';
   }
   if (node.type === 'decisionNode') return '#FDBA74';
   if (node.type === 'subpipelineGroup') return '#E2E8F0';
