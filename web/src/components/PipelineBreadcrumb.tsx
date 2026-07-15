@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from 'antd';
 import { useQuery } from '@tanstack/react-query';
@@ -78,6 +78,47 @@ export default function PipelineBreadcrumb({
     }
   }, [refetchProjects]);
 
+  // 项目切换中标记，防止重复点击
+  // v2 (2026-07): 用 ref 而非 state，避免 handleProjectSwitch 依赖项变化导致 useCallback 重建
+  const switchingRef = useRef(false);
+  const switchingCountRef = useRef(0);
+  // state 仅用于 UI 显示 loading 态（少量触发，性能可接受）
+  const [, setSwitchingRender] = useState(0);
+
+  /**
+   * 切换项目回调。
+   * 先请求目标项目的流水线列表，导航到第一个有效流水线；
+   * 若无流水线，则导航到目标项目列表页。
+   * v2 (2026-07): 修复 #198 切换项目跳转路由不存在问题，
+   * 改为跳到 `/pipelines/{projectId}/{firstDefinitionId}`。
+   */
+  const handleProjectSwitch = useCallback(
+    async (key: string) => {
+      if (switchingRef.current || key === projectId) return;
+      switchingRef.current = true;
+      switchingCountRef.current += 1;
+      setSwitchingRender(switchingCountRef.current);
+      try {
+        const res = await apiClient.get('/api/pipelines/', {
+          params: { project_id: key },
+        });
+        const pipelines: PipelineSummary[] = (res.data as { items: PipelineSummary[] }).items ?? res.data;
+        if (pipelines.length > 0) {
+          navigate(`/pipelines/${key}/${pipelines[0].id}`);
+        } else {
+          navigate(`/pipelines/${key}`);
+        }
+      } catch {
+        navigate(`/pipelines/${key}`);
+      } finally {
+        switchingRef.current = false;
+        switchingCountRef.current += 1;
+        setSwitchingRender(switchingCountRef.current);
+      }
+    },
+    [navigate, projectId],
+  );
+
   /** 流水线浮窗打开时按需加载流水线列表 */
   const handlePipelinePopoverOpen = useCallback(() => {
     if (!pipelinesLoadedRef.current) {
@@ -109,8 +150,8 @@ export default function PipelineBreadcrumb({
       label: projectName || projectId,
       options: projectOptions,
       currentKey: projectId,
-      onSwitch: (key: string) => navigate(`/pipelines/${key}`),
-      loading: projectsFetching,
+      onSwitch: handleProjectSwitch,
+      loading: projectsFetching || switchingRef.current,
       popoverTitle: '切换项目',
       onPopoverOpen: handleProjectPopoverOpen,
     },
