@@ -17,7 +17,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlmodel import select
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import select, update
 
 from taskpps.auth.security import (
     create_access_token,
@@ -151,6 +152,12 @@ async def register(body: RegisterRequest) -> UserResponse:
             return _user_to_response(user)
     except HTTPException:
         raise
+    except IntegrityError:
+        # 并发注册竞态：多个请求同时通过 SELECT 存在性检查后并发 INSERT，
+        # 触发 UNIQUE 约束。单独捕获返回 409，避免被通用 except 误转 500。
+        # 这是 check-then-insert 模式下唯一约束的兜底，保证至多 1 个成功。
+        logger.warning("注册并发冲突(UNIQUE): username=%s", body.username)
+        raise HTTPException(status_code=409, detail="该用户名已被注册") from None
     except Exception:
         logger.error("注册失败: username=%s", body.username, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error") from None
@@ -253,9 +260,21 @@ async def change_password(body: ChangePasswordRequest, request: Request) -> Mess
             if not verify_password(body.old_password, user.password_hash):
                 raise HTTPException(status_code=401, detail="旧密码错误")
 
-            user.password_hash = hash_password(body.new_password)
-            user.updated_at = datetime.now(timezone.utc)
-            session.add(user)
+            # 原子 UPDATE WHERE password_hash = 旧 hash：避免 check-then-update 竞态。
+            # 并发时第一个请求改完后 DB 中 password_hash 已变，其余请求的 UPDATE
+            # 命中 0 行（rowcount != 1）→ 返回 401，保证至多 1 个成功。
+            # 用读到的 user.password_hash 作乐观锁版本号，无需额外 version 字段。
+            new_hash = hash_password(body.new_password)
+            now = datetime.now(timezone.utc)
+            stmt = (
+                update(User)
+                .where(User.id == user.id, User.password_hash == user.password_hash)
+                .values(password_hash=new_hash, updated_at=now)
+            )
+            exec_result = await session.execute(stmt)
+            if exec_result.rowcount != 1:
+                # 并发改密竞态：旧密码已被其他请求修改，当前 hash 不再匹配
+                raise HTTPException(status_code=401, detail="旧密码错误")
             await session.commit()
             logger.info("用户修改密码成功: username=%s", username)
             return MessageResponse(message="密码修改成功")
