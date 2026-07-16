@@ -14,6 +14,20 @@ class ServerConfig(BaseModel):
     api_key: str | None = None
 
 
+class JWTConfig(BaseModel):
+    """JWT 认证配置。
+
+    设计决策：
+    - secret 不在此配置，由 security.py 持久化到 .taskpps/jwt_secret.key（避免明文落 yaml）。
+    - expire_hours 默认 24h，平衡安全性与用户体验（太短频繁登录，太长泄漏风险高）。
+    - seed_admin_password 默认 user@123（issue #204 评论1要求），首次登录后应立即修改。
+    """
+
+    expire_hours: int = 24
+    seed_admin_password: str = "user@123"
+    seed_admin_username: str = "admin"
+
+
 class AgentConfig(BaseModel):
     enabled: bool = True
     ws_host: str = "0.0.0.0"
@@ -60,6 +74,8 @@ class Settings(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     triggers: list[TriggerConfig] = Field(default_factory=list)
+    # Issue #204: JWT 认证配置（用户管理系统）
+    jwt: JWTConfig = Field(default_factory=JWTConfig)
 
     model_config = {"extra": "allow"}
 

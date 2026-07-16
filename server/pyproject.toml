@@ -21,6 +21,8 @@ dependencies = [
     "sse-starlette",
     "httpx>=0.28.1",
     "python-multipart",
+    "python-jose[cryptography]>=3.5.0",
+    "bcrypt>=5.0.0",
 ]
 
 [project.optional-dependencies]
