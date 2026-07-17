@@ -87,8 +87,20 @@ async def test_auth_create_run(app, setup_project, tmp_project, db_engine):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # issue #204 引入 JWT 中间件后，POST /api/runs/ 强制鉴权（401 无 token）。
+        # 此处先注册 + 登录拿 token，再带 Authorization 头创建 run，适配新认证模型。
+        await client.post(
+            "/api/v1/auth/register",
+            json={"username": "runner", "nickname": "Runner", "password": "pass123"},
+        )
+        login_resp = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "runner", "password": "pass123"},
+        )
+        token = login_resp.json()["access_token"]
         response = await client.post(
             "/api/runs/",
+            headers={"Authorization": f"Bearer {token}"},
             json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
         )
         assert response.status_code in (200, 201)

@@ -11,12 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from taskpps.api import agents, artifacts, health, pipelines, plugins, projects, runs, triggers, ws_agent
+from taskpps.api import agents, artifacts, auth, health, pipelines, plugins, projects, runs, triggers, ws_agent
 from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale
 from taskpps.logging_config import setup_logging
-from taskpps.middleware.auth import APIKeyMiddleware
+from taskpps.middleware.auth import JWTAuthMiddleware
 from taskpps.services.plugin_center import PluginCenter, set_plugin_center
 from taskpps.services.plugin_manager import PluginManager
 from taskpps.version import __version__
@@ -67,7 +67,8 @@ async def _recover_stale_runs() -> None:
 
             # 批量将该 run 下 RUNNING/PENDING 的 task_runs 重置为 FAILED
             await run_repo.batch_update_stale_tasks(
-                run.id, TaskStatus.FAILED,
+                run.id,
+                TaskStatus.FAILED,
                 [TaskStatus.RUNNING, TaskStatus.PENDING],
                 finished_at=now,
                 error="服务器重启恢复：任务状态重置为 FAILED",
@@ -75,7 +76,8 @@ async def _recover_stale_runs() -> None:
 
             # 批量将该 run 下 RUNNING/PENDING 的 retry_records 重置为 FAILED
             await run_repo.batch_update_stale_retries(
-                run.id, TaskStatus.FAILED,
+                run.id,
+                TaskStatus.FAILED,
                 [TaskStatus.RUNNING, TaskStatus.PENDING],
                 finished_at=now,
                 error="服务器重启恢复：重试记录状态重置为 FAILED",
@@ -114,20 +116,25 @@ async def _sweep_stale_runs_background() -> None:
                         continue
                     logger.warning(
                         "Sweeper: run %s stuck RUNNING for %.0fs, marking FAILED",
-                        run.id, age,
+                        run.id,
+                        age,
                     )
                     await run_repo.update_run_status(
-                        run.id, RunStatus.FAILED, finished_at=now,
+                        run.id,
+                        RunStatus.FAILED,
+                        finished_at=now,
                         error=f"运行超时自动恢复：停滞 {int(age)} 秒后被后台检查标记为失败",
                     )
                     await run_repo.batch_update_stale_tasks(
-                        run.id, TaskStatus.FAILED,
+                        run.id,
+                        TaskStatus.FAILED,
                         [TaskStatus.RUNNING, TaskStatus.PENDING],
                         finished_at=now,
                         error="后台恢复：任务状态重置为 FAILED",
                     )
                     await run_repo.batch_update_stale_retries(
-                        run.id, TaskStatus.FAILED,
+                        run.id,
+                        TaskStatus.FAILED,
                         [TaskStatus.RUNNING, TaskStatus.PENDING],
                         finished_at=now,
                         error="后台恢复：重试记录状态重置为 FAILED",
@@ -138,6 +145,46 @@ async def _sweep_stale_runs_background() -> None:
                     logger.info("Sweeper: recovered %d stale runs", recovered)
         except Exception:
             logger.exception("Stale run sweeper failed")
+
+
+async def _seed_admin_account() -> None:
+    """启动时 seed admin 账号（issue #204 评论1要求）。
+
+    - 检测 users 表是否为空，若为空则插入 admin 账号。
+    - 密码来自 settings.jwt.seed_admin_password（默认 user@123）。
+    - 首次登录后应立即修改密码（spec 要求）。
+    - 已有数据时不重复创建，保证幂等。
+    """
+    from sqlmodel import select
+
+    from taskpps.auth.security import ensure_jwt_secret, generate_avatar_url, hash_password
+    from taskpps.db.engine import get_session_factory
+    from taskpps.models.user import User, UserRole
+
+    settings = get_settings()
+    admin_username = settings.jwt.seed_admin_username
+    admin_password = settings.jwt.seed_admin_password
+
+    # 确保 JWT secret 已生成（spec 要求首次启动生成并持久化）
+    ensure_jwt_secret()
+
+    async with get_session_factory()() as session:
+        # 检查是否已有任意用户（幂等：已有数据则不 seed）
+        result = await session.execute(select(User).limit(1))
+        if result.scalar_one_or_none() is not None:
+            return
+
+        admin = User(
+            username=admin_username,
+            nickname="管理员",
+            password_hash=hash_password(admin_password),
+            role=UserRole.ADMIN,
+            is_active=True,
+            avatar=generate_avatar_url(admin_username),
+        )
+        session.add(admin)
+        await session.commit()
+        logger.info("已 seed admin 账号: username=%s（请尽快修改默认密码）", admin_username)
 
 
 @asynccontextmanager
@@ -164,6 +211,7 @@ async def lifespan(app: FastAPI):
         logger.warning("No API key configured — all API endpoints are accessible without authentication")
     await init_db()
     await _recover_stale_runs()
+    await _seed_admin_account()
 
     # Issue #106: 初始化全局并发信号量
     from taskpps.services.agent_manager import AgentManager
@@ -211,7 +259,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Taskpps API", version=__version__, lifespan=lifespan)
 
-app.add_middleware(APIKeyMiddleware)
+app.add_middleware(JWTAuthMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -230,6 +278,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(health.router, prefix="/api")
+# Issue #204: 认证路由（/api/v1/auth/*）
+app.include_router(auth.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(pipelines.router, prefix="/api")
 app.include_router(triggers.router, prefix="/api")
