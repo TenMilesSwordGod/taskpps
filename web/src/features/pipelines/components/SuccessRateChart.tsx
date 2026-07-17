@@ -1,8 +1,8 @@
-import { useMemo, useState, useId, type CSSProperties } from 'react';
+import { useMemo, useState, useId, memo, type CSSProperties } from 'react';
 import { Tooltip } from 'antd';
 
 /** 单次运行的 task 汇总 */
-interface RunSummary {
+export interface RunSummary {
   task_summary: Record<string, number>;
 }
 
@@ -107,7 +107,10 @@ const passTextStyle: CSSProperties = {
  * - 支持 prefers-reduced-motion
  * - aria-label 无障碍标签
  */
-export default function SuccessRateChart({
+// v2 (2026-07): 性能优化 — 每行成功率图都是独立 SVG，父表格任意交互（展开/折叠、输入）
+// 都会触发全表重渲染。用 React.memo 包裹后，runs 引用不变时直接跳过重渲染，
+// 避免几十个 SVG 在每次点击时全部重建。
+function SuccessRateChart({
   runs,
   width = 150,
   height = 36,
@@ -230,3 +233,5 @@ export default function SuccessRateChart({
     </Tooltip>
   );
 }
+
+export default memo(SuccessRateChart);

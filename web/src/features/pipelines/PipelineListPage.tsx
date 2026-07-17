@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, useDeferredValue } from 'react';
 import { Card, Table, Button, Input, Space, Tooltip, Tag } from 'antd';
 import { Search, RefreshCw, Play, ChevronRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -7,7 +7,12 @@ import { usePipelines } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import SuccessRateChart from './components/SuccessRateChart';
+import type { RunSummary } from './components/SuccessRateChart';
 import type { PipelineSummary, RunStatus, ValidationError } from '@/types';
+
+// v2 (2026-07): 性能优化 — 稳定的空数组引用，避免 `record.recent_runs || []` 在每次
+// 渲染时生成新数组引用，导致 React.memo(SuccessRateChart) 失效而全表重渲染 SVG。
+const EMPTY_RUNS: RunSummary[] = [];
 
 /** 行类型 */
 type Row =
@@ -18,19 +23,27 @@ type Row =
 export default function PipelineListPage() {
   const { data, isLoading, refetch } = usePipelines();
   const [keyword, setKeyword] = useState('');
+  // v2 (2026-07): 性能优化 — 搜索输入立即响应，但分组/过滤这类重计算延迟到下一帧，
+  // 避免每次按键都重建整张分组表格（含几十个 SVG 成功率图）。
+  const deferredKeyword = useDeferredValue(keyword);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [triggerDefinitionId, setTriggerDefinitionId] = useState<string | undefined>();
   const [triggerProjectId, setTriggerProjectId] = useState<string | null>(null);
   const [expandedRowKeys, setExpandedRowKeys] = useState<Set<string>>(new Set());
 
+  // v2 (2026-07): 性能优化 — expandedRowKeys 直接传 [...set] 会在每次渲染生成新数组引用，
+  // 触发 antd 全表 body 重渲染、兄弟行被重建，使 React.memo(SuccessRateChart) 失效。
+  // 改为仅在 Set 变化时生成新数组，保持引用稳定。
+  const expandedKeys = useMemo(() => [...expandedRowKeys], [expandedRowKeys]);
+
   const filtered = useMemo(() => {
     const list = data?.items ?? [];
-    if (!keyword.trim()) return list;
-    const kw = keyword.toLowerCase();
+    if (!deferredKeyword.trim()) return list;
+    const kw = deferredKeyword.toLowerCase();
     return list.filter(
       (p) => p.name.toLowerCase().includes(kw) || p.file.toLowerCase().includes(kw),
     );
-  }, [data?.items, keyword]);
+  }, [data?.items, deferredKeyword]);
 
   // 按 project -> folder 两级分组
   const rows = useMemo<Row[]>(() => {
@@ -327,7 +340,7 @@ export default function PipelineListPage() {
       width: 170,
       render: (_: unknown, record: Row) => {
         if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88', fontSize: 12 }}>--</span>;
-        return <SuccessRateChart runs={record.recent_runs || []} />;
+        return <SuccessRateChart runs={record.recent_runs ?? EMPTY_RUNS} />;
       },
     },
     {
@@ -383,7 +396,7 @@ export default function PipelineListPage() {
           scroll={{ x: 'max-content' }}
           expandable={{
             childrenColumnName: 'children',
-            expandedRowKeys: [...expandedRowKeys],
+            expandedRowKeys: expandedKeys,
             // onExpandedRowsChange 为 noop：完全由 toggleExpand 控制，不受 Ant Design 内部状态干扰
             onExpandedRowsChange: () => {},
             rowExpandable: isExpandable,
