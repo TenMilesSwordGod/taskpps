@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
@@ -112,12 +112,15 @@ def _read_log_lines(log_path: Path, position: int = 0, include_partial: bool = F
 
 @router.post("/", status_code=201)
 # Phase 2 (2026-07): definition_id 替代 pipeline 文件路径
-async def create_run(body: CreateRunRequest):
+async def create_run(body: CreateRunRequest, request: Request):
+    # 触发人取自 JWT（中间件写入 request.state.user）；guest 不会走到 POST（中间件已拦截）
+    operator = getattr(request.state, "user", {}).get("sub")
     try:
         result = await _pipeline_service.create_run(
             definition_id=body.definition_id,
             params=body.params,
             project_id=body.project_id,
+            operator=operator,
         )
         return result
     except ValueError as e:

@@ -30,8 +30,9 @@ class RunRepository:
         project_id: str | None = None,
         display_name: str = "",
         definition_id: str | None = None,
+        operator: str | None = None,
     ) -> PipelineRun:
-        logger.debug("Creating run: pipeline=%s project=%s", pipeline_name, project_id)
+        logger.debug("Creating run: pipeline=%s project=%s operator=%s", pipeline_name, project_id, operator)
         run = PipelineRun(
             pipeline_name=pipeline_name,
             pipeline_file=pipeline_file,
@@ -42,6 +43,7 @@ class RunRepository:
             definition_id=definition_id,
             params=json.dumps(params or {}),
             status=RunStatus.PENDING,
+            operator=operator,
         )
         self.session.add(run)
         await self.session.commit()

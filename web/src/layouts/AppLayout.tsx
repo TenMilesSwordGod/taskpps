@@ -10,7 +10,7 @@ import {
   LogoutOutlined,
   DownOutlined,
 } from '@ant-design/icons';
-import { Avatar, Dropdown } from 'antd';
+import { Avatar, Dropdown, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ReactNode } from 'react';
 import TaskPpsLogo from '@/components/TaskPpsLogo';
@@ -30,10 +30,12 @@ function CurrentTime() {
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   return (
-    <div style={{ fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace', lineHeight: 1.3, fontSize: 12 }}>
-      <div style={{ color: '#7C7F88' }}>{date}</div>
-      <div style={{ fontWeight: 500, color: '#121620' }}>{time}</div>
-    </div>
+    <Tooltip title="服务器时间">
+      <div style={{ fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace', lineHeight: 1.3, fontSize: 12 }}>
+        <div style={{ color: '#7C7F88' }}>{date}</div>
+        <div style={{ fontWeight: 500, color: '#121620' }}>{time}</div>
+      </div>
+    </Tooltip>
   );
 }
 
@@ -204,19 +206,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     }
   };
 
-  // 顶部 actions：已登录显示昵称（spec 4.3.5），始终显示时钟
-  const actions: ReactNode[] = [];
-  if (user) {
-    actions.push(
-      <span
-        key="nickname"
-        style={{ color: '#121620', fontSize: 13, fontWeight: 500, marginRight: 12 }}
-      >
-        {user.nickname}
-      </span>,
-    );
-  }
-  actions.push(<CurrentTime key="clock" />);
+  // 顶部 actions：始终显示时钟（已移除昵称展示）
+  const actions: ReactNode[] = [<CurrentTime key="clock" />];
 
   return (
     <ProLayout

@@ -46,6 +46,8 @@ class PipelineRun(SQLModel, table=True):
     display_name: str = ""
     status: RunStatus = RunStatus.PENDING
     error: str | None = Field(default=None)
+    # 触发本次运行的登录用户 username（来自 JWT sub）；历史数据/系统触发为 None
+    operator: str | None = Field(default=None, index=True)
     snapshot_content: str | None = Field(default=None)
     params: str = "{}"
     started_at: datetime | None = None

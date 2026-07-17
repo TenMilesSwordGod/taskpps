@@ -41,6 +41,10 @@ export interface RunResponse {
   version_changed: boolean;
   status: RunStatus;
   error: string | null;
+  /** 触发运行的登录用户 username；null 表示历史/系统触发 */
+  operator: string | null;
+  /** 触发人展示名（nickname）；operator 为 null 时也为 null */
+  operator_nickname: string | null;
   params: Record<string, unknown>;
   started_at: string | null;
   finished_at: string | null;
@@ -114,6 +118,10 @@ export interface PipelineSummary {
     created_at: string | null;
   } | null;
   success_rate: number;
+  /** 最近一次运行的触发人 username（来自 runs.operator）；无运行历史为 null */
+  last_operator: string | null;
+  /** 最后操作人展示名（nickname）；last_operator 为 null 时也为 null */
+  last_operator_nickname: string | null;
   /** 最近 N 次运行的 task_summary（用于折线图，按时间倒序，最近在前） */
   recent_runs: { task_summary: Record<string, number> }[];
   /** YAML 校验是否通过（v1 2026-07: issue #195） */

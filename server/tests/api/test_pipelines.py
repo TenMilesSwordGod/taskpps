@@ -288,3 +288,53 @@ async def test_save_pipeline_by_file_yaml_syntax_error(app, setup_project, tmp_p
             json={"file": "syntax.yaml", "content": "name: bad\n  bad indent: yes\n"},
         )
         assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S1010", domain="server/api", priority="P1")
+async def test_list_pipelines_last_operator(app, setup_project, tmp_project, db_engine, clean_db):
+    """列表应返回最近一次运行的触发人 username 与昵称（最后操作人）。"""
+    import taskpps.config as cfg
+    from taskpps.auth.security import create_access_token, ensure_jwt_secret
+    from taskpps.db.engine import get_session_factory
+    from taskpps.models.user import User, UserRole
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+    ensure_jwt_secret()
+
+    async with get_session_factory()() as session:
+        session.add(
+            User(username="alice", nickname="Alice", role=UserRole.USER, password_hash="x")
+        )
+        await session.commit()
+
+    token = create_access_token("alice", "user")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert create_resp.status_code == 201
+
+        # 拿到 deploy.yaml 的 definition_id 并触发一次运行（带 token）
+        list_resp = await client.get("/api/pipelines/")
+        items = list_resp.json()["items"]
+        deploy = [i for i in items if i.get("file") == "deploy.yaml"][0]
+        assert deploy["id"]
+
+        run_resp = await client.post(
+            "/api/runs/",
+            json={"definition_id": deploy["id"], "params": {}},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert run_resp.status_code in (200, 201)
+
+        # 再次拉取列表，校验该 pipeline 的 last_operator / last_operator_nickname
+        list_resp2 = await client.get("/api/pipelines/")
+        items2 = list_resp2.json()["items"]
+        deploy2 = [i for i in items2 if i.get("file") == "deploy.yaml"][0]
+        assert deploy2["last_operator"] == "alice"
+        assert deploy2["last_operator_nickname"] == "Alice"

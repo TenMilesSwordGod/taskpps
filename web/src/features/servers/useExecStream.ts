@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { getToken } from '@/api/client';
 
 export type ExecStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -55,6 +56,10 @@ export function useExecStream() {
     const apiKey = (import.meta.env.VITE_API_KEY as string) ?? '';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (apiKey) headers['X-API-Key'] = apiKey;
+    // REPL 走 /api/agents 的 POST 接口，受 JWT 中间件保护，必须携带登录 token，
+    // 否则会被中间件判定为「未登录或 token 无效」返回 401（即使已登录）。
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const append = (type: ExecLine['type'], content: string) => {
       setLines((prev) => [

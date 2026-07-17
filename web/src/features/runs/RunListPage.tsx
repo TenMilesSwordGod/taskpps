@@ -228,6 +228,17 @@ export default function RunListPage() {
       ),
     },
     {
+      title: '执行人',
+      dataIndex: 'operator',
+      key: 'operator',
+      width: 110,
+      // operator 为 null 表示历史/系统触发；优先展示 nickname，缺省回退 username
+      render: (_: string | null, record: RunResponse) =>
+        record.operator
+          ? (record.operator_nickname || record.operator)
+          : <span style={{ color: '#7C7F88' }}>系统</span>,
+    },
+    {
       title: '开始时间',
       dataIndex: 'started_at',
       key: 'started_at',

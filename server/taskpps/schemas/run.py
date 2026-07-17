@@ -43,6 +43,10 @@ class RunResponse(BaseModel):
     version_changed: bool = False
     status: RunStatus
     error: str | None = None
+    # 触发运行的登录用户 username；None 表示历史/系统触发
+    operator: str | None = None
+    # 触发人展示名（nickname）；operator 为 None 时也为 None
+    operator_nickname: str | None = None
     params: dict[str, Any] = {}
     console_log_path: str = ""
     started_at: datetime | None = None
@@ -70,6 +74,8 @@ class RunResponse(BaseModel):
             "version_changed": False,
             "status": obj.status,
             "error": getattr(obj, "error", None),
+            "operator": getattr(obj, "operator", None),
+            "operator_nickname": getattr(obj, "operator_nickname", None),
             "params": json.loads(obj.params) if isinstance(obj.params, str) else (obj.params or {}),
             "console_log_path": getattr(obj, "console_log_path", ""),
             "started_at": obj.started_at,

@@ -100,6 +100,46 @@ async def test_get_run_not_found(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0990", domain="server/api", priority="P1")
+async def test_run_records_operator_and_nickname(app, setup_project, tmp_project, db_engine):
+    """触发运行应记录 operator(username)，且读接口解析出 nickname。"""
+    import taskpps.config as cfg
+    from taskpps.auth.security import create_access_token, ensure_jwt_secret
+    from taskpps.db.engine import get_session_factory
+    from taskpps.models.user import User, UserRole
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+    ensure_jwt_secret()
+
+    # 预置一个用户，供 operator nickname 解析
+    async with get_session_factory()() as session:
+        session.add(
+            User(username="alice", nickname="Alice", role=UserRole.USER, password_hash="x")
+        )
+        await session.commit()
+
+    token = create_access_token("alice", "user")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/runs/",
+            json={"definition_id": await resolve_def_id(client, "deploy.yaml"), "params": {}},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert create_resp.status_code in (200, 201)
+        run_id = create_resp.json()["id"]
+
+        get_resp = await client.get(f"/api/runs/{run_id}")
+        assert get_resp.status_code == 200
+        data = get_resp.json()
+        assert data["operator"] == "alice"
+        assert data["operator_nickname"] == "Alice"
+
+
+@pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0986", domain="server/api", priority="P2")
 async def test_create_run_invalid(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg

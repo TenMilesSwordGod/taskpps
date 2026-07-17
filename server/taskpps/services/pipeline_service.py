@@ -42,6 +42,26 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+async def _resolve_operator_nicknames(
+    session: Any, usernames: set[str]
+) -> dict[str, str]:
+    """批量将触发运行的 username 映射为展示用 nickname。
+
+    设计决策：JWT 仅携带 sub(username) 不携带 nickname，故读 runs 时按需
+    查 users 表做映射；一次性批量查询避免 N+1。传入空集合直接返回空 dict。
+    """
+    if not usernames:
+        return {}
+    from sqlalchemy import select
+
+    from taskpps.models.user import User
+
+    result = await session.execute(
+        select(User.username, User.nickname).where(User.username.in_(usernames))
+    )
+    return {row[0]: row[1] for row in result.fetchall()}
+
+
 def _compute_duration_ms(
     started_at: datetime | None,
     finished_at: datetime | None,
@@ -143,6 +163,7 @@ class PipelineService:
         definition_id: str,
         params: dict[str, Any] | None = None,
         project_id: str | None = None,
+        operator: str | None = None,
     ) -> dict:
         from taskpps.db.repository import PipelineDefinitionRepository
 
@@ -210,6 +231,7 @@ class PipelineService:
                 pipeline_version=pipeline_version,
                 project_id=project_id,
                 project_workdir=str(project_workdir) if project_workdir else None,
+                operator=operator,
             )
 
     async def _create_run_locked(
@@ -223,6 +245,7 @@ class PipelineService:
         pipeline_version: str,
         project_id: str | None = None,
         project_workdir: str | None = None,
+        operator: str | None = None,
     ) -> dict:
         # The caller is expected to hold PipelineService._get_pipeline_lock(pipeline_id).
         async with get_session_factory()() as session:
@@ -261,6 +284,7 @@ class PipelineService:
                 project_id=project_id,
                 display_name=display_name,
                 definition_id=definition_id,
+                operator=operator,
             )
 
             task_run_ids = {}
@@ -372,6 +396,10 @@ class PipelineService:
             project_name = await _resolve_project_name(getattr(run, "project_id", None))
             server_now = datetime.now(timezone.utc)
 
+            # 解析触发人展示名（nickname）；operator 为空表示历史/系统触发
+            operator = getattr(run, "operator", None)
+            operator_map = await _resolve_operator_nicknames(session, {operator} if operator else set())
+
             return {
                 "id": run.id,
                 "pipeline_name": run.pipeline_name,
@@ -382,6 +410,8 @@ class PipelineService:
                 "project_name": project_name,
                 "display_name": getattr(run, "display_name", ""),
                 "status": run.status,
+                "operator": operator,
+                "operator_nickname": operator_map.get(operator) if operator else None,
                 "error": getattr(run, "error", None),
                 "params": params,
                 "console_log_path": console_log_path,
@@ -425,6 +455,10 @@ class PipelineService:
             project_ids = {getattr(r, "project_id", None) for r in runs}
             project_name_map = await _batch_resolve_project_names(project_ids)
 
+            # 批量解析触发人展示名（避免 N+1 查询）
+            operators = {getattr(r, "operator", None) for r in runs} - {None}
+            operator_nickname_map = await _resolve_operator_nicknames(session, operators)
+
             server_now = datetime.now(timezone.utc)
             items = []
             for run in runs:
@@ -452,6 +486,8 @@ class PipelineService:
                         "project_name": project_name,
                         "display_name": getattr(run, "display_name", ""),
                         "status": run.status,
+                        "operator": getattr(run, "operator", None),
+                        "operator_nickname": operator_nickname_map.get(getattr(run, "operator", None)),
                         "error": getattr(run, "error", None),
                         "params": params,
                         "console_log_path": console_log_path,

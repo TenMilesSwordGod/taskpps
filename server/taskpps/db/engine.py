@@ -131,6 +131,7 @@ _MIGRATIONS = {
         ("display_name", "TEXT NOT NULL DEFAULT ''"),
         ("definition_id", "TEXT"),
         ("snapshot_content", "TEXT"),
+        ("operator", "TEXT"),
     ],
     "task_runs": [
         ("subpipeline_name", "TEXT NOT NULL DEFAULT ''"),

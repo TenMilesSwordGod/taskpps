@@ -80,6 +80,8 @@ export default function PipelineListPage() {
             task_count: folderPipelines.reduce((s, c) => s + c.task_count, 0),
             subpipeline_count: folderPipelines.reduce((s, c) => s + c.subpipeline_count, 0),
             last_run: null,
+            last_operator: null,
+            last_operator_nickname: null,
             success_rate:
               folderPipelines.reduce((s, c) => s + c.success_rate, 0) / Math.max(folderPipelines.length, 1),
             recent_runs: [],
@@ -110,6 +112,8 @@ export default function PipelineListPage() {
           task_count: projectPipelines.reduce((s, c) => s + c.task_count, 0),
           subpipeline_count: projectPipelines.reduce((s, c) => s + c.subpipeline_count, 0),
           last_run: null,
+          last_operator: null,
+          last_operator_nickname: null,
           success_rate: projectPipelines.length > 0
             ? projectPipelines.reduce((s, c) => s + c.success_rate, 0) / projectPipelines.length
             : 0,
@@ -301,6 +305,20 @@ export default function PipelineListPage() {
         if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88' }}>--</span>;
         if (!record.last_run) return '-';
         return <StatusTag status={record.last_run.status as RunStatus} />;
+      },
+    },
+    {
+      title: '最后操作人',
+      key: 'last_operator',
+      width: 110,
+      // 无运行历史 → 显示「-」；有运行但触发人字段为空（历史运行）→ 显示「系统」
+      render: (_: unknown, record: Row) => {
+        if (record.kind !== 'pipeline') return <span style={{ color: '#7C7F88' }}>--</span>;
+        if (!record.last_run) return '-';
+        if (record.last_operator) {
+          return record.last_operator_nickname || record.last_operator;
+        }
+        return <span style={{ color: '#7C7F88' }}>系统</span>;
       },
     },
     {

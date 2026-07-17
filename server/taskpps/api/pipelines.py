@@ -155,6 +155,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
                 recent_runs = [{"task_summary": recent_summaries.get(r.id, {})} for r in recent_runs_data]
 
                 last_run = None
+                last_operator = None
                 if recent_runs_data:
                     r = recent_runs_data[0]
                     last_run = {
@@ -162,6 +163,8 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "status": r.status,
                         "created_at": r.created_at.isoformat() if r.created_at else None,
                     }
+                    # 最近一次运行的触发人（username），用于「最后操作人」展示
+                    last_operator = getattr(r, "operator", None)
 
                 total_count = await run_repo.count_runs(definition_id=def_id) if def_id else 0
                 success_count = await run_repo.count_runs(definition_id=def_id, status="success") if def_id else 0
@@ -180,6 +183,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "task_count": task_count,
                         "subpipeline_count": subpipeline_count,
                         "last_run": last_run,
+                        "last_operator": last_operator,
                         "success_rate": success_rate,
                         "recent_runs": recent_runs,
                         # v1 (2026-07): issue #195 — 合法 pipeline 的校验字段
@@ -212,6 +216,18 @@ async def list_pipelines(project_id: str | None = Query(None)):
                         "raw_content": inv.get("raw_content", ""),
                     }
                 )
+
+    # 批量解析「最后操作人」昵称（避免 N+1 查询）：一次查 users 表做 username→nickname 映射
+    operators = {it.get("last_operator") for it in items} - {None}
+    operator_nickname_map: dict[str, str] = {}
+    if operators:
+        from taskpps.services.pipeline_service import _resolve_operator_nicknames
+
+        async with get_session_factory()() as session:
+            operator_nickname_map = await _resolve_operator_nicknames(session, operators)
+    for it in items:
+        op = it.get("last_operator")
+        it["last_operator_nickname"] = operator_nickname_map.get(op) if op else None
 
     return {"items": items}
 
