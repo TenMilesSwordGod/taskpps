@@ -240,6 +240,11 @@ class AgentExecutor(BaseExecutor):
         signal_name = result.get("signal_name", "")
         error = result.get("error", "")
 
+        # v2 (2026-07): 判断是否为基础设施故障（connection lost）。
+        # 基础设施故障意味着 agent 连接断开而非任务本身逻辑失败，
+        # 后续 task 同样会因为连接断开而无法执行，必须 block（Issue #202）。
+        is_infra_failure = error == "connection lost"
+
         self._log(log_path, f"[INFO] Exit code: {exit_code}\n")
         if signal_name:
             self._log(log_path, f"[ERROR] Process killed by {signal_name} (exit_code={exit_code})\n")
@@ -250,6 +255,7 @@ class AgentExecutor(BaseExecutor):
             exit_code=exit_code,
             stdout="".join(output_lines),
             stderr=error,
+            is_infrastructure_failure=is_infra_failure,
         )
 
     async def cancel(self) -> None:

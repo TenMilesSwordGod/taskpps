@@ -586,6 +586,9 @@ class PipelineRunner:
         self._write_pipeline_log("INFO", f"SubPipeline '{sub_name}' has {len(levels)} execution levels")
 
         failed_tasks: set[str] = set()
+        # v2 (2026-07): 追踪基础设施故障（如 connection lost）的 task，
+        # 这些 task 即使 on_failure=continue 也必须 block 后续 task（Issue #202）
+        infra_failed_tasks: set[str] = set()
         completed_tasks: set[str] = set()
         task_error_details: list[str] = []  # 收集每个失败任务的根因
         strategy = sub.config.execution_strategy
@@ -614,6 +617,11 @@ class PipelineRunner:
                         if dep_task is None:
                             should_skip = True
                             break
+                        # v2 (2026-07): 基础设施故障（如 connection lost）始终 block，
+                        # 因为后续 task 同样会因为基础设施问题而无法执行（Issue #202）
+                        if qualified_dep in infra_failed_tasks:
+                            should_skip = True
+                            break
                         # 当前 task 或失败依赖 task 任一设置 on_failure=continue 即不跳过
                         task_on_failure = task.on_failure or sub.config.on_failure
                         dep_on_failure = dep_task.on_failure or sub.config.on_failure
@@ -628,6 +636,12 @@ class PipelineRunner:
                         if task_run_id:
                             await task_repo.update_task_status(task_run_id, TaskStatus.SKIPPED)
                     failed_tasks.add(qualified_name)
+                    # v2 (2026-07): 基础设施故障沿依赖链传播，
+                    # 被基础设施故障 block 的 task 也视为基础设施故障（Issue #202）
+                    for dep in task.depends_on:
+                        if f"{sub.name}.{dep}" in infra_failed_tasks:
+                            infra_failed_tasks.add(qualified_name)
+                            break
                     self._write_pipeline_log("SKIP", f"Task '{qualified_name}' skipped (dependency failed)")
                     continue
 
@@ -719,6 +733,10 @@ class PipelineRunner:
                         failed_tasks.add(qualified_name)
                         if isinstance(result, ExecutorResult):
                             exit_code = result.exit_code
+                            # v2 (2026-07): 基础设施故障标记传播到 infra_failed_tasks，
+                            # 使后续 task 即使 on_failure=continue 也被 block（Issue #202）
+                            if result.is_infrastructure_failure:
+                                infra_failed_tasks.add(qualified_name)
                             # 收集任务错误根因(取 stderr 前 200 字符,避免 run.error 过长)
                             err_detail = (result.stderr or "").strip()[:200]
                             if err_detail:
