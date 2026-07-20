@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, DragEvent, useState } from 'react';
+import { useCallback, useMemo, useRef, DragEvent, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   ReactFlow,
   Background,
@@ -60,6 +60,10 @@ const NODE_TYPES: NodeTypes = {
   editorPipeline: EditorPipelineNode,
 };
 
+export interface WorkflowEditorRef {
+  deleteNode: (nodeId: string) => void;
+}
+
 interface WorkflowEditorProps {
   pipeline?: PipelineDetail;
   taskStatuses?: Record<string, unknown>;
@@ -79,13 +83,13 @@ interface ContextMenuState {
   nodeType?: string;
 }
 
-export default function WorkflowEditor({
+const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(function WorkflowEditor({
   pipeline,
   selectedNodeId,
   onNodeSelect,
   onGraphChange,
   readOnly = false,
-}: WorkflowEditorProps) {
+}, ref) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
 
@@ -565,6 +569,11 @@ export default function WorkflowEditor({
     return [];
   }, [contextMenu, nodes, handleAddNodeFromContext, handleToggleCollapse, handleNodeProperties, handleDeleteNode]);
 
+  // v4 (2026-07): 暴露 handleDeleteNode 给父组件（PropertyPanel 删除路径）
+  useImperativeHandle(ref, () => ({
+    deleteNode: (nodeId: string) => handleDeleteNode(nodeId),
+  }), [handleDeleteNode]);
+
   // 同步选中状态到节点
   const syncedNodes = useMemo(
     () =>
@@ -806,7 +815,7 @@ export default function WorkflowEditor({
       </div>
     </div>
   );
-}
+});
 
 /** MiniMap 节点着色 */
 function miniMapColor(node: Node): string {
@@ -820,3 +829,5 @@ function miniMapColor(node: Node): string {
   if (node.type === 'editorPipeline') return '#f8fafc';
   return '#CBD5E1';
 }
+
+export default WorkflowEditor;

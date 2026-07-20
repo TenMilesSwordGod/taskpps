@@ -23,7 +23,7 @@ import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 import { useAppStore } from '@/stores/appStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
 import type { PipelineDetail, ValidationError } from '@/types';
-import WorkflowEditor from './workflow/WorkflowEditor';
+import WorkflowEditor, { type WorkflowEditorRef } from './workflow/WorkflowEditor';
 import NodePalette from './workflow/NodePalette';
 import PropertyPanel from './workflow/PropertyPanel';
 import { nodesToYaml } from './workflow/nodesToYaml';
@@ -76,6 +76,7 @@ export default function PipelineDetailPage() {
   const [editEdges, setEditEdges] = useState<Edge<EditorEdgeData>[]>([]);
   const [propertyPanelVisible, setPropertyPanelVisible] = useState(false);
   const [editingNode, setEditingNode] = useState<Node<EditorNodeData> | null>(null);
+  const workflowEditorRef = useRef<WorkflowEditorRef>(null);
 
   // 保存：正常模式用 by-id，文件模式用 by-file
   const saveByIdMutation = useSavePipelineById(!isFileMode ? definitionId : undefined);
@@ -140,9 +141,9 @@ export default function PipelineDetailPage() {
   }, []);
 
   // 编辑器节点删除
+  // v4 (2026-07): 委托给 WorkflowEditor 的 handleDeleteNode（单数据源）
   const handlePropertyDelete = useCallback((nodeId: string) => {
-    setEditNodes(prev => prev.filter(n => n.id !== nodeId));
-    setEditEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+    workflowEditorRef.current?.deleteNode(nodeId);
   }, []);
 
   // graph 变化回调
@@ -445,10 +446,12 @@ export default function PipelineDetailPage() {
           <>
             <div className="flex-1 min-w-0 overflow-hidden">
               <WorkflowEditor
-                pipeline={displayPipeline}
+                ref={workflowEditorRef}
+                pipeline={pipeline!}
                 selectedNodeId={selectedTaskId}
                 onNodeSelect={handleEditorNodeSelect}
                 onGraphChange={handleGraphChange}
+                readOnly={!editMode}
               />
             </div>
             <NodePalette />
