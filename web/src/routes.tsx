@@ -16,6 +16,8 @@ const ServersPage = lazy(() => import('@/features/servers/ServersPage'));
 const PluginListPage = lazy(() => import('@/features/plugins/PluginListPage'));
 // v1 (2026-07, issue #204): 登录页独立路由，不挂 AppLayout（spec: 全屏背景）
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
+// v1 (2026-07, issue #206): e2e 测试专用页面 — 绕过认证，独立渲染 WorkflowEditor
+const E2EWorkflowEditorPage = lazy(() => import('@/pages/E2EWorkflowEditorPage'));
 
 /** 路由级 Suspense fallback */
 function RouteFallback() {
@@ -73,6 +75,8 @@ function AppLayoutWithOutlet() {
  */
 const routes: RouteObject[] = [
   { path: '/login', element: wrap(<LoginPage />) },
+  // v1 (2026-07, issue #206): e2e 测试路由 — 脱离 AppLayout/RequireAuth，独立渲染 WorkflowEditor
+  { path: '/e2e/workflow-editor', element: wrap(<E2EWorkflowEditorPage />) },
   {
     element: <AppLayoutWithOutlet />,
     children: [
