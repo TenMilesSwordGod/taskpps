@@ -450,14 +450,29 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
   );
 
   // 从画布右键菜单添加节点
-  // postParentId: 当为 Post 父容器内右键添加 Post 子容器时传入，
-  // 用于把新节点归入该 Post 父容器（parentId）并以相对坐标定位。
+  // v6 (2026-07 / bug #41): 改为从 contextMenu 状态读取右键目标节点信息，
+  // 替代原 postParentId 参数方式。原因是原设计只考虑了 PostParent 一种容器，
+  // postParentId 参数仅能传递"是否 PostParent"的区分，SubPipeline 右键时该参数
+  // 为 undefined 导致新增节点始终落入画布根级（parentId=undefined, position=(200,200)）。
+  // 现在通过 contextMenu.nodeType 区分三种上下文（subpipeline / post_parent / canvas-root），
+  // 再根据上下文设置 parentId 与相对坐标，与 handleDrop 和 findDropParentContext 的
+  // 策略对齐。
   const handleAddNodeFromContext = useCallback(
-    (nodeTypeName: string, postParentId?: string) => {
-      // v5 (2026-07 / bug #37): 去掉硬编码 'canvas-root'，根据调用方传入的父容器上下文
-      // 决定落点上下文。Post 子容器必须落入 post_parent 上下文，否则沿用 canvas-root。
-      // 这样 validateDrop 的 R4（Post 父容器内仅允许 post_child）与 R3（每种最多 1 个）才能正确生效。
-      const parentContext: DropContext = postParentId ? 'post_parent' : 'canvas-root';
+    (nodeTypeName: string) => {
+      // 从当前右键上下文确定父容器类型和 parentId
+      let parentContext: DropContext = 'canvas-root';
+      let containerParentId: string | undefined;
+
+      if (contextMenu?.nodeId && contextMenu?.nodeType) {
+        if (contextMenu.nodeType === 'editorSubPipeline') {
+          parentContext = 'subpipeline';
+          containerParentId = contextMenu.nodeId;
+        } else if (contextMenu.nodeType === 'editorPostParent') {
+          parentContext = 'post_parent';
+          containerParentId = contextMenu.nodeId;
+        }
+      }
+
       const validationError = validateDrop(nodeTypeName, parentContext, nodes);
       if (validationError) {
         message.error(validationError);
@@ -466,7 +481,15 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       }
 
       const nodeId = `__new__${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      const position = { x: 200, y: 200 };
+
+      // v6 (2026-07 / bug #41): 容器内用相对坐标（使节点落在父容器可视区域内），
+      // 画布根级沿用原有默认位置，保证不破坏 canvas-root 分支。
+      // 注意(2026-07): 不引入 screenToFlowPosition（右键菜单无拖拽落点，坐标不可靠），
+      // 直接用简单偏移确保节点出现在父容器内合理位置。
+      let position = { x: 200, y: 200 };
+      if (containerParentId) {
+        position = { x: 20, y: 40 };
+      }
 
       // bug #35 关联：统一构造 newNode 后 setNodes + onGraphChange，
       // 保证右键新增节点实时同步父组件 editNodes，避免保存时丢失。
@@ -475,22 +498,26 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         newNode = {
           id: nodeId, type: 'editorSubPipeline', position,
           style: { width: 260, height: 140 },
+          parentId: containerParentId,
           data: { label: '新 SubPipeline', executionStrategy: 'sequential' },
         };
       } else if (nodeTypeName === 'task') {
         newNode = {
           id: nodeId, type: 'editorTask', position,
+          parentId: containerParentId,
           data: { task: { name: '新 Task', env: {}, retry: 0, depends_on: [] }, taskType: 'command', subpipelineName: '' },
         };
       } else if (nodeTypeName === 'post_parent') {
         newNode = {
           id: nodeId, type: 'editorPostParent', position,
           style: { width: 280, height: 150 },
+          parentId: containerParentId,
           data: { label: 'Post 处理容器' },
         };
       } else if (nodeTypeName === 'startend') {
         newNode = {
           id: nodeId, type: 'editorStartEnd', position,
+          parentId: containerParentId,
           data: { variant: 'start' },
         };
       } else if (nodeTypeName.startsWith('post_child_')) {
@@ -503,18 +530,18 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           post_child_always: 'always',
         };
         const postVariant = variantMap[nodeTypeName] || 'on_fail';
-        // 复用 yamlToNodes 的命名约定：`__postchild__<postParentId>_<variant>_<idx>`，
+        // 复用 yamlToNodes 的命名约定：`__postchild__<parentId>_<variant>_<idx>`，
         // 既保证 id 稳定可定位，也保证与初始反序列化生成的子节点 id 完全同构，便于后续双向同步。
         const siblingCount = nodes.filter(
-          (n) => n.type === 'editorPostChild' && n.parentId === postParentId && n.data?.postVariant === postVariant,
+          (n) => n.type === 'editorPostChild' && n.parentId === containerParentId && n.data?.postVariant === postVariant,
         ).length;
-        const childId = `__postchild__${postParentId}_${postVariant}_${siblingCount}`;
+        const childId = `__postchild__${containerParentId}_${postVariant}_${siblingCount}`;
         // Post 父容器内相对坐标：沿用 yamlToNodes 的容器内边距与纵向排列，确保子节点落在父容器内。
         newNode = {
           id: childId,
           type: 'editorPostChild',
           position: { x: 40, y: 40 + siblingCount * 80 },
-          parentId: postParentId,
+          parentId: containerParentId,
           data: {
             task: { name: '新 Post Task', env: {}, retry: 0, depends_on: [] },
             taskType: 'command',
@@ -532,7 +559,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       message.success(`已添加节点: ${nodeTypeName}`);
       setContextMenu(null);
     },
-    [setNodes, nodes, edges, onGraphChange],
+    [setNodes, nodes, edges, onGraphChange, contextMenu],
   );
 
   // === 工具栏操作 ===
@@ -592,6 +619,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       const items: MenuProps['items'] = [];
 
       // SubPipeline 内部右键 — 添加 Task
+      // v6 (2026-07 / bug #41): 不传 parentId，由 handleAddNodeFromContext 从 contextMenu 自行读取。
       if (node?.type === 'editorSubPipeline') {
         items.push({ key: 'add-task-inside', label: '添加 Task', onClick: () => handleAddNodeFromContext('task') });
       }
@@ -601,11 +629,11 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         const hasOnFail = nodes.some(n => n.type === 'editorPostChild' && n.data?.postVariant === 'on_fail');
         const hasOnSuccess = nodes.some(n => n.type === 'editorPostChild' && n.data?.postVariant === 'on_success');
         const hasAlways = nodes.some(n => n.type === 'editorPostChild' && n.data?.postVariant === 'always');
-        // bug #37: 传入当前右键的 Post 父容器 id，使新 Post 子节点 parentId 指向该父容器。
+        // v6 (2026-07 / bug #41): 不再传 contextMenu.nodeId!，父容器 id 由 handleAddNodeFromContext 从 contextMenu 状态自动读取。
         items.push(
-          { key: 'add-post-on-fail', label: '添加 on_fail 子容器', disabled: hasOnFail, onClick: () => handleAddNodeFromContext('post_child_on_fail', contextMenu.nodeId!) },
-          { key: 'add-post-on-success', label: '添加 on_success 子容器', disabled: hasOnSuccess, onClick: () => handleAddNodeFromContext('post_child_on_success', contextMenu.nodeId!) },
-          { key: 'add-post-always', label: '添加 always 子容器', disabled: hasAlways, onClick: () => handleAddNodeFromContext('post_child_always', contextMenu.nodeId!) },
+          { key: 'add-post-on-fail', label: '添加 on_fail 子容器', disabled: hasOnFail, onClick: () => handleAddNodeFromContext('post_child_on_fail') },
+          { key: 'add-post-on-success', label: '添加 on_success 子容器', disabled: hasOnSuccess, onClick: () => handleAddNodeFromContext('post_child_on_success') },
+          { key: 'add-post-always', label: '添加 always 子容器', disabled: hasAlways, onClick: () => handleAddNodeFromContext('post_child_always') },
         );
       }
 
