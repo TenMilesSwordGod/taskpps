@@ -32,7 +32,7 @@ import { yamlToNodes } from './yamlToNodes';
 import type { EditorNodeData, EditorEdgeData } from './yamlToNodes';
 import type { PipelineDetail } from '@/types';
 import { applyDagreLayout } from '@/utils/dagreLayout';
-import { validateDrop, findDropParentContext } from './validateDrop';
+import { validateDrop, findDropParentContext, getAbsolutePosition } from './validateDrop';
 
 /**
  * 可编辑工作流画布组件
@@ -232,9 +232,13 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       if (containerParentId) {
         const container = nodes.find((n) => n.id === containerParentId);
         if (container) {
+          // 注意(2026-07): 新节点的 position 需相对其直接父容器，而容器自身可能是嵌套节点
+          // （position 是相对它自己的父级的）。必须先换算容器的绝对坐标，再用落点绝对坐标相减，
+          // 才能得到正确的相对坐标，避免拖入嵌套容器时位置错位。
+          const absContainer = getAbsolutePosition(container, nodes);
           nodePosition = {
-            x: position.x - container.position.x,
-            y: position.y - container.position.y,
+            x: position.x - absContainer.x,
+            y: position.y - absContainer.y,
           };
           nodeParentId = containerParentId;
         }

@@ -21,6 +21,34 @@ import type { EditorNodeData } from './yamlToNodes';
 export type DropContext = 'canvas-root' | 'subpipeline' | 'post_parent';
 
 /**
+ * v3 (2026-07): 递归计算节点的绝对画布坐标。
+ *
+ * 为什么需要：ReactFlow 中带 parentId 的子节点 position 是“相对父容器”的，
+ * 而非绝对画布坐标。多层嵌套时（如 SubPipeline 内再放 SubPipeline），
+ * 子节点的 position 只相对其直接父容器。若不换算为绝对坐标，直接用落点的
+ * 绝对 flowPosition 与节点的（相对）position 做 bounds 比较会错位，
+ * 导致落点落在嵌套容器内部却被漏判为 canvas-root，R1（SubPipeline 不可嵌套）因此失效。
+ * 这里沿 parentId 链递归累加父节点 position 得到绝对坐标。
+ */
+export function getAbsolutePosition(
+  node: Node<EditorNodeData>,
+  nodes: Node<EditorNodeData>[],
+): { x: number; y: number } {
+  let { x, y } = node.position;
+  let current: Node<EditorNodeData> | undefined = node.parentId
+    ? nodes.find((n) => n.id === node.parentId)
+    : undefined;
+  while (current) {
+    x += current.position.x;
+    y += current.position.y;
+    current = current.parentId
+      ? nodes.find((n) => n.id === current!.parentId)
+      : undefined;
+  }
+  return { x, y };
+}
+
+/**
  * v2 (2026-07): 根据 drop 位置动态计算 parentContext
  * 通过检查 drop 的 flowPosition 是否落在某个容器节点内部来决定目标上下文
  *
@@ -39,11 +67,15 @@ export function findDropParentContext(
     // 节点未完成测量（首次渲染），跳过
     if (!w || !h) continue;
 
+    // 注意(2026-07): 嵌套子节点 position 是相对父容器的，必须先换算为绝对画布坐标，
+    // 才能与已转成绝对坐标的 flowPosition 做正确的 bounds 比较。
+    const absPos = getAbsolutePosition(node, nodes);
+
     const isInside =
-      flowPosition.x >= node.position.x &&
-      flowPosition.x <= node.position.x + w &&
-      flowPosition.y >= node.position.y &&
-      flowPosition.y <= node.position.y + h;
+      flowPosition.x >= absPos.x &&
+      flowPosition.x <= absPos.x + w &&
+      flowPosition.y >= absPos.y &&
+      flowPosition.y <= absPos.y + h;
 
     if (!isInside) continue;
 
