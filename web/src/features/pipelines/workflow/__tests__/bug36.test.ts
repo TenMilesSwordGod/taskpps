@@ -86,7 +86,9 @@ describe('Bug#36 合法 drop 不应被坐标换算误拒', () => {
     expect(ctx.parentId).toBe('outer');
   });
 
-  it('落在 Task 父容器内部应识别为合法上下文且 task 类型通过校验', () => {
+  // v3 (2026-07): Task 现被识别为容器，落点在内层 Task 时返回 task 上下文
+  // 此时 task 类型拖入 task 会被 R7 拒绝（Task 不可嵌套 Task），验证 validateDrop 正确拦截
+  it('落在 Task 父容器内部应返回 task 上下文且 task 类型被 R7 拒绝', () => {
     const outer = {
       id: 'outer',
       type: 'editorSubPipeline',
@@ -109,9 +111,9 @@ describe('Bug#36 合法 drop 不应被坐标换算误拒', () => {
 
     // 绝对落点 (180,180) 落在 Task 绝对范围 (150~270, 150~230) 内
     const ctx = findDropParentContext({ x: 180, y: 180 }, nodes);
-    // 注意：当前 findDropParentContext 仅识别 SubPipeline / PostParent 为容器，
-    // Task 不作为 drop 父容器，落在其内部仍按最外层容器（subpipeline）处理，符合 R5 设计。
-    expect(ctx.context).toBe('subpipeline');
-    expect(ctx.parentId).toBe('outer');
+    expect(ctx.context).toBe('task');
+    expect(ctx.parentId).toBe('task1');
+    // Task 不可嵌套 Task，被 R7 拒绝
+    expect(validateDrop('task', ctx.context, nodes)).not.toBeNull();
   });
 });

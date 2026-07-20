@@ -18,7 +18,8 @@ import type { EditorNodeData } from './yamlToNodes';
  * @returns null 表示通过校验，string 返回不通过的原因（用于 toast/alert 显示）
  */
 
-export type DropContext = 'canvas-root' | 'subpipeline' | 'post_parent';
+// v3 (2026-07): 新增 'task' 上下文，使原子节点可落入 Task 容器而非被漏判到外层容器
+export type DropContext = 'canvas-root' | 'subpipeline' | 'post_parent' | 'task';
 
 /**
  * v3 (2026-07): 递归计算节点的绝对画布坐标。
@@ -57,10 +58,17 @@ export function getAbsolutePosition(
  *
  * @returns { context: DropContext, parentId?: string } - 上下文和容器节点 id
  */
+// v3 (2026-07): 重写为深度优先匹配
+// 为什么不用 early return：Task 可能嵌套在 SubPipeline 内部，若按数组顺序匹配且
+// SubPipeline 在前，会返回外层容器而非最内层的 Task。改为遍历所有节点，选嵌套深度
+// 最大的容器返回，确保拖入深层容器时落点归入最具体的容器上下文。
 export function findDropParentContext(
   flowPosition: { x: number; y: number },
   nodes: Node<EditorNodeData>[],
 ): { context: DropContext; parentId?: string } {
+  let bestMatch: { context: DropContext; parentId: string } | null = null;
+  let bestDepth = -1;
+
   for (const node of nodes) {
     const w = node.width;
     const h = node.height;
@@ -79,15 +87,34 @@ export function findDropParentContext(
 
     if (!isInside) continue;
 
-    if (node.type === 'editorSubPipeline') {
-      return { context: 'subpipeline', parentId: node.id };
+    // 当前节点是哪种容器
+    let context: DropContext | null = null;
+    if (node.type === 'editorTask') {
+      context = 'task';
+    } else if (node.type === 'editorSubPipeline') {
+      context = 'subpipeline';
+    } else if (node.type === 'editorPostParent') {
+      context = 'post_parent';
     }
-    if (node.type === 'editorPostParent') {
-      return { context: 'post_parent', parentId: node.id };
+    if (!context) continue; // editorPostChild 等非容器节点跳过
+
+    // 计算嵌套深度：沿 parentId 链计数
+    let depth = 0;
+    let cur: Node<EditorNodeData> | undefined = node;
+    while (cur.parentId) {
+      depth++;
+      cur = nodes.find((n) => n.id === cur!.parentId);
+      if (!cur) break;
     }
-    // editorTask / editorPostChild 等非容器节点忽略
+
+    // 深度更大的容器优先（子容器比父容器更具体）
+    if (depth > bestDepth) {
+      bestDepth = depth;
+      bestMatch = { context, parentId: node.id };
+    }
   }
-  return { context: 'canvas-root' };
+
+  return bestMatch ?? { context: 'canvas-root' };
 }
 
 export function validateDrop(
@@ -128,6 +155,17 @@ export function validateDrop(
     if (!['task', 'post_parent', 'post_child'].includes(nodeType)) {
       return `${nodeType} 类型不可放入 SubPipeline 内部`;
     }
+  }
+
+  // v3 (2026-07): R7 — Task 容器内只允许原子行为节点
+  // 为什么：Task 是原子节点（CMD/STEP/PLUGIN/INVOKE）的父容器，
+  // 不允许容器嵌套（SubPipeline/Task/Post 等放入 Task 无意义）
+  if (parentContext === 'task') {
+    const atomicTypes = ['task_atomic_cmd', 'task_atomic_step', 'task_atomic_plugin', 'task_atomic_invoke'];
+    if (atomicTypes.includes(nodeType)) {
+      return null; // 原子节点可以放入 Task
+    }
+    return 'Task 容器内只允许原子行为节点（CMD/STEP/PLUGIN/INVOKE）';
   }
 
   // R3: Post 子容器各类型最多 1 个（在 Post 父容器内部时校验）

@@ -148,6 +148,51 @@ describe('R6: Start/End 节点唯一性', () => {
   });
 });
 
+// v3 (2026-07): R7 — Task 容器内只允许原子行为节点
+describe('R7: Task 容器内只允许原子行为节点', () => {
+  it('cmd 原子节点放入 task 应通过', () => {
+    expect(validateDrop('task_atomic_cmd', 'task', [])).toBeNull();
+  });
+
+  it('step 原子节点放入 task 应通过', () => {
+    expect(validateDrop('task_atomic_step', 'task', [])).toBeNull();
+  });
+
+  it('plugin 原子节点放入 task 应通过', () => {
+    expect(validateDrop('task_atomic_plugin', 'task', [])).toBeNull();
+  });
+
+  it('invoke 原子节点放入 task 应通过', () => {
+    expect(validateDrop('task_atomic_invoke', 'task', [])).toBeNull();
+  });
+
+  it('Task 容器不可放入另一个 Task', () => {
+    const result = validateDrop('task', 'task', []);
+    expect(result).toContain('只允许原子行为节点');
+  });
+
+  it('SubPipeline 不可放入 Task', () => {
+    const result = validateDrop('subpipeline', 'task', []);
+    expect(result).toContain('只允许原子行为节点');
+  });
+
+  // 注意(2026-07): R2 先于 R7 拦截 post_parent，返回"仅可放置在根层级"
+  it('Post 父容器不可放入 Task（被 R2 拦截）', () => {
+    const result = validateDrop('post_parent', 'task', []);
+    expect(result).not.toBeNull();
+  });
+
+  it('Post 子容器不可放入 Task', () => {
+    const result = validateDrop('post_child_on_fail', 'task', []);
+    expect(result).toContain('只允许原子行为节点');
+  });
+
+  it('startend 不可放入 Task', () => {
+    const result = validateDrop('startend', 'task', []);
+    expect(result).toContain('只允许原子行为节点');
+  });
+});
+
 describe('边界场景', () => {
   it('canvas-root 中拖入 task 应通过', () => {
     expect(validateDrop('task', 'canvas-root', [])).toBeNull();
@@ -216,7 +261,8 @@ describe('findDropParentContext: 动态计算 drop 位置下的父容器', () =>
     expect(result.parentId).toBeUndefined();
   });
 
-  it('drop 在 Task 节点内部 → canvas-root（Task 非容器）', () => {
+  // v3 (2026-07): Task 现在是合法容器，返回 task 上下文
+  it('drop 在 Task 节点内部 → task', () => {
     const nodes: Node<EditorNodeData>[] = [
       makeNode({
         id: 't1',
@@ -227,8 +273,8 @@ describe('findDropParentContext: 动态计算 drop 位置下的父容器', () =>
       }),
     ];
     const result = findDropParentContext({ x: 50, y: 25 }, nodes);
-    expect(result.context).toBe('canvas-root');
-    expect(result.parentId).toBeUndefined();
+    expect(result.context).toBe('task');
+    expect(result.parentId).toBe('t1');
   });
 
   it('节点未测量（width/height 为 undefined）时跳过 → canvas-root', () => {
