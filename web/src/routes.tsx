@@ -18,6 +18,8 @@ const PluginListPage = lazy(() => import('@/features/plugins/PluginListPage'));
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 // v1 (2026-07, issue #206): e2e 测试专用页面 — 绕过认证，独立渲染 WorkflowEditor
 const E2EWorkflowEditorPage = lazy(() => import('@/pages/E2EWorkflowEditorPage'));
+// v1 (2026-07, issue #206): e2e 测试专用页面 — PipelineDetailPage 集成测试
+const E2EPipelineDetailPage = lazy(() => import('@/pages/E2EPipelineDetailPage'));
 
 /** 路由级 Suspense fallback */
 function RouteFallback() {
@@ -77,6 +79,8 @@ const routes: RouteObject[] = [
   { path: '/login', element: wrap(<LoginPage />) },
   // v1 (2026-07, issue #206): e2e 测试路由 — 脱离 AppLayout/RequireAuth，独立渲染 WorkflowEditor
   { path: '/e2e/workflow-editor', element: wrap(<E2EWorkflowEditorPage />) },
+  // v1 (2026-07, issue #206): e2e 测试路由 — PipelineDetailPage 集成测试
+  { path: '/e2e/pipeline-detail', element: wrap(<E2EPipelineDetailPage />) },
   {
     element: <AppLayoutWithOutlet />,
     children: [
