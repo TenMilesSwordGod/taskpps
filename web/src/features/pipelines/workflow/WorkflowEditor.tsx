@@ -382,6 +382,21 @@ export default function WorkflowEditor({
     [setNodes, setEdges, selectedNodeId, onNodeSelect],
   );
 
+  // v4 (2026-07): 键盘 Delete/Backspace 删除选中节点
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNodeId) {
+        const node = nodes.find(n => n.id === selectedNodeId);
+        // 不允许删除哨兵节点（Start/End/Pipeline）
+        if (node && !['__start__', '__end__', '__pipeline__'].includes(node.id)) {
+          event.preventDefault();
+          handleDeleteNode(selectedNodeId);
+        }
+      }
+    },
+    [selectedNodeId, nodes, handleDeleteNode],
+  );
+
   // 折叠/展开节点
   const handleToggleCollapse = useCallback(
     (nodeId: string) => {
@@ -563,6 +578,7 @@ export default function WorkflowEditor({
   return (
     <div
       ref={wrapperRef}
+      tabIndex={0}
       style={{
         width: '100%',
         height: '100%',
@@ -570,7 +586,9 @@ export default function WorkflowEditor({
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
+        outline: 'none',
       }}
+      onKeyDown={handleKeyDown}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
