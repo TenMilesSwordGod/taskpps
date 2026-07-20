@@ -132,25 +132,42 @@ AntD `Table` 列出全部已加载的流水线（需后端新增 `GET /api/pipel
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### 4.3.2 DAG 节点设计
+#### 4.3.2 层级模型与节点设计
 
-- **子流水线节点（SubPipelineNode）**：分组容器，显示子流水线名与任务数。
-- **任务节点（TaskNode）**：根据 `TaskYAML.get_task_type()` 返回值区分 5 种视觉样式：
+**层级结构**：
 
-  | 类型 | 视觉特征 |
-  |---|---|
-  | command | 默认圆形/圆角矩形，命令式图标 |
-  | invoke | 调用图标，蓝色 |
-  | steps | 多步骤图标，紫色 |
-  | git | Git 分支图标，橙色 |
-  | nexus | 上传/下载图标，青色 |
+| 层级 | 名称 | 形态 | 说明 |
+|------|------|------|------|
+| L0 | Pipeline | 淡灰虚线边界框（画布根） | 内含 SubPipeline / Post 父容器 / Start / End |
+| L1 | SubPipeline | 蓝色虚线边界容器 | 仅含 Task，不可直接放原子行为 |
+| L2 | Task | 绿色虚线边界容器 | 多原子容器，内部含 CMD/STEP/PLUGIN/INVOKE 原子节点 |
+| L2 | Post 父容器 | 红色虚线边界容器（根层级） | 内含 on_fail/on_success/always 子容器 |
+| L3 | Post 子容器 | Post 父容器内的钩子 | 多个原子节点，仅支持线性链式，无出端口 |
+| L3 | 原子行为 | 叶子节点 | CMD / STEP / PLUGIN / INVOKE，1 in + 1 out |
+
+**节点类型**：
+
+- **SubPipelineNode**：蓝色虚线框容器，显示子流水线名与任务数。
+- **TaskNode**：绿色虚线框容器，显示任务名及内部原子计数。
+- **PostContainerNode**：红色虚线框，含 on_fail/on_success/always 三个子容器插槽。
+- **StartEndNode**：Start/End 哨兵节点。
+- **原子节点**（通过选中 Task 容器后在属性面板中查看/编辑）：
+
+  | 类型 | 来源 | 视觉特征 |
+  |---|---|---|
+  | CMD | YAML `command`/`commands` | 等宽字体，命令式图标 |
+  | STEP | YAML `steps` 列表项 | 多步骤图标，紫色 |
+  | PLUGIN | YAML `plugin` | 插件图标 |
+  | INVOKE | YAML `invoke` | 调用图标，蓝色 |
 
 - 节点状态色（运行视图下）：pending=灰、running=蓝（脉冲）、success=绿、failed=红、skipped=黄。
 
 #### 4.3.3 边（Edges）
 
-- 任务级 `depends_on` → 任务间实线箭头。
-- 子流水线级 `depends_on` → 子流水线间虚线箭头。
+- **SubPipeline 间依赖**：`depends_on` → 蓝色虚线箭头。
+- **Task 间依赖**：`depends_on` → 灰色实线箭头（有 when 条件时中间插入决策菱形节点，yes=绿色实线、no=灰色虚线）。
+- **原子间顺序**：Task/Post 容器内部原子按 YAML 列表顺序 + `execution_strategy` 决定执行顺序（隐式），不渲染节点间连线。
+- **Post 从属关系**：Post 父容器底部虚线箭头连接到根层级（表示"后处理阶段"）。
 
 #### 4.3.4 属性面板（Properties Panel）
 
@@ -163,15 +180,17 @@ AntD `Table` 列出全部已加载的流水线（需后端新增 `GET /api/pipel
 - 用户偏好（当前宽度、是否最大化）持久化到 `localStorage`，key 按 `pipeline:file` 维度隔离。
 - 默认宽度 420px，最小 320px，最大 70vw。
 
-**面板内容（Tab 结构）**：
+**面板内容（Tab 结构）——选中 Task 容器时**：
 
 | Tab | 字段 |
 |---|---|
 | 基本 | 名称、类型（只读）、描述 |
-| 源码 | 根据 `task_type` 动态渲染：command 文本框、invoke 表单、steps 列表、git 表单、nexus 表单 |
+| 策略 | execution_strategy、when、on_failure（执行策略） |
 | 环境变量 | Key-Value 动态列表 |
-| 依赖 | 多选（其他任务名） |
-| 高级 | timeout、retry、on_failure、when |
+| 依赖 | 多选（其他 Task 名） |
+| 高级 | timeout、retry、端口管理 |
+
+**选中原子节点时**：直接复用 YAML 原始字段，不做独立定义。
 
 > **V1 编辑策略**：所有表单项 `disabled` 灰显，但保留「复制为 YAML」按钮方便排错。V2 通过 `editable` 全局开关放开 `disabled` 即可，无需重构面板。
 
@@ -183,6 +202,38 @@ AntD `Table` 列出全部已加载的流水线（需后端新增 `GET /api/pipel
 - 复制图片到剪贴板
 - 自动布局（调用 dagre / elk 进行层级布局）
 - 适应窗口
+
+#### 4.3.6 右键菜单
+
+**在 Task 内部空白处右键**（新增原子）：
+```text
+┌──────────────────────┐
+│ 添加原子行为 ▶        │
+│  ├ ⌨ CMD             │
+│  ├ ⚙ STEP            │
+│  ├ 🧩 PLUGIN         │
+│  └ 🔗 INVOKE         │
+├──────────────────────┤
+│ 删除 Task            │
+│ 属性...              │
+└──────────────────────┘
+```
+
+**在画布空白处右键**：
+```text
+┌──────────────────────┐
+│ 添加 SubPipeline      │
+│ 适应窗口              │
+│ 自动布局              │
+└──────────────────────┘
+```
+
+#### 4.3.7 验证规则
+
+- **Task 非空**：Task 内部至少包含 1 个原子行为节点，且进/出端子必须连通（保存时）。
+- **Post 子容器非空**：每个 Post 子容器内至少 1 个原子行为，进端口已路由连通（保存时）。
+- **Post 子容器无分叉**：Post 子容器内部仅允许线性链式拓扑（保存时检测）。
+- **原子列表顺序合法**：Task/Post 内部原子列表不能为空循环引用（保存时检测）。
 
 ### 4.4 运行历史（/runs）
 
@@ -358,7 +409,5 @@ server/taskpps/
 | SSE 在反向代理下被缓冲 | 日志不实时 | 文档明确禁用 nginx proxy_buffering（V1 不经 Nginx，但保留此条以备部署变化） |
 | CORS 未配置 | 前端无法调 API | V1 启动前与后端确认 CORS 白名单 |
 | Python 静态文件与 SPA 路由冲突 | 刷新 404 | 后端 SPA fallback：未匹配 `/api/` 或静态资源时回退到 `index.html` |
-
----
 
 > 文档结束。V1 进入实现阶段。

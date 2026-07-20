@@ -2,13 +2,14 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Input, Empty, Tag, Tooltip, Alert, Button, Segmented } from 'antd';
 import {
   Search, Server, RefreshCw, AlertCircle, Radar,
-  ChevronRight, FolderOpen,
+  ChevronRight, FolderOpen, Clock,
 } from 'lucide-react';
 import { useAgentsWithConfig } from '@/api/agents';
 import ServerCard from './ServerCard';
 import HostInfoModal from './HostInfoModal';
 import ReplModal from './ReplModal';
 import apiClient from '@/api/client';
+import { RelativeTime } from '@/components/RelativeTime';
 import type { AgentCheckResult, AgentWithConfig } from '@/types';
 
 type StatusFilter = 'all' | 'online' | 'offline';
@@ -32,7 +33,7 @@ const STATUS_OPTIONS: { label: React.ReactNode; value: StatusFilter }[] = [
 
 /** Servers 列表页 */
 export default function ServersPage() {
-  const { data: agents, isLoading, refetch, isFetching, error } = useAgentsWithConfig();
+  const { data: agents, isLoading, refetch, isFetching, error, dataUpdatedAt } = useAgentsWithConfig();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   // 折叠的项目 ID 集合（默认全部展开，点击折叠后加入集合）
@@ -180,6 +181,16 @@ export default function ServersPage() {
 
   return (
     <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F6F6F8' }}>
+      <style>{`
+        @keyframes pageSyncPulse {
+          0% { transform: scale(1); opacity: 0.35; }
+          70% { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes pageSyncPulse { 0%,100% { opacity: 0; } }
+        }
+      `}</style>
       {/* 顶部工具栏 */}
       <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-3 flex-wrap">
@@ -200,6 +211,26 @@ export default function ServersPage() {
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9CBD3', flexShrink: 0 }} />
                 离线 {offlineCount}
+              </span>
+            )}
+            {/* 上次更新时间 + 全局呼吸灯：代表正在后台获取信息中 */}
+            {dataUpdatedAt > 0 && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                style={{ background: '#F6F6F8', color: '#7C7F88' }}
+                title={new Date(dataUpdatedAt).toLocaleString('zh-CN')}
+              >
+                <span
+                  style={{
+                    width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                    // 仅在首个后端数据加载时显示呼吸灯；后台刷新时保持静态点，避免每5s闪烁
+                    background: isLoading ? '#F59E0B' : '#C9CBD3',
+                    boxShadow: isLoading ? '0 0 6px rgba(245, 158, 11, 0.5)' : 'none',
+                    animation: isLoading ? 'pageSyncPulse 1.8s ease-out infinite' : 'none',
+                  }}
+                />
+                <Clock size={11} style={{ flexShrink: 0 }} />
+                <RelativeTime tsMs={dataUpdatedAt} prefix="更新于" />
               </span>
             )}
           </div>

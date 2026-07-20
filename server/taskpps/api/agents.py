@@ -22,6 +22,15 @@ from taskpps.loaders.agent_loader import AgentLoader
 _agents_cache: tuple[list[dict], list] | None = None
 _agents_cache_ts: float = 0.0
 _AGENTS_CACHE_TTL: float = 10.0
+
+# --- 网络可达性探测缓存 ---
+# 探测一个离线 agent 的 TCP 可达性需要等超时（默认 1.5s）。前端每 5s 轮询 /all，
+# 若每次都真连会稳定叠加 1.5s 延迟。这里按 host:port 缓存探测结果，
+# 命中即返回；未命中时后台异步刷新，本次响应不阻塞。
+_net_status_cache: dict[str, tuple[str, float]] = {}
+_NET_STATUS_TTL: float = 20.0
+# 保留后台探测任务的引用，避免事件循环回收时抛出 "Task was destroyed" 告警
+_net_probe_tasks: set[asyncio.Task] = set()
 from taskpps.schemas.agent import (
     AgentCheckRequest,
     AgentCheckResponse,
@@ -287,7 +296,7 @@ async def agent_all():
             item.last_execution_time = manager.get_last_execution_time(agent_id)
         result.append(item)
 
-    # 并发探测所有 agent 的网络可达性
+    # 网络可达性探测（单次 TCP 探测，可能等 1.5s 超时）
     async def probe_net(host: str, port: int) -> str:
         if not host or not port:
             return "unknown"
@@ -304,18 +313,26 @@ async def agent_all():
         except Exception:
             return "unreachable"
 
-    # 并发执行所有探测，填回 net_status（ws 连接的 agent 跳过，已填 reachable）
+    async def refresh_net_status(key: str, host: str, port: int) -> None:
+        """后台刷新单个 host:port 的探测结果到缓存，不阻塞主响应。"""
+        status = await probe_net(host, port)
+        _net_status_cache[key] = (status, time.monotonic())
+
+    # 填充 net_status：已连接的 agent 前面已置 reachable 跳过；
+    # 其余优先用缓存（即时返回），缓存未命中则后台异步探测，本次先保留 unknown，
+    # 下一轮轮询（≤5s）即可拿到结果。这样 /all 不再因探测而阻塞 1.5s。
     if result:
-        tasks = []
-        idx_map: list[int] = []
-        for idx, item in enumerate(result):
-            if item.net_status == "unknown" and item.host and item.port:
-                tasks.append(probe_net(item.host, item.port))
-                idx_map.append(idx)
-        if tasks:
-            statuses = await asyncio.gather(*tasks, return_exceptions=False)
-            for idx, status in zip(idx_map, statuses):
-                result[idx].net_status = status
+        for item in result:
+            if item.net_status != "unknown" or not item.host or not item.port:
+                continue
+            key = f"{item.host}:{item.port}"
+            cached = _net_status_cache.get(key)
+            if cached is not None and (time.monotonic() - cached[1]) < _NET_STATUS_TTL:
+                item.net_status = cached[0]
+            else:
+                task = asyncio.create_task(refresh_net_status(key, item.host, item.port))
+                task.add_done_callback(_net_probe_tasks.discard)
+                _net_probe_tasks.add(task)
 
     return result
 

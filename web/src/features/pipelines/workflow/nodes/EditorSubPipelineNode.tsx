@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { memo, useCallback } from 'react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 import { SubPipelineIcon, CollapseIcon, ExpandIcon } from '../icons';
 
@@ -18,13 +18,38 @@ interface EditorSubPipelineNodeData {
  * 蓝色虚线边框，左 in / 右 out / 底 post 端口，角标显示执行策略
  *
  * v2 (2026-07): SVG 图标替换 emoji + 折叠/展开按钮
+ * v3 (2026-07): 折叠按钮添加 onClick — 通过 useReactFlow 直接操作 store 避免回调传递
  */
-function EditorSubPipelineNode({ data, selected }: { data: EditorSubPipelineNodeData; selected?: boolean }) {
+function EditorSubPipelineNode({ id, data, selected }: { id: string; data: EditorSubPipelineNodeData; selected?: boolean }) {
   const label = data.label || 'SubPipeline';
   const strategy = data.executionStrategy || 'sequential';
   const maxParallel = data.maxConcurrentTasks;
   const borderColor = selected ? '#1d4ed8' : '#3b82f6';
   const collapsed = data.collapsed === true;
+
+  const { setNodes } = useReactFlow();
+
+  // v3 (2026-07): 折叠/展开按钮点击处理
+  // 通过 useReactFlow().setNodes 直接操作 store，避免通过 data 传递回调导致的闭包问题
+  const handleToggleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation(); // 防止触发节点选中
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id !== id) return n;
+          const nextCollapsed = !n.data?.collapsed;
+          return {
+            ...n,
+            data: { ...n.data, collapsed: nextCollapsed },
+            style: nextCollapsed
+              ? { ...(n.style as object), width: 140, height: 48 }
+              : n.style,
+          };
+        }),
+      );
+    },
+    [id, setNodes],
+  );
 
   const badgeText = strategy === 'parallel'
     ? `PAR(${maxParallel || '∞'})`
@@ -166,6 +191,7 @@ function EditorSubPipelineNode({ data, selected }: { data: EditorSubPipelineNode
             {badgeText}
           </span>
           {/* v2 (2026-07): 折叠按钮 */}
+          {/* v3 (2026-07): 添加 onClick 处理 */}
           <span
             style={{
               cursor: 'pointer',
@@ -178,6 +204,7 @@ function EditorSubPipelineNode({ data, selected }: { data: EditorSubPipelineNode
             title="折叠"
             className="collapse-toggle"
             data-collapsed={collapsed ? 'true' : 'false'}
+            onClick={handleToggleClick}
           >
             <CollapseIcon style={{ width: 14, height: 14 }} />
           </span>

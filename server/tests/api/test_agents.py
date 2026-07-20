@@ -633,3 +633,41 @@ async def test_agent_all_last_execution_time_default_zero(app, setup_project, tm
     assert len(data) == 1
     assert data[0]["last_execution_time"] == 0
 
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S0920", domain="server/api", priority="P1")
+async def test_agent_all_net_probe_non_blocking(app, tmp_project):
+    """离线 agent 的 TCP 探测不应阻塞 /all 响应：首次返回 net_status=unknown，
+    探测结果在后台异步刷新（验证接口不被 1.5s 超时拖慢）。"""
+    import taskpps.config as cfg
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    agent_items = [
+        {
+            "id": "offline-1",
+            "name": "Offline",
+            "type": "ssh-linux",
+            "host": "10.255.255.1",  # 不可达地址
+            "port": 22,
+            "max_parallel": 1,
+            "_project_id": "proj-1",
+            "_project_name": "Project 1",
+        },
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("taskpps.api.agents._load_agents_from_projects", return_value=(agent_items, [])):
+            # 探测必然超时（地址不可达），若同步等待会拖到 1.5s 且返回 reachable/unreachable
+            with patch("asyncio.open_connection", side_effect=TimeoutError):
+                response = await client.get("/api/agents/all")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    # 非阻塞：首次响应立即返回 unknown，不等待后台探测
+    assert data[0]["net_status"] == "unknown"
+

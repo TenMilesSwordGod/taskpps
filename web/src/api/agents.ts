@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import apiClient from './client';
 import type { AgentStatus, AgentWithConfig, AgentHostInfo, PendingCommandItem } from '@/types';
@@ -100,6 +100,9 @@ export function useAgentsWithConfig(enabled = true) {
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
     staleTime: 2000,
+    // 保留上一次成功的列表数据：再次进入 /servers 时（缓存未失效）立即展示老数据，
+    // 后台静默刷新，避免"每次点进去都是加载中、啥都没有"
+    placeholderData: keepPreviousData,
   });
 }
 

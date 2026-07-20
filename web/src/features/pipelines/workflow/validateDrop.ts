@@ -20,6 +20,44 @@ import type { EditorNodeData } from './yamlToNodes';
 
 export type DropContext = 'canvas-root' | 'subpipeline' | 'post_parent';
 
+/**
+ * v2 (2026-07): 根据 drop 位置动态计算 parentContext
+ * 通过检查 drop 的 flowPosition 是否落在某个容器节点内部来决定目标上下文
+ *
+ * 为什么不用 getIntersectingNodes: ReactFlowInstance.getIntersectingNodes 类型不稳定，
+ * 手动遍历节点进行 bounds 检查更可控，且不依赖内部 API
+ *
+ * @returns { context: DropContext, parentId?: string } - 上下文和容器节点 id
+ */
+export function findDropParentContext(
+  flowPosition: { x: number; y: number },
+  nodes: Node<EditorNodeData>[],
+): { context: DropContext; parentId?: string } {
+  for (const node of nodes) {
+    const w = node.width;
+    const h = node.height;
+    // 节点未完成测量（首次渲染），跳过
+    if (!w || !h) continue;
+
+    const isInside =
+      flowPosition.x >= node.position.x &&
+      flowPosition.x <= node.position.x + w &&
+      flowPosition.y >= node.position.y &&
+      flowPosition.y <= node.position.y + h;
+
+    if (!isInside) continue;
+
+    if (node.type === 'editorSubPipeline') {
+      return { context: 'subpipeline', parentId: node.id };
+    }
+    if (node.type === 'editorPostParent') {
+      return { context: 'post_parent', parentId: node.id };
+    }
+    // editorTask / editorPostChild 等非容器节点忽略
+  }
+  return { context: 'canvas-root' };
+}
+
 export function validateDrop(
   nodeType: string,
   parentContext: DropContext,

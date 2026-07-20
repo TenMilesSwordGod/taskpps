@@ -11,7 +11,9 @@ vi.mock('@/api/agents', () => ({
   useAgentsWithConfig: () => mockUseAgentsWithConfig(),
   useAgentHostInfo: () => ({ data: null, isLoading: false, isError: false, error: null, refetch: vi.fn(), isRefetching: false }),
   useDeployAgent: () => ({ mutate: vi.fn(), isPending: false, variables: null }),
+  useUpdateDeployAgent: () => ({ mutate: vi.fn(), isPending: false, variables: null }),
   usePendingCommands: () => ({ data: [] }),
+  useAgentStatus: () => ({ data: undefined, isLoading: false, isFetching: false, dataUpdatedAt: 0 }),
 }))
 
 /** Mock api/client */
@@ -70,11 +72,14 @@ describe('<ServersPage />', () => {
       refetch: vi.fn(),
       isFetching: false,
       error: null,
+      dataUpdatedAt: Date.now() - 2000,
     })
     render(<ServersPage />, { wrapper: Wrapper })
     await waitFor(() => {
       expect(screen.getByText('服务器列表')).toBeInTheDocument()
     })
+    // 顶部展示"更新于 X秒前"
+    expect(screen.getByText(/^更新于 \d+秒前$/)).toBeInTheDocument()
   })
 
   it('P0-9 回归：system/arch/hostname 为 null 时过滤不崩溃', async () => {

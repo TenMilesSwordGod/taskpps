@@ -8,10 +8,13 @@ import type { AgentWithConfig, PendingCommandItem } from '@/types'
 /** Mock api/agents 的 hooks */
 const mockUsePendingCommands = vi.fn()
 const mockUseDeployAgent = vi.fn()
+const mockUseAgentStatus = vi.fn()
 
 vi.mock('@/api/agents', () => ({
   useDeployAgent: () => mockUseDeployAgent(),
+  useUpdateDeployAgent: () => mockUseDeployAgent(),
   usePendingCommands: (agentId: string | undefined, enabled: boolean) => mockUsePendingCommands(agentId, enabled),
+  useAgentStatus: (agentId: string | undefined) => mockUseAgentStatus(agentId),
 }))
 
 /** 构造测试用 agent 数据 */
@@ -63,6 +66,13 @@ describe('<ServerCard />', () => {
       mutate: vi.fn(),
       isPending: false,
       variables: null,
+    })
+    // 默认：每卡实时状态尚未返回（syncing 态），回退到列表快照字段
+    mockUseAgentStatus.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      dataUpdatedAt: 0,
     })
   })
 
@@ -242,6 +252,60 @@ describe('<ServerCard />', () => {
       await waitFor(() => {
         expect(screen.getByText('2分钟前')).toBeInTheDocument()
       })
+    })
+  })
+
+  describe('每卡独立状态（呼吸灯 + 更新时间）', () => {
+    it('实时状态未回来时显示"获取中…"并回退到列表快照', () => {
+      mockUseAgentStatus.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isFetching: true, // 后台刷新中
+        dataUpdatedAt: 0,
+      })
+      render(
+        <ServerCard agent={makeAgent({ connected: true, running_commands: 2, queued_commands: 3 })} />,
+        { wrapper: Wrapper },
+      )
+      // 探测中：底部显示"获取中…"
+      expect(screen.getByText('获取中…')).toBeInTheDocument()
+      // 实时字段回退到列表快照
+      expect(screen.getByText('运行中 2 / 等待中 3 / 并发 4')).toBeInTheDocument()
+    })
+
+    it('实时状态回来后覆盖列表快照并展示"更新于 X秒前"', () => {
+      const updatedAt = Date.now() - 3000
+      mockUseAgentStatus.mockReturnValue({
+        data: {
+          agent_id: 'agent-1',
+          connected: false, // 实时显示离线，覆盖快照的在线
+          hostname: 'live-host',
+          platform: 'linux',
+          system: 'Debian 12',
+          arch: 'x86_64',
+          ip: '10.9.9.9',
+          agent_version: '9.9.9',
+          agent_pid: 999,
+          connected_at: 0,
+          last_heartbeat: 0,
+          running_commands: 1,
+          queued_commands: 0,
+          max_parallel: 2,
+        },
+        isLoading: false,
+        isFetching: false,
+        dataUpdatedAt: updatedAt,
+      })
+      render(
+        <ServerCard agent={makeAgent({ connected: true, running_commands: 2, queued_commands: 3, max_parallel: 4 })} />,
+        { wrapper: Wrapper },
+      )
+      // 实时状态覆盖：离线
+      expect(screen.getByText('离线')).toBeInTheDocument()
+      // 实时并发覆盖为 2
+      expect(screen.getByText('运行中 1 / 等待中 0 / 并发 2')).toBeInTheDocument()
+      // 展示"更新于 X秒前"
+      expect(screen.getByText(/^更新于 \d+秒前$/)).toBeInTheDocument()
     })
   })
 })

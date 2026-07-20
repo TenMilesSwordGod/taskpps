@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateDrop } from '../validateDrop';
+import { validateDrop, findDropParentContext } from '../validateDrop';
 import type { Node } from '@xyflow/react';
 import type { EditorNodeData } from '../yamlToNodes';
 
@@ -160,5 +160,112 @@ describe('边界场景', () => {
 
   it('post_child 类型在 canvas-root 无重复时通过', () => {
     expect(validateDrop('post_child_always', 'canvas-root', [])).toBeNull();
+  });
+});
+
+// v2 (2026-07): findDropParentContext 测试 — 动态 parentContext 计算
+describe('findDropParentContext: 动态计算 drop 位置下的父容器', () => {
+  it('drop 在空画布上 → canvas-root', () => {
+    const result = findDropParentContext({ x: 100, y: 100 }, []);
+    expect(result.context).toBe('canvas-root');
+    expect(result.parentId).toBeUndefined();
+  });
+
+  it('drop 在 SubPipeline 节点内部 → subpipeline', () => {
+    const nodes: Node<EditorNodeData>[] = [
+      makeNode({
+        id: 'sp1',
+        type: 'editorSubPipeline',
+        position: { x: 0, y: 0 },
+        width: 260,
+        height: 140,
+      }),
+    ];
+    const result = findDropParentContext({ x: 50, y: 50 }, nodes);
+    expect(result.context).toBe('subpipeline');
+    expect(result.parentId).toBe('sp1');
+  });
+
+  it('drop 在 Post 父容器节点内部 → post_parent', () => {
+    const nodes: Node<EditorNodeData>[] = [
+      makeNode({
+        id: 'pp1',
+        type: 'editorPostParent',
+        position: { x: 100, y: 100 },
+        width: 280,
+        height: 150,
+      }),
+    ];
+    const result = findDropParentContext({ x: 200, y: 150 }, nodes);
+    expect(result.context).toBe('post_parent');
+    expect(result.parentId).toBe('pp1');
+  });
+
+  it('drop 在 SubPipeline 边界外 → canvas-root', () => {
+    const nodes: Node<EditorNodeData>[] = [
+      makeNode({
+        id: 'sp1',
+        type: 'editorSubPipeline',
+        position: { x: 0, y: 0 },
+        width: 260,
+        height: 140,
+      }),
+    ];
+    const result = findDropParentContext({ x: 300, y: 50 }, nodes);
+    expect(result.context).toBe('canvas-root');
+    expect(result.parentId).toBeUndefined();
+  });
+
+  it('drop 在 Task 节点内部 → canvas-root（Task 非容器）', () => {
+    const nodes: Node<EditorNodeData>[] = [
+      makeNode({
+        id: 't1',
+        type: 'editorTask',
+        position: { x: 0, y: 0 },
+        width: 180,
+        height: 56,
+      }),
+    ];
+    const result = findDropParentContext({ x: 50, y: 25 }, nodes);
+    expect(result.context).toBe('canvas-root');
+    expect(result.parentId).toBeUndefined();
+  });
+
+  it('节点未测量（width/height 为 undefined）时跳过 → canvas-root', () => {
+    const nodes: Node<EditorNodeData>[] = [
+      makeNode({
+        id: 'sp1',
+        type: 'editorSubPipeline',
+        position: { x: 0, y: 0 },
+        width: undefined,
+        height: undefined,
+      }),
+    ];
+    const result = findDropParentContext({ x: 0, y: 0 }, nodes);
+    expect(result.context).toBe('canvas-root');
+    expect(result.parentId).toBeUndefined();
+  });
+
+  it('多个容器节点重叠时返回最先匹配的 SubPipeline', () => {
+    const nodes: Node<EditorNodeData>[] = [
+      makeNode({
+        id: 'sp1',
+        type: 'editorSubPipeline',
+        position: { x: 0, y: 0 },
+        width: 300,
+        height: 200,
+      }),
+      makeNode({
+        id: 'sp2',
+        type: 'editorSubPipeline',
+        position: { x: 50, y: 50 },
+        width: 300,
+        height: 200,
+      }),
+    ];
+    // 在 sp1 内部但也在 sp2 内部 → 返回 sp1（先匹配）
+    const result = findDropParentContext({ x: 100, y: 100 }, nodes);
+    expect(result.context).toBe('subpipeline');
+    expect(result.parentId).toBe('sp1');
   });
 });

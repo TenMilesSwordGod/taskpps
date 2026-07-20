@@ -5,8 +5,9 @@ import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
   CloudUpload, Loader2, Info, ExternalLink, Clock, Timer, Terminal, RefreshCw,
 } from 'lucide-react';
-import { useDeployAgent, useUpdateDeployAgent, usePendingCommands } from '@/api/agents';
+import { useDeployAgent, useUpdateDeployAgent, usePendingCommands, useAgentStatus } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
+import { RelativeTime } from '@/components/RelativeTime';
 
 interface ServerCardProps {
   agent: AgentWithConfig;
@@ -102,9 +103,9 @@ function formatDateTime(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function formatRelativeTime(ts: number): string {
+function formatRelativeTime(ts: number, now?: number): string {
   if (!ts) return '';
-  const diff = Math.floor((Date.now() / 1000) - ts);
+  const diff = Math.floor(((now ?? Date.now()) / 1000) - ts);
   if (diff < 0) return '刚刚';
   if (diff < 60) return `${diff}秒前`;
   if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
@@ -329,15 +330,27 @@ function IconBtn({
   );
 }
 
-/** 状态点：在线时呼吸动效 */
-function StatusDot({ online }: { online: boolean }) {
+/** 状态点：three 态
+ *  - 'syncing'：正在获取该服务器实时信息（呼吸灯，琥珀色）
+ *  - 'online' ：已连接（呼吸灯，绿色）
+ *  - 'offline'：未连接（静态灰）
+ */
+type DotState = 'syncing' | 'online' | 'offline';
+function StatusDot({ state }: { state: DotState }) {
+  const color = state === 'online' ? '#10b981' : state === 'syncing' ? '#F59E0B' : '#C9CBD3';
+  const glow = state === 'online'
+    ? '0 0 6px rgba(16, 185, 129, 0.45)'
+    : state === 'syncing'
+      ? '0 0 6px rgba(245, 158, 11, 0.5)'
+      : 'none';
+  const shouldPulse = state !== 'offline';
   return (
     <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 8, height: 8 }}>
-      {online && (
+      {shouldPulse && (
         <span
           style={{
             position: 'absolute', width: 8, height: 8, borderRadius: '50%',
-            background: '#10b981', opacity: 0.35,
+            background: color, opacity: 0.35,
             animation: 'serverDotPulse 1.8s ease-out infinite',
           }}
         />
@@ -345,9 +358,11 @@ function StatusDot({ online }: { online: boolean }) {
       <span
         style={{
           width: 8, height: 8, borderRadius: '50%',
-          background: online ? '#10b981' : '#C9CBD3',
-          boxShadow: online ? '0 0 6px rgba(16, 185, 129, 0.45)' : 'none',
+          background: color,
+          boxShadow: glow,
           position: 'relative', zIndex: 1,
+          // 绿↔灰切换时柔和过渡，避免硬切造成闪烁
+          transition: 'background-color 0.45s ease, box-shadow 0.45s ease',
         }}
       />
       <style>{`
@@ -365,30 +380,48 @@ function StatusDot({ online }: { online: boolean }) {
 }
 
 function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowRepl }: ServerCardProps) {
-  const online = agent.connected;
+  // 每卡独立拉取实时状态：谁先回来谁先点亮，不再等整批都好才一起显示
+  const liveQuery = useAgentStatus(agent.agent_id);
+  const live = liveQuery.data;
+  // 仅在"尚无任何实时数据"时显示获取中（呼吸灯变黄）；稳态后台刷新时保持当前
+  // 绿/灰状态安静更新，避免每 5s 闪一下黄再变绿造成抖动。
+  const hasLive = !!live;
+  const syncing = !hasLive && (liveQuery.isLoading || liveQuery.isFetching);
   const deploy = useDeployAgent();
   const updateDeploy = useUpdateDeployAgent();
   const navigate = useNavigate();
   const isDeploying = deploy.isPending && deploy.variables === agent.agent_id;
   const isUpdating = updateDeploy.isPending && updateDeploy.variables === agent.agent_id;
-  const isSshAgent = agent.type.startsWith('ssh-');
+  const isSshAgent = (agent.type || '').startsWith('ssh-');
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const hasQueue = agent.running_commands > 0 || agent.queued_commands > 0;
+  // 实时字段优先用每卡拉取的结果，未回来前回退到列表快照（老数据）
+  const online = hasLive ? live!.connected : agent.connected;
+  const hasQueue = (hasLive ? live!.running_commands : agent.running_commands) > 0
+    || (hasLive ? live!.queued_commands : agent.queued_commands) > 0;
   const { data: pendingCommands } = usePendingCommands(agent.agent_id, popoverOpen && hasQueue);
 
-  const effectiveSystem = detectedSystem || agent.system || fallbackSystem(agent.type);
-  const effectiveArch = detectedArch || agent.arch || fallbackArch();
+  const effectiveSystem = detectedSystem
+    || (hasLive && live!.system) || agent.system
+    || fallbackSystem(agent.type);
+  const effectiveArch = detectedArch
+    || (hasLive && live!.arch) || agent.arch
+    || fallbackArch();
   const osIcon = getOsIcon(effectiveSystem);
   const systemLabel = effectiveSystem ? getSystemLabel(effectiveSystem) : '—';
   const archLabel = effectiveArch ? getArchLabel(effectiveArch) : '—';
   const typeLabel = getTypeLabel(agent.type);
 
   const displayName = agent.name || agent.hostname || agent.agent_id;
-  const displayIp = agent.ip || (agent.host ? (agent.port ? `${agent.host}:${agent.port}` : agent.host) : '—');
-  const versionDisplay = agent.agent_version ? `v${agent.agent_version}` : '—';
+  const liveIp = hasLive && live!.ip ? live!.ip : '';
+  const displayIp = liveIp || agent.ip || (agent.host ? (agent.port ? `${agent.host}:${agent.port}` : agent.host) : '—');
+  const liveVersion = hasLive && live!.agent_version ? live!.agent_version : '';
+  const versionDisplay = liveVersion ? `v${liveVersion}` : (agent.agent_version ? `v${agent.agent_version}` : '—');
   const osArchText = osArchLabel(systemLabel, archLabel);
-  const maxParallel = agent.max_parallel ?? 1;
+  const maxParallel = (hasLive ? live!.max_parallel : agent.max_parallel) ?? 1;
+  const connectedAt = hasLive && live!.connected_at ? live!.connected_at : agent.connected_at;
   const deployDisabled = !online && agent.net_status === 'unreachable';
+  // 最近更新时间：每卡状态拉取完成时刻（dataUpdatedAt 为 ms）
+  const lastUpdatedAt = liveQuery.dataUpdatedAt || undefined;
 
   return (
     <div
@@ -463,9 +496,10 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, paddingTop: 4 }}>
-          <StatusDot online={online} />
-          <Tooltip title={online ? 'Agent 已连接' : 'Agent 未连接'}>
-            {online ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="#C9CBD3" />}
+          <StatusDot state={syncing ? 'syncing' : online ? 'online' : 'offline'} />
+          <Tooltip title={syncing ? '正在获取实时状态…' : online ? 'Agent 已连接' : 'Agent 未连接'}>
+            {syncing ? <Loader2 size={14} className="animate-spin" color="#F59E0B" />
+              : online ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="#C9CBD3" />}
           </Tooltip>
           <NetStatusIcon netStatus={agent.net_status} />
         </div>
@@ -522,13 +556,27 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
               }}
             >
               <Activity size={11} />
-              运行中 {agent.running_commands} / 等待中 {agent.queued_commands} / 并发 {maxParallel}
+              运行中 {hasLive ? live!.running_commands : agent.running_commands} / 等待中 {hasLive ? live!.queued_commands : agent.queued_commands} / 并发 {maxParallel}
             </span>
           </Popover>
           <span style={{ color: '#E3E4E8', fontSize: 11 }}>|</span>
           <span style={{ fontSize: 11, color: '#9CA0AC', whiteSpace: 'nowrap' }}>
-            {online ? `连接 ${formatTs(agent.connected_at)}` : '未连接'}
+            {syncing
+              ? '获取中…'
+              : online
+                ? `连接 ${formatTs(connectedAt)}`
+                : '未连接'}
           </span>
+          {lastUpdatedAt && (
+            <>
+              <span style={{ color: '#E3E4E8', fontSize: 11 }}>|</span>
+              <RelativeTime
+                tsMs={lastUpdatedAt}
+                prefix="更新于"
+                style={{ fontSize: 11, color: '#9CA0AC', whiteSpace: 'nowrap' }}
+              />
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
           <IconBtn

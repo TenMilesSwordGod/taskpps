@@ -32,7 +32,7 @@ import { yamlToNodes } from './yamlToNodes';
 import type { EditorNodeData, EditorEdgeData } from './yamlToNodes';
 import type { PipelineDetail } from '@/types';
 import { applyDagreLayout } from '@/utils/dagreLayout';
-import { validateDrop } from './validateDrop';
+import { validateDrop, findDropParentContext } from './validateDrop';
 
 /**
  * 可编辑工作流画布组件
@@ -190,29 +190,53 @@ export default function WorkflowEditor({
       const wrapperEl = wrapperRef.current;
       if (!wrapperEl) return;
 
-      // v2 (2026-07): 容器嵌套校验 — 在创建节点前检查规则
-      const validationError = validateDrop(nodeTypeName, 'canvas-root', nodes);
+      // v2 (2026-07): 用 screenToFlowPosition 将屏幕坐标转为画布坐标（考虑缩放/平移）
+      const flowPosition = reactFlowInstanceRef.current?.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      if (!flowPosition) return;
+
+      // v3 (2026-07): 动态计算 drop 位置下的实际父容器上下文
+      // 原实现硬编码 'canvas-root'，导致拖入 SubPipeline 内部时校验规则不生效
+      const { context: parentContext, parentId: containerParentId } = findDropParentContext(flowPosition, nodes);
+
+      const validationError = validateDrop(nodeTypeName, parentContext, nodes);
       if (validationError) {
         message.error(validationError);
         return;
       }
 
-      const bounds = wrapperEl.getBoundingClientRect();
-      const wrapperScrollLeft = wrapperEl.scrollLeft || 0;
-      const wrapperScrollTop = wrapperEl.scrollTop || 0;
-
+      // v2 (2026-07): screenToFlowPosition 替代手动 clientX/Y 偏移计算（更准确，考虑 zoom/pan）
       const position = {
-        x: event.clientX - bounds.left + wrapperScrollLeft - 90,
-        y: event.clientY - bounds.top + wrapperScrollTop - 28,
+        x: flowPosition.x - 90,
+        y: flowPosition.y - 28,
       };
 
       const nodeId = `__new__${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+      // v3 (2026-07): 若 drop 在容器内部，设置 parentId 并调整坐标为相对容器坐标
+      // ReactFlow parentId 机制要求子节点 position 相对于父容器节点
+      let nodePosition = { x: position.x, y: position.y };
+      let nodeParentId: string | undefined;
+      if (containerParentId) {
+        const container = nodes.find((n) => n.id === containerParentId);
+        if (container) {
+          nodePosition = {
+            x: position.x - container.position.x,
+            y: position.y - container.position.y,
+          };
+          nodeParentId = containerParentId;
+        }
+      }
 
       if (nodeTypeName === 'subpipeline') {
         const newNode: Node<EditorNodeData> = {
           id: nodeId,
           type: 'editorSubPipeline',
-          position,
+          position: nodePosition,
+          parentId: nodeParentId,
           style: { width: 260, height: 140 },
           data: {
             label: label || '新 SubPipeline',
@@ -225,7 +249,8 @@ export default function WorkflowEditor({
         const newNode: Node<EditorNodeData> = {
           id: nodeId,
           type: 'editorTask',
-          position,
+          position: nodePosition,
+          parentId: nodeParentId,
           data: {
             task: { name: label || '新 Task', env: {}, retry: 0, depends_on: [] },
             taskType: 'command',
@@ -238,7 +263,8 @@ export default function WorkflowEditor({
         const newNode: Node<EditorNodeData> = {
           id: nodeId,
           type: 'editorPostParent',
-          position,
+          position: nodePosition,
+          parentId: nodeParentId,
           style: { width: 280, height: 150 },
           data: { label: label || 'Post 处理容器' },
         };
@@ -254,7 +280,8 @@ export default function WorkflowEditor({
         const newNode: Node<EditorNodeData> = {
           id: nodeId,
           type: 'editorPostChild',
-          position,
+          position: nodePosition,
+          parentId: nodeParentId,
           data: {
             task: { name: label || '新 Post Task', env: {}, retry: 0, depends_on: [] },
             taskType: 'command',
@@ -267,7 +294,8 @@ export default function WorkflowEditor({
         const newNode: Node<EditorNodeData> = {
           id: nodeId,
           type: 'editorStartEnd',
-          position,
+          position: nodePosition,
+          parentId: nodeParentId,
           data: { variant: 'start' },
         };
         setNodes((nds: Node<EditorNodeData>[]) => [...nds, newNode]);
@@ -283,7 +311,8 @@ export default function WorkflowEditor({
         const newNode: Node<EditorNodeData> = {
           id: nodeId,
           type: 'editorTask',
-          position,
+          position: nodePosition,
+          parentId: nodeParentId,
           data: {
             task: { name: label || '新任务', env: {}, retry: 0, depends_on: [] },
             taskType,
