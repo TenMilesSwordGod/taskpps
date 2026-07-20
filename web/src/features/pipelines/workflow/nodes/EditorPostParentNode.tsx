@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, NodeResizer } from '@xyflow/react';
 import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 import { PostParentIcon } from '../icons';
 
@@ -39,6 +39,8 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
           minHeight: 40,
         }}
       >
+        {/* v4 (2026-07): 添加 NodeResizer 使折叠态可拖拽调整大小 */}
+        <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />
         <PostParentIcon style={{ width: 16, height: 16, color: '#ef4444' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#991b1b' }}>
           {label}
@@ -61,6 +63,8 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
         minHeight: 150,
       }}
     >
+      {/* v4 (2026-07): 添加 NodeResizer 使展开态可拖拽调整大小 */}
+      <NodeResizer minWidth={200} minHeight={150} isVisible={selected} />
       {/* In 端口 — 左侧（唯一端口） */}
       <Handle
         id="in"

@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import { Handle, Position, useReactFlow } from '@xyflow/react';
+import { Handle, Position, useReactFlow, NodeResizer } from '@xyflow/react';
 import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 import { SubPipelineIcon, CollapseIcon, ExpandIcon } from '../icons';
 
@@ -75,6 +75,8 @@ function EditorSubPipelineNode({ id, data, selected }: { id: string; data: Edito
           minHeight: 40,
         }}
       >
+        {/* v4 (2026-07): 添加 NodeResizer 使折叠态也可拖拽调整大小 */}
+        <NodeResizer minWidth={120} minHeight={40} isVisible={selected} />
         <SubPipelineIcon style={{ width: 16, height: 16, color: '#3b82f6' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#1e40af' }}>
           {label}
@@ -102,6 +104,8 @@ function EditorSubPipelineNode({ id, data, selected }: { id: string; data: Edito
         minHeight: 120,
       }}
     >
+      {/* v4 (2026-07): 添加 NodeResizer 使展开态可拖拽调整大小，选中时显示手柄 */}
+      <NodeResizer minWidth={200} minHeight={120} isVisible={selected} />
       {/* In 端口 — 左侧 */}
       <Handle
         id="in"

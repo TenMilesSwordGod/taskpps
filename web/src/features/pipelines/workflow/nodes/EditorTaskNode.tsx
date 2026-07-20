@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, NodeResizer } from '@xyflow/react';
 import type { TaskYAML, TaskType } from '@/types';
 import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 import { CmdIcon, StepIcon, PluginIcon, InvokeIcon } from '../icons';
@@ -64,6 +64,8 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
           minHeight: 40,
         }}
       >
+        {/* v4 (2026-07): 添加 NodeResizer 使折叠态可拖拽调整大小 */}
+        <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />
         {IconComponent && <IconComponent style={{ width: 14, height: 14, color: iconColor }} />}
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#0f172a' }}>
           {taskName}
@@ -85,6 +87,8 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
         boxShadow: selected ? '0 0 0 4px rgba(22,119,255,0.12)' : undefined,
       }}
     >
+      {/* v4 (2026-07): 添加 NodeResizer 使展开态可拖拽调整大小 */}
+      <NodeResizer minWidth={100} minHeight={56} isVisible={selected} />
       {/* In 端口 — 左侧 */}
       <Handle
         id="in"
