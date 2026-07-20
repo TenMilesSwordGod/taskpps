@@ -139,7 +139,7 @@ function UserMenuFooter({
           size={36}
           style={{ backgroundColor: '#3D5BFF', color: '#FFFFFF', flexShrink: 0 }}
         >
-          {user.nickname.charAt(0).toUpperCase()}
+          {(user.nickname || user.account || '?').charAt(0).toUpperCase()}
         </Avatar>
         {!collapsed && (
           <>

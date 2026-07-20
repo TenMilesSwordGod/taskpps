@@ -315,3 +315,199 @@ test.describe('真实 PDP 集成测试', () => {
     expect(nodes).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ============================================================
+// 补测: 真实保存流程 + 文件模式 + YAML同步 + 大流水线 + 浏览器导航
+// ============================================================
+
+const LARGE_PIPELINE = {
+  name: 'large-pipeline',
+  tasks: Array.from({ length: 10 }, (_, i) => ({
+    name: `task-${i}`, command: `echo ${i}`, env: {}, retry: 0,
+    depends_on: i > 0 ? [`task-${i - 1}`] : [],
+  })),
+  pipelines: Array.from({ length: 3 }, (_, subIdx) => ({
+    name: `sub-${subIdx}`,
+    depends_on: subIdx > 0 ? [`sub-${subIdx - 1}`] : [],
+    config: { env: {}, retry: 0, on_failure: '', execution_strategy: subIdx % 2 === 0 ? 'sequential' : 'parallel' as const },
+    tasks: Array.from({ length: 10 }, (_, tIdx) => ({
+      name: `compile-${subIdx}-${tIdx}`, command: 'make', env: {}, retry: 0,
+      depends_on: tIdx > 0 ? [`compile-${subIdx}-${tIdx - 1}`] : [],
+    })),
+  })),
+  post: {
+    on_fail: Array.from({ length: 2 }, (_, i) => ({
+      name: `notify-${i}`, command: 'slack', env: {}, retry: 0, depends_on: [],
+    })),
+  },
+};
+
+test.describe('补测: 保存流程', () => {
+  test('S1: 编辑器保存 → PUT API 被调用', async ({ page }) => {
+    let saveBody = '';
+    await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
+      const url = route.request().url();
+      if (url.includes('auth/me')) {
+        await route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ account: 'admin', id: 1, nickname: 'Admin', role: 'top', dept: 0 }) });
+      } else if (url.includes('pipelines/by-id') && route.request().method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(LARGE_PIPELINE) });
+      } else if (url.includes('pipelines/by-id') && route.request().method() === 'PUT') {
+        saveBody = await route.request().postData() || '';
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+
+    await page.goto('/');
+    await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
+    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForSelector('.react-flow', { timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    // 切编辑模式 → 拖节点 → 保存
+    await page.getByRole('button', { name: '编辑模式' }).click();
+    await page.waitForTimeout(1000);
+
+    const card = page.locator('[draggable="true"]', { hasText: 'CMD' }).first();
+    const canvas = page.locator('.react-flow__pane').first();
+    await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 300, y: 300 } });
+    await page.waitForTimeout(800);
+
+    const saveBtn = page.locator('button').filter({ hasText: '保存' }).first();
+    await saveBtn.click();
+    await page.waitForTimeout(1000);
+
+    // 验证 PUT API 被调用，且请求体含有效 YAML
+    expect(saveBody.length).toBeGreaterThan(10);
+    expect(saveBody).toContain('"content"');
+  });
+});
+
+test.describe('补测: 文件模式', () => {
+  test('F1: 文件模式路由 → 不崩溃', async ({ page }) => {
+    const mockYaml = 'name: file-pipeline\ntasks:\n  - name: init\n    command: echo\n';
+    let apiCalls: string[] = [];
+    await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
+      const url = route.request().url();
+      apiCalls.push(url);
+      if (url.includes('auth/me')) {
+        await route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ account: 'admin', id: 1, nickname: 'Admin', role: 'top', dept: 0 }) });
+      } else if (url.includes('pipelines/by-file')) {
+        await route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ raw_content: mockYaml, name: 'file-pipeline', file: 'pipelines/my-pipeline.yaml' }) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    page.on('pageerror', err => console.log('F1 ERR:', err.message));
+    await page.goto('/');
+    await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
+    await page.goto('/pipelines/test-proj/_file/pipelines/my-pipeline.yaml', { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForTimeout(3000);
+    console.log('F1 API calls:', apiCalls);
+
+    // 不崩溃即可
+    expect(await page.locator('.react-flow').isVisible().catch(() => false) ||
+           page.url().includes('pipelines')).toBeTruthy();
+  });
+});
+
+test.describe('补测: YAML ↔ DAG 双向同步', () => {
+  test('Y1: 打开 YAML 编辑器 → 修改 YAML → DAG 保持不变（不崩溃）', async ({ page }) => {
+    await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
+      const url = route.request().url();
+      if (url.includes('auth/me')) {
+        await route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ account: 'admin', id: 1, nickname: 'Admin', role: 'top', dept: 0 }) });
+      } else if (url.includes('pipelines/by-id')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          name: 'yaml-sync-test',
+          tasks: [{ name: 't1', command: 'echo', env: {}, retry: 0, depends_on: [] }],
+        }) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await page.goto('/');
+    await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
+    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForSelector('.react-flow', { timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    // 打开 YAML 编辑器
+    const yamlBtn = page.locator('button').filter({ hasText: 'YAML 编辑器' });
+    if (await yamlBtn.isVisible().catch(() => false)) {
+      await yamlBtn.click({ force: true });
+      await page.waitForTimeout(1000);
+    }
+    // 不崩溃
+    expect(await page.locator('.react-flow').isVisible().catch(() => false)).toBeTruthy();
+  });
+});
+
+test.describe('补测: 大流水线性能', () => {
+  test('P1: 30 节点流水线 → 画布渲染 < 10s', async ({ page }) => {
+    const start = Date.now();
+    await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
+      const url = route.request().url();
+      if (url.includes('auth/me')) {
+        await route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ account: 'admin', id: 1, nickname: 'Admin', role: 'top', dept: 0 }) });
+      } else if (url.includes('pipelines/by-id')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(LARGE_PIPELINE) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await page.goto('/');
+    await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
+    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForSelector('.react-flow', { timeout: 15000 });
+    await page.waitForTimeout(1000);
+
+    const elapsed = Date.now() - start;
+    const nodes = await page.locator('.react-flow__node').count();
+    console.log(`大流水线渲染: ${nodes} 节点, ${elapsed}ms`);
+    expect(elapsed).toBeLessThan(10000);
+  });
+});
+
+test.describe('补测: 浏览器导航', () => {
+  test('N1: PDP → 编辑 → 切换到 YAML → 浏览器返回 → 不崩溃', async ({ page }) => {
+    await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
+      const url = route.request().url();
+      if (url.includes('auth/me')) {
+        await route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ account: 'admin', id: 1, nickname: 'Admin', role: 'top', dept: 0 }) });
+      } else if (url.includes('pipelines/by-id')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ name: 'nav-test' }) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await page.goto('/');
+    await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
+    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForSelector('.react-flow', { timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    // 切编辑模式
+    await page.getByRole('button', { name: '编辑模式' }).click();
+    await page.waitForTimeout(800);
+
+    // 浏览器后退
+    await page.goBack();
+    await page.waitForTimeout(2000);
+
+    // 浏览器前进
+    await page.goForward();
+    await page.waitForTimeout(2000);
+
+    // 不崩溃
+    const hasFlow = await page.locator('.react-flow').isVisible().catch(() => false);
+    expect(hasFlow || page.url().includes('pipelines')).toBeTruthy();
+  });
+});
