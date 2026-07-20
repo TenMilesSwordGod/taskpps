@@ -3,6 +3,7 @@ import { Input, Collapse } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import type { TaskType } from '@/types';
 import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
+import { SubPipelineIcon, TaskIcon, PostParentIcon, CmdIcon, StepIcon, PluginIcon, InvokeIcon } from './icons';
 
 /**
  * 右侧节点面板 — n8n 风格可拖拽节点列表
@@ -10,6 +11,8 @@ import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
  *   - 按分类折叠展示
  *   - 搜索过滤
  *   - 拖拽到画布新增节点
+ *
+ * v2 (2026-07): SVG 图标替换 emoji
  */
 
 interface DraggableCardProps {
@@ -17,7 +20,7 @@ interface DraggableCardProps {
   nodeType: string;
   label: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
   color: string;
 }
 
@@ -80,6 +83,9 @@ function DraggableCard({ type, nodeType, label, description, icon, color }: Drag
   );
 }
 
+// v2 (2026-07): SVG 图标尺寸常量
+const PALETTE_ICON_STYLE = { width: 18, height: 18 };
+
 export default function NodePalette() {
   const [search, setSearch] = useState('');
 
@@ -90,27 +96,27 @@ export default function NodePalette() {
   };
 
   const flowCards: DraggableCardProps[] = filterCards([
-    { type: 'startEnd', nodeType: 'startend', label: 'Start', description: '流程开始', icon: '▶', color: '#10B981' },
-    { type: 'startEnd', nodeType: 'startend', label: 'End', description: '流程结束', icon: '■', color: '#94A3B8' },
+    { type: 'startEnd', nodeType: 'startend', label: 'Start', description: '流程开始', icon: <span style={{ fontSize: 16 }}>▶</span>, color: '#10B981' },
+    { type: 'startEnd', nodeType: 'startend', label: 'End', description: '流程结束', icon: <span style={{ fontSize: 16 }}>⏹</span>, color: '#94A3B8' },
   ]);
 
   const containerCards: DraggableCardProps[] = filterCards([
-    { type: 'subpipeline', nodeType: 'subpipeline', label: 'SubPipeline', description: '蓝色虚线容器', icon: '⬡', color: '#3b82f6' },
-    { type: 'task', nodeType: 'task', label: 'Task', description: '绿色虚线容器', icon: '⚙', color: '#22c55e' },
-    { type: 'post_parent', nodeType: 'post_parent', label: 'Post 父容器', description: '红色虚线容器', icon: '⚠', color: '#ef4444' },
+    { type: 'subpipeline', nodeType: 'subpipeline', label: 'SubPipeline', description: '蓝色虚线容器', icon: <SubPipelineIcon style={{ ...PALETTE_ICON_STYLE, color: '#3b82f6' }} />, color: '#3b82f6' },
+    { type: 'task', nodeType: 'task', label: 'Task', description: '绿色虚线容器', icon: <TaskIcon style={{ ...PALETTE_ICON_STYLE, color: '#22c55e' }} />, color: '#22c55e' },
+    { type: 'post_parent', nodeType: 'post_parent', label: 'Post 父容器', description: '红色虚线容器', icon: <PostParentIcon style={{ ...PALETTE_ICON_STYLE, color: '#ef4444' }} />, color: '#ef4444' },
   ]);
 
   const atomicCards: DraggableCardProps[] = filterCards([
-    { type: 'task', nodeType: 'task_atomic_cmd', label: 'CMD', description: '命令执行', icon: '⌨', color: TYPE_COLOR.command },
-    { type: 'task', nodeType: 'task_atomic_step', label: 'STEP', description: '步骤执行', icon: '⚙', color: TYPE_COLOR.steps },
-    { type: 'task', nodeType: 'task_atomic_plugin', label: 'PLUGIN', description: '插件', icon: '🧩', color: TYPE_COLOR.plugin },
-    { type: 'task', nodeType: 'task_atomic_invoke', label: 'INVOKE', description: '调用', icon: '🔗', color: TYPE_COLOR.invoke },
+    { type: 'task', nodeType: 'task_atomic_cmd', label: 'CMD', description: '命令执行', icon: <CmdIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.command }} />, color: TYPE_COLOR.command },
+    { type: 'task', nodeType: 'task_atomic_step', label: 'STEP', description: '步骤执行', icon: <StepIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.steps }} />, color: TYPE_COLOR.steps },
+    { type: 'task', nodeType: 'task_atomic_plugin', label: 'PLUGIN', description: '插件', icon: <PluginIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.plugin }} />, color: TYPE_COLOR.plugin },
+    { type: 'task', nodeType: 'task_atomic_invoke', label: 'INVOKE', description: '调用', icon: <InvokeIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.invoke }} />, color: TYPE_COLOR.invoke },
   ]);
 
   const postCards: DraggableCardProps[] = filterCards([
-    { type: 'post_child', nodeType: 'post_child_on_fail', label: 'on_fail 子容器', description: '失败时触发', icon: '✕', color: '#ef4444' },
-    { type: 'post_child', nodeType: 'post_child_on_success', label: 'on_success 子容器', description: '成功时触发', icon: '✓', color: '#22c55e' },
-    { type: 'post_child', nodeType: 'post_child_always', label: 'always 子容器', description: '始终触发', icon: '↻', color: '#6b7280' },
+    { type: 'post_child', nodeType: 'post_child_on_fail', label: 'on_fail 子容器', description: '失败时触发', icon: <span style={{ fontSize: 16 }}>✕</span>, color: '#ef4444' },
+    { type: 'post_child', nodeType: 'post_child_on_success', label: 'on_success 子容器', description: '成功时触发', icon: <span style={{ fontSize: 16 }}>✓</span>, color: '#22c55e' },
+    { type: 'post_child', nodeType: 'post_child_always', label: 'always 子容器', description: '始终触发', icon: <span style={{ fontSize: 16 }}>↻</span>, color: '#6b7280' },
   ]);
 
   const collapseItems = [

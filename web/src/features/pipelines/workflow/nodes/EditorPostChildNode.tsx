@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { TaskYAML, TaskType } from '@/types';
-import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
+import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 
 interface EditorPostChildNodeData {
   task?: TaskYAML;
@@ -17,6 +17,11 @@ const VARIANT_STYLE = {
   always: { accent: '#6b7280', background: '#f9fafb', label: '始终' },
 };
 
+/**
+ * Post 子容器节点
+ *
+ * v2 (2026-07): 移除 emoji，使用纯文字标签（无 emoji 图标）
+ */
 function EditorPostChildNode({ data, selected }: { data: EditorPostChildNodeData; selected?: boolean }) {
   const task = data.task;
   const taskName = task?.name || 'Post Task';

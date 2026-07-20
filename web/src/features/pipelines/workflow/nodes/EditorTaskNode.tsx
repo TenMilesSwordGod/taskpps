@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { TaskYAML, TaskType } from '@/types';
 import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
+import { CmdIcon, StepIcon, PluginIcon, InvokeIcon } from '../icons';
 
 /** 推断任务类型 */
 function inferType(task: TaskYAML): TaskType {
@@ -13,27 +14,27 @@ function inferType(task: TaskYAML): TaskType {
   return 'command';
 }
 
-/** 类型标签 */
-const TYPE_ICON: Record<TaskType, string> = {
-  command: '⌨',
-  invoke: '🔗',
-  steps: '⚙',
-  plugin: '🧩',
-  git: '',
-  nexus: '📦',
-  ssh: '>_',
+/** v2 (2026-07): 类型 → SVG 图标组件映射（替换 emoji） */
+const TYPE_ICON_SVG: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
+  command: CmdIcon,
+  invoke: InvokeIcon,
+  steps: StepIcon,
+  plugin: PluginIcon,
 };
 
 interface EditorTaskNodeData {
   task?: TaskYAML;
   taskType?: TaskType;
   subpipelineName?: string;
+  collapsed?: boolean;
   [key: string]: unknown;
 }
 
 /**
  * 可编辑 Task 节点 — n8n 风格紧凑圆角方形
  * 左入右出端口，底部 Post 端口
+ *
+ * v2 (2026-07): SVG 图标替换 emoji + 折叠支持
  */
 function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected?: boolean }) {
   const task = data.task;
@@ -41,6 +42,35 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
   const taskType = data.taskType || (task ? inferType(task) : 'command');
   const iconColor = TYPE_COLOR[taskType] || '#94a3b8';
   const borderColor = selected ? '#1677ff' : '#22c55e';
+  const collapsed = data.collapsed === true;
+  // v2 (2026-07): 使用 SVG 图标组件
+  const IconComponent = TYPE_ICON_SVG[taskType];
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          border: `2px solid ${borderColor}`,
+          borderRadius: 8,
+          background: '#f0fdf4',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          minWidth: 100,
+          minHeight: 40,
+        }}
+      >
+        {IconComponent && <IconComponent style={{ width: 14, height: 14, color: iconColor }} />}
+        <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#0f172a' }}>
+          {taskName}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -104,9 +134,8 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
 
       {/* 标题行 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 13, color: iconColor, fontWeight: 600 }}>
-          {TYPE_ICON[taskType]}
-        </span>
+        {/* v2 (2026-07): SVG 图标替换 emoji */}
+        {IconComponent && <IconComponent style={{ width: 16, height: 16, color: iconColor }} />}
         <span
           style={{
             fontFamily: FONT_MONO,
