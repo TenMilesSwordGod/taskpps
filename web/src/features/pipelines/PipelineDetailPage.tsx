@@ -27,6 +27,7 @@ import WorkflowEditor, { type WorkflowEditorRef } from './workflow/WorkflowEdito
 import NodePalette from './workflow/NodePalette';
 import PropertyPanel from './workflow/PropertyPanel';
 import { nodesToYaml } from './workflow/nodesToYaml';
+import { yamlToNodes } from './workflow/yamlToNodes';
 import type { EditorNodeData, EditorEdgeData } from './workflow/yamlToNodes';
 import type { Node, Edge } from '@xyflow/react';
 
@@ -77,6 +78,9 @@ export default function PipelineDetailPage() {
   const [propertyPanelVisible, setPropertyPanelVisible] = useState(false);
   const [editingNode, setEditingNode] = useState<Node<EditorNodeData> | null>(null);
   const workflowEditorRef = useRef<WorkflowEditorRef>(null);
+  // 进入编辑模式时是否已用 yamlToNodes(pipeline) 初始化过 editNodes/editEdges。
+  // 用 ref 防重入：避免后续 render 因 pipeline 引用变化而覆盖用户在画布上的编辑结果。
+  const editInitializedRef = useRef(false);
 
   // 保存：正常模式用 by-id，文件模式用 by-file
   const saveByIdMutation = useSavePipelineById(!isFileMode ? definitionId : undefined);
@@ -151,6 +155,25 @@ export default function PipelineDetailPage() {
     setEditNodes(nodes);
     setEditEdges(edges);
   }, []);
+
+  // v2 (2026-07): issue #206 / bug #39 — 进入编辑模式时必须用 yamlToNodes(pipeline)
+  // 初始化 editNodes/editEdges。否则 WorkflowEditor 仅在保存/连线时触发 onGraphChange，
+  // 初始不回调，导致 editNodes 长期为空；保存时 nodesToYaml([],[]) 找不到 __pipeline__
+  // 节点而得到 name='unnamed'、pipelines=[]。这里与 WorkflowEditor 内部节点 ID 对齐，
+  // 保证保存序列化能还原真实流水线名与 SubPipeline/Task 结构。
+  // 退出编辑模式时重置标记，使再次进入能重新从最新 pipeline 初始化。
+  useEffect(() => {
+    if (editMode && !isFileMode && pipeline) {
+      if (!editInitializedRef.current) {
+        const g = yamlToNodes(pipeline);
+        setEditNodes(g.nodes);
+        setEditEdges(g.edges);
+        editInitializedRef.current = true;
+      }
+    } else {
+      editInitializedRef.current = false;
+    }
+  }, [editMode, pipeline, isFileMode]);
 
   // v2 (2026-07): 文件模式下，数据加载后自动填充编辑器
   useEffect(() => {
