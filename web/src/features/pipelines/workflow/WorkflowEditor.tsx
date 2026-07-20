@@ -32,7 +32,7 @@ import { yamlToNodes } from './yamlToNodes';
 import type { EditorNodeData, EditorEdgeData } from './yamlToNodes';
 import type { PipelineDetail } from '@/types';
 import { applyDagreLayout } from '@/utils/dagreLayout';
-import { validateDrop, findDropParentContext, getAbsolutePosition } from './validateDrop';
+import { validateDrop, findDropParentContext, getAbsolutePosition, type DropContext } from './validateDrop';
 
 /**
  * 可编辑工作流画布组件
@@ -450,9 +450,15 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
   );
 
   // 从画布右键菜单添加节点
+  // postParentId: 当为 Post 父容器内右键添加 Post 子容器时传入，
+  // 用于把新节点归入该 Post 父容器（parentId）并以相对坐标定位。
   const handleAddNodeFromContext = useCallback(
-    (nodeTypeName: string) => {
-      const validationError = validateDrop(nodeTypeName, 'canvas-root', nodes);
+    (nodeTypeName: string, postParentId?: string) => {
+      // v5 (2026-07 / bug #37): 去掉硬编码 'canvas-root'，根据调用方传入的父容器上下文
+      // 决定落点上下文。Post 子容器必须落入 post_parent 上下文，否则沿用 canvas-root。
+      // 这样 validateDrop 的 R4（Post 父容器内仅允许 post_child）与 R3（每种最多 1 个）才能正确生效。
+      const parentContext: DropContext = postParentId ? 'post_parent' : 'canvas-root';
+      const validationError = validateDrop(nodeTypeName, parentContext, nodes);
       if (validationError) {
         message.error(validationError);
         setContextMenu(null);
@@ -486,6 +492,34 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         newNode = {
           id: nodeId, type: 'editorStartEnd', position,
           data: { variant: 'start' },
+        };
+      } else if (nodeTypeName.startsWith('post_child_')) {
+        // bug #37: 新增对 post_child_* 类型的处理（原实现无此分支，newNode 恒为 null，点击无效）。
+        // 构造 editorPostChild 节点，postVariant 由类型前缀映射，parentId 指向右键的 Post 父容器，
+        // 使节点真正落入该父容器内部（nodesToYaml 按 parentId 分组，能正确序列化回 YAML）。
+        const variantMap: Record<string, 'on_fail' | 'on_success' | 'always'> = {
+          post_child_on_fail: 'on_fail',
+          post_child_on_success: 'on_success',
+          post_child_always: 'always',
+        };
+        const postVariant = variantMap[nodeTypeName] || 'on_fail';
+        // 复用 yamlToNodes 的命名约定：`__postchild__<postParentId>_<variant>_<idx>`，
+        // 既保证 id 稳定可定位，也保证与初始反序列化生成的子节点 id 完全同构，便于后续双向同步。
+        const siblingCount = nodes.filter(
+          (n) => n.type === 'editorPostChild' && n.parentId === postParentId && n.data?.postVariant === postVariant,
+        ).length;
+        const childId = `__postchild__${postParentId}_${postVariant}_${siblingCount}`;
+        // Post 父容器内相对坐标：沿用 yamlToNodes 的容器内边距与纵向排列，确保子节点落在父容器内。
+        newNode = {
+          id: childId,
+          type: 'editorPostChild',
+          position: { x: 40, y: 40 + siblingCount * 80 },
+          parentId: postParentId,
+          data: {
+            task: { name: '新 Post Task', env: {}, retry: 0, depends_on: [] },
+            taskType: 'command',
+            postVariant,
+          },
         };
       }
 
@@ -567,10 +601,11 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         const hasOnFail = nodes.some(n => n.type === 'editorPostChild' && n.data?.postVariant === 'on_fail');
         const hasOnSuccess = nodes.some(n => n.type === 'editorPostChild' && n.data?.postVariant === 'on_success');
         const hasAlways = nodes.some(n => n.type === 'editorPostChild' && n.data?.postVariant === 'always');
+        // bug #37: 传入当前右键的 Post 父容器 id，使新 Post 子节点 parentId 指向该父容器。
         items.push(
-          { key: 'add-post-on-fail', label: '添加 on_fail 子容器', disabled: hasOnFail, onClick: () => handleAddNodeFromContext('post_child_on_fail') },
-          { key: 'add-post-on-success', label: '添加 on_success 子容器', disabled: hasOnSuccess, onClick: () => handleAddNodeFromContext('post_child_on_success') },
-          { key: 'add-post-always', label: '添加 always 子容器', disabled: hasAlways, onClick: () => handleAddNodeFromContext('post_child_always') },
+          { key: 'add-post-on-fail', label: '添加 on_fail 子容器', disabled: hasOnFail, onClick: () => handleAddNodeFromContext('post_child_on_fail', contextMenu.nodeId!) },
+          { key: 'add-post-on-success', label: '添加 on_success 子容器', disabled: hasOnSuccess, onClick: () => handleAddNodeFromContext('post_child_on_success', contextMenu.nodeId!) },
+          { key: 'add-post-always', label: '添加 always 子容器', disabled: hasAlways, onClick: () => handleAddNodeFromContext('post_child_always', contextMenu.nodeId!) },
         );
       }
 
