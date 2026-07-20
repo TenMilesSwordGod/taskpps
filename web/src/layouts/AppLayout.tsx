@@ -88,6 +88,16 @@ function UserMenuFooter({
   collapsed: boolean;
   onLogout: () => void;
 }) {
+  // 空值兜底（设计决策）：后端 /me 实际返回可能缺失 nickname（undefined/null）或旧数据
+  // 缺 username。直接调用 String.prototype.charAt 会抛 TypeError，导致 UserMenuFooter
+  // 渲染失败并向上冒泡使整页白屏。此处对所有展示字段做空值兜底，仅用于防御性渲染，
+  // 不作任何业务假数据填充（no-fallback）。
+  const nickname = user.nickname ?? '';
+  // 头像首字符：优先 nickname 首字母，缺失时用 username 首字母，再缺失用占位 '?'
+  const avatarChar = (nickname || user.username || '?').charAt(0).toUpperCase();
+  // 信息块昵称：nickname 缺失时显示默认文本"未命名"，避免空白且语义明确
+  const displayName = nickname || '未命名';
+
   // Dropdown menu items：信息块（disabled 不可点） + 分隔线 + 退出登录
   const items: MenuProps['items'] = [
     {
@@ -95,7 +105,7 @@ function UserMenuFooter({
       disabled: true,
       label: (
         <div style={{ padding: '4px 0' }}>
-          <div style={{ fontWeight: 500, color: '#121620' }}>{user.nickname}</div>
+          <div style={{ fontWeight: 500, color: '#121620' }}>{displayName}</div>
           <div
             style={{
               color: '#7C7F88',
@@ -103,7 +113,7 @@ function UserMenuFooter({
               fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace',
             }}
           >
-            {user.username} · {user.role}
+            {user.username ?? ''} · {user.role ?? ''}
           </div>
         </div>
       ),
@@ -139,7 +149,7 @@ function UserMenuFooter({
           size={36}
           style={{ backgroundColor: '#3D5BFF', color: '#FFFFFF', flexShrink: 0 }}
         >
-          {user.nickname.charAt(0).toUpperCase()}
+          {avatarChar}
         </Avatar>
         {!collapsed && (
           <>
@@ -154,7 +164,7 @@ function UserMenuFooter({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {user.nickname}
+                {displayName}
               </div>
               <div
                 style={{
@@ -166,7 +176,7 @@ function UserMenuFooter({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {user.username}
+                {user.username ?? ''}
               </div>
             </div>
             <DownOutlined style={{ color: '#7C7F88', fontSize: 10 }} />
