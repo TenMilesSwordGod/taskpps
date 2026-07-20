@@ -19,7 +19,7 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { message, Tooltip, Dropdown } from 'antd';
+import { message, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import { SaveOutlined, ApartmentOutlined, ExpandOutlined, CameraOutlined } from '@ant-design/icons';
 import EditorTaskNode from './nodes/EditorTaskNode';
@@ -792,30 +792,11 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           />
         </ReactFlow>
 
-        {/* v2 (2026-07): 右键菜单（画布内 Dropdown） */}
-        {contextMenu && contextMenu.open && (
-          <div
-            style={{
-              position: 'fixed',
-              left: contextMenu.x,
-              top: contextMenu.y,
-              zIndex: 1000,
-            }}
-          >
-            <Dropdown
-              menu={{ items: contextMenuItems }}
-              open
-              onOpenChange={(open) => { if (!open) setContextMenu(null); }}
-              trigger={['contextMenu']}
-              getPopupContainer={() => document.body}
-            >
-              {/* 使用一个不可见的div，让Dropdown菜单出现 */}
-              <div style={{ width: 0, height: 0 }} />
-            </Dropdown>
-          </div>
-        )}
-
-        {/* v2 (2026-07): 右键菜单 fallback — 使用 antd Dropdown 不可见元素方式不可靠时，用绝对定位的菜单 */}
+        {/* 注意(2026-07): 右键菜单仅保留自定义绝对定位 div 一份，移除冗余的 antd <Dropdown> 块。
+            原因：原先同时存在 antd Dropdown（zIndex 1000）与自定义 div（zIndex 1001）两套菜单，
+            右键时内容重复渲染（同一菜单项出现两次）并引发 zIndex 冲突/闪烁。自定义 div 已通过
+            contextMenuItems 完整渲染"添加 SubPipeline"/属性/删除等项且 onClick 处理完善，
+            因此直接删除 antd Dropdown，避免双重渲染。 */}
         {contextMenu && contextMenu.open && (
           <div
             style={{
