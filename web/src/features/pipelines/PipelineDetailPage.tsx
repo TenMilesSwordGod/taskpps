@@ -8,6 +8,9 @@ import {
   PlayCircleOutlined,
   CodeOutlined,
   CloseOutlined,
+  EditOutlined,
+  EyeOutlined,
+  SaveOutlined,
 } from '@ant-design/icons';
 import { usePipelineById, usePipelineByFile, useSavePipelineById, useSavePipelineByFile } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
@@ -20,6 +23,12 @@ import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 import { useAppStore } from '@/stores/appStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
 import type { PipelineDetail, ValidationError } from '@/types';
+import WorkflowEditor from './workflow/WorkflowEditor';
+import NodePalette from './workflow/NodePalette';
+import PropertyPanel from './workflow/PropertyPanel';
+import { nodesToYaml } from './workflow/nodesToYaml';
+import type { EditorNodeData, EditorEdgeData } from './workflow/yamlToNodes';
+import type { Node, Edge } from '@xyflow/react';
 
 // v2 (2026-07): issue #195 补充 — 非法 pipeline 无 definition_id
 // 通过 _file_/* 路由参数获取文件路径，从文件系统加载原始 YAML
@@ -61,6 +70,13 @@ export default function PipelineDetailPage() {
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
+  // v1 (2026-07): issue #206 — 可视化编辑器模式
+  const [editMode, setEditMode] = useState(false);
+  const [editNodes, setEditNodes] = useState<Node<EditorNodeData>[]>([]);
+  const [editEdges, setEditEdges] = useState<Edge<EditorEdgeData>[]>([]);
+  const [propertyPanelVisible, setPropertyPanelVisible] = useState(false);
+  const [editingNode, setEditingNode] = useState<Node<EditorNodeData> | null>(null);
+
   // 保存：正常模式用 by-id，文件模式用 by-file
   const saveByIdMutation = useSavePipelineById(!isFileMode ? definitionId : undefined);
   const saveByFileMutation = useSavePipelineByFile(isFileMode ? projectId : undefined);
@@ -81,6 +97,59 @@ export default function PipelineDetailPage() {
   }, [yamlText, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
 
   const saving = isFileMode ? saveByFileMutation.isPending : saveByIdMutation.isPending;
+
+  // v1 (2026-07): issue #206 — 编辑器中保存：nodes/edges → YAML → 写回
+  const handleSaveFromEditor = useCallback(() => {
+    const { pipeline: editedPipeline, errors } = nodesToYaml(editNodes, editEdges);
+    if (!editedPipeline) {
+      message.error(`保存失败: ${errors.join(', ')}`);
+      return;
+    }
+    const yaml = pipelineToYaml(editedPipeline);
+    if (isFileMode && actualFilePath) {
+      saveByFileMutation.mutate({ file: actualFilePath, content: yaml }, {
+        onSuccess: () => message.success('已保存'),
+        onError: (err: Error) => message.error(`保存失败: ${err.message}`),
+      });
+    } else if (definitionId) {
+      saveByIdMutation.mutate(yaml, {
+        onSuccess: () => message.success('已保存'),
+        onError: (err: Error) => message.error(`保存失败: ${err.message}`),
+      });
+    }
+  }, [editNodes, editEdges, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
+
+  // 编辑器节点选择处理
+  const handleEditorNodeSelect = useCallback((nodeId: string | null) => {
+    setSelectedTaskId(nodeId);
+    if (nodeId) {
+      const node = editNodes.find(n => n.id === nodeId);
+      if (node) {
+        setEditingNode(node);
+        setPropertyPanelVisible(true);
+      }
+    } else {
+      setPropertyPanelVisible(false);
+      setEditingNode(null);
+    }
+  }, [editNodes]);
+
+  // 编辑器节点属性保存
+  const handlePropertySave = useCallback((updatedNode: Node<EditorNodeData>) => {
+    setEditNodes(prev => prev.map(n => n.id === updatedNode.id ? updatedNode : n));
+  }, []);
+
+  // 编辑器节点删除
+  const handlePropertyDelete = useCallback((nodeId: string) => {
+    setEditNodes(prev => prev.filter(n => n.id !== nodeId));
+    setEditEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+  }, []);
+
+  // graph 变化回调
+  const handleGraphChange = useCallback((nodes: Node<EditorNodeData>[], edges: Edge<EditorEdgeData>[]) => {
+    setEditNodes(nodes);
+    setEditEdges(edges);
+  }, []);
 
   // v2 (2026-07): 文件模式下，数据加载后自动填充编辑器
   useEffect(() => {
@@ -248,32 +317,60 @@ export default function PipelineDetailPage() {
       {/* 工具栏 */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0">
         <Space>
-          <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'}>
-            <Button
-              icon={yamlEditorOpen ? <CloseOutlined /> : <CodeOutlined />}
-              onClick={handleToggleEditor}
-              type={yamlEditorOpen ? 'primary' : 'default'}
-            >
-              {yamlEditorOpen ? '关闭编辑器' : 'YAML 编辑器'}
-            </Button>
-          </Tooltip>
+          {/* v1 (2026-07): issue #206 — 编辑/查看模式切换 */}
           {!isFileMode && (
+            <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'}>
+              <Button
+                icon={editMode ? <EyeOutlined /> : <EditOutlined />}
+                onClick={() => setEditMode((prev) => !prev)}
+                type={editMode ? 'primary' : 'default'}
+              >
+                {editMode ? '查看模式' : '编辑模式'}
+              </Button>
+            </Tooltip>
+          )}
+          {editMode && (
+            <Tooltip title="保存 (Ctrl+S)">
+              <Button
+                icon={<SaveOutlined />}
+                onClick={handleSaveFromEditor}
+                loading={saving}
+                type="primary"
+              >
+                保存
+              </Button>
+            </Tooltip>
+          )}
+          {!editMode && (
             <>
-              <Tooltip title="导出 PNG">
-                <Button icon={<FileImageOutlined />} onClick={handleExportPng}>
-                  导出 PNG
+              <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'}>
+                <Button
+                  icon={yamlEditorOpen ? <CloseOutlined /> : <CodeOutlined />}
+                  onClick={handleToggleEditor}
+                  type={yamlEditorOpen ? 'primary' : 'default'}
+                >
+                  {yamlEditorOpen ? '关闭编辑器' : 'YAML 编辑器'}
                 </Button>
               </Tooltip>
-              <Tooltip title="导出 SVG">
-                <Button icon={<ExportOutlined />} onClick={handleExportSvg}>
-                  导出 SVG
-                </Button>
-              </Tooltip>
-              <Tooltip title="复制到剪贴板">
-                <Button icon={<CopyOutlined />} onClick={handleCopy}>
-                  复制图片
-                </Button>
-              </Tooltip>
+              {!isFileMode && (
+                <>
+                  <Tooltip title="导出 PNG">
+                    <Button icon={<FileImageOutlined />} onClick={handleExportPng}>
+                      导出 PNG
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="导出 SVG">
+                    <Button icon={<ExportOutlined />} onClick={handleExportSvg}>
+                      导出 SVG
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="复制到剪贴板">
+                    <Button icon={<CopyOutlined />} onClick={handleCopy}>
+                      复制图片
+                    </Button>
+                  </Tooltip>
+                </>
+              )}
             </>
           )}
         </Space>
@@ -298,10 +395,10 @@ export default function PipelineDetailPage() {
         </Space>
       </div>
 
-      {/* 主内容区：YAML 编辑器（可选） + DAG 画布 + 属性面板 */}
+      {/* 主内容区：YAML 编辑器（可选） + DAG 画布/编辑器 + NodePalette */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* YAML 编辑器面板 */}
-        {yamlEditorOpen && (
+        {/* YAML 编辑器面板 — 仅查看模式 */}
+        {!editMode && yamlEditorOpen && (
           <div className="flex-shrink-0 border-r border-gray-200 bg-[#1e1e1e]" style={{ width: isFileMode ? '100%' : '40%', minWidth: 300 }}>
             <YamlEditor
               ref={yamlEditorRef}
@@ -315,10 +412,10 @@ export default function PipelineDetailPage() {
           </div>
         )}
 
-        {/* DAG 画布 — 文件模式下隐藏，只显示 YAML 编辑器 */}
-        {!isFileMode && (
+        {/* DAG 画布 — 文件模式下隐藏，仅查看模式 */}
+        {!isFileMode && !editMode && (
           <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden flex flex-col">
-            {/* v1 (2026-07): issue #195 — 画布错误态横幅：YAML 非法时提示当前展示的是旧版本 */}
+            {/* v1 (2026-07): issue #195 — 画布错误态横幅 */}
             {yamlEditorOpen && yamlError && (
               <Alert
                 type="error"
@@ -341,6 +438,31 @@ export default function PipelineDetailPage() {
               <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
             </div>
           </div>
+        )}
+
+        {/* 编辑模式 — 可编辑画布 + 右侧节点面板 */}
+        {!isFileMode && editMode && (
+          <>
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <WorkflowEditor
+                pipeline={displayPipeline}
+                selectedNodeId={selectedTaskId}
+                onNodeSelect={handleEditorNodeSelect}
+                onGraphChange={handleGraphChange}
+              />
+            </div>
+            <NodePalette />
+            <PropertyPanel
+              selectedNode={editingNode}
+              visible={propertyPanelVisible}
+              onClose={() => {
+                setPropertyPanelVisible(false);
+                setEditingNode(null);
+              }}
+              onSave={handlePropertySave}
+              onDelete={handlePropertyDelete}
+            />
+          </>
         )}
 
         {/* 帮助面板 */}
