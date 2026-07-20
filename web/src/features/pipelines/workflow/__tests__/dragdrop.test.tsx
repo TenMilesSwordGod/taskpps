@@ -162,6 +162,44 @@ describe('真实拖放 → 画布根层级', () => {
     unmount();
   });
 
+  it.each([
+    { nodeType: 'task_atomic_cmd', label: 'CMD' },
+    { nodeType: 'task_atomic_step', label: 'STEP' },
+    { nodeType: 'task_atomic_plugin', label: 'PLUGIN' },
+    { nodeType: 'task_atomic_invoke', label: 'INVOKE' },
+  ])('拖 $label 原子节点到画布 → 画布出现 $nodeType 节点', async ({ nodeType, label }) => {
+    const onGraphChange = vi.fn();
+    const { container, unmount } = render(
+      <WorkflowEditor
+        pipeline={{ name: `atomic-${label.toLowerCase()}` }}
+        selectedNodeId={null}
+        onNodeSelect={() => {}}
+        onGraphChange={onGraphChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('.react-flow')).toBeInTheDocument();
+    });
+
+    const dt = new DataTransfer();
+    dt.setData('application/reactflow-type', 'task');
+    dt.setData('application/reactflow-node-type', nodeType);
+    dt.setData('application/reactflow-label', label);
+
+    const pane = container.querySelector('[class*="react-flow__pane"]');
+    fireEvent.drop(pane!, { dataTransfer: dt, clientX: 400, clientY: 400 });
+
+    // 画布正常渲染，不崩溃
+    expect(container.querySelector('.react-flow')).toBeInTheDocument();
+
+    const nodes = container.querySelectorAll('[class*="react-flow__node"]');
+    // 初始 start/pipeline/end = 3 + 新原子节点 >= 4
+    expect(nodes.length).toBeGreaterThanOrEqual(4);
+
+    unmount();
+  });
+
   it('空 dataTransfer（缺失 reactflow-type）→ 不创建节点，组件不崩溃', async () => {
     const onGraphChange = vi.fn();
     const { container, unmount } = render(
