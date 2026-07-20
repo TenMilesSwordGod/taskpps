@@ -70,3 +70,31 @@ class ClipboardItemStub {
 ;(globalThis as unknown as { ClipboardItem: typeof ClipboardItemStub }).ClipboardItem =
   ClipboardItemStub
 
+// jsdom 不实现 DataTransfer，拖拽测试需要
+class DataTransferStub {
+  private _data: Map<string, string> = new Map()
+  dropEffect: string = 'none'
+  effectAllowed: string = 'none'
+
+  getData(format: string): string {
+    return this._data.get(format) || ''
+  }
+  setData(format: string, data: string): void {
+    this._data.set(format, data)
+  }
+  clearData(): void {
+    this._data.clear()
+  }
+  get types(): string[] {
+    return Array.from(this._data.keys())
+  }
+  get files(): File[] {
+    return []
+  }
+  get items(): unknown[] {
+    return []
+  }
+}
+// @ts-expect-error jsdom fallback for DataTransfer
+globalThis.DataTransfer = DataTransferStub
+

@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest';
+import { render, waitFor } from '@testing-library/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { PipelineDetail } from '@/types';
 import { yamlToNodes } from '../yamlToNodes';
 import { nodesToYaml } from '../nodesToYaml';
 import type { EditorNodeData, EditorEdgeData } from '../yamlToNodes';
+import { renderWithProvider } from './test-utils';
+import WorkflowEditor from '../WorkflowEditor';
+import EditorSubPipelineNode from '../nodes/EditorSubPipelineNode';
+import EditorTaskNode from '../nodes/EditorTaskNode';
+import EditorPostParentNode from '../nodes/EditorPostParentNode';
+import EditorPostChildNode from '../nodes/EditorPostChildNode';
 
 /**
  * 边界场景测试
@@ -318,5 +325,272 @@ describe('边界场景: Post 容器边界', () => {
     // 不应生成 post 父容器
     const postParent = nodes.find(n => n.type === 'editorPostParent');
     expect(postParent).toBeUndefined();
+  });
+});
+
+/**
+ * 数据层补充测试（H）
+ * 验证:
+ *   1. 100 节点画布序列化/反序列化性能（<2s）
+ *   2. 节点图标验证
+ *   3. 节点颜色遵循层级模型
+ *   注意: React 将 inline style 颜色标准化为 rgb() 格式
+ */
+
+describe('数据层补充: 性能测试', () => {
+  it('100 节点画布序列化+反序列化在 2 秒内完成', () => {
+    // 构建包含多个 SubPipeline 的 Pipeline（20 个 SubPipeline × 5 task = 100 task 节点）
+    const pipelines: NonNullable<PipelineDetail['pipelines']> = [];
+    for (let s = 0; s < 20; s++) {
+      const tasks: NonNullable<PipelineDetail['pipelines']>[number]['tasks'] = [];
+      for (let t = 0; t < 5; t++) {
+        tasks.push({
+          name: `task-${s}-${t}`,
+          command: `echo ${s}-${t}`,
+          env: {},
+          retry: t % 3,
+          depends_on: t > 0 ? [`task-${s}-${t - 1}`] : [],
+        });
+      }
+      pipelines.push({
+        name: `sub-${s}`,
+        depends_on: s > 0 ? [`sub-${s - 1}`] : [],
+        tasks,
+      });
+    }
+
+    const p: PipelineDetail = { name: 'perf-test', pipelines };
+
+    const start = performance.now();
+    const { nodes, edges } = yamlToNodes(p);
+    const result = nodesToYaml(nodes, edges);
+    const elapsed = performance.now() - start;
+
+    expect(elapsed).toBeLessThan(2000);
+    expect(result.errors).toEqual([]);
+    expect(result.pipeline?.pipelines?.length).toBe(20);
+
+    // 验证 total task 数量
+    let totalTasks = 0;
+    for (const sub of result.pipeline?.pipelines || []) {
+      totalTasks += sub.tasks.length;
+    }
+    expect(totalTasks).toBe(100);
+  });
+
+  it('50 个 SubPipeline 的序列化在 1 秒内完成', () => {
+    const pipelines: NonNullable<PipelineDetail['pipelines']> = [];
+    for (let s = 0; s < 50; s++) {
+      pipelines.push({
+        name: `sub-${s}`,
+        depends_on: [],
+        tasks: [{ name: `t-${s}`, env: {}, retry: 0, depends_on: [] }],
+      });
+    }
+
+    const p: PipelineDetail = { name: 'large', pipelines };
+
+    const start = performance.now();
+    const { nodes, edges } = yamlToNodes(p);
+    const elapsedParse = performance.now() - start;
+
+    const startSerial = performance.now();
+    const result = nodesToYaml(nodes, edges);
+    const elapsedSerial = performance.now() - startSerial;
+
+    expect(elapsedParse).toBeLessThan(1000);
+    expect(elapsedSerial).toBeLessThan(1000);
+    expect(result.errors).toEqual([]);
+  });
+});
+
+describe('数据层补充: 节点视觉验证', () => {
+  it('SubPipeline 节点使用蓝色虚线边框（层级模型颜色）', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorSubPipelineNode data={{ label: 'build' }} />,
+    );
+    const root = container.firstChild as HTMLElement;
+    const style = root.getAttribute('style') || '';
+    expect(style).toContain('dashed');
+    // #3b82f6 → rgb(59, 130, 246)
+    expect(style).toContain('59, 130, 246');
+    unmount();
+  });
+
+  it('Task 节点使用绿色虚线边框', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorTaskNode data={{ task: { name: 'test', env: {}, retry: 0, depends_on: [] } }} />,
+    );
+    const root = container.firstChild as HTMLElement;
+    const style = root.getAttribute('style') || '';
+    expect(style).toContain('dashed');
+    // #22c55e → rgb(34, 197, 94)
+    expect(style).toContain('34, 197, 94');
+    unmount();
+  });
+
+  it('Post 父容器节点使用红色虚线边框', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorPostParentNode data={{ label: 'Post' }} />,
+    );
+    const root = container.firstChild as HTMLElement;
+    const style = root.getAttribute('style') || '';
+    // #ef4444 → rgb(239, 68, 68)
+    expect(style).toContain('239, 68, 68');
+    unmount();
+  });
+
+  it('Post 子容器 on_fail 使用红色强调条', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorPostChildNode
+        data={{ task: { name: 'alert', env: {}, retry: 0, depends_on: [] }, postVariant: 'on_fail' }}
+      />,
+    );
+    const root = container.firstChild as HTMLElement;
+    const style = root.getAttribute('style') || '';
+    expect(style).toContain('3px');
+    // #ef4444 → rgb(239, 68, 68)
+    expect(style).toContain('239, 68, 68');
+    unmount();
+  });
+
+  it('Post 子容器 on_success 使用绿色强调条', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorPostChildNode
+        data={{ task: { name: 'tag', env: {}, retry: 0, depends_on: [] }, postVariant: 'on_success' }}
+      />,
+    );
+    const root = container.firstChild as HTMLElement;
+    const style = root.getAttribute('style') || '';
+    expect(style).toContain('3px');
+    // #22c55e → rgb(34, 197, 94)
+    expect(style).toContain('34, 197, 94');
+    unmount();
+  });
+
+  it('SubPipeline 容器使用圆角边框', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorSubPipelineNode data={{ label: 'build' }} />,
+    );
+    const root = container.firstChild as HTMLElement;
+    const style = root.getAttribute('style') || '';
+    expect(style).toContain('border-radius');
+    unmount();
+  });
+});
+
+/**
+ * v2 (2026-07): SVG 图标验证
+ * PM spec 要求所有节点使用 SVG 组件（严禁 emoji unicode 字符）
+ * 验证:
+ *   1. 节点渲染使用 SVG 组件（<svg> 标签存在）
+ *   2. 节点中不存在 emoji 字符（⚠⬡⚙⌨ 等）
+ */
+describe('SVG 图标验证', () => {
+  /** emoji 中常用作图标替代的 unicode 范围 */
+  const EMOJI_CHARS = /[⚠⬡⚙⌨⏳✓✗▶◀▲▼●○◆◇▲▼☐☑☒⭐♻⬆⬇⬅➡🔄💾📁📂🔍🔧]+/u;
+
+  it('SubPipeline 节点渲染包含 SVG 元素（SubPipelineIcon）', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorSubPipelineNode data={{ label: 'build' }} />,
+    );
+    // SubPipelineIcon 渲染为 <svg> 标签
+    expect(container.querySelector('svg')).not.toBeNull();
+    unmount();
+  });
+
+  it('Task 节点渲染包含 SVG 元素（CmdIcon/StepIcon 等）', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorTaskNode
+        data={{ task: { name: 'compile', command: 'make', env: {}, retry: 0, depends_on: [] }, taskType: 'command' }}
+      />,
+    );
+    // CmdIcon 渲染为 <svg> 标签
+    expect(container.querySelector('svg')).not.toBeNull();
+    unmount();
+  });
+
+  it('PostParent 节点渲染包含 SVG 元素（PostParentIcon）', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorPostParentNode data={{ label: 'Post' }} />,
+    );
+    expect(container.querySelector('svg')).not.toBeNull();
+    unmount();
+  });
+
+  it('节点渲染内容中不存在 emoji 字符（⚠⬡⚙⌨）', () => {
+    const { container: c1, unmount: u1 } = renderWithProvider(
+      <EditorSubPipelineNode data={{ label: 'build' }} />,
+    );
+    const { container: c2, unmount: u2 } = renderWithProvider(
+      <EditorTaskNode
+        data={{ task: { name: 't', command: 'cmd', env: {}, retry: 0, depends_on: [] }, taskType: 'command' }}
+      />,
+    );
+    const { container: c3, unmount: u3 } = renderWithProvider(
+      <EditorPostParentNode data={{ label: 'Post' }} />,
+    );
+    const { container: c4, unmount: u4 } = renderWithProvider(
+      <EditorPostChildNode
+        data={{ task: { name: 'alert', env: {}, retry: 0, depends_on: [] }, postVariant: 'on_fail' }}
+      />,
+    );
+
+    const allHtml = [c1, c2, c3, c4].map(c => c.innerHTML).join('');
+    expect(allHtml).not.toMatch(EMOJI_CHARS);
+    u1(); u2(); u3(); u4();
+  });
+});
+
+/**
+ * v3 (2026-07): 渲染性能测试
+ * 100+ 节点 pipeline → WorkflowEditor 渲染 < 2s
+ * 验证 React Flow 画布渲染性能在安全阈值内
+ */
+describe('渲染性能: 100 节点画布渲染', () => {
+  it('20 SubPipeline × 5 tasks = 100 task 节点 → 渲染到 React Flow 画布 < 2s', async () => {
+    const pipelines: NonNullable<PipelineDetail['pipelines']> = [];
+    for (let s = 0; s < 20; s++) {
+      const tasks: NonNullable<PipelineDetail['pipelines']>[number]['tasks'] = [];
+      for (let t = 0; t < 5; t++) {
+        tasks.push({
+          name: `t-${s}-${t}`,
+          command: `echo ${s}-${t}`,
+          env: {},
+          retry: 0,
+          depends_on: t > 0 ? [`t-${s}-${t - 1}`] : [],
+        });
+      }
+      pipelines.push({
+        name: `sub-${s}`,
+        depends_on: s > 0 ? [`sub-${s - 1}`] : [],
+        tasks,
+      });
+    }
+
+    const p: PipelineDetail = { name: 'perf-render', pipelines };
+
+    const start = performance.now();
+    const { container, unmount } = render(
+      <WorkflowEditor
+        pipeline={p}
+        selectedNodeId={null}
+        onNodeSelect={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('.react-flow')).toBeInTheDocument();
+    });
+
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(2000);
+
+    // 验证节点确实渲染了
+    const flowNodes = container.querySelectorAll('.react-flow__node');
+    // 100 tasks + 20 SubPipeline + 1 pipeline + 1 start + 1 end = 123 个节点
+    expect(flowNodes.length).toBeGreaterThanOrEqual(100);
+
+    unmount();
   });
 });
