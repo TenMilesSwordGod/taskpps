@@ -126,7 +126,9 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       if (readOnly) return;
       if (connection.source === connection.target) return;
 
-      setEdges((eds: Edge<EditorEdgeData>[]) => addEdge({
+      // bug #35 关联：连线改变 edges，需同步回传父组件 editEdges，
+      // 否则新增连线在保存时丢失。
+      const newEdge: Edge<EditorEdgeData> = {
         ...connection,
         type: 'smoothstep',
         markerEnd: { type: 'arrowclosed' as const, width: 8, height: 8, color: '#94a3b8' },
@@ -136,9 +138,12 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           explicit: true,
           implicit: false,
         },
-      } as Edge<EditorEdgeData>, eds));
+      } as Edge<EditorEdgeData>;
+      const newEdges = addEdge(newEdge, edges);
+      setEdges(newEdges);
+      onGraphChange?.(nodes, newEdges);
     },
-    [readOnly, setEdges],
+    [readOnly, setEdges, edges, nodes, onGraphChange],
   );
 
   // 节点变化处理 — 标记 dirty
@@ -235,8 +240,12 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         }
       }
 
+      // bug #35 关联修复：各分支只负责构造 newNode，最后统一 setNodes + onGraphChange，
+      // 避免每处重复回传，也保证新增节点实时同步到父组件 editNodes（否则保存时丢失）。
+      let newNode: Node<EditorNodeData> | null = null;
+
       if (nodeTypeName === 'subpipeline') {
-        const newNode: Node<EditorNodeData> = {
+        newNode = {
           id: nodeId,
           type: 'editorSubPipeline',
           position: nodePosition,
@@ -247,10 +256,8 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             executionStrategy: 'sequential',
           },
         };
-        setNodes((nds: Node<EditorNodeData>[]) => [...nds, newNode]);
-        setIsDirty(true);
       } else if (nodeTypeName === 'task') {
-        const newNode: Node<EditorNodeData> = {
+        newNode = {
           id: nodeId,
           type: 'editorTask',
           position: nodePosition,
@@ -261,10 +268,8 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             subpipelineName: '',
           },
         };
-        setNodes((nds: Node<EditorNodeData>[]) => [...nds, newNode]);
-        setIsDirty(true);
       } else if (nodeTypeName === 'post_parent') {
-        const newNode: Node<EditorNodeData> = {
+        newNode = {
           id: nodeId,
           type: 'editorPostParent',
           position: nodePosition,
@@ -272,8 +277,6 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           style: { width: 280, height: 150 },
           data: { label: label || 'Post 处理容器' },
         };
-        setNodes((nds: Node<EditorNodeData>[]) => [...nds, newNode]);
-        setIsDirty(true);
       } else if (nodeTypeName.startsWith('post_child_')) {
         const variantMap: Record<string, 'on_fail' | 'on_success' | 'always'> = {
           post_child_on_fail: 'on_fail',
@@ -281,7 +284,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           post_child_always: 'always',
         };
         const postVariant = variantMap[nodeTypeName] || 'on_fail';
-        const newNode: Node<EditorNodeData> = {
+        newNode = {
           id: nodeId,
           type: 'editorPostChild',
           position: nodePosition,
@@ -292,18 +295,14 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             postVariant,
           },
         };
-        setNodes((nds: Node<EditorNodeData>[]) => [...nds, newNode]);
-        setIsDirty(true);
       } else if (nodeTypeName === 'startend') {
-        const newNode: Node<EditorNodeData> = {
+        newNode = {
           id: nodeId,
           type: 'editorStartEnd',
           position: nodePosition,
           parentId: nodeParentId,
           data: { variant: 'start' },
         };
-        setNodes((nds: Node<EditorNodeData>[]) => [...nds, newNode]);
-        setIsDirty(true);
       } else if (nodeTypeName.startsWith('task_atomic_')) {
         const typeMap: Record<string, 'command' | 'steps' | 'plugin' | 'invoke'> = {
           task_atomic_cmd: 'command',
@@ -312,7 +311,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           task_atomic_invoke: 'invoke',
         };
         const taskType = typeMap[nodeTypeName] || 'command';
-        const newNode: Node<EditorNodeData> = {
+        newNode = {
           id: nodeId,
           type: 'editorTask',
           position: nodePosition,
@@ -323,13 +322,18 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             subpipelineName: '',
           },
         };
-        setNodes((nds: Node<EditorNodeData>[]) => [...nds, newNode]);
+      }
+
+      if (newNode) {
+        const newNodes = [...nodes, newNode];
+        setNodes(newNodes);
+        onGraphChange?.(newNodes, edges);
         setIsDirty(true);
       }
 
       message.success(`已添加节点: ${label || nodeTypeName}`);
     },
-    [setNodes, nodes],
+    [setNodes, nodes, edges, onGraphChange],
   );
 
   // === 右键菜单处理 ===
@@ -374,8 +378,15 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
   // 删除节点
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
-      setNodes((nds) => nds.filter((n) => n.id !== nodeId));
-      setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+      // 关键修复（bug #35）：直接基于当前 nodes/edges 计算删除后的新图并回传父组件。
+      // 原实现只更新内部 state 而未调用 onGraphChange，导致父组件的 editNodes
+      // 未同步删除，PropertyPanel 删除节点后保存时该节点"复活"。
+      // 这里用闭包里的 nodes/edges 显式计算新数组，避免 setState 回调异步导致回传旧值。
+      const newNodes = nodes.filter((n) => n.id !== nodeId);
+      const newEdges = edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+      setNodes(newNodes);
+      setEdges(newEdges);
+      onGraphChange?.(newNodes, newEdges);
       if (selectedNodeId === nodeId) {
         onNodeSelect(null);
       }
@@ -383,7 +394,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       message.success('节点已删除');
       setContextMenu(null);
     },
-    [setNodes, setEdges, selectedNodeId, onNodeSelect],
+    [setNodes, setEdges, selectedNodeId, onNodeSelect, onGraphChange, nodes, edges],
   );
 
   // v4 (2026-07): 键盘 Delete/Backspace 删除选中节点
@@ -404,23 +415,25 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
   // 折叠/展开节点
   const handleToggleCollapse = useCallback(
     (nodeId: string) => {
-      setNodes((nds) =>
-        nds.map((n) => {
-          if (n.id !== nodeId) return n;
-          const collapsed = !n.data?.collapsed;
-          return {
-            ...n,
-            data: { ...n.data, collapsed },
-            style: collapsed
-              ? { ...(n.style as object), width: 140, height: 48 }
-              : n.style,
-          };
-        }),
-      );
+      // bug #35 关联：折叠虽不影响 YAML（不标 dirty），但仍应回传新图，
+      // 保证父组件 editNodes 与画布一致，避免后续保存基于过期数据。
+      const newNodes = nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const collapsed = !n.data?.collapsed;
+        return {
+          ...n,
+          data: { ...n.data, collapsed },
+          style: collapsed
+            ? { ...(n.style as object), width: 140, height: 48 }
+            : n.style,
+        };
+      });
+      setNodes(newNodes);
+      onGraphChange?.(newNodes, edges);
       setIsDirty(false); // 折叠不影响 YAML，不标 dirty
       setContextMenu(null);
     },
-    [setNodes],
+    [setNodes, nodes, edges, onGraphChange],
   );
 
   // 查看节点属性（选中节点）
@@ -445,34 +458,43 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       const nodeId = `__new__${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const position = { x: 200, y: 200 };
 
+      // bug #35 关联：统一构造 newNode 后 setNodes + onGraphChange，
+      // 保证右键新增节点实时同步父组件 editNodes，避免保存时丢失。
+      let newNode: Node<EditorNodeData> | null = null;
       if (nodeTypeName === 'subpipeline') {
-        setNodes((nds) => [...nds, {
+        newNode = {
           id: nodeId, type: 'editorSubPipeline', position,
           style: { width: 260, height: 140 },
           data: { label: '新 SubPipeline', executionStrategy: 'sequential' },
-        } as Node<EditorNodeData>]);
+        };
       } else if (nodeTypeName === 'task') {
-        setNodes((nds) => [...nds, {
+        newNode = {
           id: nodeId, type: 'editorTask', position,
           data: { task: { name: '新 Task', env: {}, retry: 0, depends_on: [] }, taskType: 'command', subpipelineName: '' },
-        } as Node<EditorNodeData>]);
+        };
       } else if (nodeTypeName === 'post_parent') {
-        setNodes((nds) => [...nds, {
+        newNode = {
           id: nodeId, type: 'editorPostParent', position,
           style: { width: 280, height: 150 },
           data: { label: 'Post 处理容器' },
-        } as Node<EditorNodeData>]);
+        };
       } else if (nodeTypeName === 'startend') {
-        setNodes((nds) => [...nds, {
+        newNode = {
           id: nodeId, type: 'editorStartEnd', position,
           data: { variant: 'start' },
-        } as Node<EditorNodeData>]);
+        };
       }
-      setIsDirty(true);
+
+      if (newNode) {
+        const newNodes = [...nodes, newNode];
+        setNodes(newNodes);
+        onGraphChange?.(newNodes, edges);
+        setIsDirty(true);
+      }
       message.success(`已添加节点: ${nodeTypeName}`);
       setContextMenu(null);
     },
-    [setNodes, nodes],
+    [setNodes, nodes, edges, onGraphChange],
   );
 
   // === 工具栏操作 ===
