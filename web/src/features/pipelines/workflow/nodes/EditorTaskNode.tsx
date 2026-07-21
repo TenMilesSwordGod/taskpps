@@ -1,8 +1,9 @@
 import { memo } from 'react';
 import { Handle, Position, NodeResizer } from '@xyflow/react';
 import type { TaskYAML, TaskType } from '@/types';
-import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
+import { TYPE_COLOR, FONT_MONO, INK } from '@/features/pipelines/nodes/nodeTokens';
 import { CmdIcon, StepIcon, PluginIcon, InvokeIcon } from '../icons';
+import { useReadOnly } from './ReadOnlyContext';
 
 /** 推断任务类型 */
 function inferType(task: TaskYAML): TaskType {
@@ -37,11 +38,15 @@ interface EditorTaskNodeData {
  * v2 (2026-07): SVG 图标替换 emoji + 折叠支持
  */
 function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected?: boolean }) {
+  const readOnly = useReadOnly();
   const task = data.task;
   const taskName = task?.name || 'Task';
   const taskType = data.taskType || (task ? inferType(task) : 'command');
   const iconColor = TYPE_COLOR[taskType] || '#94a3b8';
-  const borderColor = selected ? '#1677ff' : '#22c55e';
+  // 注意(2026-07): 只读模式下使用实线边框（与 PipelineGraph 查看模式一致），
+  // 编辑模式使用虚线边框以暗示可拖拽/可连接
+  const borderStyle = readOnly ? 'solid' : 'dashed';
+  const borderColor = selected ? (readOnly ? '#64748b' : '#1677ff') : '#22c55e';
   const collapsed = data.collapsed === true;
   // v2 (2026-07): 使用 SVG 图标组件
   const IconComponent = TYPE_ICON_SVG[taskType];
@@ -52,7 +57,7 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
         style={{
           width: '100%',
           height: '100%',
-          border: `2px solid ${borderColor}`,
+          border: `2px ${borderStyle} ${borderColor}`,
           borderRadius: 8,
           background: '#f0fdf4',
           position: 'relative',
@@ -64,8 +69,7 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
           minHeight: 40,
         }}
       >
-        {/* v4 (2026-07): 添加 NodeResizer 使折叠态可拖拽调整大小 */}
-        <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />
+        {!readOnly && <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />}
         {IconComponent && <IconComponent style={{ width: 14, height: 14, color: iconColor }} />}
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#0f172a' }}>
           {taskName}
@@ -77,64 +81,71 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
   return (
     <div
       style={{
-        width: 180,
+        width: '100%',
+        height: '100%',
+        minWidth: 100,
         minHeight: 56,
-        border: `2px dashed ${borderColor}`,
+        border: `2px ${borderStyle} ${borderColor}`,
         borderRadius: 8,
         background: '#f0fdf4',
         padding: '10px 12px',
         position: 'relative',
-        boxShadow: selected ? '0 0 0 4px rgba(22,119,255,0.12)' : undefined,
+        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(22,119,255,0.12)' : undefined,
+        boxSizing: 'border-box',
       }}
     >
-      {/* v4 (2026-07): 添加 NodeResizer 使展开态可拖拽调整大小 */}
-      <NodeResizer minWidth={100} minHeight={56} isVisible={selected} />
-      {/* In 端口 — 左侧 */}
-      <Handle
-        id="in"
-        type="target"
-        position={Position.Left}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: '2px solid #64748b',
-          borderRadius: '50%',
-          left: -5,
-          top: '50%',
-        }}
-      />
+      {!readOnly && <NodeResizer minWidth={100} minHeight={56} isVisible={selected} />}
+      {/* 注意(2026-07): 只读模式下隐藏所有 Handle，与 PipelineGraph 查看模式一致 */}
+      {!readOnly && (
+        <>
+          {/* In 端口 — 左侧 */}
+          <Handle
+            id="in"
+            type="target"
+            position={Position.Left}
+            style={{
+              width: 8,
+              height: 8,
+              background: 'transparent',
+              border: '2px solid #64748b',
+              borderRadius: '50%',
+              left: -5,
+              top: '50%',
+            }}
+          />
 
-      {/* Out 端口 — 右侧 */}
-      <Handle
-        id="out"
-        type="source"
-        position={Position.Right}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: '2px solid #64748b',
-          borderRadius: '50%',
-          right: -5,
-          top: '50%',
-        }}
-      />
+          {/* Out 端口 — 右侧 */}
+          <Handle
+            id="out"
+            type="source"
+            position={Position.Right}
+            style={{
+              width: 8,
+              height: 8,
+              background: 'transparent',
+              border: '2px solid #64748b',
+              borderRadius: '50%',
+              right: -5,
+              top: '50%',
+            }}
+          />
 
-      {/* Post 端口 — 底部 */}
-      <Handle
-        id="post"
-        type="source"
-        position={Position.Bottom}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: '2px solid #ef4444',
-          borderRadius: '50%',
-          bottom: -5,
-        }}
-      />
+          {/* Post 端口 — 底部 */}
+          <Handle
+            id="post"
+            type="source"
+            position={Position.Bottom}
+            style={{
+              width: 8,
+              height: 8,
+              background: 'transparent',
+              border: '2px solid #ef4444',
+              borderRadius: '50%',
+              bottom: -5,
+            }}
+          />
+        </>
+      )}
 
       {/* 标题行 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>

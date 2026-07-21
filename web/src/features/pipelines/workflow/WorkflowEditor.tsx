@@ -28,7 +28,9 @@ import EditorPostParentNode from './nodes/EditorPostParentNode';
 import EditorPostChildNode from './nodes/EditorPostChildNode';
 import EditorStartEndNode from './nodes/EditorStartEndNode';
 import EditorPipelineNode from './nodes/EditorPipelineNode';
+import { ReadOnlyCtx } from './nodes/ReadOnlyContext';
 import { yamlToNodes } from './yamlToNodes';
+import { INK } from '../nodes/nodeTokens';
 import type { EditorNodeData, EditorEdgeData } from './yamlToNodes';
 import type { PipelineDetail } from '@/types';
 import { applyDagreLayout } from '@/utils/dagreLayout';
@@ -315,17 +317,33 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           task_atomic_invoke: 'invoke',
         };
         const taskType = typeMap[nodeTypeName] || 'command';
-        newNode = {
-          id: nodeId,
-          type: 'editorTask',
-          position: nodePosition,
-          parentId: nodeParentId,
-          data: {
-            task: { name: label || '新任务', env: {}, retry: 0, depends_on: [] },
-            taskType,
-            subpipelineName: '',
-          },
-        };
+        const taskData = { name: label || '新任务', env: {}, retry: 0, depends_on: [] };
+        // bug #50 (2026-07): 原子行为拖入 Post 容器时，创建 editorPostChild 节点而非 editorTask
+        if (parentContext === 'post_parent') {
+          newNode = {
+            id: nodeId,
+            type: 'editorPostChild',
+            position: nodePosition,
+            parentId: nodeParentId,
+            data: {
+              task: taskData,
+              taskType,
+              postVariant: 'on_fail',
+            },
+          };
+        } else {
+          newNode = {
+            id: nodeId,
+            type: 'editorTask',
+            position: nodePosition,
+            parentId: nodeParentId,
+            data: {
+              task: taskData,
+              taskType,
+              subpipelineName: '',
+            },
+          };
+        }
       }
 
       if (newNode) {
@@ -582,13 +600,35 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         nodes as unknown as Node<Record<string, unknown>>[],
         edges as unknown as Edge<Record<string, unknown>>[],
       );
-      setNodes(layouted as unknown as Node<EditorNodeData>[]);
+      // v5 (2026-07 / bug #46): 将子节点 position 从绝对坐标转为相对父容器的偏移
+      // 根因：dagre 给所有节点输出 canvas 级别的绝对坐标，但 ReactFlow 对有 parentId
+      // 的子节点将 position 解释为相对父容器的偏移。若不转换，子节点会以绝对坐标+
+      // 父容器偏移叠加渲染，导致节点"到处乱飞"。
+      // 这里的转换逻辑与 usePipelineGraph.ts:648-663 保持一致。
+      const layoutedMap = new Map(layouted.map((n) => [n.id, n]));
+      const adjusted = layouted.map((node) => {
+        if (node.parentId) {
+          const parent = layoutedMap.get(node.parentId);
+          if (parent) {
+            return {
+              ...node,
+              position: {
+                x: (node.position.x as number) - (parent.position.x as number),
+                y: (node.position.y as number) - (parent.position.y as number),
+              },
+            };
+          }
+        }
+        return { ...node };
+      });
+      setNodes(adjusted as unknown as Node<EditorNodeData>[]);
+      onGraphChange?.(adjusted as unknown as Node<EditorNodeData>[], edges);
       setIsDirty(true);
       message.success('自动布局完成');
     } catch {
       message.error('自动布局失败');
     }
-  }, [nodes, edges, setNodes]);
+  }, [nodes, edges, setNodes, onGraphChange]);
 
   const handleFitView = useCallback(() => {
     reactFlowInstanceRef.current?.fitView({ padding: 0.3, duration: 300 });
@@ -691,7 +731,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       style={{
         width: '100%',
         height: '100%',
-        backgroundColor: '#f5f5f5',
+        backgroundColor: INK.canvas,
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
@@ -785,6 +825,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
 
       {/* 画布区域 */}
       <div style={{ flex: 1, position: 'relative' }}>
+        <ReadOnlyCtx.Provider value={readOnly}>
         <ReactFlow
           nodes={syncedNodes}
           edges={edges}
@@ -808,12 +849,13 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
           nodesDraggable={!readOnly}
           nodesConnectable={!readOnly}
           elementsSelectable={!readOnly}
+          isValidConnection={isValidConnection}
         >
           <Background
             variant={BackgroundVariant.Dots}
-            gap={20}
+            gap={18}
             size={1}
-            color="#e5e5e5"
+            color="#CBD5E1"
           />
           <Controls
             className="!shadow-sm !border !border-slate-200 !rounded !overflow-hidden"
@@ -830,6 +872,8 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             pannable
           />
         </ReactFlow>
+
+        </ReadOnlyCtx.Provider>
 
         {/* 注意(2026-07): 右键菜单仅保留自定义绝对定位 div 一份，移除冗余的 antd <Dropdown> 块。
             原因：原先同时存在 antd Dropdown（zIndex 1000）与自定义 div（zIndex 1001）两套菜单，
@@ -897,6 +941,21 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
     </div>
   );
 });
+
+// v4 (2026-07 / Bug#45): 连接校验函数
+// 只要 source 端是 out/post 类 handle 且 target 端是 in 类 handle 即允许，
+// 确保不会出现 target→target 或 source→source 等无效连接
+export function isValidConnection(
+  connection: { source: string; target: string; sourceHandle: string | null; targetHandle: string | null },
+): boolean {
+  const { sourceHandle, targetHandle } = connection;
+  if (!sourceHandle || !targetHandle) return false;
+
+  const sourceIsOutput = sourceHandle === 'out' || sourceHandle === 'post';
+  const targetIsInput = targetHandle === 'in';
+
+  return sourceIsOutput && targetIsInput;
+}
 
 /** MiniMap 节点着色 */
 function miniMapColor(node: Node): string {

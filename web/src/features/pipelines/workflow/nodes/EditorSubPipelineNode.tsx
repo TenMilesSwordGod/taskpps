@@ -2,6 +2,7 @@ import { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow, NodeResizer } from '@xyflow/react';
 import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 import { SubPipelineIcon, CollapseIcon, ExpandIcon } from '../icons';
+import { useReadOnly } from './ReadOnlyContext';
 
 interface EditorSubPipelineNodeData {
   label?: string;
@@ -21,10 +22,13 @@ interface EditorSubPipelineNodeData {
  * v3 (2026-07): 折叠按钮添加 onClick — 通过 useReactFlow 直接操作 store 避免回调传递
  */
 function EditorSubPipelineNode({ id, data, selected }: { id: string; data: EditorSubPipelineNodeData; selected?: boolean }) {
+  const readOnly = useReadOnly();
   const label = data.label || 'SubPipeline';
   const strategy = data.executionStrategy || 'sequential';
   const maxParallel = data.maxConcurrentTasks;
-  const borderColor = selected ? '#1d4ed8' : '#3b82f6';
+  // 注意(2026-07): 只读模式下使用实线边框 + 无蓝色选中阴影
+  const borderStyle = readOnly ? 'solid' : 'dashed';
+  const borderColor = selected ? (readOnly ? '#64748b' : '#1d4ed8') : '#3b82f6';
   const collapsed = data.collapsed === true;
 
   const { setNodes } = useReactFlow();
@@ -75,8 +79,7 @@ function EditorSubPipelineNode({ id, data, selected }: { id: string; data: Edito
           minHeight: 40,
         }}
       >
-        {/* v4 (2026-07): 添加 NodeResizer 使折叠态也可拖拽调整大小 */}
-        <NodeResizer minWidth={120} minHeight={40} isVisible={selected} />
+        {!readOnly && <NodeResizer minWidth={120} minHeight={40} isVisible={selected} />}
         <SubPipelineIcon style={{ width: 16, height: 16, color: '#3b82f6' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#1e40af' }}>
           {label}
@@ -95,63 +98,67 @@ function EditorSubPipelineNode({ id, data, selected }: { id: string; data: Edito
       style={{
         width: '100%',
         height: '100%',
-        border: `3px dashed ${borderColor}`,
+        border: `3px ${borderStyle} ${borderColor}`,
         borderRadius: 12,
         background: '#eff6ff',
         position: 'relative',
-        boxShadow: selected ? '0 0 0 4px rgba(59,130,246,0.12)' : undefined,
+        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(59,130,246,0.12)' : undefined,
         minWidth: 200,
         minHeight: 120,
       }}
     >
-      {/* v4 (2026-07): 添加 NodeResizer 使展开态可拖拽调整大小，选中时显示手柄 */}
-      <NodeResizer minWidth={200} minHeight={120} isVisible={selected} />
-      {/* In 端口 — 左侧 */}
-      <Handle
-        id="in"
-        type="target"
-        position={Position.Left}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: '2px solid #64748b',
-          borderRadius: '50%',
-          left: -5,
-          top: '50%',
-        }}
-      />
+      {!readOnly && <NodeResizer minWidth={200} minHeight={120} isVisible={selected} />}
+      {/* 注意(2026-07): 只读模式下隐藏所有 Handle */}
+      {!readOnly && (
+        <>
+          {/* In 端口 — 左侧 */}
+          <Handle
+            id="in"
+            type="target"
+            position={Position.Left}
+            style={{
+              width: 8,
+              height: 8,
+              background: 'transparent',
+              border: '2px solid #64748b',
+              borderRadius: '50%',
+              left: -5,
+              top: '50%',
+            }}
+          />
 
-      {/* Out 端口 — 右侧 */}
-      <Handle
-        id="out"
-        type="source"
-        position={Position.Right}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: '2px solid #64748b',
-          borderRadius: '50%',
-          right: -5,
-          top: '50%',
-        }}
-      />
+          {/* Out 端口 — 右侧 */}
+          <Handle
+            id="out"
+            type="source"
+            position={Position.Right}
+            style={{
+              width: 8,
+              height: 8,
+              background: 'transparent',
+              border: '2px solid #64748b',
+              borderRadius: '50%',
+              right: -5,
+              top: '50%',
+            }}
+          />
 
-      {/* Post 端口 — 底部 */}
-      <Handle
-        id="post"
-        type="source"
-        position={Position.Bottom}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: '2px solid #ef4444',
-          borderRadius: '50%',
-          bottom: -5,
-        }}
-      />
+          {/* Post 端口 — 底部 */}
+          <Handle
+            id="post"
+            type="source"
+            position={Position.Bottom}
+            style={{
+              width: 8,
+              height: 8,
+              background: 'transparent',
+              border: '2px solid #ef4444',
+              borderRadius: '50%',
+              bottom: -5,
+            }}
+          />
+        </>
+      )}
 
       {/* 标题栏 */}
       <div
@@ -194,24 +201,25 @@ function EditorSubPipelineNode({ id, data, selected }: { id: string; data: Edito
           >
             {badgeText}
           </span>
-          {/* v2 (2026-07): 折叠按钮 */}
-          {/* v3 (2026-07): 添加 onClick 处理 */}
-          <span
-            style={{
-              cursor: 'pointer',
-              padding: '2px',
-              borderRadius: 4,
-              display: 'flex',
-              alignItems: 'center',
-              color: '#64748b',
-            }}
-            title="折叠"
-            className="collapse-toggle"
-            data-collapsed={collapsed ? 'true' : 'false'}
-            onClick={handleToggleClick}
-          >
-            <CollapseIcon style={{ width: 14, height: 14 }} />
-          </span>
+          {/* 注意(2026-07): 只读模式下隐藏折叠按钮 */}
+          {!readOnly && (
+            <span
+              style={{
+                cursor: 'pointer',
+                padding: '2px',
+                borderRadius: 4,
+                display: 'flex',
+                alignItems: 'center',
+                color: '#64748b',
+              }}
+              title="折叠"
+              className="collapse-toggle"
+              data-collapsed={collapsed ? 'true' : 'false'}
+              onClick={handleToggleClick}
+            >
+              <CollapseIcon style={{ width: 14, height: 14 }} />
+            </span>
+          )}
         </div>
       </div>
     </div>

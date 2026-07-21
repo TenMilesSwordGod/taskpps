@@ -188,16 +188,17 @@ describe('Start/End 哨兵节点', () => {
 });
 
 describe('Pipeline 根容器节点', () => {
-  it('有 out 和 post 端口（无 in）', () => {
+  // v4 (2026-07): Bug#45 — Pipeline 新增 in 端口用于连接 Start
+  it('有 in、out 和 post 端口', () => {
     const { container, unmount } = renderWithProvider(
       <EditorPipelineNode data={{ label: 'MyPipeline' }} />,
     );
     expect(screen.getByText('MyPipeline')).toBeInTheDocument();
     const handles = container.querySelectorAll('[data-handleid]');
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
+    expect(handleIds).toContain('in');
     expect(handleIds).toContain('out');
     expect(handleIds).toContain('post');
-    expect(handleIds).not.toContain('in');
     unmount();
   });
 });

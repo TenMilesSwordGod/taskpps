@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Handle, Position, NodeResizer } from '@xyflow/react';
 import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 import { PostParentIcon } from '../icons';
+import { useReadOnly } from './ReadOnlyContext';
 
 interface EditorPostParentNodeData {
   label?: string;
@@ -17,7 +18,9 @@ interface EditorPostParentNodeData {
  * v2 (2026-07): SVG 图标替换 emoji + 折叠/展开支持
  */
 function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeData; selected?: boolean }) {
+  const readOnly = useReadOnly();
   const label = data.label || 'Post';
+  const borderStyle = readOnly ? 'solid' : 'dashed';
   const borderColor = selected ? '#b91c1c' : '#ef4444';
   const collapsed = data.collapsed === true;
 
@@ -39,8 +42,7 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
           minHeight: 40,
         }}
       >
-        {/* v4 (2026-07): 添加 NodeResizer 使折叠态可拖拽调整大小 */}
-        <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />
+        {!readOnly && <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />}
         <PostParentIcon style={{ width: 16, height: 16, color: '#ef4444' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#991b1b' }}>
           {label}
@@ -54,32 +56,33 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
       style={{
         width: '100%',
         height: '100%',
-        border: `2px dashed ${borderColor}`,
+        border: `2px ${borderStyle} ${borderColor}`,
         borderRadius: 12,
         background: '#fef2f2',
         position: 'relative',
-        boxShadow: selected ? '0 0 0 4px rgba(239,68,68,0.12)' : undefined,
+        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(239,68,68,0.12)' : undefined,
         minWidth: 200,
         minHeight: 150,
       }}
     >
-      {/* v4 (2026-07): 添加 NodeResizer 使展开态可拖拽调整大小 */}
-      <NodeResizer minWidth={200} minHeight={150} isVisible={selected} />
-      {/* In 端口 — 左侧（唯一端口） */}
-      <Handle
-        id="in"
-        type="target"
-        position={Position.Left}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: '2px solid #ef4444',
-          borderRadius: '50%',
-          left: -5,
-          top: '50%',
-        }}
-      />
+      {!readOnly && <NodeResizer minWidth={200} minHeight={150} isVisible={selected} />}
+      {/* 注意(2026-07): 只读模式下隐藏 Handle */}
+      {!readOnly && (
+        <Handle
+          id="in"
+          type="target"
+          position={Position.Left}
+          style={{
+            width: 8,
+            height: 8,
+            background: 'transparent',
+            border: '2px solid #ef4444',
+            borderRadius: '50%',
+            left: -5,
+            top: '50%',
+          }}
+        />
+      )}
 
       {/* 标题 */}
       <div

@@ -52,6 +52,7 @@ export default function RunListPage() {
   const [treeSelectValue, setTreeSelectValue] = useState<string | undefined>(undefined);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [triggerOpen, setTriggerOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(12);
   const [cleanOpen, setCleanOpen] = useState(false);
   const [cleanForm] = Form.useForm();
   const cleanRuns = useCleanRuns();
@@ -393,7 +394,7 @@ export default function RunListPage() {
           columns={columns}
           dataSource={filtered}
           loading={isLoading}
-          pagination={{ pageSize: 12, showSizeChanger: true, pageSizeOptions: [12, 20, 50, 100], showTotal: (t) => `共 ${t} 条`, size: 'small' }}
+          pagination={{ pageSize, showSizeChanger: true, pageSizeOptions: [12, 20, 50, 100], showTotal: (t) => `共 ${t} 条`, size: 'small', onChange: (_page, _pageSize) => setPageSize(_pageSize), onShowSizeChange: (_current, _size) => setPageSize(_size) }}
           size="small"
           scroll={tableScrollY ? { y: tableScrollY } : undefined}
           onRow={(record) => ({

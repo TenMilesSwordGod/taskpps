@@ -13,15 +13,17 @@ import TrendLineChart from '@/features/dashboard/components/TrendLineChart';
 import type { RunResponse, RunStatus } from '@/types';
 
 /** 计算耗时（基于服务端返回的 duration_ms） */
+/* 注意(2026-07): Bug #47 修复 — 从中文长格式改为简短 h/m/s 格式（与 RunListPage 保持一致），
+   避免 "15时30分0秒" 这类长字符串在 90px 列宽内换行。同时增加 ellipsis 兜底。 */
 function formatDuration(durationMs: number | null): string {
   if (durationMs == null || durationMs < 0) return '-';
-  const sec = Math.floor(durationMs / 1000);
-  if (sec < 60) return `${sec}秒`;
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const remainSec = sec % 60;
-  if (h > 0) return `${h}时${m}分${remainSec}秒`;
-  return `${m}分${remainSec}秒`;
+  const totalSec = Math.floor(durationMs / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 /** 运行状态对应的行背景色 — Column 风格浅色提示 */
@@ -218,6 +220,7 @@ export default function DashboardPage() {
       title: '耗时',
       key: 'duration',
       width: 90,
+      ellipsis: true,
       render: (_: unknown, record: RunResponse) => formatDuration(record.duration_ms),
     },
   ], [navigate]);

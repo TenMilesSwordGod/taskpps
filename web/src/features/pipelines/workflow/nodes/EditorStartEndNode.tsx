@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
+import { useReadOnly } from './ReadOnlyContext';
 
 interface EditorStartEndNodeData {
   variant: 'start' | 'end';
@@ -11,6 +12,7 @@ interface EditorStartEndNodeData {
  * Start / End 哨兵节点 — 胶囊形
  */
 function EditorStartEndNode({ data, selected }: { data: EditorStartEndNodeData; selected?: boolean }) {
+  const readOnly = useReadOnly();
   const isStart = data.variant === 'start';
   const dotColor = isStart ? '#10B981' : '#94A3B8';
   const borderColor = selected ? '#1677ff' : '#94a3b8';
@@ -30,7 +32,7 @@ function EditorStartEndNode({ data, selected }: { data: EditorStartEndNodeData; 
         fontWeight: 600,
         color: '#475569',
         letterSpacing: 0.8,
-        boxShadow: selected ? '0 0 0 4px rgba(22,119,255,0.12)' : undefined,
+        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(22,119,255,0.12)' : undefined,
       }}
     >
       <span
@@ -44,7 +46,7 @@ function EditorStartEndNode({ data, selected }: { data: EditorStartEndNodeData; 
       />
       <span>{isStart ? 'START' : 'END'}</span>
 
-      {isStart ? (
+      {!readOnly && (isStart ? (
         <Handle
           id="out"
           type="source"
@@ -72,7 +74,7 @@ function EditorStartEndNode({ data, selected }: { data: EditorStartEndNodeData; 
             left: -5,
           }}
         />
-      )}
+      ))}
     </div>
   );
 }

@@ -98,3 +98,42 @@ class DataTransferStub {
 // @ts-expect-error jsdom fallback for DataTransfer
 globalThis.DataTransfer = DataTransferStub
 
+// jsdom 不实现 DOMMatrixReadOnly/DOMMatrix，ReactFlow updateNodeInternals 在解析
+// CSS transform 时需要用到（commit 阶段的 passive effect 中调用）。
+// 这里提供一个最小桩，让 new DOMMatrixReadOnly(transformString) 不抛错。
+if (typeof window.DOMMatrixReadOnly !== 'function') {
+  // 注意(2026-07): 最小桩，仅满足 ReactFlow 的构造函数调用，不做实际矩阵运算。
+  // 若后续有矩阵运算需求（inverse/multiply 等），需补充对应方法。
+  class DOMMatrixReadOnlyStub {
+    a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+    static fromMatrix() { return new DOMMatrixReadOnlyStub(); }
+    static fromFloat64Array() { return new DOMMatrixReadOnlyStub(); }
+    static fromFloat32Array() { return new DOMMatrixReadOnlyStub(); }
+    inverse() { return new DOMMatrixReadOnlyStub(); }
+    multiply() { return new DOMMatrixReadOnlyStub(); }
+    translate() { return new DOMMatrixReadOnlyStub(); }
+    scale() { return new DOMMatrixReadOnlyStub(); }
+    rotate() { return new DOMMatrixReadOnlyStub(); }
+    flipX() { return new DOMMatrixReadOnlyStub(); }
+    flipY() { return new DOMMatrixReadOnlyStub(); }
+    toJSON() { return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; }
+    toString() { return 'matrix(1, 0, 0, 1, 0, 0)'; }
+  }
+  // @ts-expect-error jsdom fallback
+  window.DOMMatrixReadOnly = DOMMatrixReadOnlyStub;
+}
+if (typeof window.DOMMatrix !== 'function') {
+  class DOMMatrixStub extends (window.DOMMatrixReadOnly as unknown as new () => unknown) {
+    constructor(init?: string | number[]) {
+      super();
+    }
+    static fromMatrix() { return new DOMMatrixStub(); }
+    static fromFloat64Array() { return new DOMMatrixStub(); }
+    static fromFloat32Array() { return new DOMMatrixStub(); }
+  }
+  // @ts-expect-error jsdom fallback
+  window.DOMMatrix = DOMMatrixStub;
+  // @ts-expect-error jsdom also missing on globalThis
+  globalThis.DOMMatrix = DOMMatrixStub;
+}
+

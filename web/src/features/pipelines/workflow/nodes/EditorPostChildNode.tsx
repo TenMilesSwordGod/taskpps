@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { TaskYAML, TaskType } from '@/types';
 import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
+import { useReadOnly } from './ReadOnlyContext';
 
 interface EditorPostChildNodeData {
   task?: TaskYAML;
@@ -23,6 +24,7 @@ const VARIANT_STYLE = {
  * v2 (2026-07): 移除 emoji，使用纯文字标签（无 emoji 图标）
  */
 function EditorPostChildNode({ data, selected }: { data: EditorPostChildNodeData; selected?: boolean }) {
+  const readOnly = useReadOnly();
   const task = data.task;
   const taskName = task?.name || 'Post Task';
   const variant = data.postVariant || 'on_fail';
@@ -40,24 +42,26 @@ function EditorPostChildNode({ data, selected }: { data: EditorPostChildNodeData
         background: style.background,
         padding: '8px 10px',
         position: 'relative',
-        boxShadow: selected ? `0 0 0 4px ${style.accent}20` : undefined,
+        boxShadow: selected && !readOnly ? `0 0 0 4px ${style.accent}20` : undefined,
       }}
     >
-      {/* In 端口 — 左侧 */}
-      <Handle
-        id="in"
-        type="target"
-        position={Position.Left}
-        style={{
-          width: 8,
-          height: 8,
-          background: 'transparent',
-          border: `2px solid ${style.accent}`,
-          borderRadius: '50%',
-          left: -5,
-          top: '50%',
-        }}
-      />
+      {/* 注意(2026-07): 只读模式下隐藏 Handle */}
+      {!readOnly && (
+        <Handle
+          id="in"
+          type="target"
+          position={Position.Left}
+          style={{
+            width: 8,
+            height: 8,
+            background: 'transparent',
+            border: `2px solid ${style.accent}`,
+            borderRadius: '50%',
+            left: -5,
+            top: '50%',
+          }}
+        />
+      )}
 
       {/* 标题 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

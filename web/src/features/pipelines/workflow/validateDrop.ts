@@ -90,6 +90,13 @@ export function findDropParentContext(
     // 当前节点是哪种容器
     let context: DropContext | null = null;
     if (node.type === 'editorTask') {
+      // 注意(2026-07编辑器): 原子行为节点（也是 editorTask）不应当作容器。
+      // 判断依据：若父节点也是 editorTask，则当前节点是原子行为子节点，跳过。
+      // 只有父节点是 SubPipeline/Pipeline/根级的 editorTask 才是合法 Task 容器。
+      const parentNode = node.parentId ? nodes.find((n) => n.id === node.parentId) : undefined;
+      if (parentNode?.type === 'editorTask') {
+        continue; // 原子行为子节点，不是合法容器
+      }
       context = 'task';
     } else if (node.type === 'editorSubPipeline') {
       context = 'subpipeline';
@@ -135,12 +142,11 @@ export function validateDrop(
   }
 
   // R4: Post 子容器不可嵌套其它容器 — 任何容器类型拖入 post_parent 都拒绝
+  // bug #50 (2026-07): 放行 task_atomic_*（原子行为不是容器），同时移除 unused 的 isContainerType 变量
   if (parentContext === 'post_parent') {
-    // 仅 post_child 类型可以放入 Post 父容器
     const allowedInPost = ['post_child'];
-    const isContainerType = ['subpipeline', 'task', 'post_parent'].includes(nodeType) ||
-      (nodeType.startsWith('task_atomic_') && !allowedInPost.includes(nodeType));
-    if (!allowedInPost.some(t => nodeType.startsWith(t))) {
+    // 仅允许 post_child 前缀类型（容器子项）和 task_atomic_* 类型（原子行为）
+    if (!allowedInPost.some(t => nodeType.startsWith(t)) && !nodeType.startsWith('task_atomic_')) {
       return 'Post 子容器内部不可嵌套其它容器节点';
     }
   }
