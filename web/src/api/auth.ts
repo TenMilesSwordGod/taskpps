@@ -38,6 +38,8 @@ export interface RegisterRequest {
 export interface LoginRequest {
   username: string;
   password: string;
+  /** 勾选后 token 有效期 30 天（默认 24 小时） */
+  remember_me?: boolean;
 }
 
 /** 修改密码请求 */

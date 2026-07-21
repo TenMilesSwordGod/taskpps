@@ -20,10 +20,12 @@ class JWTConfig(BaseModel):
     设计决策：
     - secret 不在此配置，由 security.py 持久化到 .taskpps/jwt_secret.key（避免明文落 yaml）。
     - expire_hours 默认 24h，平衡安全性与用户体验（太短频繁登录，太长泄漏风险高）。
+    - long_expire_hours 用于"30天不用免登录"场景（720h = 30天），用户勾选 remember_me 时使用。
     - seed_admin_password 默认 user@123（issue #204 评论1要求），首次登录后应立即修改。
     """
 
     expire_hours: int = 24
+    long_expire_hours: int = 720
     seed_admin_password: str = "user@123"
     seed_admin_username: str = "admin"
 

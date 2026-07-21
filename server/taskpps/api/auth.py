@@ -47,10 +47,11 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """登录请求：用户名 + 密码。"""
+    """登录请求：用户名 + 密码 + 记住我（30天免登录）。"""
 
     username: str = Field(..., min_length=1, max_length=32)
     password: str = Field(..., min_length=1, max_length=64)
+    remember_me: bool = False
 
 
 class ChangePasswordRequest(BaseModel):
@@ -185,10 +186,14 @@ async def login(body: LoginRequest) -> LoginResponse:
                 raise HTTPException(status_code=403, detail="账号已被禁用")
 
             settings = get_settings()
+            # remember_me=True 时使用 long_expire_hours（30天），否则用默认 expire_hours（24h）
+            expire_hours = (
+                settings.jwt.long_expire_hours if body.remember_me else settings.jwt.expire_hours
+            )
             token = create_access_token(
                 username=user.username,
                 role=user.role.value,
-                expires_hours=settings.jwt.expire_hours,
+                expires_hours=expire_hours,
             )
             logger.info("用户登录成功: username=%s", user.username)
             return LoginResponse(access_token=token, user=_user_to_response(user))

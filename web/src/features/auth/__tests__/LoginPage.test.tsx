@@ -235,6 +235,35 @@ describe('LoginPage (issue #204)', () => {
     await waitForMessage('该用户名已被注册')
   })
 
+  it('TC-Wxxx: 登录表单存在「30天不用免登录」复选框', async () => {
+    const { container } = await renderLogin()
+    // 复选框应存在于登录表单中
+    const checkbox = screen.getByText('30天不用免登录')
+    expect(checkbox).toBeInTheDocument()
+    // 获取实际的 checkbox input（前一个兄弟元素或父元素内的 input[type="checkbox"]）
+    const checkboxInput = container.querySelector('.ant-checkbox-input') as HTMLInputElement
+    expect(checkboxInput).not.toBeNull()
+    // 默认应未勾选
+    expect(checkboxInput?.checked).toBe(false)
+  })
+
+  it('TC-Wxxx: 勾选「30天不用免登录」后发送 remember_me=true', async () => {
+    mockLoginMutate.mockResolvedValueOnce({ access_token: 'tok123', user: { id: 1 } })
+    const { container } = await renderLogin()
+    // 填表单
+    fireEvent.change(screen.getByPlaceholderText('请输入用户名'), { target: { value: 'alice' } })
+    fireEvent.change(screen.getByPlaceholderText('请输入密码'), { target: { value: 'pass123' } })
+    // 勾选 remember_me 复选框
+    const checkboxInput = container.querySelector('.ant-checkbox-input') as HTMLInputElement
+    fireEvent.click(checkboxInput)
+    expect(checkboxInput?.checked).toBe(true)
+    // 提交
+    fireEvent.click(getSubmitButton(container, '登录'))
+    await waitFor(() => {
+      expect(mockLoginMutate).toHaveBeenCalledWith({ username: 'alice', password: 'pass123', remember_me: true })
+    })
+  })
+
   it('TC-W177: redirect 参数跳回原页面', async () => {
     mockSearchParams.set('redirect', '/pipelines')
     mockLoginMutate.mockResolvedValueOnce({ access_token: 'tok123', user: { id: 1 } })
