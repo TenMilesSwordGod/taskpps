@@ -470,6 +470,12 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         } else if (contextMenu.nodeType === 'editorPostParent') {
           parentContext = 'post_parent';
           containerParentId = contextMenu.nodeId;
+        } else if (contextMenu.nodeType === 'editorPipeline') {
+          // v7 (2026-07): Pipeline 根容器上右键添加 SubPipeline → 归入根容器内
+          // parentContext='canvas-root' 让 validateDrop 放行（R1 只拦截 subpipeline-in-subpipeline），
+          // containerParentId='__pipeline__' 使新 SubPipeline 正确嵌入根容器。
+          parentContext = 'canvas-root';
+          containerParentId = '__pipeline__';
         }
       }
 
@@ -622,6 +628,11 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       // v6 (2026-07 / bug #41): 不传 parentId，由 handleAddNodeFromContext 从 contextMenu 自行读取。
       if (node?.type === 'editorSubPipeline') {
         items.push({ key: 'add-task-inside', label: '添加 Task', onClick: () => handleAddNodeFromContext('task') });
+      }
+
+      // v7 (2026-07): Pipeline 根容器右键 — 添加 SubPipeline（自动归入 __pipeline__ 内）
+      if (node?.type === 'editorPipeline') {
+        items.push({ key: 'add-subpipeline-inside', label: '添加 SubPipeline', onClick: () => handleAddNodeFromContext('subpipeline') });
       }
 
       // Post 父容器内部右键 — 添加 Post 子容器
