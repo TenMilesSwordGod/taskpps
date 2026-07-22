@@ -79,7 +79,7 @@ function EditorSubPipelineNode({ id, data, selected }: { id: string; data: Edito
           minHeight: 40,
         }}
       >
-        {!readOnly && <NodeResizer minWidth={120} minHeight={40} isVisible={selected} />}
+        {!readOnly && <NodeResizer minWidth={120} minHeight={40} />}
         <SubPipelineIcon style={{ width: 16, height: 16, color: '#3b82f6' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#1e40af' }}>
           {label}
@@ -107,7 +107,7 @@ function EditorSubPipelineNode({ id, data, selected }: { id: string; data: Edito
         minHeight: 120,
       }}
     >
-      {!readOnly && <NodeResizer minWidth={200} minHeight={120} isVisible={selected} />}
+      {!readOnly && <NodeResizer minWidth={200} minHeight={120} />}
       {/* 注意(2026-07): 只读模式下隐藏所有 Handle */}
       {!readOnly && (
         <>

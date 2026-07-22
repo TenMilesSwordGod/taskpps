@@ -42,7 +42,7 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
           minHeight: 40,
         }}
       >
-        {!readOnly && <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />}
+        {!readOnly && <NodeResizer minWidth={100} minHeight={40} />}
         <PostParentIcon style={{ width: 16, height: 16, color: '#ef4444' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#991b1b' }}>
           {label}
@@ -65,7 +65,7 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
         minHeight: 150,
       }}
     >
-      {!readOnly && <NodeResizer minWidth={200} minHeight={150} isVisible={selected} />}
+      {!readOnly && <NodeResizer minWidth={200} minHeight={150} />}
       {/* 注意(2026-07): 只读模式下隐藏 Handle */}
       {!readOnly && (
         <Handle

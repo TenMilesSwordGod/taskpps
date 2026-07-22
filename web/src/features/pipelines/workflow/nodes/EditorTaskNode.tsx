@@ -69,7 +69,7 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
           minHeight: 40,
         }}
       >
-        {!readOnly && <NodeResizer minWidth={100} minHeight={40} isVisible={selected} />}
+        {!readOnly && <NodeResizer minWidth={100} minHeight={40} />}
         {IconComponent && <IconComponent style={{ width: 14, height: 14, color: iconColor }} />}
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#0f172a' }}>
           {taskName}
@@ -94,7 +94,7 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
         boxSizing: 'border-box',
       }}
     >
-      {!readOnly && <NodeResizer minWidth={100} minHeight={56} isVisible={selected} />}
+      {!readOnly && <NodeResizer minWidth={100} minHeight={56} />}
       {/* 注意(2026-07): 只读模式下隐藏所有 Handle，与 PipelineGraph 查看模式一致 */}
       {!readOnly && (
         <>

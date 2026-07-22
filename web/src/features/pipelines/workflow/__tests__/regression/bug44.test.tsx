@@ -50,10 +50,10 @@ describe('Bug #44 — 容器节点缺失 resize 手柄', () => {
   });
 
   // ──────────────────────────────────────────────
-  // RED 测试：展开状态的容器应使用弹性 width（非硬编码固定值）
-  // 当前 EditorTaskNode 展开态 div 写死 width: 180，NodeResizer 无法生效
+  // 展开状态验证：容器应使用弹性 width（修复后确认不再硬编码）
+  // v2 (2026-07-21): 修复 width:180 硬编码问题，改为 width:100%
   // ──────────────────────────────────────────────
-  it('RED: EditorTaskNode 展开态不应有硬编码的固定 width', () => {
+  it('EditorTaskNode 展开态使用弹性 width（无硬编码 180px）', () => {
     const { container, unmount } = renderWithProvider(
       <EditorTaskNode
         data={{
@@ -62,33 +62,49 @@ describe('Bug #44 — 容器节点缺失 resize 手柄', () => {
       />,
     );
 
-    // container.firstElementChild 是渲染的根 div
-    // 当前它包含 "width: 180" → 断言没匹配到 → RED
     const styleAttr = container.firstElementChild?.getAttribute('style') || '';
     expect(styleAttr).not.toMatch(/width:\s*180/);
 
     unmount();
   });
 
-  it('RED: EditorSubPipelineNode 展开态应使用弹性 width', () => {
+  it('EditorSubPipelineNode 展开态使用弹性 width: 100%', () => {
     const { container, unmount } = renderWithProvider(
       <EditorSubPipelineNode data={{ label: 'build' }} />,
     );
 
-    // SubPipeline 展开态应使用 "width: 100%" 而非硬编码数值
     const styleAttr = container.firstElementChild?.getAttribute('style') || '';
     expect(styleAttr).toMatch(/width:\s*100%/);
 
     unmount();
   });
 
-  it('RED: EditorPostParentNode 展开态应使用弹性 width', () => {
+  it('EditorPostParentNode 展开态使用弹性 width: 100%', () => {
     const { container, unmount } = renderWithProvider(
       <EditorPostParentNode data={{ label: 'Post' }} />,
     );
 
     const styleAttr = container.firstElementChild?.getAttribute('style') || '';
     expect(styleAttr).toMatch(/width:\s*100%/);
+
+    unmount();
+  });
+
+  // ──────────────────────────────────────────────
+  // v2 (2026-07-21): 选中 + 非只读模式下手柄应始终可见
+  // ──────────────────────────────────────────────
+  it('EditorTaskNode selected=true 时包含 resize 手柄', () => {
+    const { container, unmount } = renderWithProvider(
+      <EditorTaskNode
+        selected
+        data={{
+          task: { name: 'compile', command: 'gcc main.c', env: {}, retry: 0, depends_on: [] },
+        }}
+      />,
+    );
+
+    const resizeControls = container.querySelectorAll('.react-flow__resize-control');
+    expect(resizeControls.length).toBeGreaterThan(0);
 
     unmount();
   });
