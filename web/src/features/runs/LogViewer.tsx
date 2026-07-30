@@ -1,14 +1,12 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Select, Input, Switch, Button, Empty, Tag, Tooltip } from 'antd';
-import { Trash2, Filter, Layers, Download, Copy, AlertCircle, AlertTriangle, Info, Bug, Terminal } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
+import { Select, Input, Button, Empty, Tag, Tooltip } from 'antd';
+import { Trash2, Filter, Layers, Download, Copy, AlertCircle, AlertTriangle, Info, Bug, Terminal, ArrowDownToLine } from 'lucide-react';
 import { VariableSizeList as List } from 'react-window';
 import type { LogEntry } from './hooks/useSSELogs';
 
 interface LogViewerProps {
   logs: LogEntry[];
   connected: boolean;
-  autoScroll: boolean;
-  onAutoScrollChange: (v: boolean) => void;
   onClear: () => void;
   selectedTaskId?: string | null;
   onClearTaskFilter?: () => void;
@@ -62,8 +60,6 @@ const ROW_HEIGHT = 20;
 export default function LogViewer({
   logs,
   connected,
-  autoScroll,
-  onAutoScrollChange,
   onClear,
   selectedTaskId,
   onClearTaskFilter,
@@ -171,10 +167,25 @@ export default function LogViewer({
     listRef.current?.resetAfterIndex(0);
   }, [filtered]);
 
+  // Jenkins 式自动跟随：用 onScroll 检测用户滚动位置，
+  // 避免 onItemsRendered 在 render 阶段同步触发导致的新日志竞态（旧代码 bug）
+  const handleScroll = useCallback(({ scrollOffset, scrollUpdateWasRequested }: { scrollOffset: number; scrollUpdateWasRequested: boolean }) => {
+    if (!outerRef.current || scrollUpdateWasRequested) return;
+    const { scrollHeight, clientHeight } = outerRef.current;
+    // 距离底部 < 50px 视为"在底部"，恢复自动跟随
+    stickyToBottomRef.current = scrollHeight - clientHeight - scrollOffset < 50;
+  }, []);
+
+  // 新日志到来时自动滚动到底部（仅在用户处于底部时）
   useEffect(() => {
-    if (!autoScroll || filtered.length === 0 || !stickyToBottomRef.current) return;
+    if (filtered.length === 0 || !stickyToBottomRef.current) return;
     listRef.current?.scrollToItem(filtered.length - 1, 'end');
-  }, [filtered.length, autoScroll]);
+  }, [filtered.length]);
+
+  // 日志被清空时重置为"在底部"状态
+  useEffect(() => {
+    if (filtered.length === 0) stickyToBottomRef.current = true;
+  }, [filtered.length]);
 
   useEffect(() => {
     const prev = prevSelectedTaskIdRef.current;
@@ -189,19 +200,6 @@ export default function LogViewer({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTaskId]);
-
-  const handleItemsRendered = useCallback(
-    ({ visibleStopIndex }: { visibleStopIndex: number }) => {
-      if (autoScroll && filtered.length > 0) {
-        stickyToBottomRef.current = visibleStopIndex >= filtered.length - 2;
-      }
-    },
-    [autoScroll, filtered.length],
-  );
-
-  useEffect(() => {
-    if (filtered.length === 0) stickyToBottomRef.current = true;
-  }, [filtered.length]);
 
   const handleExport = () => {
     const text = filtered
@@ -328,13 +326,6 @@ export default function LogViewer({
           size="small"
           allowClear
         />
-        <Switch
-          size="small"
-          checked={autoScroll}
-          onChange={onAutoScrollChange}
-          checkedChildren="自动滚动"
-          unCheckedChildren="暂停"
-        />
         <Button size="small" icon={<Trash2 size={14} />} onClick={onClear}>
           清空
         </Button>
@@ -381,7 +372,7 @@ export default function LogViewer({
 
       <div
         ref={containerRef}
-        style={{ flex: 1, background: '#111827', minHeight: 120, overflow: 'hidden' }}
+        style={{ flex: 1, background: '#111827', minHeight: 120, overflow: 'hidden', position: 'relative' }}
       >
         {logs.length === 0 ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -392,17 +383,33 @@ export default function LogViewer({
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: '#6b7280' }}>无匹配日志</span>} />
           </div>
         ) : (
-          <List
-            ref={listRef}
-            outerRef={outerRef}
-            height={containerHeight}
-            itemCount={filtered.length}
-            itemSize={getItemSize}
-            width="100%"
-            onItemsRendered={handleItemsRendered}
-          >
-            {LogRow}
-          </List>
+          <Fragment>
+            <List
+              ref={listRef}
+              outerRef={outerRef}
+              height={containerHeight}
+              itemCount={filtered.length}
+              itemSize={getItemSize}
+              width="100%"
+              onScroll={handleScroll}
+            >
+              {LogRow}
+            </List>
+            {!stickyToBottomRef.current && filtered.length > 0 && (
+              <div style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10 }}>
+                <Button
+                  type="primary"
+                  icon={<ArrowDownToLine size={14} />}
+                  onClick={() => {
+                    stickyToBottomRef.current = true;
+                    listRef.current?.scrollToItem(filtered.length - 1, 'end');
+                  }}
+                >
+                  滚动到底部
+                </Button>
+              </div>
+            )}
+          </Fragment>
         )}
       </div>
     </div>

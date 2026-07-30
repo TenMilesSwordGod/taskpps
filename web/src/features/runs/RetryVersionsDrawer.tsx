@@ -277,8 +277,6 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
             <LogViewer
               logs={sseLogs}
               connected={sseResult.connected}
-              autoScroll={sseResult.autoScroll}
-              onAutoScrollChange={sseResult.setAutoScroll}
               onClear={sseResult.clearLogs}
               failedCount={0}
             />

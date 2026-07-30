@@ -351,8 +351,8 @@ describe('<RunDetailPage /> — Issue #134 artifacts 按钮', () => {
 
     vi.doMock('./hooks/useSSELogs', () => ({
       useSSELogs: () => ({
-        logs: [], connected: false, autoScroll: true,
-        setAutoScroll: vi.fn(), clearLogs: vi.fn(), reconnect: vi.fn(),
+        logs: [], connected: false,
+        clearLogs: vi.fn(), reconnect: vi.fn(),
       }),
     }))
 
