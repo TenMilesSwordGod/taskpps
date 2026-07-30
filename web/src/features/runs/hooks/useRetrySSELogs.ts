@@ -20,7 +20,6 @@ const RECONNECT_MAX_DELAY = 10000;
 export function useRetrySSELogs(runId: string | undefined, retryId: string | undefined) {
   const [logs, setLogs] = useState<RetryLogEntry[]>([]);
   const [connected, setConnected] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -117,5 +116,5 @@ export function useRetrySSELogs(runId: string | undefined, retryId: string | und
 
   const clearLogs = useCallback(() => setLogs([]), []);
 
-  return { logs, connected, autoScroll, setAutoScroll, clearLogs };
+  return { logs, connected, clearLogs };
 }

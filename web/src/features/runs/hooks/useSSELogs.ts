@@ -30,7 +30,6 @@ const RECONNECT_MAX_DELAY = 10000;
 export function useSSELogs(runId: string | undefined) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [connected, setConnected] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
   const [taskStatusMap, setTaskStatusMap] = useState<Record<string, TaskStatus>>({});
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,5 +169,5 @@ export function useSSELogs(runId: string | undefined) {
     connect();
   }, [connect]);
 
-  return { logs, connected, autoScroll, setAutoScroll, clearLogs, taskStatusMap, reconnect };
+  return { logs, connected, clearLogs, taskStatusMap, reconnect };
 }

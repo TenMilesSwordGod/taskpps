@@ -186,8 +186,6 @@ export default function RunDetailPage() {
   }, [baseLogs, debugVisible, phaseLogEntries]);
 
   const connected = sseResult.connected;
-  const autoScroll = sseResult.autoScroll;
-  const setAutoScroll = sseResult.setAutoScroll;
   const clearLogs = sseResult.clearLogs;
 
   // 进度与耗时（使用服务端计算的 duration_ms，避免客户端时钟偏差）
@@ -341,8 +339,6 @@ export default function RunDetailPage() {
               <LogViewer
                 logs={logs}
                 connected={connected}
-                autoScroll={autoScroll}
-                onAutoScrollChange={setAutoScroll}
                 onClear={clearLogs}
                 selectedTaskId={selectedTaskId}
                 onClearTaskFilter={() => setSelectedTaskId(null)}
@@ -400,8 +396,6 @@ export default function RunDetailPage() {
                   <LogViewer
                     logs={logs}
                     connected={connected}
-                    autoScroll={autoScroll}
-                    onAutoScrollChange={setAutoScroll}
                     onClear={clearLogs}
                     selectedTaskId={selectedTaskId}
                     onClearTaskFilter={() => setSelectedTaskId(null)}

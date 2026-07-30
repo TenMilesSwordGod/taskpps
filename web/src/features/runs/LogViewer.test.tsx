@@ -9,8 +9,6 @@ function makeLog(seq: number, taskName: string, content: string): LogEntry {
 
 const baseProps = {
   connected: true,
-  autoScroll: false,
-  onAutoScrollChange: vi.fn(),
   onClear: vi.fn(),
 };
 
