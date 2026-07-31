@@ -47,6 +47,13 @@ func NewAgent(config *AgentConfig) *Agent {
 	a.wsClient.OnCancel = func(commandID string) {
 		a.executor.Cancel(commandID)
 	}
+	// 补全异步执行：compgen 是独立子进程，不阻塞 readLoop 心跳/命令分发
+	a.wsClient.OnComplete = func(req CompleteRequest) {
+		result := a.executor.Complete(req)
+		if err := a.wsClient.SendComplete(result); err != nil {
+			logger.Warn("SendComplete error: %v", err)
+		}
+	}
 
 	return a
 }

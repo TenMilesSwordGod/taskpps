@@ -35,6 +35,8 @@ from taskpps.schemas.agent import (
     AgentCheckRequest,
     AgentCheckResponse,
     AgentCheckResult,
+    AgentCompleteRequest,
+    AgentCompleteResult,
     AgentDeployRequest,
     AgentDeployResult,
     AgentExecRequest,
@@ -337,6 +339,19 @@ async def agent_all():
     return result
 
 
+async def _resolve_agent_cwd(agent_id: str) -> str:
+    """解析命令/补全的执行目录：请求未指定时回退到 agent 配置的 agent_work_dir。
+
+    v1 (2026-07): 从 exec/exec_stream/complete 三处重复代码提取，
+    保证各端点的 cwd 解析行为一致。
+    """
+    agent_items, _ = await _load_agents_from_projects()
+    for item in agent_items:
+        if item.get("id") == agent_id and item.get("agent_work_dir"):
+            return item["agent_work_dir"]
+    return ""
+
+
 @router.post("/{agent_id}/exec")
 async def agent_exec(agent_id: str, body: AgentExecRequest):
     manager = AgentManager.instance()
@@ -358,13 +373,7 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
             f"Please wait for completion or cancel the run first.",
         )
 
-    cwd = body.cwd or ""
-    if not cwd:
-        agent_items, _ = await _load_agents_from_projects()
-        for item in agent_items:
-            if item.get("id") == agent_id and item.get("agent_work_dir"):
-                cwd = item["agent_work_dir"]
-                break
+    cwd = body.cwd or await _resolve_agent_cwd(agent_id)
 
     command_id = str(uuid.uuid4())
     start_time = time.monotonic()
@@ -443,13 +452,7 @@ async def agent_exec_stream(agent_id: str, body: AgentExecRequest):
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not connected")
     conn = manager.get_connection(agent_id)
 
-    cwd = body.cwd or ""
-    if not cwd:
-        agent_items, _ = await _load_agents_from_projects()
-        for item in agent_items:
-            if item.get("id") == agent_id and item.get("agent_work_dir"):
-                cwd = item["agent_work_dir"]
-                break
+    cwd = body.cwd or await _resolve_agent_cwd(agent_id)
 
     command_id = str(uuid.uuid4())
     start_time = time.monotonic()
@@ -507,6 +510,46 @@ async def agent_exec_stream(agent_id: str, body: AgentExecRequest):
             conn._output_callbacks.pop(command_id, None)
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/{agent_id}/complete", response_model=AgentCompleteResult)
+async def agent_complete(agent_id: str, body: AgentCompleteRequest):
+    """Web REPL 补全：转发 complete_request 到 agent，等待 complete_result。
+
+    v1 (2026-07): 补全是瞬时交互，不占并发槽位、不进入 _pending_commands，
+    与 exec/stream 一样绕过 Issue #68 守卫，可与 pipeline 并存。
+    超时返回 200 + error（前端 UI 静默），而不是 500：超时不是服务故障。
+    """
+    manager = AgentManager.instance()
+    if not manager.is_connected(agent_id):
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not connected")
+
+    cwd = body.cwd or await _resolve_agent_cwd(agent_id)
+
+    request_id = str(uuid.uuid4())
+    fut = manager.register_complete(agent_id, request_id)
+
+    try:
+        await manager.send_complete(agent_id, request_id, body.line, body.cursor, cwd)
+    except Exception as e:
+        manager.fail_all_completes(agent_id)
+        raise HTTPException(status_code=500, detail=f"Failed to send complete request: {e}") from e
+
+    try:
+        result = await asyncio.wait_for(fut, timeout=5)
+    except asyncio.TimeoutError:
+        manager.fail_all_completes(agent_id)
+        return AgentCompleteResult(request_id=request_id, error="completion timeout")
+    except asyncio.CancelledError:
+        manager.fail_all_completes(agent_id)
+        raise
+
+    return AgentCompleteResult(
+        request_id=result.get("request_id", request_id),
+        prefix=result.get("prefix", ""),
+        candidates=result.get("candidates", []),
+        error=result.get("error", ""),
+    )
 
 
 @router.post("/deploy", response_model=AgentDeployResult)

@@ -10,6 +10,8 @@ const (
 	MsgTypeStdoutChunk       MessageType = "stdout_chunk"
 	MsgTypeStderrChunk       MessageType = "stderr_chunk"
 	MsgTypeExecResult        MessageType = "exec_result"
+	MsgTypeCompleteRequest   MessageType = "complete_request"
+	MsgTypeCompleteResult    MessageType = "complete_result"
 	MsgTypePing              MessageType = "ping"
 	MsgTypeHeartbeatRequest  MessageType = "heartbeat_request"
 	MsgTypeHeartbeatResponse MessageType = "heartbeat_response"
@@ -65,6 +67,22 @@ type ExecResult struct {
 	SignalName string `json:"signal_name,omitempty"`
 	DurationMs int64  `json:"duration_ms"`
 	Error      string `json:"error,omitempty"`
+}
+
+type CompleteRequest struct {
+	RequestID string `json:"request_id"`
+	// Line 是当前输入整行（含光标前的全部字符）
+	Line   string `json:"line"`
+	Cursor int    `json:"cursor"`
+	Cwd    string `json:"cwd"`
+}
+
+type CompleteResult struct {
+	RequestID string `json:"request_id"`
+	// Prefix 是被补全的原始 token（agent 端解析，保证与候选匹配）
+	Prefix     string   `json:"prefix"`
+	Candidates []string `json:"candidates"`
+	Error      string   `json:"error,omitempty"`
 }
 
 const ProtocolVersion = "1.0.0"

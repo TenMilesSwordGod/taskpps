@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Modal, Tag, Tooltip } from 'antd';
-import { Terminal, Trash2, Square, Clock, Plus, X } from 'lucide-react';
+import { Terminal, Trash2, Square, Clock, Plus, X, FolderClosed, FileText } from 'lucide-react';
 import type { AgentWithConfig } from '@/types';
 import { execCommandStream, type ExecLine, type ExecStatus } from './execStream';
+import { fetchCompletions } from './complete';
 
 interface Props {
   open: boolean;
@@ -11,6 +12,22 @@ interface Props {
 }
 
 const DEFAULT_TIMEOUT = 60;
+
+/** 输入提示（tip）的防抖间隔：太短会高频打接口，太长提示不跟手 */
+const TIP_DEBOUNCE_MS = 150;
+
+/** 补全候选下拉的交互状态（与后端返回的 prefix/candidates 同源） */
+interface CompletionState {
+  prefix: string;
+  candidates: string[];
+  selected: number;
+  start: number;    // input 中被补全 token 的起点
+  cursor: number;   // 请求时的光标位置
+  // 用户是否已通过 Tab/方向键主动选择过候选。
+  // 为 true 时 Enter 上屏候选；false（tip 自动弹出）时 Enter 直接执行命令，
+  // 避免提示列表阻塞最高频的"输入完直接回车执行"操作
+  navigated: boolean;
+}
 
 /** 给 session 自增 ID */
 let sessionIdCounter = 0;
@@ -104,6 +121,12 @@ export default function ReplModal({ open, agent, onClose }: Props) {
 
   const [input, setInput] = useState('');
   const [timeout, setTimeoutVal] = useState(DEFAULT_TIMEOUT);
+  // 补全候选下拉：null 表示关闭；selected 为高亮索引
+  const [completion, setCompletion] = useState<CompletionState | null>(null);
+  const completionAbortRef = useRef<AbortController | null>(null);
+  // 请求序号：响应回来时与最新序号比对，过期结果直接丢弃（竞态保护）
+  const completionSeqRef = useRef(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -136,10 +159,83 @@ export default function ReplModal({ open, agent, onClose }: Props) {
     setSessions((prev) => prev.map((s) => (s.id === sessionId ? updater(s) : s)));
   }, []);
 
+  /** 应用候选：替换 start..cursor 区间，光标移到补全结果末尾 */
+  const applyCompletion = useCallback((candidate: string, start: number, cursor: number) => {
+    setCompletion(null);
+    setInput((prev) => {
+      const next = prev.slice(0, start) + candidate + prev.slice(cursor);
+      // 渲染后移动光标（React 受控输入默认把光标丢到末尾，这里显式对齐）
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        const pos = start + candidate.length;
+        el.setSelectionRange(pos, pos);
+      });
+      return next;
+    });
+  }, []);
+
+  /** 请求补全并处理结果。失败/超时/输入已变化 → 关闭提示，保持原输入（需求约定） */
+  const requestCompletion = useCallback((line: string, cursor: number) => {
+    if (!agent?.connected || !line) {
+      setCompletion(null);
+      return;
+    }
+    completionAbortRef.current?.abort();
+    const controller = new AbortController();
+    completionAbortRef.current = controller;
+    const seq = ++completionSeqRef.current;
+    const activeS = sessionsRef.current.find((s) => s.id === activeId);
+    fetchCompletions(agent.agent_id, line, cursor, activeS?.cwd ?? '', controller.signal).then((result) => {
+      if (seq !== completionSeqRef.current) return; // 已有更新的请求，丢弃过期结果
+      const el = inputRef.current;
+      if (!el || el.value !== line) return; // 用户已修改输入，丢弃
+      if (!result || result.candidates.length === 0) {
+        setCompletion(null);
+        return;
+      }
+      // prefix 必须与当前输入吻合（lastIndexOf + 末尾对齐），否则输入已变
+      const start = line.lastIndexOf(result.prefix, cursor);
+      if (start < 0 || start + result.prefix.length !== cursor) {
+        setCompletion(null);
+        return;
+      }
+      if (result.candidates.length === 1) {
+        applyCompletion(result.candidates[0], start, cursor);
+      } else {
+        setCompletion({ prefix: result.prefix, candidates: result.candidates, selected: 0, start, cursor, navigated: false });
+      }
+    });
+  }, [agent, activeId, applyCompletion]);
+
+  // 输入提示（tip）：输入变化后防抖请求补全；仅光标在末尾且有内容时触发，
+  // 避免用户回改历史输入时被提示打扰。
+  // 注意(2026-07): effect 必须定义在 requestCompletion 之后（const 提升问题），
+  // 否则渲染期访问 requestCompletion 会抛 ReferenceError
+  // v2 (2026-07): 光标位置检查必须在防抖回调内执行——输入 change 事件同步 flush
+  // effect 时 selectionStart 仍是旧值（jsdom 与浏览器时序均如此），
+  // 防抖窗口结束时的光标位置才是用户操作的最终状态
+  useEffect(() => {
+    if (!open) return;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    const el = inputRef.current;
+    if (!el || !el.value) return;
+    debounceTimerRef.current = setTimeout(() => {
+      const cursor = el.selectionStart ?? el.value.length;
+      if (cursor !== el.value.length) return; // 用户已移动光标，不弹提示
+      requestCompletion(el.value, cursor);
+    }, TIP_DEBOUNCE_MS);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [input, open, requestCompletion]);
+
   // 切换 session
   const switchSession = useCallback((id: string) => {
     setActiveId(id);
     setInput('');
+    setCompletion(null); // 会话切换后旧候选不再适用
   }, []);
 
   // 添加 session
@@ -150,6 +246,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
       return [...prev, s];
     });
     setInput('');
+    setCompletion(null); // 新增会话并切换为活动会话，旧候选不再适用
   }, []);
 
   // 删除 session（至少保留一个）
@@ -184,6 +281,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
     if (!session) return;
     const curCwd = session.cwd;
 
+    setCompletion(null); // 执行开始后提示列表不再适用
     updateSession(activeSid, (s) => {
       s.abortController?.abort();
       return {
@@ -222,9 +320,41 @@ export default function ReplModal({ open, agent, onClose }: Props) {
   }, [input, agent, activeId, timeout, updateSession]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Escape') {
+      // Esc 关闭候选列表，不影响已输入内容
       e.preventDefault();
+      setCompletion(null);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (completion && completion.navigated) {
+        // 用户已用 Tab/方向键选择过候选：回车 = 上屏当前高亮，不执行命令
+        applyCompletion(completion.candidates[completion.selected], completion.start, completion.cursor);
+        return;
+      }
       handleSubmit();
+    } else if (e.key === 'Tab') {
+      // Tab 补全：列表已打开则循环切换高亮，否则请求补全
+      e.preventDefault();
+      const el = inputRef.current;
+      const cursor = el?.selectionStart ?? el?.value.length ?? 0;
+      if (completion && completion.candidates.length > 0) {
+        setCompletion({
+          ...completion,
+          selected: (completion.selected + 1) % completion.candidates.length,
+          navigated: true, // 用户按 Tab 即视为主动选择，之后 Enter 上屏
+        });
+      } else {
+        requestCompletion(el?.value ?? '', cursor);
+      }
+    } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && completion) {
+      // 列表打开时方向键选择候选（不翻历史）
+      e.preventDefault();
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      setCompletion({
+        ...completion,
+        selected: (completion.selected + delta + completion.candidates.length) % completion.candidates.length,
+        navigated: true, // 方向键同样视为主动选择
+      });
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       const s = sessionsRef.current.find((x) => x.id === activeId);
@@ -245,9 +375,10 @@ export default function ReplModal({ open, agent, onClose }: Props) {
         setInput(s.history[newIdx]);
       }
     }
-  }, [handleSubmit, activeId, updateSession]);
+  }, [handleSubmit, activeId, updateSession, completion, applyCompletion, requestCompletion]);
 
   const cancel = useCallback(() => {
+    setCompletion(null);
     const id = activeId;
     updateSession(id, (s) => {
       s.abortController?.abort();
@@ -256,6 +387,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
   }, [activeId, updateSession]);
 
   const clear = useCallback(() => {
+    setCompletion(null);
     updateSession(activeId, (s) => ({ ...s, lines: [], status: 'idle' }));
   }, [activeId, updateSession]);
 
@@ -475,6 +607,56 @@ export default function ReplModal({ open, agent, onClose }: Props) {
             )}
           </div>
 
+          {/* 补全候选下拉（输入框上方弹出，仅多候选时显示） */}
+          {completion && completion.candidates.length > 0 && (
+            <div
+              role="listbox"
+              data-testid="completion-list"
+              style={{
+                position: 'relative',
+                marginTop: 8,
+                marginBottom: -52,
+                zIndex: 10,
+              }}
+            >
+              <div style={{
+                background: '#1e1e2e',
+                border: '1px solid #313244',
+                borderRadius: 6,
+                padding: '4px',
+                maxHeight: 180,
+                overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              }}>
+                {completion.candidates.map((c, idx) => {
+                  const isDir = c.endsWith('/');
+                  const isFile = c.includes('/');
+                  const Icon = isDir ? FolderClosed : isFile ? FileText : Terminal;
+                  return (
+                    <div
+                      key={c + idx}
+                      role="option"
+                      aria-selected={idx === completion.selected}
+                      onMouseEnter={() => setCompletion({ ...completion, selected: idx })}
+                      onClick={() => applyCompletion(c, completion.start, completion.cursor)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '4px 8px', borderRadius: 4, cursor: 'pointer',
+                        fontSize: 12.5, fontFamily: 'JetBrains Mono, monospace',
+                        color: '#C8D0E0',
+                        background: idx === completion.selected ? '#313244' : 'transparent',
+                      }}
+                    >
+                      <Icon size={13} color={isDir ? '#f59e0b' : isFile ? '#7EADFF' : '#10b981'} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {/* 命令输入行 */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
