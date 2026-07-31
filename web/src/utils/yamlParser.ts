@@ -12,9 +12,11 @@ export interface YamlParseResult {
  * 返回 null 表示通过，返回 ValidationError 表示非法
  */
 function validatePipelineStructure(doc: Record<string, unknown>): ValidationError | null {
-  // name 必填
+  // name 必填：仅要求"存在且非 null"，不要求非空字符串。
+  // v2 (2026-07): 对齐后端 pydantic lax 模式——`name: 12345` 强转为 '12345'、`name: ""` 合法，
+  // 二者由下方 String(obj.name || 'unnamed') 统一强转回退；缺失/null 才报错（pydantic 同样拒绝）
   const name = doc.name;
-  if (typeof name !== 'string' || !name.trim()) {
+  if (name === undefined || name === null) {
     return { message: '缺少必填字段 name', path: 'name' };
   }
 

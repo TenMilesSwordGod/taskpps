@@ -176,13 +176,16 @@ describe('useSSELogs()', () => {
   })
 
   it('task 数量很多（50 个）：perTask 不会变成 0', () => {
-    // 边界测试：37500 / 50 = 750，每个 task 应保留 750 行
-    // 如果 perTask 变成 0，所有日志都会丢失
+    // 边界测试：如果 perTask 变成 0，所有日志都会丢失
+    // 注意(2026-07): 裁剪只在总行数 > MAX_LOG_LINES(50000) 时触发，且裁剪后各 task 增量
+    // 会再次把总量推回 37500~50000 区间（顺序 emit 场景下 ≤37500 数学上不稳定），
+    // 故断言硬上限 50000；核心验证点是"裁剪后每个 task 都至少保留 1 行"
+    // linesPerTask=1100 保证确实触发过裁剪（50×1100=55000 > 50000）
     const { result } = renderHook(() => useSSELogs('run-1'))
     const es = MockEventSource.instances[0]
 
     const taskCount = 50
-    const linesPerTask = 1000
+    const linesPerTask = 1100
 
     for (let i = 0; i < taskCount; i++) {
       const taskName = `task-${i}`
@@ -193,8 +196,8 @@ describe('useSSELogs()', () => {
       act(() => es.emit('log', lines.join('\n')))
     }
 
-    // 裁剪后总行数 <= 37500
-    expect(result.current.logs.length).toBeLessThanOrEqual(37500)
+    // 裁剪后总行数不得超过硬上限（DOM 性能保护）
+    expect(result.current.logs.length).toBeLessThanOrEqual(50000)
 
     // 每个 task 至少保留 1 行（perTask >= 1）
     const taskNames = new Set(result.current.logs.map((l) => l.taskName))

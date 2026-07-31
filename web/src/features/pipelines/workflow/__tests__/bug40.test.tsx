@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/react';
-import WorkflowEditor from '../../WorkflowEditor';
+import WorkflowEditor from '../WorkflowEditor';
 import type { PipelineDetail } from '@/types';
 
 /**

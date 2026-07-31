@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import WorkflowEditor from '../WorkflowEditor';
 import type { PipelineDetail } from '@/types';
 
@@ -182,7 +181,6 @@ describe('右键菜单 — 节点右键', () => {
   });
 
   it('点击节点直接触发 onNodeSelect（不通过右键菜单）', async () => {
-    const user = userEvent.setup();
     const onNodeSelect = vi.fn();
     const { container, unmount } = render(
       <WorkflowEditor
@@ -199,7 +197,11 @@ describe('右键菜单 — 节点右键', () => {
     // 点击 SubPipeline 节点 → onNodeSelect 被调用
     const subNode = container.querySelector('[data-id*="__pipeline__build"]');
     expect(subNode).not.toBeNull();
-    await user.click(subNode!);
+    // 注意(2026-07): 不能用 userEvent.click——它会派发 mousedown 序列，jsdom 合成事件的
+    // view 为 null，触发 d3-drag 的 nodrag(event.view) 崩溃（Cannot read properties of null），
+    // 产生 unhandled error 污染整个测试进程。fireEvent.click 只派发 click 事件，
+    // 不经 d3-drag（节点选择由 React onClick 处理），既触发 onNodeSelect 又无副作用
+    fireEvent.click(subNode!);
 
     await waitFor(() => {
       expect(onNodeSelect).toHaveBeenCalled();

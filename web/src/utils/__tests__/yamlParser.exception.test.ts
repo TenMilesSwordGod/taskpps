@@ -34,32 +34,37 @@ describe('yamlParser 异常流测试', () => {
     expect(result.error?.message).toContain('有效的对象');
   });
 
-  it('tasks 字段为对象（非数组）时被忽略', () => {
+  it('tasks 字段为对象（非数组）时被拒绝', () => {
     const yaml = `name: test\ntasks:\n  not: an-array`;
     const result = parseYamlToPipeline(yaml);
-    expect(result.success).toBe(true);
-    expect(result.pipeline?.tasks).toBeUndefined();
+    // v2 (2026-07): #195 起严格校验对齐后端 pydantic——tasks 类型不匹配即报错，不再静默忽略
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('tasks 应为数组');
+    expect(result.error?.path).toBe('tasks');
   });
 
-  it('pipelines 字段为字符串（非数组）时被忽略', () => {
+  it('pipelines 字段为字符串（非数组）时被拒绝', () => {
     const yaml = `name: test\npipelines: "not an array"`;
     const result = parseYamlToPipeline(yaml);
-    expect(result.success).toBe(true);
-    expect(result.pipeline?.pipelines).toBeUndefined();
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('pipelines 应为数组');
+    expect(result.error?.path).toBe('pipelines');
   });
 
-  it('options 字段为字符串（非对象）时被忽略', () => {
+  it('options 字段为字符串（非对象）时被拒绝', () => {
     const yaml = `name: test\noptions: "not an object"`;
     const result = parseYamlToPipeline(yaml);
-    expect(result.success).toBe(true);
-    expect(result.pipeline?.options).toBeUndefined();
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('options 应为对象');
+    expect(result.error?.path).toBe('options');
   });
 
-  it('config 字段为数字（非对象）时被忽略', () => {
+  it('config 字段为数字（非对象）时被拒绝', () => {
     const yaml = `name: test\nconfig: 123`;
     const result = parseYamlToPipeline(yaml);
-    expect(result.success).toBe(true);
-    expect(result.pipeline?.config).toBeUndefined();
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('config 应为对象');
+    expect(result.error?.path).toBe('config');
   });
 
   it('未知字段被静默忽略', () => {
@@ -98,15 +103,15 @@ pipelines:
     expect(result.success).toBe(false);
   });
 
-  it('tasks 数组中包含非对象元素', () => {
+  it('tasks 数组中包含非对象元素时被拒绝', () => {
     const yaml = `name: test\ntasks:\n  - "just a string"\n  - 42`;
     const result = parseYamlToPipeline(yaml);
-    expect(result.success).toBe(true);
-    // js-yaml 会解析为数组，但类型不匹配
-    expect(result.pipeline?.tasks).toHaveLength(2);
+    // v2 (2026-07): #195 起严格校验——非对象 task 元素与后端 pydantic TaskYAML 校验一致，直接报错
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('tasks[0] 应为对象');
   });
 
-  it('pipelines 中 task 缺少 name 字段', () => {
+  it('pipelines 中 task 缺少 name 字段时被拒绝', () => {
     const yaml = `
 name: test
 pipelines:
@@ -115,9 +120,9 @@ pipelines:
       - command: echo "no name"
 `;
     const result = parseYamlToPipeline(yaml);
-    expect(result.success).toBe(true);
-    // name 为 undefined，流程图应能处理
-    expect(result.pipeline?.pipelines?.[0].tasks[0].name).toBeUndefined();
+    // v2 (2026-07): #195 起严格校验——task.name 为后端 pydantic 必填字段，缺失即拒绝
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('pipelines[0].tasks[0] 缺少必填字段 name');
   });
 
   it('YAML 包含重复键时 js-yaml 默认行为', () => {
