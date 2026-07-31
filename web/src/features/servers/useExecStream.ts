@@ -1,14 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
-import { getToken } from '@/api/client';
+import { execCommandStream, type ExecStatus, type ExecLine } from './execStream';
 
-export type ExecStatus = 'idle' | 'running' | 'done' | 'error';
-
-export interface ExecLine {
-  seq: number;
-  type: 'command' | 'output' | 'error' | 'info';
-  content: string;
-  timestamp: number;
-}
+export type { ExecStatus, ExecLine };
 
 let globalSeq = 0;
 
@@ -17,21 +10,29 @@ interface SSEEvent {
   data: string;
 }
 
-/** 将 SSE 原始文本块解析为事件列表 */
-function parseSSEChunk(chunk: string): SSEEvent[] {
+/** 将 SSE 原始文本块解析为事件列表，返回未完成尾部供下次拼接 */
+export function parseSSEChunk(chunk: string): { events: SSEEvent[]; rest: string } {
+  // 规范化换行符：\r\n → \n，残留 \r → \n（兼容 sse-starlette 的 CRLF 输出）
+  const normalized = chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const events: SSEEvent[] = [];
-  const blocks = chunk.split('\n\n');
+  const blocks = normalized.split('\n\n');
+  // 最后一个 block 可能不完整（TCP 包边界落在 SSE event 中间），留到下次拼完再解析
+  const rest = blocks.pop() ?? '';
   for (const block of blocks) {
     if (!block.trim()) continue;
     let event = 'message';
-    let data = '';
+    const dataLines: string[] = [];
     for (const line of block.split('\n')) {
       if (line.startsWith('event:')) event = line.slice(6).trim();
-      else if (line.startsWith('data:')) data += line.slice(5).trimStart();
+      else if (line.startsWith('data:')) {
+        // v2: data: 后可选一个空格（SSE 规范），该空格不属于内容
+        const raw = line.slice(5);
+        dataLines.push(raw.startsWith(' ') ? raw.slice(1) : raw);
+      }
     }
-    events.push({ event, data });
+    events.push({ event, data: dataLines.join('\n') }); // v2: 用 \n 重新拼接多行 data，取代原来的裸拼接
   }
-  return events;
+  return { events, rest };
 }
 
 export function useExecStream() {
@@ -39,105 +40,24 @@ export function useExecStream() {
   const [status, setStatus] = useState<ExecStatus>('idle');
   const abortRef = useRef<AbortController | null>(null);
 
-  const run = useCallback(async (agentId: string, command: string, timeout = 60) => {
+  const run = useCallback(async (
+    agentId: string, command: string, timeout = 60, cwd = '',
+  ) => {
     if (abortRef.current) abortRef.current.abort();
 
     const controller = new AbortController();
     abortRef.current = controller;
 
     setStatus('running');
-    const cmdSeq = ++globalSeq;
-    setLines((prev) => [
-      ...prev,
-      { seq: cmdSeq, type: 'command', content: command, timestamp: Date.now() },
-    ]);
 
-    const baseURL = (import.meta.env.VITE_API_BASE_URL as string) ?? '';
-    const apiKey = (import.meta.env.VITE_API_KEY as string) ?? '';
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (apiKey) headers['X-API-Key'] = apiKey;
-    // REPL 走 /api/agents 的 POST 接口，受 JWT 中间件保护，必须携带登录 token，
-    // 否则会被中间件判定为「未登录或 token 无效」返回 401（即使已登录）。
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const append = (type: ExecLine['type'], content: string) => {
-      setLines((prev) => [
-        ...prev,
-        { seq: ++globalSeq, type, content, timestamp: Date.now() },
-      ]);
+    const append = (line: ExecLine) => {
+      setLines((prev) => [...prev, { ...line, seq: ++globalSeq }]);
     };
 
-    try {
-      const resp = await fetch(`${baseURL}/api/agents/${agentId}/exec/stream`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ command, timeout }),
-        signal: controller.signal,
-      });
-
-      if (!resp.ok) {
-        let msg = `HTTP ${resp.status}`;
-        try {
-          const body = await resp.text();
-          const j = JSON.parse(body);
-          if (j.detail) msg = j.detail;
-        } catch { /* ignore */ }
-        append('error', msg);
-        setStatus('error');
-        return;
-      }
-
-      const reader = resp.body?.getReader();
-      if (!reader) {
-        append('error', '无法读取响应流');
-        setStatus('error');
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = parseSSEChunk(buffer);
-        buffer = '';
-        for (const evt of events) {
-          if (evt.event === 'output') {
-            append('output', evt.data);
-          } else if (evt.event === 'result') {
-            try {
-              const r = JSON.parse(evt.data);
-              if (r.exit_code !== 0 && r.exit_code !== undefined) {
-                append('info', `[exit_code: ${r.exit_code}]`);
-              }
-              if (r.duration_ms) {
-                append('info', `[耗时: ${r.duration_ms}ms]`);
-              }
-            } catch { /* ignore */ }
-          } else if (evt.event === 'error') {
-            try {
-              const r = JSON.parse(evt.data);
-              append('error', r.error || '执行出错');
-            } catch {
-              append('error', evt.data);
-            }
-            setStatus('error');
-          } else if (evt.event === 'done') {
-            setStatus('done');
-          }
-        }
-      }
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') {
-        append('info', '[已取消]');
-      } else {
-        append('error', String(e));
-      }
-      setStatus('error');
-    }
+    await execCommandStream(agentId, command, timeout, cwd, controller.signal, {
+      onAppend: append,
+      onStatus: setStatus,
+    });
   }, []);
 
   const cancel = useCallback(() => {
