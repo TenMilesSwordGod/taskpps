@@ -226,7 +226,7 @@ function SuccessRateChart({
             {avgPct}%
           </span>
           <span style={passTextStyle}>
-            {stats!.passCount}/{stats!.total} pass
+            {stats!.passCount}/{stats!.total} 通过
           </span>
         </div>
       </div>

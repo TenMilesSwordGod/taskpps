@@ -2,17 +2,16 @@ import { useMemo } from 'react';
 import { Tooltip } from 'antd';
 import { Check, X, Loader2, SkipForward, Ban, Clock } from 'lucide-react';
 import type { PipelineDetail, TaskRunResponse, TaskStatus } from '@/types';
+import { STATUS_COLOR, STATUS_LABEL } from '@/features/pipelines/nodes/nodeTokens';
 
-const STATUS_META: Record<
-  TaskStatus,
-  { color: string; label: string; Icon: typeof Check }
-> = {
-  pending: { color: '#9ca3af', label: '等待中', Icon: Clock },
-  running: { color: '#60a5fa', label: '运行中', Icon: Loader2 },
-  success: { color: '#34d399', label: '成功', Icon: Check },
-  failed: { color: '#f87171', label: '失败', Icon: X },
-  skipped: { color: '#fbbf24', label: '已跳过', Icon: SkipForward },
-  cancelled: { color: '#fb923c', label: '已取消', Icon: Ban },
+// v2 (2026-07): STATUS_META 已移除，状态色统一引用 nodeTokens STATUS_COLOR
+const ICONS: Record<TaskStatus, typeof Check> = {
+  pending: Clock,
+  running: Loader2,
+  success: Check,
+  failed: X,
+  skipped: SkipForward,
+  cancelled: Ban,
 };
 
 const NODE_SIZE = 18;
@@ -41,7 +40,9 @@ interface RunStagePanelProps {
 
 /** 任务节点：带状态图标的圆点 */
 function StageTaskNode({ node }: { node: StageNode }) {
-  const { color, label, Icon } = STATUS_META[node.status];
+  const color = STATUS_COLOR[node.status];
+  const label = STATUS_LABEL[node.status];
+  const Icon = ICONS[node.status];
   const isRunning = node.status === 'running';
 
   return (

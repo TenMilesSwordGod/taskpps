@@ -1,7 +1,6 @@
 import { DragEvent, useState, useCallback } from 'react';
 import { Input, Collapse } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import type { TaskType } from '@/types';
 import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
 import { SubPipelineIcon, TaskIcon, PostParentIcon, CmdIcon, StepIcon, PluginIcon, InvokeIcon } from './icons';
 
@@ -101,9 +100,9 @@ export default function NodePalette() {
   ]);
 
   const containerCards: DraggableCardProps[] = filterCards([
-    { type: 'subpipeline', nodeType: 'subpipeline', label: 'SubPipeline', description: '蓝色虚线容器', icon: <SubPipelineIcon style={{ ...PALETTE_ICON_STYLE, color: '#3b82f6' }} />, color: '#3b82f6' },
-    { type: 'task', nodeType: 'task', label: 'Task', description: '绿色虚线容器', icon: <TaskIcon style={{ ...PALETTE_ICON_STYLE, color: '#22c55e' }} />, color: '#22c55e' },
-    { type: 'post_parent', nodeType: 'post_parent', label: 'Post 父容器', description: '红色虚线容器', icon: <PostParentIcon style={{ ...PALETTE_ICON_STYLE, color: '#ef4444' }} />, color: '#ef4444' },
+    { type: 'subpipeline', nodeType: 'subpipeline', label: 'SubPipeline', description: '子流水线容器', icon: <SubPipelineIcon style={{ ...PALETTE_ICON_STYLE, color: '#3b82f6' }} />, color: '#3b82f6' },
+    { type: 'task', nodeType: 'task', label: 'Task', description: '任务容器', icon: <TaskIcon style={{ ...PALETTE_ICON_STYLE, color: '#22c55e' }} />, color: '#22c55e' },
+    { type: 'post_parent', nodeType: 'post_parent', label: 'Post 父容器', description: '后置动作容器', icon: <PostParentIcon style={{ ...PALETTE_ICON_STYLE, color: '#ef4444' }} />, color: '#ef4444' },
   ]);
 
   const atomicCards: DraggableCardProps[] = filterCards([
@@ -114,9 +113,9 @@ export default function NodePalette() {
   ]);
 
   const postCards: DraggableCardProps[] = filterCards([
-    { type: 'post_child', nodeType: 'post_child_on_fail', label: 'on_fail 子容器', description: '失败时触发', icon: <span style={{ fontSize: 16 }}>✕</span>, color: '#ef4444' },
-    { type: 'post_child', nodeType: 'post_child_on_success', label: 'on_success 子容器', description: '成功时触发', icon: <span style={{ fontSize: 16 }}>✓</span>, color: '#22c55e' },
-    { type: 'post_child', nodeType: 'post_child_always', label: 'always 子容器', description: '始终触发', icon: <span style={{ fontSize: 16 }}>↻</span>, color: '#6b7280' },
+    { type: 'post_child', nodeType: 'post_child_on_fail', label: '失败后', description: '失败时触发', icon: <span style={{ fontSize: 16 }}>✕</span>, color: '#ef4444' },
+    { type: 'post_child', nodeType: 'post_child_on_success', label: '成功后', description: '成功时触发', icon: <span style={{ fontSize: 16 }}>✓</span>, color: '#22c55e' },
+    { type: 'post_child', nodeType: 'post_child_always', label: '始终', description: '始终触发', icon: <span style={{ fontSize: 16 }}>↻</span>, color: '#6b7280' },
   ]);
 
   const collapseItems = [
@@ -144,7 +143,7 @@ export default function NodePalette() {
     },
     {
       key: 'atomic',
-      label: <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}>原子行为</span>,
+      label: <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}>基础任务</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {atomicCards.map((c) => (

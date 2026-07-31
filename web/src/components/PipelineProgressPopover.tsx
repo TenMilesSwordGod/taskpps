@@ -4,16 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Check, X, Loader2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import type { TaskRunResponse, TaskStatus } from '@/types';
-
-/** 状态颜色 — 绿=通过，灰=未执行，红=失败，蓝=运行中，黄=跳过，橙=取消 */
-const STATUS_COLOR: Record<TaskStatus, string> = {
-  success: '#10b981',
-  failed: '#ef4444',
-  running: '#3D5BFF',
-  pending: '#7C7F88',
-  skipped: '#f59e0b',
-  cancelled: '#f97316',
-};
+import { STATUS_COLOR } from '@/features/pipelines/nodes/nodeTokens';
 
 /** 呼吸灯动画 keyframes */
 const BREATHING_STYLE = `
@@ -28,9 +19,9 @@ const BREATHING_STYLE = `
 
 /** 子流水线状态汇总颜色（优先级：failed > running > 其他） */
 function groupStatusColor(tasks: TaskRunResponse[]): string {
-  if (tasks.some((t) => t.status === 'failed')) return '#ef4444';
-  if (tasks.some((t) => t.status === 'running')) return '#3b82f6';
-  return '#10b981';
+  if (tasks.some((t) => t.status === 'failed')) return STATUS_COLOR.failed;
+  if (tasks.some((t) => t.status === 'running')) return STATUS_COLOR.running;
+  return STATUS_COLOR.success;
 }
 
 /** 按 subpipeline_name 分组，保持顺序 */
@@ -201,13 +192,13 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
                         </span>
                       )}
                       {t.status === 'success' && (
-                        <Check size={10} color="#10b981" style={{ flexShrink: 0 }} />
+                        <Check size={10} color={STATUS_COLOR.success} style={{ flexShrink: 0 }} />
                       )}
                       {t.status === 'failed' && (
-                        <X size={10} color="#ef4444" style={{ flexShrink: 0 }} />
+                        <X size={10} color={STATUS_COLOR.failed} style={{ flexShrink: 0 }} />
                       )}
                       {t.status === 'running' && (
-                        <Loader2 size={10} color="#3D5BFF" className="animate-spin" style={{ flexShrink: 0 }} />
+                        <Loader2 size={10} color={STATUS_COLOR.running} className="animate-spin" style={{ flexShrink: 0 }} />
                       )}
                     </div>
                   )}

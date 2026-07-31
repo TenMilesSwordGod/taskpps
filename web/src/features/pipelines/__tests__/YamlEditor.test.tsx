@@ -58,12 +58,13 @@ describe('YamlEditor', () => {
     expect(content).toBeTruthy();
   });
 
-  it('显示工具栏按钮', () => {
+  // v2 (2026-07): 撤销/重做/格式化按钮已移除（无实际功能），
+  // 不传 onSave 时工具栏仅剩标题文字，不渲染任何按钮
+  it('不传 onSave 时不渲染工具栏按钮', () => {
     const { container } = render(<YamlEditor value="" onChange={() => {}} />);
-    // 工具栏中有 3 个按钮（撤销、重做、格式化）
     const toolbar = container.querySelector('.flex.items-center.justify-between');
     const buttons = toolbar?.querySelectorAll('button');
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(0);
   });
 
   it('渲染初始值', () => {

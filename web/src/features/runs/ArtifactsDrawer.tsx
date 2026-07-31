@@ -74,13 +74,13 @@ export default function ArtifactsDrawer({ runId, open, onClose }: ArtifactsDrawe
   if (!open) return null
 
   return (
-    <Drawer title="Artifacts" open={open} onClose={onClose} width={480}>
+    <Drawer title="构建产物" open={open} onClose={onClose} width={480}>
       {isLoading ? (
         <Spin spinning />
       ) : error ? (
-        <Alert type="error" message="Failed to load artifacts" />
+        <Alert type="error" message="加载产物失败" />
       ) : !tree.length ? (
-        <Empty description="No artifacts" />
+        <Empty description="无构建产物" />
       ) : (
         <>
           <Tree

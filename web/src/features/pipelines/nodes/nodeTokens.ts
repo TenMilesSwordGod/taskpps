@@ -34,24 +34,29 @@ export const INK = {
   accent: '#0EA5E9', // sky-500 签名强调色（流/活动）
 } as const;
 
-/** 任务状态 → 颜色（强调条 / 边） */
+/** 任务状态 → 颜色（强调条 / 边）
+ * v2 (2026-07): cancelled 从 #EF4444（与 failed 同色造成语义混淆）改为 #7C7F88，
+ *   与 Dashboard/RunList 已有行为对齐，区分"失败(红)"与"取消(灰)"
+ */
 export const STATUS_COLOR: Record<TaskStatus, string> = {
   pending: '#94A3B8',
   running: '#0EA5E9',
   success: '#10B981',
   failed: '#EF4444',
   skipped: '#F59E0B',
-  cancelled: '#EF4444',
+  cancelled: '#7C7F88',
 };
 
-/** 任务状态 → 软背景色（用于徽章） */
+/** 任务状态 → 软背景色（用于徽章）
+ * v2 (2026-07): cancelled soft bg 从 #FEE2E2（红色系）改为 #F3F4F6（灰色系）
+ */
 export const STATUS_SOFT_BG: Record<TaskStatus, string> = {
   pending: '#F1F5F9',
   running: '#E0F2FE',
   success: '#D1FAE5',
   failed: '#FEE2E2',
   skipped: '#FEF3C7',
-  cancelled: '#FEE2E2',
+  cancelled: '#F3F4F6',
 };
 
 /** 任务状态 → 短代码（等宽徽章） */
