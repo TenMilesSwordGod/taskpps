@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, DragEvent, useState, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useMemo, useRef, DragEvent, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
   ReactFlow,
   Background,
@@ -21,7 +21,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { message, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
-import { SaveOutlined, ApartmentOutlined, ExpandOutlined, CameraOutlined } from '@ant-design/icons';
+import { ApartmentOutlined, ExpandOutlined, CameraOutlined } from '@ant-design/icons';
 import EditorTaskNode from './nodes/EditorTaskNode';
 import EditorSubPipelineNode from './nodes/EditorSubPipelineNode';
 import EditorPostParentNode from './nodes/EditorPostParentNode';
@@ -34,6 +34,7 @@ import { INK } from '../nodes/nodeTokens';
 import type { EditorNodeData, EditorEdgeData } from './yamlToNodes';
 import type { PipelineDetail } from '@/types';
 import { applyDagreLayout } from '@/utils/dagreLayout';
+import { exportAsPng } from '@/utils/exportImage';
 import { validateDrop, findDropParentContext, getAbsolutePosition, type DropContext } from './validateDrop';
 
 /**
@@ -47,7 +48,10 @@ import { validateDrop, findDropParentContext, getAbsolutePosition, type DropCont
  *   - 选中节点触发 PropertyPanel
  *   - 右键菜单（节点上下文 + 画布上下文）
  *   - 容器折叠/展开
- *   - 工具栏（保存/自动布局/适应窗口/导出图片）
+ *   - 工具栏（自动布局/适应窗口/导出图片）
+ * v3 (2026-07): 移除内部"保存"按钮（假保存不写后端），
+ *   保存由父组件 PipelineDetailPage 的 handleSaveFromEditor 统一负责。
+ *   新增 isDirty ref 暴露，供父组件做 beforeunload 和模式切换守卫。
  *   - YAML 双向同步
  *
  * v2 (2026-07): 补充 5 项功能—handleDrop校验 + 右键菜单 + 折叠展开 + 工具栏 + SVG图标
@@ -64,6 +68,8 @@ const NODE_TYPES: NodeTypes = {
 
 export interface WorkflowEditorRef {
   deleteNode: (nodeId: string) => void;
+  /** 画布是否有未保存修改（供父组件做 beforeunload/模式切换守卫） */
+  readonly isDirty: boolean;
 }
 
 interface WorkflowEditorProps {
@@ -97,6 +103,10 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
 
   // 追踪画布是否有未保存修改
   const [isDirty, setIsDirty] = useState(false);
+  // v3 (2026-07): ref 同步 isDirty，供 useImperativeHandle 暴露给父组件
+  // 不用状态值的原因是 useImperativeHandle 的 getter 需要稳定引用
+  const isDirtyRef = useRef(false);
+  useEffect(() => { isDirtyRef.current = isDirty; }, [isDirty]);
 
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -116,11 +126,6 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
     setEdges(initialGraph.edges);
     setIsDirty(false);
   }, [pipeline?.name, pipeline?.pipelines?.length]);
-
-  // 通知父组件 graph 变化
-  const handleGraphChange = useCallback(() => {
-    onGraphChange?.(nodes, edges);
-  }, [nodes, edges, onGraphChange]);
 
   // 连线处理
   const onConnect: OnConnect = useCallback(
@@ -588,12 +593,6 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
 
   // === 工具栏操作 ===
 
-  const handleSave = useCallback(() => {
-    handleGraphChange();
-    setIsDirty(false);
-    message.success('工作流已保存');
-  }, [handleGraphChange]);
-
   const handleAutoLayout = useCallback(() => {
     try {
       const layouted = applyDagreLayout(
@@ -635,7 +634,18 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
   }, []);
 
   const handleExportImage = useCallback(async () => {
-    message.info('导出图片功能准备中...');
+    // v3 (2026-07): 实现导出 PNG（之前为 stub toast），复用 exportAsPng 工具
+    const el = wrapperRef.current?.querySelector('.react-flow') as HTMLElement | null;
+    if (!el) {
+      message.error('画布未就绪');
+      return;
+    }
+    try {
+      await exportAsPng(el, 'pipeline.png');
+      message.success('PNG 已导出');
+    } catch {
+      message.error('导出失败');
+    }
   }, []);
 
   // 构建右键菜单项
@@ -709,9 +719,11 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
     return [];
   }, [contextMenu, nodes, handleAddNodeFromContext, handleToggleCollapse, handleNodeProperties, handleDeleteNode]);
 
-  // v4 (2026-07): 暴露 handleDeleteNode 给父组件（PropertyPanel 删除路径）
+  // v4 (2026-07): 暴露 deleteNode + isDirty 给父组件
+  // isDirty 通过 ref getter 暴露，在 beforeunload/模式切换时读取最新值
   useImperativeHandle(ref, () => ({
     deleteNode: (nodeId: string) => handleDeleteNode(nodeId),
+    get isDirty() { return isDirtyRef.current; },
   }), [handleDeleteNode]);
 
   // 同步选中状态到节点
@@ -735,7 +747,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        outline: 'none',
+        // v3 (2026-07): 移除 outline:'none'，恢复浏览器默认键盘焦点指示器，改善 a11y
       }}
       onKeyDown={handleKeyDown}
       onDragOver={handleDragOver}
@@ -755,24 +767,6 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             zIndex: 10,
           }}
         >
-          <Tooltip title="保存工作流">
-            <button
-              onClick={handleSave}
-              disabled={!isDirty}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: 6,
-                background: isDirty ? '#eff6ff' : '#f9fafb',
-                color: isDirty ? '#1d4ed8' : '#9ca3af',
-                cursor: isDirty ? 'pointer' : 'not-allowed',
-                fontSize: 12, fontWeight: 500,
-                opacity: isDirty ? 1 : 0.6,
-              }}
-            >
-              <SaveOutlined />
-              保存
-            </button>
-          </Tooltip>
           <Tooltip title="自动布局（dagre）">
             <button
               onClick={handleAutoLayout}

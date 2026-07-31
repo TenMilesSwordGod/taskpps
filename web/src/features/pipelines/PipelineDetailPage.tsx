@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Space, Tooltip, message, Spin, Alert } from 'antd';
+import { Button, Space, Tooltip, message, Spin, Alert, Modal } from 'antd';
 import {
   ExportOutlined,
   FileImageOutlined,
@@ -123,6 +123,21 @@ export default function PipelineDetailPage() {
       });
     }
   }, [editNodes, editEdges, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
+
+  // v2 (2026-07): 未保存修改的离开守卫
+  // 在编辑模式下注册 beforeunload 事件，关闭/刷新页面时提示用户
+  // dirty 状态通过 workflowEditorRef 读取（ref getter，始终返回最新值）
+  useEffect(() => {
+    if (!editMode) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      if (workflowEditorRef.current?.isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [editMode]);
 
   // 编辑器节点选择处理
   const handleEditorNodeSelect = useCallback((nodeId: string | null) => {
@@ -343,15 +358,29 @@ export default function PipelineDetailPage() {
         <Space>
           {/* v1 (2026-07): issue #206 — 编辑/查看模式切换 */}
           {!isFileMode && (
-            <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'}>
-              <Button
-                icon={editMode ? <EyeOutlined /> : <EditOutlined />}
-                onClick={() => setEditMode((prev) => !prev)}
-                type={editMode ? 'primary' : 'default'}
-              >
-                {editMode ? '查看模式' : '编辑模式'}
-              </Button>
-            </Tooltip>
+              <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'}>
+                <Button
+                  icon={editMode ? <EyeOutlined /> : <EditOutlined />}
+                  onClick={() => {
+                    // v2 (2026-07): 切换到查看模式前检查未保存修改
+                    if (editMode && workflowEditorRef.current?.isDirty) {
+                      Modal.confirm({
+                        title: '未保存的修改',
+                        content: '退出编辑模式将丢失所有未保存的修改，确定继续？',
+                        okText: '确定退出',
+                        cancelText: '继续编辑',
+                        okButtonProps: { danger: true },
+                        onOk: () => setEditMode(false),
+                      });
+                    } else {
+                      setEditMode((prev) => !prev);
+                    }
+                  }}
+                  type={editMode ? 'primary' : 'default'}
+                >
+                  {editMode ? '查看模式' : '编辑模式'}
+                </Button>
+              </Tooltip>
           )}
           {editMode && (
             <Tooltip title="保存 (Ctrl+S)">

@@ -10,7 +10,7 @@ import {
   LogoutOutlined,
   DownOutlined,
 } from '@ant-design/icons';
-import { Avatar, Dropdown, Tooltip } from 'antd';
+import { Avatar, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ReactNode } from 'react';
 import TaskPpsLogo from '@/components/TaskPpsLogo';
@@ -20,22 +20,30 @@ import type { AuthUser } from '@/api/auth';
 function CurrentTime() {
   const [now, setNow] = useState(() => new Date());
 
+  // v2 (2026-07): 每秒刷新改为每分钟刷新（减少视觉噪音），去掉秒显示
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
+    const secToNextMinute = (60 - new Date().getSeconds()) * 1000;
+    const timeout = setTimeout(() => {
+      setNow(new Date());
+      const timer = setInterval(() => setNow(new Date()), 60000);
+      timeoutRef = timer;
+    }, secToNextMinute);
+    let timeoutRef: ReturnType<typeof setInterval>;
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(timeoutRef);
+    };
   }, []);
 
   const pad = (n: number) => String(n).padStart(2, '0');
-  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   return (
-    <Tooltip title="服务器时间">
-      <div style={{ fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace', lineHeight: 1.3, fontSize: 12 }}>
-        <div style={{ color: '#7C7F88' }}>{date}</div>
-        <div style={{ fontWeight: 500, color: '#121620' }}>{time}</div>
-      </div>
-    </Tooltip>
+    <div style={{ fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace', lineHeight: 1.3, fontSize: 12 }}>
+      <div style={{ color: '#94A3B8' }}>{date}</div>
+      <div style={{ fontWeight: 500, color: '#0F172A' }}>{time}</div>
+    </div>
   );
 }
 

@@ -22,7 +22,6 @@ import WorkflowEditor from '../WorkflowEditor';
 describe('真实拖放 → 画布根层级', () => {
   it('拖 SubPipeline 到画布后画布出现对应节点', async () => {
     const onGraphChange = vi.fn();
-    const user = userEvent.setup();
     const { container, unmount } = render(
       <WorkflowEditor
         pipeline={{ name: 'drop-test' }}
@@ -125,7 +124,7 @@ describe('真实拖放 → 画布根层级', () => {
     unmount();
   });
 
-  it('拖放节点后 isDirty=true → 保存按钮变为可用', async () => {
+  it('拖放节点后 isDirty=true → 脏标记出现', async () => {
     const onGraphChange = vi.fn();
     const { container, unmount } = render(
       <WorkflowEditor
@@ -140,9 +139,8 @@ describe('真实拖放 → 画布根层级', () => {
       expect(container.querySelector('.react-flow')).toBeInTheDocument();
     });
 
-    // 初始状态：保存按钮 disabled
-    const saveBtnBefore = screen.getByText('保存');
-    expect((saveBtnBefore as HTMLButtonElement).disabled).toBe(true);
+    // 初始状态：无脏标记
+    expect(screen.queryByText('有未保存的修改')).not.toBeInTheDocument();
 
     // 拖放 SubPipeline 节点
     const dt = new DataTransfer();
@@ -154,9 +152,8 @@ describe('真实拖放 → 画布根层级', () => {
     fireEvent.drop(pane!, { dataTransfer: dt, clientX: 200, clientY: 150 });
 
     await waitFor(() => {
-      // handleDrop 调用 setIsDirty(true)，保存按钮应变为 enabled
-      const saveBtn = screen.getByText('保存');
-      expect((saveBtn as HTMLButtonElement).disabled).toBe(false);
+      // v4 (2026-07): 保存按钮已移除，用脏标记代替
+      expect(screen.getByText('有未保存的修改')).toBeInTheDocument();
     });
 
     unmount();

@@ -132,6 +132,7 @@ web/dist/
 # Editor & Tool artifacts
 .mimocode/
 .opencode/
+.impeccable/
 
 # Runtime state
 state/

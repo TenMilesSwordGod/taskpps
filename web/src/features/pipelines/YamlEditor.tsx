@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -9,7 +9,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintGutter } from '@codemirror/lint';
 import { Alert, Button, Tooltip, Space } from 'antd';
-import { FormatPainterOutlined, UndoOutlined, RedoOutlined, SaveOutlined } from '@ant-design/icons';
+import { SaveOutlined } from '@ant-design/icons';
 import type { ValidationError } from '@/types';
 
 export interface YamlEditorRef {
@@ -42,7 +42,6 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const [internalError, setInternalError] = useState<typeof error>(null);
 
   onChangeRef.current = onChange;
   const onSaveRef = useRef(onSave);
@@ -159,26 +158,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
     }
   }, [value]);
 
-  // 合并外部和内部错误
-  const displayError = error ?? internalError;
-
-  // 撤销/重做
-  const handleUndo = () => {
-    const view = viewRef.current;
-    if (!view) return;
-    // 触发 Ctrl+Z
-    view.dispatch({ selection: view.state.selection.main });
-  };
-
-  const handleRedo = () => {
-    const view = viewRef.current;
-    if (!view) return;
-    view.dispatch({ selection: view.state.selection.main });
-  };
-
-  const handleFormat = () => {
-    setInternalError(null);
-  };
+  // 直接使用外部传入的 error，不再维护独立的 internalError（v2 移除内部无效状态）
 
   return (
     <div className="flex flex-col h-full">
@@ -186,15 +166,6 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
       <div className="flex items-center justify-between px-3 py-1.5 bg-[#252526] border-b border-[#333] shrink-0">
         <span className="text-xs text-gray-400 font-medium">YAML 编辑器</span>
         <Space size="small">
-          <Tooltip title="撤销 (Ctrl+Z)">
-            <Button type="text" size="small" icon={<UndoOutlined />} onClick={handleUndo} className="text-gray-400 hover:text-white" />
-          </Tooltip>
-          <Tooltip title="重做 (Ctrl+Y)">
-            <Button type="text" size="small" icon={<RedoOutlined />} onClick={handleRedo} className="text-gray-400 hover:text-white" />
-          </Tooltip>
-          <Tooltip title="格式化">
-            <Button type="text" size="small" icon={<FormatPainterOutlined />} onClick={handleFormat} className="text-gray-400 hover:text-white" />
-          </Tooltip>
           {onSave && (
             <Tooltip title="保存 (Ctrl+S)">
               <Button type="primary" size="small" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
@@ -209,7 +180,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
       <div ref={editorRef} className="flex-1 min-h-0 overflow-auto" style={{ height }} />
 
       {/* v1 (2026-07): issue #195 — 错误信息统一展示 message + 可选 line/column/path */}
-      {displayError && (
+      {error && (
         <div className="shrink-0 border-t border-[#333]">
           <Alert
             type="error"
@@ -217,11 +188,11 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
             banner
             message={
               <span className="text-xs font-mono">
-                {displayError.line != null && displayError.column != null
-                  ? `行 ${displayError.line}:${displayError.column} — `
+                {error.line != null && error.column != null
+                  ? `行 ${error.line}:${error.column} — `
                   : ''}
-                {displayError.path ? `${displayError.path}: ` : ''}
-                {displayError.message}
+                {error.path ? `${error.path}: ` : ''}
+                {error.message}
               </span>
             }
             className="!bg-[#2d1b1b] !border-[#5a2020]"

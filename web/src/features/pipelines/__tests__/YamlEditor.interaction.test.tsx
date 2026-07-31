@@ -53,10 +53,11 @@ describe('YamlEditor 交互测试', () => {
     // 在 DOM 中 contenteditable 仍为 true，但输入被 CodeMirror 拦截
   });
 
-  it('工具栏按钮渲染正确', () => {
+  // v2 (2026-07): 撤销/重做/格式化按钮已移除，不传 onSave 时无按钮
+  it('工具栏不渲染无功能按钮', () => {
     const { container } = render(<YamlEditor value="" onChange={() => {}} />);
     const buttons = container.querySelectorAll('button');
-    expect(buttons.length).toBeGreaterThanOrEqual(3);
+    expect(buttons.length).toBe(0);
   });
 
   it('错误信息行号正确显示', () => {

@@ -163,13 +163,12 @@ function LoginForm({ onSubmit, loading, prefillUsername }: LoginFormProps) {
   }
 
   return (
-    <Form<LoginRequest>
-      form={form}
-      layout="vertical"
-      onFinish={onSubmit}
-      autoComplete="off"
-      style={{ marginTop: 8 }}
-    >
+      <Form<LoginRequest>
+        form={form}
+        layout="vertical"
+        onFinish={onSubmit}
+        style={{ marginTop: 8 }}
+      >
       <Form.Item
         name="username"
         label="用户名"
@@ -179,7 +178,7 @@ function LoginForm({ onSubmit, loading, prefillUsername }: LoginFormProps) {
           { pattern: USERNAME_PATTERN, message: '仅支持字母、数字、下划线、连字符' },
         ]}
       >
-        <Input placeholder="请输入用户名" autoFocus />
+          <Input placeholder="请输入用户名" autoFocus autoComplete="username" />
       </Form.Item>
       <Form.Item
         name="password"
@@ -189,10 +188,10 @@ function LoginForm({ onSubmit, loading, prefillUsername }: LoginFormProps) {
           { min: 6, max: 64, message: '长度 6-64 位' },
         ]}
       >
-        <Input.Password placeholder="请输入密码" />
+          <Input.Password placeholder="请输入密码" autoComplete="current-password" />
       </Form.Item>
       <Form.Item name="remember_me" valuePropName="checked" style={{ marginBottom: 12 }}>
-        <Checkbox>30天不用免登录</Checkbox>
+          <Checkbox>30天内免登录</Checkbox>
       </Form.Item>
       <Button type="primary" htmlType="submit" block loading={loading}>
         登录

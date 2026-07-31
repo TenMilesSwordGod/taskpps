@@ -350,7 +350,7 @@ export default function LogViewer({
 
         {failedCount > 0 && (
           <Tag color="error" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
-            <AlertCircle size={12} /> {failedCount} failed
+            <AlertCircle size={12} /> {failedCount} 失败
           </Tag>
         )}
 

@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import { GitBranch, Play, Loader, AlertCircle, History } from 'lucide-react';
 import dayjs from 'dayjs';
+import { STATUS_COLOR } from '@/features/pipelines/nodes/nodeTokens';
 import { useNavigate } from 'react-router-dom';
 import { usePipelines } from '@/api/pipelines';
 import { useRuns } from '@/api/runs';
@@ -33,22 +34,13 @@ function rowBackground(status: RunStatus): string | undefined {
   return undefined;
 }
 
-/** 运行状态的配色（用于 tooltip） */
+/** 运行状态配色（v2: 统一引用 nodeTokens STATUS_COLOR，移除本地硬编码） */
 function runStatusColor(status: string): string {
-  switch (status) {
-    case 'success':
-      return '#10b981';
-    case 'failed':
-      return '#ef4444';
-    case 'running':
-      return '#3D5BFF';
-    case 'cancelled':
-      return '#7C7F88';
-    case 'partial':
-      return '#f59e0b';
-    default:
-      return '#7C7F88';
+  if (status === 'success' || status === 'failed' || status === 'running' || status === 'cancelled' || status === 'skipped') {
+    return STATUS_COLOR[status as keyof typeof STATUS_COLOR];
   }
+  if (status === 'pending') return STATUS_COLOR.pending;
+  return STATUS_COLOR.cancelled; // partial 等未知状态用灰
 }
 
 /**
@@ -243,32 +235,32 @@ export default function DashboardPage() {
               <Statistic
                 title="流水线总数"
                 value={pipelineCount}
-                prefix={<GitBranch size={18} color="#7C7F88" />}
-                valueStyle={{ color: '#121620', fontWeight: 500 }}
+                prefix={<GitBranch size={18} color="#94A3B8" />}
+                valueStyle={{ color: '#0F172A', fontWeight: 500 }}
               />
             </Card>
             <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
               <Statistic
                 title="今日运行"
                 value={todayRuns}
-                prefix={<Play size={18} color="#7C7F88" />}
-                valueStyle={{ color: '#121620', fontWeight: 500 }}
+                prefix={<Play size={18} color="#94A3B8" />}
+                valueStyle={{ color: '#0F172A', fontWeight: 500 }}
               />
             </Card>
             <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
               <Statistic
                 title="运行中"
                 value={runningCount}
-                prefix={<Loader size={18} color="#7EADFF" />}
-                valueStyle={{ color: '#3D5BFF', fontWeight: 500 }}
+                prefix={<Loader size={18} color={STATUS_COLOR.running} />}
+                valueStyle={{ color: STATUS_COLOR.running, fontWeight: 500 }}
               />
             </Card>
             <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
               <Statistic
                 title="失败"
                 value={failedCount}
-                prefix={<AlertCircle size={18} color={failedCount > 0 ? '#ef4444' : '#7C7F88'} />}
-                valueStyle={failedCount > 0 ? { color: '#ef4444', fontWeight: 500 } : { color: '#121620', fontWeight: 500 }}
+                prefix={<AlertCircle size={18} color={failedCount > 0 ? STATUS_COLOR.failed : '#94A3B8'} />}
+                valueStyle={failedCount > 0 ? { color: STATUS_COLOR.failed, fontWeight: 500 } : { color: '#0F172A', fontWeight: 500 }}
               />
             </Card>
           </div>

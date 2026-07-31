@@ -3,20 +3,35 @@
 @tailwind utilities;
 
 :root {
-  /* Column design tokens */
-  --column-bg: #f6f6f8;
-  --column-bg-soft: #ffffff;
-  --column-ink: #121620;
-  --column-ink-soft: #7c7f88;
-  --column-accent: #7eadff;
-  --column-line: #e3e4e8;
-  --column-radius-sm: 3px;
-  --column-radius-md: 8px;
-  --column-radius-lg: 12px;
-  --column-shadow: rgba(1, 24, 33, 0.05) 0px 0px 0px 1px;
-  --column-shadow-hover: rgba(17, 26, 74, 0.1) 0px 1px 3px 0px;
-  --column-easing: cubic-bezier(0.76, 0, 0.24, 1);
-  --column-duration-micro: 220ms;
+  /* 工程蓝图（Engineering Schematic）设计 token — v2 (2026-07) */
+  --schematic-bg: #F8FAFC;
+  --schematic-bg-soft: #FFFFFF;
+  --schematic-ink: #0F172A;
+  --schematic-ink-soft: #475569;
+  --schematic-ink-muted: #94A3B8;
+  --schematic-accent: #0EA5E9;
+  --schematic-line: #E2E8F0;
+  --schematic-radius-sm: 3px;
+  --schematic-radius-md: 8px;
+  --schematic-radius-lg: 12px;
+  --schematic-shadow: rgba(1, 24, 33, 0.05) 0px 0px 0px 1px;
+  --schematic-easing: cubic-bezier(0.76, 0, 0.24, 1);
+  --schematic-duration-micro: 220ms;
+
+  /* 保留旧 token 名作为别名，避免大规模 CSS 更新 */
+  --column-bg: var(--schematic-bg);
+  --column-bg-soft: var(--schematic-bg-soft);
+  --column-ink: var(--schematic-ink);
+  --column-ink-soft: var(--schematic-ink-soft);
+  --column-accent: var(--schematic-accent);
+  --column-line: var(--schematic-line);
+  --column-radius-sm: var(--schematic-radius-sm);
+  --column-radius-md: var(--schematic-radius-md);
+  --column-radius-lg: var(--schematic-radius-lg);
+  --column-shadow: var(--schematic-shadow);
+  --column-shadow-hover: var(--schematic-shadow);
+  --column-easing: var(--schematic-easing);
+  --column-duration-micro: var(--schematic-duration-micro);
 
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.5;

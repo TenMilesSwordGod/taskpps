@@ -9,6 +9,7 @@ import LogViewer from './LogViewer';
 import TaskTree from './TaskTree';
 import RunStagePanel from './RunStagePanel';
 import ResultViewer from './ResultViewer';
+import { STATUS_COLOR } from '@/features/pipelines/nodes/nodeTokens';
 import RetryModal from './RetryModal';
 import RetryVersionsDrawer from './RetryVersionsDrawer';
 import ArtifactsDrawer from './ArtifactsDrawer';
@@ -459,8 +460,8 @@ function ProgressBadge({ done, total, failed, running }: { done: number; total: 
   const isFailed = failed > 0;
   const isDone = total > 0 && done === total;
 
-  // 颜色与状态：失败红 / 完成绿 / 进行中蓝
-  const color = isFailed ? '#ef4444' : isDone ? '#10b981' : '#3b82f6';
+  // 颜色与状态：失败红 / 完成绿 / 进行中蓝（v2: 统一引用 nodeTokens STATUS_COLOR）
+  const color = isFailed ? STATUS_COLOR.failed : isDone ? STATUS_COLOR.success : STATUS_COLOR.running;
   const status: 'success' | 'exception' | 'active' | 'normal' = isFailed
     ? 'exception'
     : isDone

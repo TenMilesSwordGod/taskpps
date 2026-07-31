@@ -1,24 +1,23 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import WorkflowEditor from '../WorkflowEditor';
+import WorkflowEditor, { type WorkflowEditorRef } from '../WorkflowEditor';
 import type { PipelineDetail } from '@/types';
 
 /**
- * 工具栏 + 保存交互测试（重写 v3）
+ * 工具栏 + 脏状态跟踪测试（重写 v4）
  *
- * 验证真实工具栏操作：
- *   1. 初始状态：保存按钮 disabled（isDirty=false）
- *   2. 修改画布（拖放节点）→ 保存按钮 enabled（isDirty=true）
- *   3. 点击保存 → onGraphChange 被调用 → isDirty=false → 保存按钮 disabled
- *   4. 点击"适应"按钮 → fitView 被触发（reactFlowInstance 已初始化）
+ * 验证工具栏操作 + isDirty 暴露：
+ *   1. 拖放节点 → isDirty=true（ref 暴露） + 脏标记出现
+ *   2. 拖放节点 → onGraphChange 被调用
+ *   3. 点击"适应"按钮 → fitView 被触发（reactFlowInstance 已初始化）
+ *   4. 点击"布局"按钮触发自动布局
  *   5. 只读模式下工具栏隐藏
- *   6. 布局/适应/导出按钮始终存在（非只读模式）
+ *   6. 非只读模式渲染 3 个工具栏按钮（布局/适应/导出）
  *
- * 设计决策：
- *   - 用拖放节点来触发 isDirty=true
- *   - 用 onGraphChange 回调验证保存操作
- *   - fitView 在 jsdom 中不抛错即可
+ * v4 (2026-07): 移除 WorkflowEditor 内部"保存"按钮（假保存），
+ *   保存由父组件 PipelineDetailPage 的顶层保存按钮（handleSaveFromEditor）统一负责。
+ *   新增 isDirty ref 暴露，供父组件做 beforeunload 和模式切换守卫。
  */
 
 function makeSimplePipeline(): PipelineDetail {
@@ -34,10 +33,14 @@ function makeSimplePipeline(): PipelineDetail {
   };
 }
 
-describe('工具栏 — 保存按钮 isDirty 状态流', () => {
-  it('初始状态：保存按钮 disabled（isDirty=false）', async () => {
+describe('工具栏 — isDirty 状态与脏标记', () => {
+  it('初始状态：isDirty=false（通过 ref 读取）', async () => {
+    // v4 (2026-07): 用 callback ref 获取 forwarded ref 的最新值
+    // useRef pattern 在 render 函数体内读取不到 ref.current（React 在 render 后赋值）
+    let refValue: WorkflowEditorRef | null = null;
     const { container, unmount } = render(
       <WorkflowEditor
+        ref={(r) => { refValue = r; }}
         pipeline={makeSimplePipeline()}
         selectedNodeId={null}
         onNodeSelect={() => {}}
@@ -48,17 +51,20 @@ describe('工具栏 — 保存按钮 isDirty 状态流', () => {
       expect(container.querySelector('.react-flow')).toBeInTheDocument();
     });
 
-    const saveBtn = screen.getByText('保存');
-    expect(saveBtn).toBeInTheDocument();
-    expect((saveBtn as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => {
+      expect(refValue).not.toBeNull();
+    });
+    expect(refValue!.isDirty).toBe(false);
 
     unmount();
   });
 
-  it('拖放节点后 → 保存按钮 enabled（isDirty=true）', async () => {
+  it('拖放节点后 → isDirty=true（ref 暴露）+ 脏标记出现', async () => {
     const onGraphChange = vi.fn();
+    let refValue: WorkflowEditorRef | null = null;
     const { container, unmount } = render(
       <WorkflowEditor
+        ref={(r) => { refValue = r; }}
         pipeline={{ name: 'dirty-save' }}
         selectedNodeId={null}
         onNodeSelect={() => {}}
@@ -70,9 +76,11 @@ describe('工具栏 — 保存按钮 isDirty 状态流', () => {
       expect(container.querySelector('.react-flow')).toBeInTheDocument();
     });
 
-    // 验证初始 disabled
-    const saveBtnBefore = screen.getByText('保存');
-    expect((saveBtnBefore as HTMLButtonElement).disabled).toBe(true);
+    // 初始 isDirty=false
+    await waitFor(() => {
+      expect(refValue).not.toBeNull();
+    });
+    expect(refValue!.isDirty).toBe(false);
 
     // 拖放一个节点使 isDirty=true
     const dt = new DataTransfer();
@@ -84,8 +92,7 @@ describe('工具栏 — 保存按钮 isDirty 状态流', () => {
     fireEvent.drop(pane!, { dataTransfer: dt, clientX: 300, clientY: 200 });
 
     await waitFor(() => {
-      const saveBtnAfter = screen.getByText('保存');
-      expect((saveBtnAfter as HTMLButtonElement).disabled).toBe(false);
+      expect(refValue!.isDirty).toBe(true);
     });
 
     // isDirty=true 时"有未保存的修改"提示出现
@@ -94,12 +101,11 @@ describe('工具栏 — 保存按钮 isDirty 状态流', () => {
     unmount();
   });
 
-  it('点击保存 → onGraphChange 被调用 → isDirty 重置 → 保存按钮 disabled', async () => {
-    const user = userEvent.setup();
+  it('拖放节点 → onGraphChange 被调用', async () => {
     const onGraphChange = vi.fn();
     const { container, unmount } = render(
       <WorkflowEditor
-        pipeline={{ name: 'save-flow' }}
+        pipeline={{ name: 'graph-sync' }}
         selectedNodeId={null}
         onNodeSelect={() => {}}
         onGraphChange={onGraphChange}
@@ -110,7 +116,6 @@ describe('工具栏 — 保存按钮 isDirty 状态流', () => {
       expect(container.querySelector('.react-flow')).toBeInTheDocument();
     });
 
-    // 1. 拖放节点使 isDirty=true
     const dt = new DataTransfer();
     dt.setData('application/reactflow-type', 'subpipeline');
     dt.setData('application/reactflow-node-type', 'subpipeline');
@@ -120,21 +125,7 @@ describe('工具栏 — 保存按钮 isDirty 状态流', () => {
     fireEvent.drop(pane!, { dataTransfer: dt, clientX: 250, clientY: 150 });
 
     await waitFor(() => {
-      const saveBtn = screen.getByText('保存');
-      expect((saveBtn as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    // 2. 点击保存按钮
-    const saveBtn = screen.getByText('保存');
-    await user.click(saveBtn);
-
-    // 3. onGraphChange 被调用（带 nodes 和 edges）
-    expect(onGraphChange).toHaveBeenCalled();
-
-    // 4. 保存后 isDirty=false → 按钮 disabled
-    await waitFor(() => {
-      const saveBtnAfter = screen.getByText('保存');
-      expect((saveBtnAfter as HTMLButtonElement).disabled).toBe(true);
+      expect(onGraphChange).toHaveBeenCalled();
     });
 
     unmount();
@@ -157,10 +148,7 @@ describe('工具栏 — 保存按钮 isDirty 状态流', () => {
     const fitBtn = screen.getByText('适应');
     expect(fitBtn).toBeInTheDocument();
 
-    // 点击适应按钮，fitView 调用不应抛出错误
     await user.click(fitBtn);
-
-    // 组件仍正常渲染
     expect(container.querySelector('.react-flow')).toBeInTheDocument();
 
     unmount();
@@ -205,7 +193,6 @@ describe('工具栏 — 只读模式', () => {
       expect(container.querySelector('.react-flow')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('保存')).not.toBeInTheDocument();
     expect(screen.queryByText('布局')).not.toBeInTheDocument();
     expect(screen.queryByText('适应')).not.toBeInTheDocument();
     expect(screen.queryByText('导出')).not.toBeInTheDocument();
@@ -215,7 +202,7 @@ describe('工具栏 — 只读模式', () => {
 });
 
 describe('工具栏 — 按钮完整性', () => {
-  it('非只读模式渲染 4 个工具栏按钮（保存/布局/适应/导出）', async () => {
+  it('非只读模式渲染 3 个工具栏按钮（布局/适应/导出）', async () => {
     const { container, unmount } = render(
       <WorkflowEditor
         pipeline={makeSimplePipeline()}
@@ -228,7 +215,6 @@ describe('工具栏 — 按钮完整性', () => {
       expect(container.querySelector('.react-flow')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('保存')).toBeInTheDocument();
     expect(screen.getByText('布局')).toBeInTheDocument();
     expect(screen.getByText('适应')).toBeInTheDocument();
     expect(screen.getByText('导出')).toBeInTheDocument();
