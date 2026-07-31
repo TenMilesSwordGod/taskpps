@@ -17,6 +17,8 @@ func TestMessageType_Values(t *testing.T) {
 		{"stdout_chunk", MsgTypeStdoutChunk, "stdout_chunk"},
 		{"stderr_chunk", MsgTypeStderrChunk, "stderr_chunk"},
 		{"exec_result", MsgTypeExecResult, "exec_result"},
+		{"complete_request", MsgTypeCompleteRequest, "complete_request"},
+		{"complete_result", MsgTypeCompleteResult, "complete_result"},
 		{"heartbeat_request", MsgTypeHeartbeatRequest, "heartbeat_request"},
 		{"heartbeat_response", MsgTypeHeartbeatResponse, "heartbeat_response"},
 	}
@@ -197,5 +199,60 @@ func TestExecResult_Signaled(t *testing.T) {
 	}
 	if result.ExitCode != -9 {
 		t.Errorf("expected -9, got %d", result.ExitCode)
+	}
+}
+
+func TestCompleteRequest_Fields(t *testing.T) {
+	req := CompleteRequest{
+		RequestID: "req-1",
+		Line:      "cd ./my d",
+		Cursor:    10,
+		Cwd:       "/tmp",
+	}
+	if req.RequestID != "req-1" {
+		t.Errorf("expected req-1, got %s", req.RequestID)
+	}
+	if req.Line != "cd ./my d" {
+		t.Errorf("expected line, got %s", req.Line)
+	}
+	if req.Cursor != 10 {
+		t.Errorf("expected 10, got %d", req.Cursor)
+	}
+	if req.Cwd != "/tmp" {
+		t.Errorf("expected /tmp, got %s", req.Cwd)
+	}
+}
+
+func TestCompleteResult_Fields(t *testing.T) {
+	result := CompleteResult{
+		RequestID:  "req-1",
+		Prefix:     "./my d",
+		Candidates: []string{"./my dir/"},
+		Error:      "",
+	}
+	if result.RequestID != "req-1" {
+		t.Errorf("expected req-1, got %s", result.RequestID)
+	}
+	if result.Prefix != "./my d" {
+		t.Errorf("expected ./my d, got %s", result.Prefix)
+	}
+	if len(result.Candidates) != 1 || result.Candidates[0] != "./my dir/" {
+		t.Errorf("unexpected candidates: %v", result.Candidates)
+	}
+	if result.Error != "" {
+		t.Errorf("expected empty error, got %s", result.Error)
+	}
+}
+
+func TestCompleteResult_Error(t *testing.T) {
+	result := CompleteResult{
+		RequestID: "req-2",
+		Error:     "completion timeout",
+	}
+	if result.Error != "completion timeout" {
+		t.Errorf("expected timeout error, got %s", result.Error)
+	}
+	if len(result.Candidates) != 0 {
+		t.Errorf("expected no candidates, got %v", result.Candidates)
 	}
 }

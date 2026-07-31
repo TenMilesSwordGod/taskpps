@@ -24,6 +24,7 @@ type WsClient struct {
 	done           chan struct{}
 	OnCommand      func(ExecCommand)
 	OnCancel       func(string)
+	OnComplete     func(CompleteRequest)
 	reconnect      bool
 	pendingResults []ExecResult
 }
@@ -201,6 +202,18 @@ func (c *WsClient) handleMessage(msg Message) {
 			c.OnCancel(cancel.CommandID)
 		}
 
+	case MsgTypeCompleteRequest:
+		data, _ := json.Marshal(msg.Data)
+		var req CompleteRequest
+		if err := json.Unmarshal(data, &req); err != nil {
+			logger.Error("Failed to decode complete_request: %v", err)
+			return
+		}
+		logger.Debug("Received complete_request: %s", req.RequestID)
+		if c.OnComplete != nil {
+			c.OnComplete(req)
+		}
+
 	case MsgTypeHeartbeatRequest:
 		c.SendHeartbeatResponse()
 
@@ -226,6 +239,12 @@ func (c *WsClient) SendResult(result ExecResult) error {
 		return err
 	}
 	return nil
+}
+
+// SendComplete 发送补全结果。补全是瞬时交互，不做断线重发（pendingResults 机制
+// 只服务 exec_result），断线时结果直接丢弃，服务端超时即可。
+func (c *WsClient) SendComplete(result CompleteResult) error {
+	return c.sendMsg(MsgTypeCompleteResult, result)
 }
 
 func (c *WsClient) SendHeartbeatResponse() error {

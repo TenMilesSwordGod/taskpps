@@ -53,6 +53,9 @@ class AgentConnection:
         self.last_command_finished_at = 0.0
         self._pending_commands: dict[str, PendingCommandInfo] = {}
         self._output_callbacks: dict[str, Callable] = {}
+        # v1 (2026-07): REPL 补全请求的 future。与 _pending_commands 分离：
+        # 补全是瞬时交互，不应占并发槽位、也不应影响 running_commands 计数。
+        self._complete_futures: dict[str, asyncio.Future[dict]] = {}
         self._send_lock = asyncio.Lock()
         self._heartbeat_sent_at = 0.0
 
@@ -74,6 +77,34 @@ class AgentConnection:
 
     async def send_cancel(self, command_id: str) -> None:
         await self.send_msg("cancel_command", {"command_id": command_id})
+
+    async def send_complete(self, request_id: str, line: str, cursor: int, cwd: str) -> None:
+        # v1 (2026-07): REPL 补全请求，走独立消息，agent 端返回 complete_result
+        await self.send_msg(
+            "complete_request",
+            {"request_id": request_id, "line": line, "cursor": cursor, "cwd": cwd},
+        )
+
+    def register_complete(self, request_id: str) -> asyncio.Future[dict]:
+        """注册补全请求的 future，等待 agent 返回 complete_result。"""
+        fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()
+        self._complete_futures[request_id] = fut
+        return fut
+
+    def handle_complete_result(self, request_id: str, result: dict) -> None:
+        """resolve 补全请求；未注册的 request_id（断线残留）直接忽略。"""
+        fut = self._complete_futures.pop(request_id, None)
+        if fut and not fut.done():
+            fut.set_result(result)
+
+    def fail_all_completes(self) -> None:
+        """断连/关闭时失败所有未完成的补全请求，避免端点挂到超时。"""
+        for request_id, fut in self._complete_futures.items():
+            if not fut.done():
+                fut.set_result(
+                    {"request_id": request_id, "prefix": "", "candidates": [], "error": "connection lost"}
+                )
+        self._complete_futures.clear()
 
     def register_pending(
         self,
@@ -260,6 +291,9 @@ class AgentManager:
             return
         current.last_heartbeat = -1
         logger.info("Agent '%s' disconnected (pending commands preserved for reconnect)", agent_id)
+        # v1 (2026-07): 补全请求是瞬时交互，断连后 agent 不会补发结果，
+        # 立即失败所有未完成的 complete future，避免 HTTP 端点挂到超时。
+        current.fail_all_completes()
 
         # 启动延迟清理任务：如果 agent 在 DISPLAY_GRACE_PERIOD 内未重连，
         # 清理残留的 pending commands 和 output callbacks，避免内存泄漏
@@ -404,6 +438,30 @@ class AgentManager:
             return
         await conn.send_cancel(command_id)
 
+    async def send_complete(self, agent_id: str, request_id: str, line: str, cursor: int, cwd: str) -> None:
+        conn = self._connections.get(agent_id)
+        if conn is None:
+            raise RuntimeError(t("Agent '{agent_id}' not connected", agent_id=agent_id))
+        await conn.send_complete(request_id, line, cursor, cwd)
+
+    def register_complete(self, agent_id: str, request_id: str) -> asyncio.Future[dict]:
+        conn = self._connections.get(agent_id)
+        if conn is None:
+            fut: asyncio.Future[dict] = asyncio.get_event_loop().create_future()
+            fut.set_result({"request_id": request_id, "prefix": "", "candidates": [], "error": "agent not connected"})
+            return fut
+        return conn.register_complete(request_id)
+
+    def handle_complete_result(self, agent_id: str, request_id: str, result: dict) -> None:
+        conn = self._connections.get(agent_id)
+        if conn:
+            conn.handle_complete_result(request_id, result)
+
+    def fail_all_completes(self, agent_id: str) -> None:
+        conn = self._connections.get(agent_id)
+        if conn:
+            conn.fail_all_completes()
+
     def cleanup_command(self, agent_id: str, command_id: str) -> None:
         """Issue #66: 清理 pending command，避免 agent 永远显示 running。
 
@@ -456,5 +514,6 @@ class AgentManager:
             conn = self._connections.pop(agent_id, None)
             if conn is None:
                 continue
+            conn.fail_all_completes()
             for cid in list(conn._pending_commands.keys()):
                 conn.cleanup_command(cid)

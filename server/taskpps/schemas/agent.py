@@ -104,6 +104,23 @@ class AgentExecResult(BaseModel):
     error: str | None = None
 
 
+class AgentCompleteRequest(BaseModel):
+    """Web REPL 补全请求：光标所在行的当前输入。"""
+
+    line: str
+    cursor: int = 0
+    cwd: str = ""
+
+
+class AgentCompleteResult(BaseModel):
+    """补全结果：prefix 是 agent 端解析的被补全 token，candidates 以 prefix 开头。"""
+
+    request_id: str = ""
+    prefix: str = ""
+    candidates: list[str] = []
+    error: str = ""
+
+
 class AgentDeployResult(BaseModel):
     success: bool
     agent_id: str

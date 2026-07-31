@@ -63,6 +63,9 @@ async def agent_websocket(ws: WebSocket):
             elif msg_type == "exec_result":
                 conn.resolve_pending(payload.get("command_id", ""), payload)
 
+            elif msg_type == "complete_result":
+                conn.handle_complete_result(payload.get("request_id", ""), payload)
+
     except WebSocketDisconnect:
         logger.info("Agent WebSocket disconnected")
     except Exception:

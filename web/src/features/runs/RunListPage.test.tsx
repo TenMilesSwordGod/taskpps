@@ -62,17 +62,15 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** 找到弹窗 OK 按钮（位于 ant-modal 容器内） */
-function findOkButtonInModal(): HTMLElement {
-  // Antd 5 把弹窗渲染在 .ant-modal-wrap 容器内
-  const dialogs = document.querySelectorAll('.ant-modal')
-  for (const d of Array.from(dialogs)) {
-    if (d.textContent?.includes('确认删除')) {
-      const okBtn = d.querySelector('.ant-modal-footer .ant-btn-primary') as HTMLElement | null
-      if (okBtn) return okBtn
-    }
-  }
-  throw new Error('删除确认弹窗未打开或找不到 OK 按钮')
+/** 找到 Popconfirm 确认按钮（位于 ant-popconfirm 容器内） */
+function findOkButtonInPopconfirm(): HTMLElement {
+  // v2 (2026-07): 04c0737 起删除确认由 Modal 重构为 Popconfirm（portal 到 body），
+  // 选择器随之从 .ant-modal 改为 .ant-popconfirm
+  const popover = document.querySelector('.ant-popconfirm')
+  if (!popover) throw new Error('删除确认弹层未打开')
+  const okBtn = popover.querySelector('.ant-popconfirm-buttons .ant-btn-primary') as HTMLElement | null
+  if (okBtn) return okBtn
+  throw new Error('删除确认弹层未打开或找不到确认按钮')
 }
 
 describe('<RunListPage /> Issue #55 - 删除弹窗自动关闭', () => {
@@ -104,8 +102,8 @@ describe('<RunListPage /> Issue #55 - 删除弹窗自动关闭', () => {
       expect(screen.getByText('确认删除')).toBeInTheDocument()
     })
 
-    // 3) 点击弹窗里的 OK 按钮
-    const okBtn = findOkButtonInModal()
+    // 3) 点击弹层里的确认按钮
+    const okBtn = findOkButtonInPopconfirm()
     fireEvent.click(okBtn)
 
     // 4) 验证 mutation 被调用
@@ -113,13 +111,16 @@ describe('<RunListPage /> Issue #55 - 删除弹窗自动关闭', () => {
       expect(mockMutateAsync).toHaveBeenCalledWith('run-1')
     })
 
-    // 5) 弹窗应自动关闭
+    // 5) 弹层应自动关闭
+    // 注意(2026-07): jsdom 下 rc-motion 动画不结束，弹层 DOM 保留但会被标记 ant-popover-hidden
+    // 故以 hidden class 断言关闭（等价于 Modal 版本的"弹窗从文档中消失"）
     await waitFor(() => {
-      expect(screen.queryByText('确认删除')).not.toBeInTheDocument()
+      const pop = document.querySelector('.ant-popconfirm')
+      expect(pop?.classList.contains('ant-popover-hidden')).toBe(true)
     })
   })
 
-  it('删除失败时弹窗保持打开以便重试', async () => {
+  it('删除失败时提示错误，弹层自动关闭（重试=重新点击）', async () => {
     mockUseRuns.mockReturnValue({
       data: { items: [makeRun({ id: 'run-1' })] },
       isLoading: false,
@@ -134,14 +135,22 @@ describe('<RunListPage /> Issue #55 - 删除弹窗自动关闭', () => {
       expect(screen.getByText('确认删除')).toBeInTheDocument()
     })
 
-    fireEvent.click(findOkButtonInModal())
+    fireEvent.click(findOkButtonInPopconfirm())
 
     await waitFor(() => {
       expect(mockMutateAsync).toHaveBeenCalled()
     })
 
-    // 失败时弹窗应保持打开
-    expect(screen.getByText('确认删除')).toBeInTheDocument()
+    // v2 (2026-07): 04c0737 起为 Popconfirm，handleDeleteConfirm 内部 catch 后 Promise 必 resolve，
+    // 弹层自动关闭，失败信息经 message.error toast 提示（重试=重新点击删除按钮）。
+    // jsdom 下 rc-motion 动画不结束，弹层 DOM 保留但被标记 ant-popover-hidden
+    await waitFor(() => {
+      expect(document.querySelector('.ant-message-error')).toBeInTheDocument()
+    })
+    await waitFor(() => {
+      const pop = document.querySelector('.ant-popconfirm')
+      expect(pop?.classList.contains('ant-popover-hidden')).toBe(true)
+    })
   })
 })
 
