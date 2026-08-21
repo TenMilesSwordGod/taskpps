@@ -281,7 +281,9 @@ export default function RunDetailPage() {
                 </Button>
               </Tooltip>
             </Space>
-            <span style={{ fontSize: 18, fontWeight: 600 }}>{run.pipeline_name}</span>
+            {/* 排印层级 T1：流水线名称是页面锚点，20px/600 与操作按钮（14px）拉开明确级差；
+                与按钮组之间显式 16px 间距，避免 Space 嵌套下 gap 失效造成的 4px 拥挤 */}
+            <span style={{ fontSize: 20, fontWeight: 600, lineHeight: '28px', marginLeft: 16 }}>{run.pipeline_name}</span>
             <StatusTag status={run.status} error={run.error} />
             <ProgressBadge
               done={progress.done}
@@ -508,7 +510,8 @@ function ProgressBadge({ done, total, failed, running }: { done: number; total: 
           strokeColor={color}
           status={status === 'normal' ? 'normal' : status}
         />
-        <span style={{ fontWeight: 500 }}>{label}</span>
+        {/* 排印：行高与 16px 进度圈一致，配合容器 flex 居中消除文字光学下沉 */}
+        <span style={{ fontWeight: 500, lineHeight: '16px' }}>{label}</span>
         {running > 0 ? (
           <Loader2 size={11} color={color} className="animate-spin" />
         ) : isFailed ? (

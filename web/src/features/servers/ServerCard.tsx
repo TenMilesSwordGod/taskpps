@@ -86,7 +86,7 @@ function NetStatusIcon({ netStatus }: { netStatus: 'unknown' | 'reachable' | 'un
   }
   return (
     <Tooltip title="网络状态未知">
-      <HelpCircle size={14} color="#7C7F88" />
+      <HelpCircle size={14} color="#8C8C8C" />
     </Tooltip>
   );
 }
@@ -142,7 +142,7 @@ function CommandRow({
   return (
     <div
       key={cmd.command_id}
-      style={{ padding: '6px 12px', borderBottom: '1px solid #E3E4E8', fontSize: 12 }}
+      style={{ padding: '6px 12px', borderBottom: '1px solid #E0E0E0', fontSize: 12 }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -151,8 +151,8 @@ function CommandRow({
               width: 18,
               height: 18,
               borderRadius: 4,
-              background: isRunning ? 'rgba(126, 173, 255, 0.1)' : '#E3E4E8',
-              color: isRunning ? '#3D5BFF' : '#7C7F88',
+              background: isRunning ? 'rgba(126, 173, 255, 0.1)' : '#E0E0E0',
+              color: isRunning ? '#1F1F1F' : '#8C8C8C',
               fontSize: 10,
               fontWeight: 600,
               display: 'inline-flex',
@@ -163,13 +163,13 @@ function CommandRow({
           >
             {index + 1}
           </span>
-          <span style={{ fontWeight: 600, color: '#121620' }}>
-            {cmd.task_name || <span style={{ color: '#7C7F88' }}>未知任务</span>}
+          <span style={{ fontWeight: 600, color: '#262626' }}>
+            {cmd.task_name || <span style={{ color: '#8C8C8C' }}>未知任务</span>}
           </span>
         </span>
         <span
           style={{
-            color: isRunning ? '#3D5BFF' : '#7C7F88',
+            color: isRunning ? '#1F1F1F' : '#8C8C8C',
             fontSize: 11,
             display: 'inline-flex',
             alignItems: 'center',
@@ -184,7 +184,7 @@ function CommandRow({
         style={{
           fontFamily: 'monospace',
           fontSize: 11,
-          color: '#121620',
+          color: '#262626',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -200,7 +200,7 @@ function CommandRow({
             tabIndex={0}
             onClick={() => onRunClick(cmd.run_id)}
             onKeyDown={(e) => { if (e.key === 'Enter') onRunClick(cmd.run_id); }}
-            style={{ fontSize: 11, color: '#3D5BFF', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            style={{ fontSize: 11, color: '#1F1F1F', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
           >
             <ExternalLink size={10} />
             {cmd.run_id.slice(0, 8)}
@@ -213,14 +213,14 @@ function CommandRow({
 
 function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCommandItem[]; onRunClick: (runId: string) => void }) {
   if (!commands?.length) {
-    return <div style={{ padding: '8px 12px', color: '#7C7F88', fontSize: 12 }}>暂无运行中或等待中命令</div>;
+    return <div style={{ padding: '8px 12px', color: '#8C8C8C', fontSize: 12 }}>暂无运行中或等待中命令</div>;
   }
   const running = commands.filter((c) => c.status === 'running');
   const queued = commands.filter((c) => c.status === 'queued');
   return (
     <div>
       {running.length > 0 && (
-        <div style={{ padding: '4px 12px', fontSize: 11, color: '#3D5BFF', fontWeight: 600, background: '#F6F6F8' }}>
+        <div style={{ padding: '4px 12px', fontSize: 11, color: '#1F1F1F', fontWeight: 600, background: '#F5F5F5' }}>
           运行中 ({running.length})
         </div>
       )}
@@ -228,7 +228,7 @@ function PendingCommandsContent({ commands, onRunClick }: { commands?: PendingCo
         <CommandRow key={cmd.command_id} cmd={cmd} index={index} status="running" onRunClick={onRunClick} />
       ))}
       {queued.length > 0 && (
-        <div style={{ padding: '4px 12px', fontSize: 11, color: '#7C7F88', fontWeight: 600, background: '#F6F6F8' }}>
+        <div style={{ padding: '4px 12px', fontSize: 11, color: '#8C8C8C', fontWeight: 600, background: '#F5F5F5' }}>
           等待中 ({queued.length})
         </div>
       )}
@@ -253,7 +253,7 @@ function LastExecTime({ timestamp }: { timestamp: number }) {
 
   if (!timestamp) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#7C7F88', marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#8C8C8C', marginBottom: 6 }}>
         <Timer size={12} style={{ flexShrink: 0 }} />
         <span>暂无执行记录</span>
       </div>
@@ -274,13 +274,13 @@ function LastExecTime({ timestamp }: { timestamp: number }) {
         alignItems: 'center',
         gap: 5,
         fontSize: 11,
-        color: '#121620',
+        color: '#262626',
         cursor: 'pointer',
         marginBottom: 6,
         userSelect: 'none',
       }}
     >
-      <Timer size={12} style={{ flexShrink: 0, color: '#7C7F88' }} />
+      <Timer size={12} style={{ flexShrink: 0, color: '#8C8C8C' }} />
       <span
         style={{
           display: 'inline-block',
@@ -317,12 +317,12 @@ function IconBtn({
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           width: 28, height: 28, borderRadius: 6, cursor: disabled ? 'not-allowed' : 'pointer',
-          color: disabled ? '#E3E4E8' : accent ? '#3D5BFF' : '#7C7F88',
+          color: disabled ? '#E0E0E0' : accent ? '#1F1F1F' : '#8C8C8C',
           transition: 'background 0.15s, color 0.15s',
           opacity: disabled ? 0.6 : 1,
         }}
-        onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = accent ? 'rgba(126, 173, 255, 0.1)' : '#F6F6F8'; e.currentTarget.style.color = accent ? '#3D5BFF' : '#121620'; } }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = disabled ? '#E3E4E8' : accent ? '#3D5BFF' : '#7C7F88'; }}
+        onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = accent ? 'rgba(126, 173, 255, 0.1)' : '#F5F5F5'; e.currentTarget.style.color = accent ? '#1F1F1F' : '#262626'; } }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = disabled ? '#E0E0E0' : accent ? '#1F1F1F' : '#8C8C8C'; }}
       >
         {spinIcon ? <span className="animate-spin" style={{ display: 'inline-flex' }}>{icon}</span> : icon}
       </span>
@@ -427,7 +427,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
     <div
       style={{
         background: '#FFFFFF',
-        border: '1px solid #E3E4E8',
+        border: '1px solid #E0E0E0',
         borderRadius: 8,
         padding: '14px 16px 12px',
         display: 'flex',
@@ -445,7 +445,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
       onMouseLeave={(e) => {
         e.currentTarget.style.boxShadow = '';
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = '#E3E4E8';
+        e.currentTarget.style.borderColor = '#E0E0E0';
       }}
     >
       {/* 顶部：图标 + 名称 + 状态指示 */}
@@ -455,7 +455,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
             width: 40,
             height: 40,
             borderRadius: 8,
-            background: '#F6F6F8',
+            background: '#F5F5F5',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -472,7 +472,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: online ? '#121620' : '#7C7F88',
+                color: online ? '#262626' : '#8C8C8C',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -488,9 +488,9 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
               {online ? '在线' : '离线'}
             </Tag>
           </div>
-          <div style={{ fontSize: 11, color: '#7C7F88', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, color: '#8C8C8C', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
             <span title={agent.source_file || agent.agent_id}>{agent.agent_id}</span>
-            <span style={{ color: '#E3E4E8' }}>·</span>
+            <span style={{ color: '#E0E0E0' }}>·</span>
             <span>{typeLabel}</span>
 
           </div>
@@ -508,18 +508,18 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
       {/* 信息区：标签 + 值，规整两行 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 7, columnGap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <Globe size={11} style={{ flexShrink: 0, color: '#9CA0AC' }} />
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#121620', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <Globe size={11} style={{ flexShrink: 0, color: '#8C8C8C' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#262626', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {displayIp}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Hash size={11} style={{ flexShrink: 0, color: '#9CA0AC' }} />
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#121620' }}>{versionDisplay}</span>
+          <Hash size={11} style={{ flexShrink: 0, color: '#8C8C8C' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#262626' }}>{versionDisplay}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, gridColumn: '1 / -1' }}>
-          <Cpu size={11} style={{ flexShrink: 0, color: '#9CA0AC' }} />
-          <span style={{ fontSize: 12, color: '#121620' }}>{osArchText}</span>
+          <Cpu size={11} style={{ flexShrink: 0, color: '#8C8C8C' }} />
+          <span style={{ fontSize: 12, color: '#262626' }}>{osArchText}</span>
         </div>
       </div>
 
@@ -535,7 +535,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
             trigger="click"
             placement="topLeft"
             title={
-              <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, color: '#121620', borderBottom: '1px solid #E3E4E8' }}>
+              <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, color: '#262626', borderBottom: '1px solid #E0E0E0' }}>
                 执行队列（运行中 {agent.running_commands} + 等待中 {agent.queued_commands} / 最大并发 {maxParallel}）
               </div>
             }
@@ -550,7 +550,7 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
                 alignItems: 'center',
                 gap: 4,
                 cursor: hasQueue ? 'pointer' : 'default',
-                color: hasQueue ? '#3D5BFF' : '#9CA0AC',
+                color: hasQueue ? '#1F1F1F' : '#8C8C8C',
                 fontSize: 11,
                 whiteSpace: 'nowrap',
               }}
@@ -559,8 +559,8 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
               运行中 {hasLive ? live!.running_commands : agent.running_commands} / 等待中 {hasLive ? live!.queued_commands : agent.queued_commands} / 并发 {maxParallel}
             </span>
           </Popover>
-          <span style={{ color: '#E3E4E8', fontSize: 11 }}>|</span>
-          <span style={{ fontSize: 11, color: '#9CA0AC', whiteSpace: 'nowrap' }}>
+          <span style={{ color: '#E0E0E0', fontSize: 11 }}>|</span>
+          <span style={{ fontSize: 11, color: '#8C8C8C', whiteSpace: 'nowrap' }}>
             {syncing
               ? '获取中…'
               : online
@@ -569,11 +569,11 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
           </span>
           {lastUpdatedAt && (
             <>
-              <span style={{ color: '#E3E4E8', fontSize: 11 }}>|</span>
+              <span style={{ color: '#E0E0E0', fontSize: 11 }}>|</span>
               <RelativeTime
                 tsMs={lastUpdatedAt}
                 prefix="更新于"
-                style={{ fontSize: 11, color: '#9CA0AC', whiteSpace: 'nowrap' }}
+                style={{ fontSize: 11, color: '#8C8C8C', whiteSpace: 'nowrap' }}
               />
             </>
           )}

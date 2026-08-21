@@ -1,11 +1,14 @@
 /**
- * DAG 节点共享设计 token —— "工程蓝图"（Engineering Schematic）视觉语言
+ * DAG 节点共享设计 token —— "黑白极简"（Monochrome）视觉语言
  *
- * 设计理念：CI/CD 工具应当读起来像工程图纸，而非消费级 App。
+ * 设计理念：CI/CD 工具读起来像一张被照亮的工位 — 中性灰底 + 黑色强调。
+ * v3 (2026-07): 曾由「工程蓝图」改造为暖中性灰 + 暖橙 #FF6D5A。
+ * v4 (2026-07): 用户反馈橙色刺激，accent 收敛为黑 #1F1F1F，中性色全部去暖化，
+ *   仅保留语义状态色（成功/失败/跳过）。
  * - 等宽字体承载所有技术文本（任务名、类型、条件、编号）
- * - 发丝级边框（1px slate-200），无投影
+ * - 发丝级中性灰边框，无投影
  * - 类型用 6×6 色块标识（电阻色环隐喻）
- * - 状态作为 3px 左侧强调条，可扫读
+ * - 状态作为整卡边框色 + 极淡晕染，可扫读
  * - 边作为连续"流轨"，而非装饰性曲线
  */
 
@@ -21,42 +24,47 @@ export const NODE_SIZE = {
   POST_W: 168,
 } as const;
 
-/** 画布与结构色 */
+/** 画布与结构色
+ * v4 (2026-07): canvas 中性暖白 #FAFAFA，accent 由暖橙改为黑 #1F1F1F
+ */
 export const INK = {
-  canvas: '#F8FAFC', // slate-50 画布底
+  canvas: '#FAFAFA', // 暖白画布底（DAG 编辑工位）
   card: '#FFFFFF', // 节点填充
-  border: '#E2E8F0', // slate-200 发丝边框
-  borderHover: '#CBD5E1', // slate-300 悬停边框
-  borderActive: '#94A3B8', // slate-400 结构边框
-  textPrimary: '#0F172A', // slate-900 主文本
-  textSecondary: '#475569', // slate-600 次文本
-  textMuted: '#94A3B8', // slate-400 弱文本
-  accent: '#0EA5E9', // sky-500 签名强调色（流/活动）
+  border: '#E0E0E0', // 暖灰发丝边框
+  borderHover: '#D4D4D4', // 悬停边框
+  borderActive: '#BFBFBF', // 结构边框
+  textPrimary: '#262626', // 主文本（暖近黑）
+  textSecondary: '#525252', // 次文本
+  textMuted: '#8C8C8C', // 弱文本
+  accent: '#1F1F1F', // 黑色签名强调色（流/活动/选中）
 } as const;
 
-/** 任务状态 → 颜色（强调条 / 边）
- * v2 (2026-07): cancelled 从 #EF4444（与 failed 同色造成语义混淆）改为 #7C7F88，
+/** 任务状态 → 颜色（边框 / 边）
+ * v2 (2026-07): cancelled 从 #EF4444（与 failed 同色造成语义混淆）改为 #8C8C8C，
  *   与 Dashboard/RunList 已有行为对齐，区分"失败(红)"与"取消(灰)"
+ * v4 (2026-07): running 状态用黑 #1F1F1F（黑白主题激活态），
+ *   pending/cancelled 中性灰 #8C8C8C
  */
 export const STATUS_COLOR: Record<TaskStatus, string> = {
-  pending: '#94A3B8',
-  running: '#0EA5E9',
+  pending: '#8C8C8C',
+  running: '#1F1F1F',
   success: '#10B981',
   failed: '#EF4444',
   skipped: '#F59E0B',
-  cancelled: '#7C7F88',
+  cancelled: '#8C8C8C',
 };
 
-/** 任务状态 → 软背景色（用于徽章）
- * v2 (2026-07): cancelled soft bg 从 #FEE2E2（红色系）改为 #F3F4F6（灰色系）
+/** 任务状态 → 软背景色（用于徽章 / 节点晕染）
+ * v2 (2026-07): cancelled soft bg 从 #FEE2E2（红色系）改为 #F2F2F2（灰色系）
+ * v4 (2026-07): running soft bg 用浅灰 #F0F0F0（黑白主题）
  */
 export const STATUS_SOFT_BG: Record<TaskStatus, string> = {
-  pending: '#F1F5F9',
-  running: '#E0F2FE',
+  pending: '#F2F2F2',
+  running: '#F0F0F0',
   success: '#D1FAE5',
   failed: '#FEE2E2',
   skipped: '#FEF3C7',
-  cancelled: '#F3F4F6',
+  cancelled: '#F2F2F2',
 };
 
 /** 任务状态 → 短代码（等宽徽章） */

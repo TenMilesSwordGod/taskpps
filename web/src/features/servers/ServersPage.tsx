@@ -180,7 +180,7 @@ export default function ServersPage() {
   const handleCloseRepl = useCallback(() => setReplAgent(null), []);
 
   return (
-    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F6F6F8' }}>
+    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F5F5F5' }}>
       <style>{`
         @keyframes pageSyncPulse {
           0% { transform: scale(1); opacity: 0.35; }
@@ -192,15 +192,15 @@ export default function ServersPage() {
         }
       `}</style>
       {/* 顶部工具栏 */}
-      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
+      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E0E0E0', boxShadow: 'rgba(30, 25, 20, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <Server size={18} color="#7C7F88" />
-            <span className="text-base font-semibold" style={{ color: '#121620' }}>服务器列表</span>
+            <Server size={18} color="#8C8C8C" />
+            <span className="text-base font-semibold" style={{ color: '#262626' }}>服务器列表</span>
           </div>
           {/* 统计胶囊 */}
           <div className="flex items-center gap-1.5 text-xs">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#8C8C8C' }}>
               总计 {totalCount}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
@@ -208,7 +208,7 @@ export default function ServersPage() {
               在线 {onlineCount}
             </span>
             {offlineCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#8C8C8C' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9CBD3', flexShrink: 0 }} />
                 离线 {offlineCount}
               </span>
@@ -217,7 +217,7 @@ export default function ServersPage() {
             {dataUpdatedAt > 0 && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-                style={{ background: '#F6F6F8', color: '#7C7F88' }}
+                style={{ background: '#F5F5F5', color: '#8C8C8C' }}
                 title={new Date(dataUpdatedAt).toLocaleString('zh-CN')}
               >
                 <span
@@ -244,7 +244,7 @@ export default function ServersPage() {
           />
           <Input
             allowClear
-            prefix={<Search size={14} color="#7C7F88" />}
+            prefix={<Search size={14} color="#8C8C8C" />}
             placeholder="搜索 ID / 名称 / IP / 系统 / 架构 / 类型"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -284,7 +284,7 @@ export default function ServersPage() {
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                <span style={{ color: '#7C7F88' }}>
+                <span style={{ color: '#8C8C8C' }}>
                   {totalCount === 0 ? '暂无 agent 配置' : '无匹配的服务器'}
                 </span>
               }
@@ -301,13 +301,13 @@ export default function ServersPage() {
                     当前状态：{error ? `前端请求失败（${String(error)}）` : '后端返回空数组'}
                   </div>
                   {debugInfo && (
-                    <div className="font-mono text-xs p-2 rounded mt-1" style={{ background: '#F6F6F8', border: '1px solid #E3E4E8' }}>
+                    <div className="font-mono text-xs p-2 rounded mt-1" style={{ background: '#F5F5F5', border: '1px solid #E0E0E0' }}>
                       <div>URL: {debugInfo.url}</div>
                       <div>HTTP {debugInfo.status} · type: {debugInfo.type}</div>
                       <div>preview: {debugInfo.preview}</div>
                     </div>
                   )}
-                  <div style={{ color: '#7C7F88' }} className="mt-2">
+                  <div style={{ color: '#8C8C8C' }} className="mt-2">
                     可能原因：
                     <ul className="list-disc pl-5 mt-1">
                       <li>后端 Python 进程未重启，<code>/api/agents/all</code> 路由未注册（HTTP 404）</li>
@@ -321,7 +321,7 @@ export default function ServersPage() {
                 <button
                   onClick={checkDebug}
                   className="text-xs px-2 py-1 rounded"
-                  style={{ border: '1px solid #E3E4E8', background: '#FFFFFF' }}
+                  style={{ border: '1px solid #E0E0E0', background: '#FFFFFF' }}
                 >
                   检测 API 响应
                 </button>
@@ -344,21 +344,21 @@ export default function ServersPage() {
                     className="group sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 transition-colors cursor-pointer"
                     style={{
                       background: '#FFFFFF',
-                      border: '1px solid #E3E4E8',
+                      border: '1px solid #E0E0E0',
                       borderRadius: 8,
                       transitionTimingFunction: 'cubic-bezier(0.76, 0, 0.24, 1)',
                       transitionDuration: '220ms',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F6F6F8'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F5F5'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; }}
                   >
                     <ChevronRight
                       size={14}
-                      style={{ color: '#7C7F88', transition: 'transform 200ms cubic-bezier(0.76, 0, 0.24, 1)' }}
+                      style={{ color: '#8C8C8C', transition: 'transform 200ms cubic-bezier(0.76, 0, 0.24, 1)' }}
                       className={isCollapsed ? '' : 'rotate-90'}
                     />
-                    <FolderOpen size={14} color={isDefault ? '#7C7F88' : '#3D5BFF'} />
-                    <span className="text-sm font-semibold" style={{ color: isDefault ? '#7C7F88' : '#121620' }}>
+                    <FolderOpen size={14} color={isDefault ? '#8C8C8C' : '#1F1F1F'} />
+                    <span className="text-sm font-semibold" style={{ color: isDefault ? '#8C8C8C' : '#262626' }}>
                       {group.projectName}
                     </span>
                     <Tag className="!m-0 !text-xs" color="default" style={{ borderRadius: 3 }}>
@@ -418,7 +418,7 @@ function ServerCardSkeleton() {
     <div
       style={{
         background: '#FFFFFF',
-        border: '1px solid #E3E4E8',
+        border: '1px solid #E0E0E0',
         borderRadius: 8,
         padding: 16,
         height: 158,
@@ -432,7 +432,7 @@ function ServerCardSkeleton() {
           100% { background-position: 200% 0; }
         }
         .server-card-skeleton-line {
-          background: linear-gradient(90deg, #F6F6F8 0%, #E3E4E8 50%, #F6F6F8 100%);
+          background: linear-gradient(90deg, #F5F5F5 0%, #E0E0E0 50%, #F5F5F5 100%);
           background-size: 200% 100%;
           animation: serverCardShimmer 1.4s linear infinite;
           border-radius: 3px;

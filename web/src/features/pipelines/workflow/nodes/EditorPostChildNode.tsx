@@ -15,7 +15,7 @@ interface EditorPostChildNodeData {
 const VARIANT_STYLE = {
   on_fail: { accent: '#ef4444', background: '#fef2f2', label: '失败时' },
   on_success: { accent: '#22c55e', background: '#f0fdf4', label: '成功时' },
-  always: { accent: '#6b7280', background: '#f9fafb', label: '始终' },
+  always: { accent: '#6b7280', background: '#F5F5F5', label: '始终' },
 };
 
 /**
@@ -83,7 +83,7 @@ function EditorPostChildNode({ data, selected }: { data: EditorPostChildNodeData
             fontFamily: FONT_MONO,
             fontSize: 12,
             fontWeight: 600,
-            color: '#0f172a',
+            color: '#262626',
           }}
         >
           {taskName}

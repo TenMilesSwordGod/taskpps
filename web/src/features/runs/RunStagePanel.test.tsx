@@ -68,6 +68,14 @@ describe('<RunStagePanel />', () => {
     expect(screen.getByText('deploy')).toBeInTheDocument();
   });
 
+  it('stage 名称带 title 悬停提示（完整名称，防截断不可读）', () => {
+    const pipeline = makePipeline();
+    render(<RunStagePanel pipeline={pipeline} taskRuns={[]} />);
+
+    const label = screen.getByText('build');
+    expect(label).toHaveAttribute('title', 'build');
+  });
+
   it('未匹配到运行记录的任务默认显示 pending 状态', () => {
     const pipeline = makePipeline();
     render(<RunStagePanel pipeline={pipeline} taskRuns={[]} />);

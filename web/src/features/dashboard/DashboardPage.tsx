@@ -27,9 +27,11 @@ function formatDuration(durationMs: number | null): string {
   return `${s}s`;
 }
 
-/** 运行状态对应的行背景色 — Column 风格浅色提示 */
+/** 运行状态对应的行背景色 — 黑白主题浅色提示
+ * v4 (2026-07): running 行底由暖橙调改为黑灰调
+ */
 function rowBackground(status: RunStatus): string | undefined {
-  if (status === 'running') return 'rgba(126, 173, 255, 0.08)';
+  if (status === 'running') return 'rgba(31, 31, 31, 0.07)';
   if (status === 'failed') return 'rgba(239, 68, 68, 0.04)';
   return undefined;
 }
@@ -56,11 +58,11 @@ function taskSuccessRatePct(summary: Record<string, number> | undefined | null):
   return Math.round(((summary.success ?? 0) / denom) * 100);
 }
 
-/** Column 风格统计卡片 */
+/** 黑白主题统计卡片 — 柔和阴影（elevation 二选一，去边框） */
 const statCardStyle: CSSProperties = {
-  border: '1px solid #E3E4E8',
-  borderRadius: 8,
-  boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+  border: 'none',
+  borderRadius: 12,
+  boxShadow: 'rgba(30, 25, 20, 0.06) 0px 1px 2px, rgba(30, 25, 20, 0.04) 0px 2px 8px',
 };
 
 const TREND_DAYS = 14;
@@ -165,7 +167,7 @@ export default function DashboardPage() {
       width: 220,
       render: (_: string, record: RunResponse) => (
         <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
-          <a onClick={() => navigate(`/runs/${record.id}`)} style={{ color: '#3D5BFF', fontWeight: 500 }}>
+          <a onClick={() => navigate(`/runs/${record.id}`)} style={{ color: '#1F1F1F', fontWeight: 500 }}>
             {record.display_name || record.id.slice(0, 8)}
           </a>
         </PipelineProgressPopover>
@@ -176,7 +178,7 @@ export default function DashboardPage() {
       dataIndex: 'pipeline_name',
       key: 'pipeline_name',
       ellipsis: true,
-      render: (v: string) => <span style={{ color: '#121620' }}>{v}</span>,
+      render: (v: string) => <span style={{ color: '#262626' }}>{v}</span>,
     },
     {
       title: '项目',
@@ -189,7 +191,7 @@ export default function DashboardPage() {
         ) : record.project_id ? (
           <Tag style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, borderRadius: 3 }}>{record.project_id}</Tag>
         ) : (
-          <span style={{ color: '#7C7F88' }}>默认</span>
+          <span style={{ color: '#8C8C8C' }}>默认</span>
         ),
     },
     {
@@ -236,7 +238,7 @@ export default function DashboardPage() {
                 title="流水线总数"
                 value={pipelineCount}
                 prefix={<GitBranch size={18} color="#94A3B8" />}
-                valueStyle={{ color: '#0F172A', fontWeight: 500 }}
+                valueStyle={{ color: '#262626', fontWeight: 500 }}
               />
             </Card>
             <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
@@ -244,7 +246,7 @@ export default function DashboardPage() {
                 title="今日运行"
                 value={todayRuns}
                 prefix={<Play size={18} color="#94A3B8" />}
-                valueStyle={{ color: '#0F172A', fontWeight: 500 }}
+                valueStyle={{ color: '#262626', fontWeight: 500 }}
               />
             </Card>
             <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
@@ -260,7 +262,7 @@ export default function DashboardPage() {
                 title="失败"
                 value={failedCount}
                 prefix={<AlertCircle size={18} color={failedCount > 0 ? STATUS_COLOR.failed : '#94A3B8'} />}
-                valueStyle={failedCount > 0 ? { color: STATUS_COLOR.failed, fontWeight: 500 } : { color: '#0F172A', fontWeight: 500 }}
+                valueStyle={failedCount > 0 ? { color: STATUS_COLOR.failed, fontWeight: 500 } : { color: '#262626', fontWeight: 500 }}
               />
             </Card>
           </div>
@@ -291,15 +293,15 @@ export default function DashboardPage() {
               </div>
             }
             style={{
-              border: '1px solid #E3E4E8',
-              borderRadius: 8,
-              boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+              border: 'none',
+              borderRadius: 12,
+              boxShadow: 'rgba(30, 25, 20, 0.06) 0px 1px 2px, rgba(30, 25, 20, 0.04) 0px 2px 8px',
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
             }}
             styles={{
-              header: { borderBottom: '1px solid #E3E4E8', minHeight: 48, flex: 'none' },
+              header: { borderBottom: '1px solid #E8E8E8', minHeight: 48, flex: 'none' },
               body: {
                 flex: 1,
                 minHeight: 0,
@@ -316,7 +318,7 @@ export default function DashboardPage() {
                 onPointClick={(id) => navigate(`/runs/${id}`)}
               />
             </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: '#7C7F88', textAlign: 'right', flex: 'none' }}>
+            <div style={{ marginTop: 6, fontSize: 11, color: '#8C8C8C', textAlign: 'right', flex: 'none' }}>
               {trendUnit}
             </div>
           </Card>
@@ -332,11 +334,11 @@ export default function DashboardPage() {
           </Button>
         }
         style={{
-          border: '1px solid #E3E4E8',
-          borderRadius: 8,
-          boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+          border: 'none',
+          borderRadius: 12,
+          boxShadow: 'rgba(30, 25, 20, 0.06) 0px 1px 2px, rgba(30, 25, 20, 0.04) 0px 2px 8px',
         }}
-        styles={{ header: { borderBottom: '1px solid #E3E4E8', minHeight: 48 } }}
+        styles={{ header: { borderBottom: '1px solid #E8E8E8', minHeight: 48 } }}
       >
         <Table
           rowKey="id"

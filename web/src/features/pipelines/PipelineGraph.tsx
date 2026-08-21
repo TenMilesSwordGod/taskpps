@@ -41,7 +41,7 @@ function miniMapNodeColor(node: Node): string {
     return node.data?.variant === 'start' ? '#10B981' : '#94A3B8';
   }
   if (node.type === 'decisionNode') return '#FDBA74';
-  if (node.type === 'subpipelineGroup') return '#E2E8F0';
+  if (node.type === 'subpipelineGroup') return '#E0E0E0';
   if (node.type === 'postTask') return '#CBD5E1';
   if (node.type === 'taskNode') {
     const status = node.data?.status as TaskStatus | undefined;
@@ -124,7 +124,7 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
           color="#CBD5E1"
         />
         <Controls
-          className="!shadow-sm !border !border-slate-200 !rounded !overflow-hidden"
+          className="!shadow-sm !border !border-[#E0E0E0] !rounded !overflow-hidden"
           showInteractive={false}
         />
         <MiniMap
@@ -132,7 +132,7 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
           nodeColor={miniMapNodeColor}
           nodeStrokeColor="#fff"
           maskColor="rgba(241, 245, 249, 0.6)"
-          className="!shadow-sm !border !border-slate-200 !rounded !overflow-hidden"
+          className="!shadow-sm !border !border-[#E0E0E0] !rounded !overflow-hidden"
           position="bottom-left"
           zoomable
           pannable

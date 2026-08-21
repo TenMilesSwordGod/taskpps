@@ -204,8 +204,8 @@ export default function E2EPipelineDetailPage() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '8px 16px',
-          borderBottom: '1px solid #e5e7eb',
-          backgroundColor: '#f9fafb',
+          borderBottom: '1px solid #E0E0E0',
+          backgroundColor: '#F5F5F5',
           flexShrink: 0,
         }}
       >
@@ -249,7 +249,7 @@ export default function E2EPipelineDetailPage() {
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {/* YAML 编辑器面板 — 仅查看模式 */}
         {!editMode && yamlEditorOpen && (
-          <div style={{ flexShrink: 0, borderRight: '1px solid #e5e7eb', backgroundColor: '#1e1e1e', width: '40%', minWidth: 300 }}>
+          <div style={{ flexShrink: 0, borderRight: '1px solid #E0E0E0', backgroundColor: '#1e1e1e', width: '40%', minWidth: 300 }}>
             <YamlEditor
               ref={yamlEditorRef}
               value={yamlText}

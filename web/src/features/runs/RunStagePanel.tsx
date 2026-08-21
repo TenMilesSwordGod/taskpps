@@ -107,7 +107,7 @@ function HLine() {
       style={{
         width: 10,
         height: 1,
-        background: '#e5e7eb',
+        background: '#E0E0E0',
         margin: '0 2px',
         flexShrink: 0,
       }}
@@ -122,7 +122,7 @@ function VLine() {
       style={{
         width: 1,
         height: 6,
-        background: '#e5e7eb',
+        background: '#E0E0E0',
         flexShrink: 0,
       }}
     />
@@ -241,11 +241,14 @@ export default function RunStagePanel({ pipeline, taskRuns }: RunStagePanelProps
             );
           })}
         </div>
+        {/* 排印（typeset）：12px + #525252（对比度 ~7.4:1，原 11px/#6b7280 仅 4.6:1）；
+            放宽到 120px 减少长 stage 名被截断；title 悬停展示完整名称（可访问性） */}
         <span
+          title={group.subpipeline}
           style={{
-            fontSize: 11,
-            color: '#6b7280',
-            maxWidth: 80,
+            fontSize: 12,
+            color: '#525252',
+            maxWidth: 120,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',

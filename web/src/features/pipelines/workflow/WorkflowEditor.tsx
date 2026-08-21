@@ -761,7 +761,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             alignItems: 'center',
             gap: 4,
             padding: '6px 12px',
-            borderBottom: '1px solid #e5e7eb',
+            borderBottom: '1px solid #E0E0E0',
             background: '#ffffff',
             flexShrink: 0,
             zIndex: 10,
@@ -852,15 +852,15 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
             color="#CBD5E1"
           />
           <Controls
-            className="!shadow-sm !border !border-slate-200 !rounded !overflow-hidden"
+            className="!shadow-sm !border !border-[#E0E0E0] !rounded !overflow-hidden"
             showInteractive={false}
           />
           <MiniMap
             nodeStrokeWidth={2}
             nodeColor={miniMapColor}
             nodeStrokeColor="#fff"
-            maskColor="rgba(241, 245, 249, 0.6)"
-            className="!shadow-sm !border !border-slate-200 !rounded !overflow-hidden"
+            maskColor="rgba(247, 247, 246, 0.6)"
+            className="!shadow-sm !border !border-[#E0E0E0] !rounded !overflow-hidden"
             position="bottom-left"
             zoomable
             pannable
@@ -882,7 +882,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
               top: contextMenu.y,
               zIndex: 1001,
               background: '#fff',
-              border: '1px solid #e5e7eb',
+              border: '1px solid #E0E0E0',
               borderRadius: 8,
               boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
               minWidth: 180,
@@ -960,7 +960,7 @@ function miniMapColor(node: Node): string {
   if (node.type === 'editorPostParent') return '#fecaca';
   if (node.type === 'editorPostChild') return '#fef2f2';
   if (node.type === 'editorTask') return '#dcfce7';
-  if (node.type === 'editorPipeline') return '#f8fafc';
+  if (node.type === 'editorPipeline') return '#F5F5F5';
   return '#CBD5E1';
 }
 

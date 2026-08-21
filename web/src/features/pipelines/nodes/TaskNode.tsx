@@ -26,8 +26,8 @@ function inferTaskType(task: TaskYAML): TaskType {
 /** 运行中边框脉冲（状态驱动整卡，不再用左侧条 + 底部流光） */
 const pulseStyle = `
 @keyframes task-border-pulse {
-  0%, 100% { border-color: #0EA5E9; box-shadow: 0 0 0 2px rgba(14,165,233,0.12); }
-  50% { border-color: #7DD3FC; box-shadow: 0 0 0 4px rgba(14,165,233,0.06); }
+  0%, 100% { border-color: #1F1F1F; box-shadow: 0 0 0 2px rgba(14,165,233,0.12); }
+  50% { border-color: #FFB7A8; box-shadow: 0 0 0 4px rgba(14,165,233,0.06); }
 }
 `;
 

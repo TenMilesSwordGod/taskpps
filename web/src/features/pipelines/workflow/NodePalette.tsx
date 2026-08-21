@@ -47,7 +47,7 @@ function DraggableCard({ type, nodeType, label, description, icon, color }: Drag
         gap: 10,
         height: CARD_HEIGHT,
         padding: '0 12px',
-        border: '1px solid #e5e7eb',
+        border: '1px solid #E0E0E0',
         borderRadius: 6,
         background: '#ffffff',
         cursor: 'grab',
@@ -71,7 +71,7 @@ function DraggableCard({ type, nodeType, label, description, icon, color }: Drag
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#0f172a' }}>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#262626' }}>
           {label}
         </div>
         <div style={{ fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -166,7 +166,7 @@ export default function NodePalette() {
   ];
 
   return (
-    <div style={{ width: 280, height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #f0f0f0', background: '#fafafa' }}>
+    <div style={{ width: 280, height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #f0f0f0', background: '#F8F8F7' }}>
       {/* 标题栏 */}
       <div
         style={{

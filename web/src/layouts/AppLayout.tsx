@@ -42,7 +42,7 @@ function CurrentTime() {
   return (
     <div style={{ fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace', lineHeight: 1.3, fontSize: 12 }}>
       <div style={{ color: '#94A3B8' }}>{date}</div>
-      <div style={{ fontWeight: 500, color: '#0F172A' }}>{time}</div>
+      <div style={{ fontWeight: 500, color: '#262626' }}>{time}</div>
     </div>
   );
 }
@@ -113,10 +113,10 @@ function UserMenuFooter({
       disabled: true,
       label: (
         <div style={{ padding: '4px 0' }}>
-          <div style={{ fontWeight: 500, color: '#121620' }}>{displayName}</div>
+          <div style={{ fontWeight: 500, color: '#262626' }}>{displayName}</div>
           <div
             style={{
-              color: '#7C7F88',
+              color: '#8C8C8C',
               fontSize: 12,
               fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace',
             }}
@@ -148,14 +148,14 @@ function UserMenuFooter({
           gap: 10,
           padding: collapsed ? '8px 0' : '10px 12px',
           justifyContent: collapsed ? 'center' : 'flex-start',
-          borderTop: '1px solid #E3E4E8',
+          borderTop: '1px solid #E0E0E0',
           cursor: 'pointer',
         }}
       >
         <Avatar
           src={user.avatar}
           size={36}
-          style={{ backgroundColor: '#3D5BFF', color: '#FFFFFF', flexShrink: 0 }}
+          style={{ backgroundColor: '#1F1F1F', color: '#FFFFFF', flexShrink: 0 }}
         >
           {avatarChar}
         </Avatar>
@@ -164,7 +164,7 @@ function UserMenuFooter({
             <div style={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>
               <div
                 style={{
-                  color: '#121620',
+                  color: '#262626',
                   fontWeight: 500,
                   fontSize: 13,
                   overflow: 'hidden',
@@ -176,7 +176,7 @@ function UserMenuFooter({
               </div>
               <div
                 style={{
-                  color: '#7C7F88',
+                  color: '#8C8C8C',
                   fontSize: 12,
                   fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace',
                   overflow: 'hidden',
@@ -187,7 +187,7 @@ function UserMenuFooter({
                 {user.username ?? ''}
               </div>
             </div>
-            <DownOutlined style={{ color: '#7C7F88', fontSize: 10 }} />
+            <DownOutlined style={{ color: '#8C8C8C', fontSize: 10 }} />
           </>
         )}
       </div>

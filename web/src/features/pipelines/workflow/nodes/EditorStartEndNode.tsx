@@ -15,7 +15,7 @@ function EditorStartEndNode({ data, selected }: { data: EditorStartEndNodeData; 
   const readOnly = useReadOnly();
   const isStart = data.variant === 'start';
   const dotColor = isStart ? '#10B981' : '#94A3B8';
-  const borderColor = selected ? '#1677ff' : '#94a3b8';
+  const borderColor = selected ? '#1F1F1F' : '#94a3b8';
 
   return (
     <div
@@ -30,7 +30,7 @@ function EditorStartEndNode({ data, selected }: { data: EditorStartEndNodeData; 
         fontFamily: FONT_MONO,
         fontSize: 11,
         fontWeight: 600,
-        color: '#475569',
+        color: '#525252',
         letterSpacing: 0.8,
         boxShadow: selected && !readOnly ? '0 0 0 4px rgba(22,119,255,0.12)' : undefined,
       }}

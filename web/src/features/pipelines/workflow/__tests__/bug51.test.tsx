@@ -11,7 +11,7 @@ import type { PipelineDetail } from '@/types';
  * （PipelineGraph.tsx）保持一致，确保两种模式间切换时视觉连贯。
  *
  * 查看模式配置：
- *   - 容器底色: INK.canvas = #F8FAFC
+ *   - 容器底色: INK.canvas = #FAFAFA（v3 全站外观改造：由 #F8FAFC 暖化）
  *   - 点状背景: variant=Dots, gap=18, size=1, color="#CBD5E1"
  *
  * RED 阶段：以上断言在修复前因不一致必然失败。
@@ -31,7 +31,7 @@ function factory(): PipelineDetail {
 }
 
 describe('Bug#51 — 编辑模式背景与查看模式一致', () => {
-  it('RED: 容器底色应为 INK.canvas（rgb(248, 250, 252)）', async () => {
+  it('RED: 容器底色应为 INK.canvas（rgb(250, 250, 250)）', async () => {
     const { container, unmount } = render(
       <WorkflowEditor
         pipeline={factory()}
@@ -49,8 +49,8 @@ describe('Bug#51 — 编辑模式背景与查看模式一致', () => {
     // 最外层 div 的 inline backgroundColor
     const wrapper = container.firstElementChild as HTMLElement;
     expect(wrapper).not.toBeNull();
-    // 修复前为 #f5f5f5（rgb(245, 245, 245)），非 INK.canvas（rgb(248, 250, 252)）
-    expect(wrapper.style.backgroundColor).toBe('rgb(248, 250, 252)');
+    // 修复前为 #f5f5f5（rgb(245, 245, 245)），非 INK.canvas（rgb(250, 250, 250)）
+    expect(wrapper.style.backgroundColor).toBe('rgb(250, 250, 250)');
 
     unmount();
   });

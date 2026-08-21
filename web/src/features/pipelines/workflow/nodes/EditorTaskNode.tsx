@@ -46,7 +46,8 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
   // 注意(2026-07): 只读模式下使用实线边框（与 PipelineGraph 查看模式一致），
   // 编辑模式使用虚线边框以暗示可拖拽/可连接
   const borderStyle = readOnly ? 'solid' : 'dashed';
-  const borderColor = selected ? (readOnly ? '#64748b' : '#1677ff') : '#22c55e';
+  // v4 (2026-07): 编辑态选中边框由暖橙改为黑 #1F1F1F（黑白主题）
+  const borderColor = selected ? (readOnly ? '#64748b' : '#1F1F1F') : '#22c55e';
   const collapsed = data.collapsed === true;
   // v2 (2026-07): 使用 SVG 图标组件
   const IconComponent = TYPE_ICON_SVG[taskType];
@@ -71,7 +72,7 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
       >
         {!readOnly && <NodeResizer minWidth={100} minHeight={40} />}
         {IconComponent && <IconComponent style={{ width: 14, height: 14, color: iconColor }} />}
-        <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#0f172a' }}>
+        <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#262626' }}>
           {taskName}
         </span>
       </div>
@@ -90,7 +91,7 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
         background: '#f0fdf4',
         padding: '10px 12px',
         position: 'relative',
-        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(22,119,255,0.12)' : undefined,
+        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(31, 31, 31, 0.14)' : undefined,
         boxSizing: 'border-box',
       }}
     >
@@ -156,7 +157,7 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
             fontFamily: FONT_MONO,
             fontSize: 13,
             fontWeight: 600,
-            color: '#0f172a',
+            color: '#262626',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
