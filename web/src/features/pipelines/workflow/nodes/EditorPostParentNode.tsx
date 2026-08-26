@@ -12,16 +12,17 @@ interface EditorPostParentNodeData {
 }
 
 /**
- * Post 父容器节点 — 红色虚线边框
+ * Post 父容器节点 — 软红实线边框
  * 仅左侧 in 端口（接收 Post 连线），无 out / post 端口
  *
  * v2 (2026-07): SVG 图标替换 emoji + 折叠/展开支持
+ * v9 (2026-08): n8n 化 —— 虚线/刺眼纯红退役，改软红实线（red-300）+ 浅红底；
+ * 缩放手柄仅选中可见（isVisible 默认 true 导致的常驻蓝方块问题）
  */
 function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeData; selected?: boolean }) {
   const readOnly = useReadOnly();
   const label = data.label || 'Post';
-  const borderStyle = readOnly ? 'solid' : 'dashed';
-  const borderColor = selected ? '#b91c1c' : '#ef4444';
+  const borderColor = selected ? '#DC2626' : '#FCA5A5';
   const collapsed = data.collapsed === true;
 
   if (collapsed) {
@@ -32,7 +33,7 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
           height: '100%',
           border: `2px solid ${borderColor}`,
           borderRadius: 8,
-          background: '#fef2f2',
+          background: '#FFF5F5',
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
@@ -42,7 +43,7 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
           minHeight: 40,
         }}
       >
-        {!readOnly && <NodeResizer minWidth={100} minHeight={40} />}
+        {!readOnly && <NodeResizer isVisible={!!selected} minWidth={100} minHeight={40} />}
         <PostParentIcon style={{ width: 16, height: 16, color: '#ef4444' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#991b1b' }}>
           {label}
@@ -56,16 +57,16 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
       style={{
         width: '100%',
         height: '100%',
-        border: `2px ${borderStyle} ${borderColor}`,
+        border: `1.5px solid ${borderColor}`,
         borderRadius: 12,
-        background: '#fef2f2',
+        background: '#FFF5F5',
         position: 'relative',
-        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(239,68,68,0.12)' : undefined,
+        boxShadow: selected && !readOnly ? '0 0 0 2px rgba(239,68,68,0.15)' : undefined,
         minWidth: 200,
         minHeight: 150,
       }}
     >
-      {!readOnly && <NodeResizer minWidth={200} minHeight={150} />}
+      {!readOnly && <NodeResizer isVisible={!!selected} minWidth={200} minHeight={150} />}
       {/* 注意(2026-07): 只读模式下隐藏 Handle */}
       {!readOnly && (
         <Handle
@@ -73,12 +74,12 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
           type="target"
           position={Position.Left}
           style={{
-            width: 8,
-            height: 8,
-            background: 'transparent',
+            width: 10,
+            height: 10,
+            background: '#FFFFFF',
             border: '2px solid #ef4444',
             borderRadius: '50%',
-            left: -5,
+            left: -6,
             top: '50%',
           }}
         />

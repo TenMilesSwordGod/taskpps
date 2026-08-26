@@ -1,23 +1,31 @@
 import { useMemo } from 'react';
 import type { Node, Edge } from '@xyflow/react';
-import { MarkerType } from '@xyflow/react';
 import type { PipelineDetail, TaskStatus, PostConfig } from '@/types';
 import type { PostVariant } from '../nodes/PostTaskNode';
+import { EDGE, INK, NODE_SIZE } from '../nodes/nodeTokens';
 import { applyDagreLayout } from '@/utils/dagreLayout';
 
+// v11 (2026-08): LR 流向语义 —— 常量从"垂直区域"翻转为"水平区域"：
+//   ENTRY/EXIT 从上下预留区变为左右预留区（入口线从左缘进、出口线从右缘出）
 const GROUP_PADDING_X = 20;
 const GROUP_PADDING_Y = 14;
-const GROUP_GAP_Y = 24;
-const GROUP_HEADER = 0;
-// 顶部入口区域：top-out handle → 首 task/decision 的边需要垂直空间
-const GROUP_ENTRY_AREA = 30;
-// 底部出口区域：no/alt/lastTask 边汇聚到 exit handle 需要垂直空间
-const GROUP_EXIT_AREA = 50;
-const TASK_W = 150;
-const TASK_H = 36;
+/** 组间水平间距（原 GROUP_GAP_Y 垂直间距的 LR 对应物） */
+const GROUP_GAP_X = 32;
+// 分组 header 行（名称/策略/任务数）占位高度（仍在顶部）
+const GROUP_HEADER = 30;
+// 左侧入口区：top-out handle → 首 task/decision 的边需要水平空间
+const GROUP_ENTRY_W = 36;
+// 右侧出口区：no/alt/lastTask 边汇聚到 exit handle 需要水平空间
+const GROUP_EXIT_W = 48;
+// 尺寸统一引用 nodeTokens.NODE_SIZE（v11 任务卡 200×56）
+const TASK_W = NODE_SIZE.TASK_W;
+const TASK_H = NODE_SIZE.TASK_H;
 const POST_H = 26;
 const POST_W = 168;
-const DECISION_SIZE = 76;
+/** v11: 与 DecisionNode 新尺寸一致（64，原 76） */
+const DECISION_SIZE = 64;
+/** post 子节点与父任务的垂直间距（post 挂在父任务正下方） */
+const POST_GAP_Y = 8;
 
 interface UsePipelineGraphOptions {
   pipeline: PipelineDetail | undefined;
@@ -34,35 +42,40 @@ function countPostTasks(post: PostConfig | null | undefined): number {
   return count;
 }
 
-/** 默认流轨样式 */
-const RAIL_STYLE = { stroke: '#94A3B8', strokeWidth: 1.5 };
-const RAIL_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
+/** 默认流轨样式
+ * v5 (2026-08): 从硬编码色值迁移到 nodeTokens.EDGE 统一管理
+ * v11 (2026-08): 箭头退役（n8n 画布无箭头，流向由 LR 布局表达）
+ */
+const RAIL_STYLE = { stroke: EDGE.rail.stroke, strokeWidth: EDGE.rail.strokeWidth };
 
-/** Yes 路径边样式（绿色实线） */
-const YES_STYLE = { stroke: '#16A34A', strokeWidth: 1.5 };
-const YES_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#16A34A' };
+/**
+ * v11 (2026-08): 连线路由 —— LR 流向下 bezier（type:'default'）才是"顺流"曲线。
+ * v10 弃用 bezier 的根因是垂直流向 + 水平偏移画出下垂 S 弯；方向翻转后
+ * bezier 控制点沿水平方向伸展，恰好是 n8n 的标志性流线。
+ */
+const EDGE_TYPE = 'default' as const;
 
-/** alt 路径边样式（灰色虚线，表示带 when 的孤立 task 执行后经 group 输出点退出） */
-const ALT_STYLE = { stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '3 3' };
-const ALT_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
-const ALT_LABEL_FILL = '#64748B';
+/** Yes 路径边样式（绿色实线，语义：条件成立执行） */
+const YES_STYLE = { stroke: EDGE.yes.stroke, strokeWidth: EDGE.yes.strokeWidth };
+
+/** alt 路径边样式（浅灰实线，虚线已退役 —— n8n 画布无虚线，语义靠明度区分） */
+const ALT_STYLE = { stroke: EDGE.railSoft.stroke, strokeWidth: EDGE.railSoft.strokeWidth };
+// v5 (2026-08): label 文字色统一引用 INK.textSecondary，白底可读
+const ALT_LABEL_FILL = INK.textSecondary;
 
 function pushPlainEdge(
   taskEdges: Edge[],
   sourceId: string,
   targetId: string,
   edgeBaseId: string,
-  markerEnd: Edge['markerEnd'],
-  style?: Edge['style'],
 ) {
   taskEdges.push({
     id: edgeBaseId,
     source: sourceId,
     target: targetId,
-    type: 'smoothstep',
+    type: EDGE_TYPE,
     animated: false,
-    markerEnd: markerEnd ?? RAIL_MARKER,
-    style: style ?? RAIL_STYLE,
+    style: RAIL_STYLE,
   });
 }
 
@@ -104,6 +117,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           parentId: groupId,
           extent: 'parent' as const,
           position: { x: 0, y: 0 },
+          // v6 (2026-08): 顶层显式尺寸 —— MiniMap nodeHasDimensions 依赖（受控模式无测量回写）
+          width: TASK_W,
+          height: TASK_H,
           data: { task, subpipelineName: sub.name, status, order: orderIndex },
         });
         orderIndex++;
@@ -147,21 +163,39 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       }
 
       const hasChildren = ids.length > 0;
-      // decision 节点(76px)比 task(36px)高，行高取最大值避免低估高度
+      // v11 (LR): 组尺寸估算 —— 宽 = 任务链横向长度（含入口/出口区），
+      // 高 = 单行任务高 + post 悬挂行（dagre 估算用，wrap 阶段按实际子节点收紧）
       const rowH = Math.max(TASK_H + 20, DECISION_SIZE + 20);
-      const taskAreaH = ids.length * rowH - 20;
-      const postAreaH = postCount > 0 ? postCount * (POST_H + 6) + 6 : 0;
+      const taskChainW = ids.length > 0
+        ? ids.length * TASK_W + Math.max(0, ids.length - 1) * 60
+        : 0;
+      const postRows = postCount > 0 ? postCount * (POST_H + 6) + 6 : 0;
+      // v6 (2026-08): group 尺寸同时写顶层 width/height 与 style —— MiniMap 读顶层值
+      const headerW = Math.ceil(sub.name.length * 7.5) + 110 + 24;
+      const initW = hasChildren
+        ? Math.max(taskChainW, headerW) + GROUP_PADDING_X * 2 + GROUP_ENTRY_W + GROUP_EXIT_W
+        : Math.max(200, headerW + GROUP_PADDING_X * 2);
+      const initH = rowH + postRows + GROUP_PADDING_Y * 2 + GROUP_HEADER * 2;
       groupNodes.push({
         id: groupId,
         type: 'subpipelineGroup',
         position: { x: 0, y: 0 },
+        width: initW,
+        height: initH,
         style: {
-          width: hasChildren ? Math.max(TASK_W, POST_W) + GROUP_PADDING_X * 2 : 200,
-          height: hasChildren
-            ? taskAreaH + postAreaH + GROUP_PADDING_Y * 2 + GROUP_HEADER + GROUP_ENTRY_AREA + GROUP_EXIT_AREA
-            : 100,
+          width: initW,
+          height: initH,
         },
-        data: { label: sub.name, taskCount: ids.length },
+        data: {
+          label: sub.name,
+          taskCount: ids.length,
+          // v7 (2026-08): header 行策略徽章
+          strategy:
+            sub.config?.execution_strategy
+            ?? pipeline.options?.execution_strategy
+            ?? pipeline.config?.execution_strategy
+            ?? 'sequential',
+        },
       });
     });
 
@@ -175,7 +209,6 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     // 对于有 when 条件的目标任务：
     //   source → decisionNode → (yes) → 条件任务
     //   no 路径由菱形 yes/no 标注隐含表达（不画 no 边到下游，避免与条件任务的出边交叉）
-    // 对于无 when 条件的目标任务：source → target 直连
 
     // 处理显式 depends_on 边
     for (const [sourceId, targets] of dependsOnMap) {
@@ -192,12 +225,14 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
               parentId: sourceGroup ?? undefined,
               extent: sourceGroup ? 'parent' as const : undefined,
               position: { x: 0, y: 0 },
+              width: DECISION_SIZE,
+              height: DECISION_SIZE,
               data: { when: whenExpr },
             });
             decisionTargetMap.set(decisionId, targetId);
 
             // source → decision
-            pushPlainEdge(taskEdges, sourceId, decisionId, `dep-${sourceId}-${decisionId}`, RAIL_MARKER, RAIL_STYLE);
+            pushPlainEdge(taskEdges, sourceId, decisionId, `dep-${sourceId}-${decisionId}`);
 
             // decision → (yes) → 条件任务
             taskEdges.push({
@@ -205,21 +240,20 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
               source: decisionId,
               sourceHandle: 'yes',
               target: targetId,
-              type: 'smoothstep',
+              type: EDGE_TYPE,
               animated: false,
               label: 'yes',
-              labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
+              labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#15803D' },
               labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
               labelBgPadding: [2, 4] as [number, number],
               labelBgBorderRadius: 3,
-              markerEnd: YES_MARKER,
               style: YES_STYLE,
             });
 
             // no 路径由菱形标注隐含（不画边，避免交叉）
           }
         } else {
-          pushPlainEdge(taskEdges, sourceId, targetId, `dep-${sourceId}-${targetId}`, RAIL_MARKER, RAIL_STYLE);
+          pushPlainEdge(taskEdges, sourceId, targetId, `dep-${sourceId}-${targetId}`);
         }
       }
     }
@@ -238,38 +272,38 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             parentId: sourceGroup ?? undefined,
             extent: sourceGroup ? 'parent' as const : undefined,
             position: { x: 0, y: 0 },
+            width: DECISION_SIZE,
+            height: DECISION_SIZE,
             data: { when: whenExpr },
           });
           decisionTargetMap.set(decisionId, currId);
 
-          pushPlainEdge(taskEdges, prevId, decisionId, `implicit-${prevId}-${decisionId}`, RAIL_MARKER, RAIL_STYLE);
+          pushPlainEdge(taskEdges, prevId, decisionId, `implicit-${prevId}-${decisionId}`);
 
           taskEdges.push({
             id: `yes-${decisionId}-${currId}`,
             source: decisionId,
             sourceHandle: 'yes',
             target: currId,
-            type: 'smoothstep',
+            type: EDGE_TYPE,
             animated: false,
             label: 'yes',
-            labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
+            labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#15803D' },
             labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
             labelBgPadding: [2, 4] as [number, number],
             labelBgBorderRadius: 3,
-            markerEnd: YES_MARKER,
             style: YES_STYLE,
           });
         }
       } else {
-        pushPlainEdge(taskEdges, prevId, currId, `implicit-${prevId}-${currId}`, RAIL_MARKER, RAIL_STYLE);
+        pushPlainEdge(taskEdges, prevId, currId, `implicit-${prevId}-${currId}`);
       }
     }
 
     // === alt 边补全 ===
-    // 对带 when 且没有任何出边的 task（显式 + 隐式边均未把它作为 source），
-    // 补一条到 group.exit handle 的灰色虚线，label 为 'alt'。
-    // group.exit 是 target handle（底部），与 group.bottom（source → END）同位置，
-    // 视觉上形成 task → exit → END 的连接。
+    // 对带 when 且没有任何出边的 task，补一条到 group.exit handle 的浅灰实线，
+    // label 为 'alt'。group.exit 是 target handle（右缘），与 group.bottom（source → END）
+    // 同位置，视觉上形成 task → exit → END 的连接。
     const tasksWithOutgoing = new Set(taskEdges.map((e) => e.source));
     for (const taskId of taskWhenMap.keys()) {
       if (tasksWithOutgoing.has(taskId)) continue;
@@ -280,21 +314,19 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         source: taskId,
         target: groupId,
         targetHandle: 'exit',
-        type: 'smoothstep',
+        type: EDGE_TYPE,
         animated: false,
         label: 'alt',
         labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: ALT_LABEL_FILL },
-        labelBgStyle: { fill: '#F5F4F2', fillOpacity: 1 },
+        labelBgStyle: { fill: '#F8FAFC', fillOpacity: 1 },
         labelBgPadding: [2, 4] as [number, number],
         labelBgBorderRadius: 3,
-        markerEnd: ALT_MARKER,
         style: ALT_STYLE,
       });
     }
 
     // === no 边构建 ===
-    // 为每个决策节点的 "no" 路径添加边，表示条件为 false 时跳过条件任务后的流向。
-    // 汇入 group.exit handle（底部 target），与 group.bottom（source → END）同位置，
+    // 为每个决策节点的 "no" 路径添加边（菱形底部出），汇入 group.exit（右缘 target），
     // 视觉上形成 decision.no → exit → END 的连接。
     for (const dn of decisionNodes) {
       const groupId = dn.parentId;
@@ -305,20 +337,18 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         sourceHandle: 'no',
         target: groupId,
         targetHandle: 'exit',
-        type: 'smoothstep',
+        type: EDGE_TYPE,
         animated: false,
         label: 'no',
-        labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#64748B' },
-        labelBgStyle: { fill: '#F5F4F2', fillOpacity: 1 },
+        labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: INK.textSecondary },
+        labelBgStyle: { fill: '#F8FAFC', fillOpacity: 1 },
         labelBgPadding: [2, 4] as [number, number],
         labelBgBorderRadius: 3,
-        markerEnd: RAIL_MARKER,
         style: RAIL_STYLE,
       });
     }
 
     // 跨 subpipeline 边 —— 直接连接 group 节点（不经过 task），让 dagre 识别 group 拓扑顺序
-    // 跟踪已为哪些 targetGroup 创建过 enter 边，避免 sub 依赖多个 dep 时重复创建
     const enterEdgeCreated = new Set<string>();
     subpipelines.forEach((sub, idx) => {
       sub.depends_on?.forEach((depSubName) => {
@@ -331,17 +361,16 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             const sourceGroup = `__group__${depSubName}`;
             const targetGroup = `__group__${sub.name}`;
             const whenExpr = taskWhenMap.get(targetId);
-            // 跨 group 拓扑边：sourceGroup.bottom → targetGroup.top（让 dagre 知道顺序）
+            // 跨 group 拓扑边：sourceGroup.bottom(右缘) → targetGroup.top(左缘)
             taskEdges.push({
               id: `cross-sub-${depSubName}-${sub.name}`,
               source: sourceGroup,
               sourceHandle: 'bottom',
               target: targetGroup,
               targetHandle: 'top',
-              type: 'smoothstep',
+              type: EDGE_TYPE,
               animated: false,
-              markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#F59E0B' },
-              style: { stroke: '#F59E0B', strokeWidth: 1.5, strokeDasharray: '4 3' },
+              style: { stroke: EDGE.cross.stroke, strokeWidth: EDGE.cross.strokeWidth },
             });
             if (whenExpr) {
               const decisionId = `decision-cross-${depSubName}-${sub.name}`;
@@ -351,18 +380,19 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 parentId: targetGroup,
                 extent: 'parent' as const,
                 position: { x: 0, y: 0 },
+                width: DECISION_SIZE,
+                height: DECISION_SIZE,
                 data: { when: whenExpr },
               });
               decisionTargetMap.set(decisionId, targetId);
-              // targetGroup.top-out → decision（灰色内部边）
+              // targetGroup.top-out(左缘) → decision（灰色内部边）
               taskEdges.push({
                 id: `enter-decision-${decisionId}`,
                 source: targetGroup,
                 sourceHandle: 'top-out',
                 target: decisionId,
-                type: 'smoothstep',
+                type: EDGE_TYPE,
                 animated: false,
-                markerEnd: RAIL_MARKER,
                 style: RAIL_STYLE,
               });
               taskEdges.push({
@@ -370,14 +400,13 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 source: decisionId,
                 sourceHandle: 'yes',
                 target: targetId,
-                type: 'smoothstep',
+                type: EDGE_TYPE,
                 animated: false,
                 label: 'yes',
-                labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#16A34A' },
+                labelStyle: { fontFamily: 'ui-monospace, monospace', fontSize: 9, fontWeight: 600, fill: '#15803D' },
                 labelBgStyle: { fill: '#F0FDF4', fillOpacity: 1 },
                 labelBgPadding: [2, 4] as [number, number],
                 labelBgBorderRadius: 3,
-                markerEnd: YES_MARKER,
                 style: YES_STYLE,
               });
             } else if (!enterEdgeCreated.has(targetGroup)) {
@@ -387,9 +416,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
                 source: targetGroup,
                 sourceHandle: 'top-out',
                 target: targetId,
-                type: 'smoothstep',
+                type: EDGE_TYPE,
                 animated: false,
-                markerEnd: RAIL_MARKER,
                 style: RAIL_STYLE,
               });
               enterEdgeCreated.add(targetGroup);
@@ -400,6 +428,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     });
 
     // === Post 阶段节点 ===
+    // v11 (LR): post 节点不进入 dagre（LR 会把子节点排到父任务右侧主流程道上，
+    // 与主流混淆）—— 布局后手工挂到父任务正下方，像"脚注"一样垂直堆叠
     const postNodes: Node[] = [];
     let postIndex = 0;
 
@@ -417,16 +447,17 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
             parentId: parentGroupId,
             extent: 'parent' as const,
             position: { x: 0, y: 0 },
+            width: POST_W,
+            height: POST_H,
             data: { label: pt.name, variant, parentTaskId },
           });
           taskEdges.push({
             id: `post-edge-${parentTaskId}-${postId}`,
             source: parentTaskId,
             target: postId,
-            type: 'smoothstep',
+            type: EDGE_TYPE,
             animated: false,
-            markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' },
-            style: { stroke: '#CBD5E1', strokeWidth: 1.2, strokeDasharray: '3 3' },
+            style: { stroke: EDGE.railSoft.stroke, strokeWidth: EDGE.railSoft.strokeWidth },
           });
         }
       }
@@ -445,21 +476,25 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     });
 
     // === Start / End 哨兵节点（占位，位置在分组尺寸调整后设置） ===
+    // v11 (2026-08): trigger 式节点卡片（非圆形），LR 流向上 START 在最左、END 在最右
     const startNode: Node = {
       id: '__start__',
       type: 'startEnd',
       position: { x: 0, y: 0 },
+      width: NODE_SIZE.SENTINEL_START_W,
+      height: NODE_SIZE.SENTINEL_H,
       data: { variant: 'start' },
     };
     const endNode: Node = {
       id: '__end__',
       type: 'startEnd',
       position: { x: 0, y: 0 },
+      width: NODE_SIZE.SENTINEL_END_W,
+      height: NODE_SIZE.SENTINEL_H,
       data: { variant: 'end' },
     };
 
-    // 拓扑：START → group.top(IN) → group.top-out → 首 task → ... → 末 task → group.exit(OUT) → group.bottom → END
-    // no/alt 边汇入 group.exit（底部 target handle），与 group.bottom（底部 source → END）同位置。
+    // 拓扑：START → group.top(左缘) → group.top-out → 首 task → ... → 末 task → group.exit(右缘) → group.bottom → END
     const groupHasIncoming = new Set<string>();
     const groupHasOutgoing = new Set<string>();
     for (const e of taskEdges) {
@@ -498,11 +533,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
     const rootGroupIds = allGroupIds.filter((id) => !groupHasIncoming.has(id));
     const leafGroupIds = allGroupIds.filter((id) => !groupHasOutgoing.has(id));
 
-    const START_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#10B981' };
-    const END_MARKER = { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' };
     for (const gid of rootGroupIds) {
       const firstTaskId = groupFirstTask.get(gid);
-      // START → group.top（绿色，进入 group 的 IN handle）
+      // START → group.top（绿色，进入 group 左缘 IN handle）
       // group.top-out → 首 task 或 decision（灰色内部边，不穿出 group）
       if (firstTaskId) {
         const firstTaskWhen = taskWhenMap.get(firstTaskId);
@@ -517,10 +550,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           source: '__start__',
           target: gid,
           targetHandle: 'top',
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: START_MARKER,
-          style: { stroke: '#10B981', strokeWidth: 1.5 },
+          style: { stroke: EDGE.start.stroke, strokeWidth: EDGE.start.strokeWidth },
         });
         // group.top-out → 首 task/decision（灰色内部边）
         taskEdges.push({
@@ -528,9 +560,8 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           source: gid,
           sourceHandle: 'top-out',
           target: enterTarget,
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: RAIL_MARKER,
           style: RAIL_STYLE,
         });
       } else {
@@ -540,38 +571,34 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           source: '__start__',
           target: gid,
           targetHandle: 'top',
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: START_MARKER,
-          style: { stroke: '#10B981', strokeWidth: 1.5 },
+          style: { stroke: EDGE.start.stroke, strokeWidth: EDGE.start.strokeWidth },
         });
       }
     }
     for (const gid of leafGroupIds) {
       const lastTaskId = groupLastTask.get(gid);
-      // 末 task → group.exit（底部 target handle）
-      // group.bottom（底部 source handle）→ END
-      // exit 和 bottom 同位于底部，视觉上形成 末task → exit → END 连接
+      // 末 task → group.exit（右缘 target handle）
+      // group.bottom（右缘 source handle）→ END
       if (lastTaskId) {
         taskEdges.push({
           id: `${gid}-out`,
           source: lastTaskId,
           target: gid,
           targetHandle: 'exit',
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: END_MARKER,
-          style: { stroke: '#94A3B8', strokeWidth: 1.5 },
+          style: { stroke: EDGE.end.stroke, strokeWidth: EDGE.end.strokeWidth },
         });
         taskEdges.push({
           id: `${gid}-to-end`,
           source: gid,
           sourceHandle: 'bottom',
           target: '__end__',
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: END_MARKER,
-          style: { stroke: '#94A3B8', strokeWidth: 1.5 },
+          style: { stroke: EDGE.end.stroke, strokeWidth: EDGE.end.strokeWidth },
         });
       } else {
         // 空 group 回退：group.bottom → END
@@ -580,10 +607,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           source: gid,
           sourceHandle: 'bottom',
           target: '__end__',
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: END_MARKER,
-          style: { stroke: '#94A3B8', strokeWidth: 1.5 },
+          style: { stroke: EDGE.end.stroke, strokeWidth: EDGE.end.strokeWidth },
         });
       }
     }
@@ -596,10 +622,9 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           id: `start-to-${tid}`,
           source: '__start__',
           target: tid,
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#10B981' },
-          style: { stroke: '#10B981', strokeWidth: 1.5 },
+          style: { stroke: EDGE.start.stroke, strokeWidth: EDGE.start.strokeWidth },
         });
       }
       for (const tid of allTaskIds.filter((id) => !taskHasOutgoing.has(id))) {
@@ -607,17 +632,15 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
           id: `${tid}-to-end`,
           source: tid,
           target: '__end__',
-          type: 'smoothstep',
+          type: EDGE_TYPE,
           animated: false,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: '#94A3B8' },
-          style: { stroke: '#94A3B8', strokeWidth: 1.5 },
+          style: { stroke: EDGE.end.stroke, strokeWidth: EDGE.end.strokeWidth },
         });
       }
     }
 
     // dagre 布局
-    // groupSizes 同时承载 group 与 decision 节点的自定义尺寸：
-    // dagreLayout.getNodeSize 优先查 custom 尺寸，再回退到 type 硬编码。
+    // groupSizes 同时承载 group 与 decision 节点的自定义尺寸
     const groupSizes = new Map<string, { width: number; height: number }>();
     for (const gn of groupNodes) {
       const w = (gn.style as { width?: number })?.width ?? 200;
@@ -628,21 +651,13 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       groupSizes.set(dn.id, { width: DECISION_SIZE, height: DECISION_SIZE });
     }
 
-    const allNodes = [...groupNodes, ...taskNodes, ...decisionNodes, ...postNodes, startNode, endNode];
-    const layoutedNodes = applyDagreLayout(allNodes, taskEdges, groupSizes);
-
-    // 固定 Start 在最顶部
-    let minY = Infinity;
-    for (const n of layoutedNodes) {
-      if (n.id === '__start__' || n.id === '__end__') continue;
-      minY = Math.min(minY, n.position.y);
-    }
-    if (!isFinite(minY)) minY = 0;
-    for (const n of layoutedNodes) {
-      if (n.id === '__start__') {
-        n.position.y = minY - 50;
-      }
-    }
+    // v11 (LR): post 节点不进 dagre —— LR 会把子节点排到父任务右侧主流程道上，
+    // 与主流混淆；post 边也不参与排序（dagre 对未知节点会崩溃）。
+    // 布局后 post 手工挂到父任务正下方。
+    const postNodeIds = new Set(postNodes.map((n) => n.id));
+    const dagreNodes = [...groupNodes, ...taskNodes, ...decisionNodes, startNode, endNode];
+    const dagreEdges = taskEdges.filter((e) => !postNodeIds.has(e.target));
+    const layoutedNodes = applyDagreLayout(dagreNodes, dagreEdges, groupSizes);
 
     // 子节点位置转为相对于 group 的 offset
     const layoutedMap = new Map(layoutedNodes.map((n) => [n.id, n]));
@@ -661,6 +676,69 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
       }
       finalNodes.push(n);
     }
+
+    // post 节点挂到父任务正下方（相对坐标已就绪，此时插入 finalNodes）
+    // 同一父任务的多个 post 按声明顺序垂直堆叠
+    {
+      const postCounter = new Map<string, number>();
+      for (const pn of postNodes) {
+        const parentTaskId = (pn.data as { parentTaskId?: string }).parentTaskId;
+        const parentTask = finalNodes.find((n) => n.id === parentTaskId);
+        if (!parentTask) continue;
+        const idx = postCounter.get(parentTaskId) ?? 0;
+        postCounter.set(parentTaskId, idx + 1);
+        pn.position = {
+          x: parentTask.position.x,
+          y: parentTask.position.y + TASK_H + POST_GAP_Y + idx * (POST_H + 6),
+        };
+        finalNodes.push(pn);
+      }
+    }
+
+    // v11 (LR): 组内单链水平对齐 —— 链中段任务共享同一 Y（同一"泳道"直线贯穿）。
+    // 为什么只对齐"严格链中段"节点（唯一前驱、且前驱的唯一出边指向自己）：
+    //   分叉叶子/汇合点/多链头承载分支拓扑，强制对齐会让分支挤在同一行不可读。
+    // 为什么放在相对坐标转换之后：此时 position 是组内相对坐标，
+    //   后续"调整 group 尺寸以包裹所有子节点"会按对齐后的位置收紧组尺寸。
+    const alignChainTasksInGroup = (nodes: Node[], edges: Edge[]) => {
+      const inEdges = new Map<string, string[]>(); // target → sources（仅 task↔task 边）
+      const outDeg = new Map<string, number>();
+      for (const e of edges) {
+        if (e.source.startsWith('__group__') || e.target.startsWith('__group__')) continue;
+        if (e.source === '__start__' || e.target === '__end__') continue;
+        if (!inEdges.has(e.target)) inEdges.set(e.target, []);
+        inEdges.get(e.target)!.push(e.source);
+        outDeg.set(e.source, (outDeg.get(e.source) ?? 0) + 1);
+      }
+      const byGroup = new Map<string, Node[]>();
+      for (const n of nodes) {
+        // decision 纳入对齐 —— when 条件链（task → decision → task）中菱形若不与任务
+        // 同行，入边会形成 Z 字绕行。no/alt 边以 __group__ 为 target 已被过滤，
+        // decision 的有效出边只剩 yes，满足"一进一出"条件时可安全对齐。
+        if ((n.type !== 'taskNode' && n.type !== 'decisionNode') || !n.parentId) continue;
+        if (!byGroup.has(n.parentId)) byGroup.set(n.parentId, []);
+        byGroup.get(n.parentId)!.push(n);
+      }
+      for (const tasks of byGroup.values()) {
+        if (tasks.length < 2) continue;
+        // 基准 y：优先取链头任务的 y；无链头任务时（cross-sub 首任务带 when，
+        // enter-decision 边被过滤）回退到任意入度为 0 的节点（即入口 decision）
+        const head =
+          tasks.find((t) => t.type === 'taskNode' && (inEdges.get(t.id)?.length ?? 0) === 0) ??
+          tasks.find((t) => (inEdges.get(t.id)?.length ?? 0) === 0);
+        if (!head) continue; // 无链头（纯并行/环）不对齐
+        const baseY = head.position.y;
+        for (const t of tasks) {
+          if (t.id === head.id) continue;
+          const preds = inEdges.get(t.id) ?? [];
+          if (preds.length !== 1) continue; // 汇合点不对齐
+          if ((outDeg.get(preds[0]) ?? 0) !== 1) continue; // 前驱分叉 → 本节点是分支叶，不对齐
+          if ((outDeg.get(t.id) ?? 0) > 1) continue; // 自身分叉不对齐
+          t.position.y = baseY;
+        }
+      }
+    };
+    alignChainTasksInGroup(finalNodes, taskEdges);
 
     // 调整 group 尺寸以包裹所有子节点
     for (const node of finalNodes) {
@@ -686,96 +764,132 @@ export function usePipelineGraph({ pipeline, taskStatuses }: UsePipelineGraphOpt
         }
         if (minX < Infinity) {
           const dagreW = ((node.style as { width?: number })?.width) ?? 0;
-          const contentW = maxX - minX + GROUP_PADDING_X * 2;
-          const contentH = maxY - minY + GROUP_PADDING_Y * 2 + GROUP_HEADER + GROUP_ENTRY_AREA + GROUP_EXIT_AREA;
+          // v11 (LR): contentW 含左入口区 + 右出口区；
+          // contentH = 顶 header + 底对称区（header 同高）+ padding：
+          // 上下对称的布局让链的垂直中轴 = 组 handle 中轴（top:50%），
+          // enter/exit 边才是纯水平直线（header 独占顶部会下拉链中轴）
+          const contentW = maxX - minX + GROUP_PADDING_X * 2 + GROUP_ENTRY_W + GROUP_EXIT_W;
+          const contentH = maxY - minY + GROUP_PADDING_Y * 2 + GROUP_HEADER * 2;
+          // v6 (2026-08): 顶层 width/height 与 style 同步更新（MiniMap 读顶层值）
+          node.width = Math.max(dagreW, contentW);
+          node.height = contentH;
           node.style = {
             ...((node.style as object) || {}),
-            width: Math.max(dagreW, contentW),
-            height: contentH,
+            width: node.width,
+            height: node.height,
           };
+          // v11 (LR): 子节点定位 —— x 贴左（入口区之后），
+          // y = 顶区（PAD + header）起排；顶底对称使链中轴 = handle 中轴
+          const postStack = new Map<string, number>();
           for (const child of finalNodes) {
-            if (child.parentId === node.id) {
+            if (child.parentId === node.id && child.type !== 'postTask') {
               child.position = {
-                x: child.position.x - minX + GROUP_PADDING_X,
-                y: child.position.y - minY + GROUP_PADDING_Y + GROUP_HEADER + GROUP_ENTRY_AREA,
+                x: child.position.x - minX + GROUP_PADDING_X + GROUP_ENTRY_W,
+                y: child.position.y - minY + GROUP_PADDING_Y + GROUP_HEADER,
               };
+            } else if (child.parentId === node.id && child.type === 'postTask') {
+              // post 跟随其父任务的新位置（post 保持悬挂堆叠）
+              const parentTaskId = (child.data as { parentTaskId?: string }).parentTaskId;
+              const parentTask = finalNodes.find((n) => n.id === parentTaskId);
+              if (parentTask) {
+                const idx = postStack.get(parentTaskId) ?? 0;
+                postStack.set(parentTaskId, idx + 1);
+                child.position = {
+                  x: parentTask.position.x,
+                  y: parentTask.position.y + TASK_H + POST_GAP_Y + idx * (POST_H + 6),
+                };
+              }
             }
           }
         }
       }
     }
 
-    // 修复：dagre 用估算高度布局，group 实际高度更大 → 相邻 group 垂直重叠
-    // 按 dagre 给的 y 排序，逐个下推消除重叠（仅处理 x 范围有重叠的 group 对）
+    // 修复：dagre 用估算尺寸布局，group 实际尺寸更大 → 相邻 group 重叠
+    // v11 (LR): 按 x 排序，逐个右推消除重叠（仅处理 y 范围有重叠的 group 对）
     const sortedGroups = finalNodes
       .filter((n) => n.type === 'subpipelineGroup')
-      .sort((a, b) => a.position.y - b.position.y);
+      .sort((a, b) => a.position.x - b.position.x);
 
     for (let i = 0; i < sortedGroups.length; i++) {
       const curr = sortedGroups[i];
-      const currW = (curr.style as { width?: number })?.width ?? 200;
+      const currH = (curr.style as { height?: number })?.height ?? 100;
       for (let j = 0; j < i; j++) {
         const prev = sortedGroups[j];
-        const prevW = (prev.style as { width?: number })?.width ?? 200;
         const prevH = (prev.style as { height?: number })?.height ?? 100;
-        // x 范围无重叠则跳过（并行 group 不需下推）
-        const xOverlap = !(curr.position.x + currW <= prev.position.x || prev.position.x + prevW <= curr.position.x);
-        if (!xOverlap) continue;
-        const prevBottom = prev.position.y + prevH;
-        if (curr.position.y < prevBottom + GROUP_GAP_Y) {
-          curr.position.y = prevBottom + GROUP_GAP_Y;
+        const prevW = (prev.style as { width?: number })?.width ?? 200;
+        // y 范围无重叠则跳过（同列并行 group 不需右推）
+        const yOverlap = !(curr.position.y + currH <= prev.position.y || prev.position.y + prevH <= curr.position.y);
+        if (!yOverlap) continue;
+        const prevRight = prev.position.x + prevW;
+        if (curr.position.x < prevRight + GROUP_GAP_X) {
+          curr.position.x = prevRight + GROUP_GAP_X;
         }
       }
     }
 
-    // End 定位到最底部
-    let finalMaxY = -Infinity;
-    for (const node of finalNodes) {
-      if (node.id === '__start__' || node.id === '__end__') continue;
-      const nodeBottom = node.position.y + ((node.type === 'subpipelineGroup')
-        ? ((node.style as { height?: number })?.height ?? 100)
-        : node.type === 'decisionNode'
-          ? DECISION_SIZE
-          : TASK_H);
-      finalMaxY = Math.max(finalMaxY, nodeBottom);
-    }
-    if (!isFinite(finalMaxY)) finalMaxY = 100;
-    for (const node of finalNodes) {
-      if (node.id === '__end__') {
-        node.position.y = finalMaxY + 60;
+    // v5 → v11 (LR): 组间拓扑右推 —— cross-sub 依赖边的下游组左缘不得在上游组右缘左侧。
+    // 多轮迭代处理链式依赖（A→B→C 中右推 A 会连锁推 B）。
+    {
+      const groupDepEdges: [string, string][] = [];
+      for (const e of taskEdges) {
+        if (e.source.startsWith('__group__') && e.target.startsWith('__group__')) {
+          groupDepEdges.push([e.source, e.target]);
+        }
+      }
+      if (groupDepEdges.length > 0) {
+        const nodeMap = new Map(finalNodes.map((n) => [n.id, n]));
+        for (let round = 0; round < sortedGroups.length; round++) {
+          let moved = false;
+          for (const [srcId, tgtId] of groupDepEdges) {
+            const s = nodeMap.get(srcId);
+            const t = nodeMap.get(tgtId);
+            if (!s || !t) continue;
+            const sW = (s.style as { width?: number })?.width ?? 200;
+            // 下游 left 至少在上游 right + GAP 之右，留出连线呼吸空间
+            const minLeft = s.position.x + sW + GROUP_GAP_X;
+            if (t.position.x < minLeft) {
+              t.position.x = minLeft;
+              moved = true;
+            }
+          }
+          if (!moved) break;
+        }
       }
     }
 
-    // 对齐 __start__ / __end__ 的 x 到所连接 group 的中心，消除长水平飞线
-    // START/END 现在直连首/末 task，需先找到该 task 所属 group 再居中
-    const START_W = 66, END_W = 52;
-    const findGroupOfNode = (nodeId: string | undefined) => {
-      if (!nodeId) return undefined;
-      const n = finalNodes.find((x) => x.id === nodeId);
-      if (!n) return undefined;
-      if (n.type === 'subpipelineGroup') return n;
-      if (n.parentId) return finalNodes.find((x) => x.id === n.parentId);
-      return undefined;
+    // v11 (LR): START/END 定位 —— START 在所有 root group 联合包围盒左侧居中，
+    // END 在所有 leaf group 联合包围盒右侧居中（并行多组时进出线对称汇入，交叉最少）。
+    const jointBBoxOfGroups = (gids: string[]): { minX: number; minY: number; maxX: number; maxY: number } | undefined => {
+      if (gids.length === 0) return undefined;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const gid of gids) {
+        const g = finalNodes.find((n) => n.id === gid);
+        if (!g) continue;
+        const gw = ((g.style as { width?: number })?.width) ?? 200;
+        const gh = ((g.style as { height?: number })?.height) ?? 100;
+        minX = Math.min(minX, g.position.x);
+        minY = Math.min(minY, g.position.y);
+        maxX = Math.max(maxX, g.position.x + gw);
+        maxY = Math.max(maxY, g.position.y + gh);
+      }
+      if (!isFinite(minX)) return undefined;
+      return { minX, minY, maxX, maxY };
     };
+    // 哨兵与组之间的水平呼吸空间（给贝塞尔曲线留弯道）
+    const SENTINEL_GAP_X = 72;
     for (const node of finalNodes) {
       if (node.id === '__start__') {
-        const startEdge = taskEdges.find((e) => e.source === '__start__');
-        const targetGroup = findGroupOfNode(startEdge?.target);
-        if (targetGroup) {
-          const gw = ((targetGroup.style as { width?: number })?.width) ?? 200;
-          node.position.x = targetGroup.position.x + gw / 2 - START_W / 2;
+        const bbox = jointBBoxOfGroups(rootGroupIds);
+        if (bbox) {
+          node.position.x = bbox.minX - NODE_SIZE.SENTINEL_START_W - SENTINEL_GAP_X;
+          node.position.y = (bbox.minY + bbox.maxY) / 2 - NODE_SIZE.SENTINEL_H / 2;
         }
       } else if (node.id === '__end__') {
-        // END 对齐所连接 group 的中心。
-        // 主出边（末 task → END，id 以 '-to-end' 结尾）决定 END 的 x；
-        // alt 边汇入 group.exit（不直连 END），不影响 END 定位。
-        const endEdge = taskEdges.find(
-          (e) => e.target === '__end__' && e.id.endsWith('-to-end'),
-        );
-        const srcGroup = findGroupOfNode(endEdge?.source);
-        if (srcGroup) {
-          const gw = ((srcGroup.style as { width?: number })?.width) ?? 200;
-          node.position.x = srcGroup.position.x + gw / 2 - END_W / 2;
+        const bbox = jointBBoxOfGroups(leafGroupIds);
+        if (bbox) {
+          node.position.x = bbox.maxX + SENTINEL_GAP_X;
+          node.position.y = (bbox.minY + bbox.maxY) / 2 - NODE_SIZE.SENTINEL_H / 2;
         }
       }
     }

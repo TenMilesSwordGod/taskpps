@@ -1,163 +1,161 @@
 import { memo } from 'react';
-import { Handle, Position, NodeResizer } from '@xyflow/react';
-import type { TaskYAML, TaskType } from '@/types';
-import { TYPE_COLOR, FONT_MONO, INK } from '@/features/pipelines/nodes/nodeTokens';
-import { CmdIcon, StepIcon, PluginIcon, InvokeIcon } from '../icons';
+import { Handle, Position } from '@xyflow/react';
+import type { TaskYAML } from '@/types';
+import {
+  TYPE_ICON,
+  TYPE_ICON_BG,
+  TYPE_LABEL,
+  FONT_MONO,
+  FONT_SANS,
+  INK,
+  CARD_SHADOW,
+} from '@/features/pipelines/nodes/nodeTokens';
+import { inferTaskType, summarizeTask } from '@/features/pipelines/nodes/taskVisual';
 import { useReadOnly } from './ReadOnlyContext';
-
-/** 推断任务类型 */
-function inferType(task: TaskYAML): TaskType {
-  if (task.invoke) return 'invoke';
-  if (task.steps) return 'steps';
-  if (task.plugin) return 'plugin';
-  if (task.git) return 'git';
-  if (task.nexus) return 'nexus';
-  return 'command';
-}
-
-/** v2 (2026-07): 类型 → SVG 图标组件映射（替换 emoji） */
-const TYPE_ICON_SVG: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
-  command: CmdIcon,
-  invoke: InvokeIcon,
-  steps: StepIcon,
-  plugin: PluginIcon,
-};
 
 interface EditorTaskNodeData {
   task?: TaskYAML;
-  taskType?: TaskType;
+  taskType?: string;
   subpipelineName?: string;
   collapsed?: boolean;
   [key: string]: unknown;
 }
 
 /**
- * 可编辑 Task 节点 — n8n 风格紧凑圆角方形
- * 左入右出端口，底部 Post 端口
+ * 可编辑 Task 节点 —— v11 (2026-08) 与查看模式 TaskNode 视觉统一（n8n 卡片）
  *
- * v2 (2026-07): SVG 图标替换 emoji + 折叠支持
+ * 为什么改：用户反馈编辑模式与查看模式"长得不一样"。
+ * - 视觉：n8n 卡片（类型色图标块 + 白色 glyph + 名称/摘要两行），
+ *   数据→视觉映射与 TaskNode 同源（taskVisual.ts 共享）
+ * - 连线：v11 随 LR 流向迁移 —— in=Left / out=Right / post=Bottom
+ *   （post 路由向下离开主流程道）
+ * - 保留：handle id 契约（in/out/post）不动 → isValidConnection、
+ *   yamlToNodes 边数据、nodesToYaml 序列化零改动
+ * - 编辑态以浅底微染暗示可编辑；选中态品牌橙描边；悬停边框走 CSS 变量
  */
 function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected?: boolean }) {
   const readOnly = useReadOnly();
   const task = data.task;
   const taskName = task?.name || 'Task';
-  const taskType = data.taskType || (task ? inferType(task) : 'command');
-  const iconColor = TYPE_COLOR[taskType] || '#94a3b8';
-  // 注意(2026-07): 只读模式下使用实线边框（与 PipelineGraph 查看模式一致），
-  // 编辑模式使用虚线边框以暗示可拖拽/可连接
-  const borderStyle = readOnly ? 'solid' : 'dashed';
-  // v4 (2026-07): 编辑态选中边框由暖橙改为黑 #1F1F1F（黑白主题）
-  const borderColor = selected ? (readOnly ? '#64748b' : '#1F1F1F') : '#22c55e';
-  const collapsed = data.collapsed === true;
-  // v2 (2026-07): 使用 SVG 图标组件
-  const IconComponent = TYPE_ICON_SVG[taskType];
+  const taskType = (data.taskType as never) || (task ? inferTaskType(task) : 'command');
+  const summary = task ? summarizeTask(task) : '';
+  const IconGlyph = TYPE_ICON[taskType as keyof typeof TYPE_ICON] ?? TYPE_ICON.command;
 
-  if (collapsed) {
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          border: `2px ${borderStyle} ${borderColor}`,
-          borderRadius: 8,
-          background: '#f0fdf4',
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-          minWidth: 100,
-          minHeight: 40,
-        }}
-      >
-        {!readOnly && <NodeResizer minWidth={100} minHeight={40} />}
-        {IconComponent && <IconComponent style={{ width: 14, height: 14, color: iconColor }} />}
-        <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#262626' }}>
-          {taskName}
-        </span>
-      </div>
-    );
-  }
+  // v9 (2026-08): 边框色走 CSS 变量 —— 悬停时 editor.css 改变量即可变色
+  // （inline style 优先级高于类规则，只能用 var() 注入悬停反馈）
+  const borderColor = selected
+    ? INK.accent
+    : 'var(--wf-card-border, #DBDFE7)';
 
   return (
     <div
+      className="wf-card"
       style={{
         width: '100%',
         height: '100%',
-        minWidth: 100,
         minHeight: 56,
-        border: `2px ${borderStyle} ${borderColor}`,
-        borderRadius: 8,
-        background: '#f0fdf4',
-        padding: '10px 12px',
+        border: `1.5px solid ${borderColor}`,
+        borderRadius: 10,
+        background: readOnly ? '#FFFFFF' : '#FBFCFE',
         position: 'relative',
-        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(31, 31, 31, 0.14)' : undefined,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '0 12px 0 10px',
+        boxShadow: selected && !readOnly
+          ? `0 0 0 2px ${INK.accent}55, 0 2px 4px rgba(15,23,42,0.08)`
+          : CARD_SHADOW,
         boxSizing: 'border-box',
       }}
     >
-      {!readOnly && <NodeResizer minWidth={100} minHeight={56} />}
-      {/* 注意(2026-07): 只读模式下隐藏所有 Handle，与 PipelineGraph 查看模式一致 */}
       {!readOnly && (
         <>
-          {/* In 端口 — 左侧 */}
+          {/* In 端口 — v11: 左缘（LR 流向入口） */}
           <Handle
             id="in"
             type="target"
             position={Position.Left}
             style={{
-              width: 8,
-              height: 8,
-              background: 'transparent',
+              width: 10,
+              height: 10,
+              background: '#FFFFFF',
               border: '2px solid #64748b',
               borderRadius: '50%',
-              left: -5,
+              left: -6,
               top: '50%',
             }}
           />
 
-          {/* Out 端口 — 右侧 */}
+          {/* Out 端口 — v11: 右缘（LR 流向出口） */}
           <Handle
             id="out"
             type="source"
             position={Position.Right}
             style={{
-              width: 8,
-              height: 8,
-              background: 'transparent',
+              width: 10,
+              height: 10,
+              background: '#FFFFFF',
               border: '2px solid #64748b',
               borderRadius: '50%',
-              right: -5,
+              right: -6,
               top: '50%',
             }}
           />
 
-          {/* Post 端口 — 底部 */}
+          {/* Post 端口 — v11: 底部（post 路由向下离开主流程道） */}
           <Handle
             id="post"
             type="source"
             position={Position.Bottom}
             style={{
-              width: 8,
-              height: 8,
-              background: 'transparent',
+              width: 10,
+              height: 10,
+              background: '#FFFFFF',
               border: '2px solid #ef4444',
               borderRadius: '50%',
-              bottom: -5,
+              bottom: -6,
+              left: '50%',
             }}
           />
         </>
       )}
 
-      {/* 标题行 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        {/* v2 (2026-07): SVG 图标替换 emoji */}
-        {IconComponent && <IconComponent style={{ width: 16, height: 16, color: iconColor }} />}
+      {/* 左侧类型图标块：类型色实底 + 白色 glyph（与 TaskNode 同款） */}
+      <div
+        aria-hidden
+        title={TYPE_LABEL[taskType as keyof typeof TYPE_LABEL]}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          backgroundColor: TYPE_ICON_BG,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <IconGlyph style={{ fontSize: 17, color: '#FFFFFF' }} />
+      </div>
+
+      {/* 右侧两行：任务名（sans）+ 命令摘要（mono） */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          minWidth: 0,
+          gap: 2,
+        }}
+      >
         <span
           style={{
-            fontFamily: FONT_MONO,
+            fontFamily: FONT_SANS,
             fontSize: 13,
             fontWeight: 600,
-            color: '#262626',
+            color: INK.textPrimary,
+            letterSpacing: -0.1,
+            lineHeight: 1.25,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -165,48 +163,39 @@ function EditorTaskNode({ data, selected }: { data: EditorTaskNodeData; selected
         >
           {taskName}
         </span>
+        {summary && (
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 10.5,
+              color: INK.textSecondary,
+              lineHeight: 1.2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: 130,
+            }}
+          >
+            {summary}
+          </span>
+        )}
+        {/* when 条件徽章（编辑态可见，提示该任务带条件） */}
+        {task?.when && (
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 9.5,
+              color: '#B45309',
+              lineHeight: 1.4,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            when: {task.when.slice(0, 22)}
+          </span>
+        )}
       </div>
-
-      {/* 副标题 */}
-      <div
-        style={{
-          fontFamily: FONT_MONO,
-          fontSize: 11,
-          color: '#94a3b8',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: 150,
-        }}
-      >
-        {task?.command
-          ? task.command.slice(0, 20)
-          : taskType === 'invoke'
-            ? `invoke ${task?.invoke?.task || ''}`
-            : taskType === 'steps'
-              ? `${task?.steps?.length || 0} steps`
-              : taskType === 'plugin'
-                ? task?.plugin?.slice(0, 20)
-                : taskType.toUpperCase()}
-      </div>
-
-      {/* when 标签 */}
-      {task?.when && (
-        <div
-          style={{
-            marginTop: 4,
-            display: 'inline-block',
-            padding: '1px 6px',
-            borderRadius: 4,
-            background: '#fef3c7',
-            color: '#d97706',
-            fontSize: 10,
-            fontFamily: FONT_MONO,
-          }}
-        >
-          {task.when.slice(0, 25)}
-        </div>
-      )}
     </div>
   );
 }

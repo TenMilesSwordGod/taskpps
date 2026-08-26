@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { usePipelineGraph } from '../usePipelineGraph'
+import { EDGE, INK, NODE_SIZE } from '../../nodes/nodeTokens'
 import type { PipelineDetail } from '@/types'
 
 function makePipeline(overrides: Partial<PipelineDetail> = {}): PipelineDetail {
@@ -221,7 +222,7 @@ describe('usePipelineGraph — decisionNode 决策节点与边结构', () => {
     expect(yesEdge).toBeDefined()
     expect(yesEdge?.sourceHandle).toBe('yes')
     expect(yesEdge?.label).toBe('yes')
-    expect((yesEdge?.style as { stroke?: string })?.stroke).toBe('#16A34A')
+    expect((yesEdge?.style as { stroke?: string })?.stroke).toBe(EDGE.yes.stroke)
   })
 
   it('条件任务有下游时，no 边连到下游任务（自然垂直路径）', () => {
@@ -479,7 +480,7 @@ describe('usePipelineGraph — decisionNode 决策节点与边结构', () => {
     const yesEdge = result.current.edges.find((e) => e.source === did && e.target === 'deploy.push')
     expect(yesEdge?.sourceHandle).toBe('yes')
     expect(yesEdge?.label).toBe('yes')
-    expect((yesEdge?.style as { stroke?: string })?.stroke).toBe('#16A34A')
+    expect((yesEdge?.style as { stroke?: string })?.stroke).toBe(EDGE.yes.stroke)
   })
 
   it('决策节点 parentId 与 source task 同 group', () => {
@@ -609,11 +610,14 @@ describe('usePipelineGraph — alt 边补全（when 孤立 task）', () => {
     expect(altEdge).toBeDefined()
     expect(altEdge?.target).toBe('__group__main')
     expect(altEdge?.targetHandle).toBe('exit')
-    expect(altEdge?.type).toBe('smoothstep')
-    expect((altEdge?.style as { stroke?: string })?.stroke).toBe('#94A3B8')
-    expect((altEdge?.style as { strokeWidth?: number })?.strokeWidth).toBe(1)
-    expect((altEdge?.style as { strokeDasharray?: string })?.strokeDasharray).toBe('3 3')
-    expect((altEdge?.labelStyle as { fill?: string })?.fill).toBe('#64748B')
+    // v11: bezier 顺流曲线（LR）
+    expect(altEdge?.type).toBe('default')
+    expect((altEdge?.style as { stroke?: string })?.stroke).toBe(EDGE.railSoft.stroke)
+    expect((altEdge?.style as { strokeWidth?: number })?.strokeWidth).toBe(EDGE.railSoft.strokeWidth)
+    expect((altEdge?.style as { strokeDasharray?: string })?.strokeDasharray).toBe(EDGE.railSoft.strokeDasharray)
+    // v11: label 文字色引用 INK.textSecondary（随 token 逐步迁移到 n8n 副标题色）
+    expect((altEdge?.labelStyle as { fill?: string })?.fill).toBe(INK.textSecondary)
+    expect((altEdge?.labelBgStyle as { fill?: string })?.fill).toBe('#F8FAFC')
   })
 
   it('带 when 但有显式出边的 task 不补 alt 边', () => {
@@ -859,7 +863,7 @@ describe('usePipelineGraph — no 边构建（决策节点跳过路径）', () =
     expect(noPerf?.targetHandle).toBe('exit')
   })
 
-  it('no 边样式为灰色实线 smoothstep（区别于 yes 的绿色和 alt 的虚线）', () => {
+  it('no 边样式为灰色实线 bezier（区别于 yes 的绿色和 alt 的浅灰）', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -895,16 +899,16 @@ describe('usePipelineGraph — no 边构建（决策节点跳过路径）', () =
       (e) => e.source === did && e.sourceHandle === 'no',
     )
     expect(noEdge).toBeDefined()
-    // no 边使用 smoothstep 类型（正交路由，减少与其他边的交叉）
-    expect(noEdge?.type).toBe('smoothstep')
+    // v11: bezier 顺流曲线（LR）
+    expect(noEdge?.type).toBe('default')
     // no 边使用 RAIL_STYLE（灰色实线）
-    expect((noEdge?.style as { stroke?: string })?.stroke).toBe('#94A3B8')
+    expect((noEdge?.style as { stroke?: string })?.stroke).toBe(EDGE.rail.stroke)
     expect((noEdge?.style as { strokeDasharray?: string })?.strokeDasharray).toBeUndefined()
   })
 })
 
-describe('usePipelineGraph — group 垂直不重叠', () => {
-  it('链式 subpipeline 的 group 不应垂直重叠', () => {
+describe('usePipelineGraph — group 水平不重叠', () => {
+  it('链式 subpipeline 的 group 不应水平重叠', () => {
     const { result } = renderHook(() =>
       usePipelineGraph({
         pipeline: makePipeline({
@@ -943,7 +947,7 @@ describe('usePipelineGraph — group 垂直不重叠', () => {
     const groups = result.current.nodes.filter((n) => n.type === 'subpipelineGroup')
     expect(groups.length).toBe(3)
 
-    // 检查每对 x 范围有重叠的 group 是否垂直重叠
+    // v11 (LR): 检查每对 y 范围有重叠的 group 是否水平重叠
     for (let i = 0; i < groups.length; i++) {
       for (let j = i + 1; j < groups.length; j++) {
         const a = groups[i]
@@ -953,13 +957,13 @@ describe('usePipelineGraph — group 垂直不重叠', () => {
         const bW = (b.style as { width?: number })?.width ?? 200
         const bH = (b.style as { height?: number })?.height ?? 100
 
-        const xOverlap = !(a.position.x + aW <= b.position.x || b.position.x + bW <= a.position.x)
-        if (!xOverlap) continue
+        const yOverlap = !(a.position.y + aH <= b.position.y || b.position.y + bH <= a.position.y)
+        if (!yOverlap) continue
 
-        const aBottom = a.position.y + aH
-        const bBottom = b.position.y + bH
-        const yOverlap = !(aBottom <= b.position.y || bBottom <= a.position.y)
-        expect(yOverlap).toBe(false)
+        const aRight = a.position.x + aW
+        const bRight = b.position.x + bW
+        const xOverlap = !(aRight <= b.position.x || bRight <= a.position.x)
+        expect(xOverlap).toBe(false)
       }
     }
   })
@@ -1001,7 +1005,7 @@ describe('usePipelineGraph — START/END 通过 group IN/OUT handle', () => {
     expect(enterEdge?.source).toBe(gid)
     expect(enterEdge?.sourceHandle).toBe('top-out')
     expect(enterEdge?.target).toBe('main.setup')
-    expect((enterEdge?.style as { stroke?: string })?.stroke).toBe('#94A3B8')
+    expect((enterEdge?.style as { stroke?: string })?.stroke).toBe(EDGE.rail.stroke)
   })
 
   it('叶子 group 的末 task → group.exit → group.bottom → END', () => {
@@ -1127,5 +1131,84 @@ describe('usePipelineGraph — 健壮性（孤儿边/重复边）', () => {
     // enter-__group__sub3 恰好存在一次
     const enterEdges = result.current.edges.filter((e) => e.id === 'enter-__group__sub3')
     expect(enterEdges).toHaveLength(1)
+  })
+})
+
+// v9 (2026-08): 连线正交化修复配套测试 —— 消除 bezier 弧钩出组与并行组连线横穿。
+// v11 (2026-08): 随 LR 流向翻转 —— 链中轴与组 handle 中轴（top:50%）对齐；
+// START/END 贴 root/leaf group 联合包围盒左/右缘垂直居中。
+describe('usePipelineGraph — 组内链居中与 START/END 联合中心对齐', () => {
+  it('组内任务链垂直居中：链中轴与组 handle 中轴（top:50%）对齐', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              // 长组名 → header 决定组宽 > 任务区宽，
+              // 复现"链贴顶、handle 居中"的错位场景（v11: 视轴翻转，链贴左 → 居中）
+              name: 'Sync Automation code',
+              config: null,
+              depends_on: [],
+              tasks: [
+                { name: 'task-a', depends_on: [], env: {}, retry: 0 },
+                { name: 'task-b', depends_on: [], env: {}, retry: 0 },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const group = result.current.nodes.find((n) => n.type === 'subpipelineGroup')!
+    const firstTask = result.current.nodes.find((n) => n.id === 'Sync Automation code.task-a')!
+    const groupH = (group.style as { height?: number })?.height ?? group.height ?? 0
+    // v11 (LR): 链的垂直中轴应落在组高中点（±1px 容差），enter/exit 边即为纯水平直线
+    const chainCenterY = firstTask.position.y + NODE_SIZE.TASK_H / 2
+    expect(Math.abs(chainCenterY - groupH / 2)).toBeLessThanOrEqual(1)
+  })
+
+  it('START/END 贴 root/leaf group 联合包围盒左右缘垂直居中（并行双组不横穿）', () => {
+    const { result } = renderHook(() =>
+      usePipelineGraph({
+        pipeline: makePipeline({
+          pipelines: [
+            {
+              name: 'alpha',
+              config: null,
+              depends_on: [],
+              tasks: [{ name: 't1', depends_on: [], env: {}, retry: 0 }],
+            },
+            {
+              name: 'beta',
+              config: null,
+              depends_on: [],
+              tasks: [{ name: 't2', depends_on: [], env: {}, retry: 0 }],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const groups = result.current.nodes.filter((n) => n.type === 'subpipelineGroup')
+    expect(groups.length).toBe(2)
+    const minX = Math.min(...groups.map((g) => g.position.x))
+    const maxX = Math.max(
+      ...groups.map((g) => g.position.x + ((g.style as { width?: number })?.width ?? 200)),
+    )
+    const minY = Math.min(...groups.map((g) => g.position.y))
+    const maxY = Math.max(
+      ...groups.map((g) => g.position.y + ((g.style as { height?: number })?.height ?? 100)),
+    )
+    const jointCenterY = (minY + maxY) / 2
+
+    const start = result.current.nodes.find((n) => n.id === '__start__')!
+    const end = result.current.nodes.find((n) => n.id === '__end__')!
+    // v11 (LR): START 在左缘外侧、END 在右缘外侧；两者垂直中心对齐联合包围盒中轴
+    const startCenterX = start.position.x + NODE_SIZE.SENTINEL_START_W / 2
+    const endCenterX = end.position.x + NODE_SIZE.SENTINEL_END_W / 2
+    expect(startCenterX).toBeLessThan(minX)
+    expect(endCenterX).toBeGreaterThan(maxX)
+    expect(Math.abs(start.position.y + NODE_SIZE.SENTINEL_H / 2 - jointCenterY)).toBeLessThanOrEqual(1)
+    expect(Math.abs(end.position.y + NODE_SIZE.SENTINEL_H / 2 - jointCenterY)).toBeLessThanOrEqual(1)
   })
 })

@@ -235,10 +235,10 @@ describe('LoginPage (issue #204)', () => {
     await waitForMessage('该用户名已被注册')
   })
 
-  it('TC-Wxxx: 登录表单存在「30天不用免登录」复选框', async () => {
+  it('TC-Wxxx: 登录表单存在「30天内免登录」复选框', async () => {
     const { container } = await renderLogin()
     // 复选框应存在于登录表单中
-    const checkbox = screen.getByText('30天不用免登录')
+    const checkbox = screen.getByText('30天内免登录')
     expect(checkbox).toBeInTheDocument()
     // 获取实际的 checkbox input（前一个兄弟元素或父元素内的 input[type="checkbox"]）
     const checkboxInput = container.querySelector('.ant-checkbox-input') as HTMLInputElement
@@ -247,7 +247,7 @@ describe('LoginPage (issue #204)', () => {
     expect(checkboxInput?.checked).toBe(false)
   })
 
-  it('TC-Wxxx: 勾选「30天不用免登录」后发送 remember_me=true', async () => {
+  it('TC-Wxxx: 勾选「30天内免登录」后发送 remember_me=true', async () => {
     mockLoginMutate.mockResolvedValueOnce({ access_token: 'tok123', user: { id: 1 } })
     const { container } = await renderLogin()
     // 填表单

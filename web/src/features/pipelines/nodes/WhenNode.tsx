@@ -119,7 +119,19 @@ function WhenNodeComponent(props: NodeProps) {
         <span
           data-testid="when-node-text"
           className="relative z-10 text-xs font-mono font-medium truncate max-w-[40px] text-center leading-tight cursor-default select-none"
-          style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: -0.1, color: AMBER_INK }}
+          style={{
+            fontFamily: FONT_MONO,
+            fontSize: 11,
+            letterSpacing: -0.1,
+            color: AMBER_INK,
+            // v6 (2026-08): critique P2 — Tailwind 的 max-w/truncate 对 inline 元素不生效，
+            // 用 inline style 兜底保证摘要被约束在菱形内部
+            display: 'inline-block',
+            maxWidth: 40,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
         >
           {summary}
         </span>

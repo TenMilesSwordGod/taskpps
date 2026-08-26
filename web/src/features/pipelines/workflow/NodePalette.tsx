@@ -1,8 +1,8 @@
 import { DragEvent, useState, useCallback } from 'react';
 import { Input, Collapse } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
-import { TYPE_COLOR, FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
-import { SubPipelineIcon, TaskIcon, PostParentIcon, CmdIcon, StepIcon, PluginIcon, InvokeIcon } from './icons';
+import { SearchOutlined, CloseOutlined, CheckOutlined, ReloadOutlined } from '@ant-design/icons';
+import { TYPE_ICON, SENTINEL_ICON, TYPE_ICON_BG, FONT_SANS } from '@/features/pipelines/nodes/nodeTokens';
+import { SubPipelineIcon, TaskIcon, PostParentIcon } from './icons';
 
 /**
  * 右侧节点面板 — n8n 风格可拖拽节点列表
@@ -12,6 +12,10 @@ import { SubPipelineIcon, TaskIcon, PostParentIcon, CmdIcon, StepIcon, PluginIco
  *   - 拖拽到画布新增节点
  *
  * v2 (2026-07): SVG 图标替换 emoji
+ * v11 (2026-08): n8n 语汇统一 —— 图标改为「类型色圆角方块 + 白色 glyph」
+ * （与画布节点卡片同款解剖）；Unicode 字符图标（▶ ⏹ ✕ ✓ ↻）全部退役；
+ * 标签从 mono 改 sans（文字码仅保留 CMD/STEP/PLUGIN/INVOKE 标签本身 ——
+ * 它们是拖拽识别与 e2e 契约，不是装饰）
  */
 
 interface DraggableCardProps {
@@ -24,7 +28,7 @@ interface DraggableCardProps {
 }
 
 const CARD_HEIGHT = 52;
-const CARD_ICON_SIZE = 22;
+const CARD_ICON_SIZE = 30;
 
 function DraggableCard({ type, nodeType, label, description, icon, color }: DraggableCardProps) {
   const handleDragStart = useCallback(
@@ -46,35 +50,38 @@ function DraggableCard({ type, nodeType, label, description, icon, color }: Drag
         alignItems: 'center',
         gap: 10,
         height: CARD_HEIGHT,
-        padding: '0 12px',
-        border: '1px solid #E0E0E0',
-        borderRadius: 6,
+        padding: '0 10px',
+        border: '1px solid #E4E9F0',
+        borderRadius: 8,
         background: '#ffffff',
         cursor: 'grab',
         userSelect: 'none',
-        transition: 'background 150ms, transform 150ms',
+        transition: 'background 150ms, transform 150ms, box-shadow 150ms',
       }}
-      className="hover:bg-blue-50 hover:-translate-y-px active:bg-blue-100 active:scale-95"
+      className="hover:bg-slate-50 hover:-translate-y-px hover:shadow-sm active:bg-slate-100"
     >
+      {/* n8n 式图标块：类型色圆角方块 + 白色 glyph（与画布节点同款） */}
       <div
+        aria-hidden
         style={{
           width: CARD_ICON_SIZE,
           height: CARD_ICON_SIZE,
+          borderRadius: 7,
+          backgroundColor: color,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 16,
-          color,
           flexShrink: 0,
+          color: '#FFFFFF',
         }}
       >
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#262626' }}>
+        <div style={{ fontFamily: FONT_SANS, fontSize: 12.5, fontWeight: 600, color: '#525356' }}>
           {label}
         </div>
-        <div style={{ fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 10.5, color: '#71747A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {description}
         </div>
       </div>
@@ -83,7 +90,7 @@ function DraggableCard({ type, nodeType, label, description, icon, color }: Drag
 }
 
 // v2 (2026-07): SVG 图标尺寸常量
-const PALETTE_ICON_STYLE = { width: 18, height: 18 };
+const PALETTE_ICON_STYLE = { width: 16, height: 16 };
 
 export default function NodePalette() {
   const [search, setSearch] = useState('');
@@ -95,33 +102,33 @@ export default function NodePalette() {
   };
 
   const flowCards: DraggableCardProps[] = filterCards([
-    { type: 'startEnd', nodeType: 'startend', label: 'Start', description: '流程开始', icon: <span style={{ fontSize: 16 }}>▶</span>, color: '#10B981' },
-    { type: 'startEnd', nodeType: 'startend', label: 'End', description: '流程结束', icon: <span style={{ fontSize: 16 }}>⏹</span>, color: '#94A3B8' },
+    { type: 'startEnd', nodeType: 'startend', label: 'Start', description: '流程开始', icon: <SENTINEL_ICON.start style={{ fontSize: 15 }} />, color: TYPE_ICON_BG },
+    { type: 'startEnd', nodeType: 'startend', label: 'End', description: '流程结束', icon: <SENTINEL_ICON.end style={{ fontSize: 13 }} />, color: TYPE_ICON_BG },
   ]);
 
   const containerCards: DraggableCardProps[] = filterCards([
-    { type: 'subpipeline', nodeType: 'subpipeline', label: 'SubPipeline', description: '子流水线容器', icon: <SubPipelineIcon style={{ ...PALETTE_ICON_STYLE, color: '#3b82f6' }} />, color: '#3b82f6' },
-    { type: 'task', nodeType: 'task', label: 'Task', description: '任务容器', icon: <TaskIcon style={{ ...PALETTE_ICON_STYLE, color: '#22c55e' }} />, color: '#22c55e' },
-    { type: 'post_parent', nodeType: 'post_parent', label: 'Post 父容器', description: '后置动作容器', icon: <PostParentIcon style={{ ...PALETTE_ICON_STYLE, color: '#ef4444' }} />, color: '#ef4444' },
+    { type: 'subpipeline', nodeType: 'subpipeline', label: 'SubPipeline', description: '子流水线容器', icon: <SubPipelineIcon style={PALETTE_ICON_STYLE} />, color: TYPE_ICON_BG },
+    { type: 'task', nodeType: 'task', label: 'Task', description: '任务容器', icon: <TaskIcon style={PALETTE_ICON_STYLE} />, color: TYPE_ICON_BG },
+    { type: 'post_parent', nodeType: 'post_parent', label: 'Post 父容器', description: '后置动作容器', icon: <PostParentIcon style={PALETTE_ICON_STYLE} />, color: TYPE_ICON_BG },
   ]);
 
   const atomicCards: DraggableCardProps[] = filterCards([
-    { type: 'task', nodeType: 'task_atomic_cmd', label: 'CMD', description: '命令执行', icon: <CmdIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.command }} />, color: TYPE_COLOR.command },
-    { type: 'task', nodeType: 'task_atomic_step', label: 'STEP', description: '步骤执行', icon: <StepIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.steps }} />, color: TYPE_COLOR.steps },
-    { type: 'task', nodeType: 'task_atomic_plugin', label: 'PLUGIN', description: '插件', icon: <PluginIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.plugin }} />, color: TYPE_COLOR.plugin },
-    { type: 'task', nodeType: 'task_atomic_invoke', label: 'INVOKE', description: '调用', icon: <InvokeIcon style={{ ...PALETTE_ICON_STYLE, color: TYPE_COLOR.invoke }} />, color: TYPE_COLOR.invoke },
+    { type: 'task', nodeType: 'task_atomic_cmd', label: 'CMD', description: '命令执行', icon: <TYPE_ICON.command style={{ fontSize: 15 }} />, color: TYPE_ICON_BG },
+    { type: 'task', nodeType: 'task_atomic_step', label: 'STEP', description: '步骤执行', icon: <TYPE_ICON.steps style={{ fontSize: 15 }} />, color: TYPE_ICON_BG },
+    { type: 'task', nodeType: 'task_atomic_plugin', label: 'PLUGIN', description: '插件', icon: <TYPE_ICON.plugin style={{ fontSize: 15 }} />, color: TYPE_ICON_BG },
+    { type: 'task', nodeType: 'task_atomic_invoke', label: 'INVOKE', description: '调用', icon: <TYPE_ICON.invoke style={{ fontSize: 15 }} />, color: TYPE_ICON_BG },
   ]);
 
   const postCards: DraggableCardProps[] = filterCards([
-    { type: 'post_child', nodeType: 'post_child_on_fail', label: '失败后', description: '失败时触发', icon: <span style={{ fontSize: 16 }}>✕</span>, color: '#ef4444' },
-    { type: 'post_child', nodeType: 'post_child_on_success', label: '成功后', description: '成功时触发', icon: <span style={{ fontSize: 16 }}>✓</span>, color: '#22c55e' },
-    { type: 'post_child', nodeType: 'post_child_always', label: '始终', description: '始终触发', icon: <span style={{ fontSize: 16 }}>↻</span>, color: '#6b7280' },
+    { type: 'post_child', nodeType: 'post_child_on_fail', label: '失败后', description: '失败时触发', icon: <CloseOutlined style={{ fontSize: 13 }} />, color: TYPE_ICON_BG },
+    { type: 'post_child', nodeType: 'post_child_on_success', label: '成功后', description: '成功时触发', icon: <CheckOutlined style={{ fontSize: 13 }} />, color: TYPE_ICON_BG },
+    { type: 'post_child', nodeType: 'post_child_always', label: '始终', description: '始终触发', icon: <ReloadOutlined style={{ fontSize: 13 }} />, color: TYPE_ICON_BG },
   ]);
 
   const collapseItems = [
     {
       key: 'flow',
-      label: <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}>流程控制</span>,
+      label: <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', letterSpacing: 0.3 }}>流程控制</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {flowCards.map((c) => (
@@ -132,7 +139,7 @@ export default function NodePalette() {
     },
     {
       key: 'container',
-      label: <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}>容器</span>,
+      label: <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', letterSpacing: 0.3 }}>容器</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {containerCards.map((c) => (
@@ -143,7 +150,7 @@ export default function NodePalette() {
     },
     {
       key: 'atomic',
-      label: <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}>基础任务</span>,
+      label: <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', letterSpacing: 0.3 }}>基础任务</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {atomicCards.map((c) => (
@@ -154,7 +161,7 @@ export default function NodePalette() {
     },
     {
       key: 'post',
-      label: <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}>Post 处理</span>,
+      label: <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', letterSpacing: 0.3 }}>Post 处理</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {postCards.map((c) => (
@@ -166,28 +173,28 @@ export default function NodePalette() {
   ];
 
   return (
-    <div style={{ width: 280, height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #f0f0f0', background: '#F8F8F7' }}>
+    <div style={{ width: 264, height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #E4E9F0', background: '#FBFCFE' }}>
       {/* 标题栏 */}
       <div
         style={{
           padding: '10px 12px',
-          borderBottom: '1px solid #f0f0f0',
+          borderBottom: '1px solid #E4E9F0',
           background: '#ffffff',
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>节点面板</span>
+        <span style={{ fontFamily: FONT_SANS, fontSize: 13, fontWeight: 600, color: '#525356' }}>节点面板</span>
       </div>
 
       {/* 搜索框 */}
       <div style={{ padding: '8px 12px' }}>
         <Input
           size="small"
-          prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+          prefix={<SearchOutlined style={{ color: '#8D939E' }} />}
           placeholder="搜索节点..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
-          style={{ borderRadius: 6 }}
+          style={{ borderRadius: 8 }}
         />
       </div>
 

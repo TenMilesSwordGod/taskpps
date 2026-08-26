@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { applyDagreLayout } from './dagreLayout'
 import type { Node, Edge } from '@xyflow/react'
 
+// v11 (2026-08): n8n 化重设计 —— 画布流向从垂直 TB 翻转为水平 LR
+// （n8n 的身份本体是左→右流动），布局契约同步翻转：
+//   依赖方向 = x 轴正向，分支 = y 轴展开
+
 /** 测试辅助：构造带 ID 的 ReactFlow 节点 */
 function makeNode(id: string, x = 0, y = 0): Node {
   return { id, position: { x, y }, data: { label: id } }
@@ -34,27 +38,27 @@ describe('applyDagreLayout()', () => {
     expect(out[1].data).toEqual({ label: 'b' })
   })
 
-  it('依赖关系：a→b 布局后 b 应当在 a 下方（rankdir=TB）', () => {
+  it('依赖关系：a→b 布局后 b 应当在 a 右侧（rankdir=LR，n8n 水平流）', () => {
     const nodes = [makeNode('a'), makeNode('b')]
     const edges = [makeEdge('e1', 'a', 'b')]
     const out = applyDagreLayout(nodes, edges)
     const a = out.find((n) => n.id === 'a')!
     const b = out.find((n) => n.id === 'b')!
-    // TB 方向：依赖方 y 应大于源
-    expect(b.position.y).toBeGreaterThan(a.position.y)
+    // LR 方向：依赖方 x 应大于源
+    expect(b.position.x).toBeGreaterThan(a.position.x)
   })
 
-  it('多分支：a→b, a→c 布局后 b/c 在 a 下方，b/c 同行（y 相同）', () => {
+  it('多分支：a→b, a→c 布局后 b/c 在 a 右侧，b/c 同列（x 相同）', () => {
     const nodes = [makeNode('a'), makeNode('b'), makeNode('c')]
     const edges = [makeEdge('e1', 'a', 'b'), makeEdge('e2', 'a', 'c')]
     const out = applyDagreLayout(nodes, edges)
     const a = out.find((n) => n.id === 'a')!
     const b = out.find((n) => n.id === 'b')!
     const c = out.find((n) => n.id === 'c')!
-    expect(b.position.y).toBeGreaterThan(a.position.y)
-    expect(c.position.y).toBeGreaterThan(a.position.y)
-    // 同 rank 节点 y 应相同
-    expect(b.position.y).toBe(c.position.y)
+    expect(b.position.x).toBeGreaterThan(a.position.x)
+    expect(c.position.x).toBeGreaterThan(a.position.x)
+    // 同 rank 节点 x 应相同
+    expect(b.position.x).toBe(c.position.x)
   })
 
   it('孤立节点（无任何边）：位置仍被 dagre 写入', () => {
@@ -78,19 +82,18 @@ describe('applyDagreLayout()', () => {
     const a = out.find((n) => n.id === 'a')!
     expect(Number.isFinite(g.position.x)).toBe(true)
     expect(Number.isFinite(a.position.x)).toBe(true)
-    // TB 方向：a 应在 group1 下方
-    expect(a.position.y).toBeGreaterThan(g.position.y)
+    // LR 方向：a 应在 group1 右侧
+    expect(a.position.x).toBeGreaterThan(g.position.x)
   })
 
-  it('间距增大：nodesep=80, ranksep=60 导致节点间距更大', () => {
+  it('间距增大：ranksep 保证相邻 rank 的水平间距', () => {
     const nodes = [makeNode('a'), makeNode('b'), makeNode('c')]
     const edges = [makeEdge('e1', 'a', 'b'), makeEdge('e2', 'a', 'c')]
     const out = applyDagreLayout(nodes, edges)
     const a = out.find((n) => n.id === 'a')!
     const b = out.find((n) => n.id === 'b')!
-    // ranksep=60，加上节点高度 48，b.y - a.y 应 >= 60 + 48 = 108
-    // dagre 返回 center，position = center - 24，所以 rank 间距 = ranksep + height
-    expect(b.position.y - a.position.y).toBeGreaterThanOrEqual(60)
+    // LR：ranksep 作用于 x 轴（dagre center → position = center - width/2）
+    expect(b.position.x - a.position.x).toBeGreaterThanOrEqual(60)
   })
 
   it('groupSizes：未在 map 中的节点仍使用默认尺寸，布局结果有效', () => {
@@ -98,12 +101,11 @@ describe('applyDagreLayout()', () => {
     const edges = [makeEdge('e1', 'group1', 'a')]
     const groupSizes = new Map([['group1', { width: 400, height: 200 }]])
     const out = applyDagreLayout(nodes, edges, groupSizes)
-    // 'a' 不在 groupSizes 中，应使用默认 200x48
-    // 布局后 group1 在上，a 在下（TB 方向）
+    // 'a' 不在 groupSizes 中，应使用默认尺寸；布局后 group1 在左，a 在右（LR）
     const g = out.find((n) => n.id === 'group1')!
     const a = out.find((n) => n.id === 'a')!
     expect(Number.isFinite(g.position.x)).toBe(true)
     expect(Number.isFinite(a.position.x)).toBe(true)
-    expect(a.position.y).toBeGreaterThan(g.position.y)
+    expect(a.position.x).toBeGreaterThan(g.position.x)
   })
 })

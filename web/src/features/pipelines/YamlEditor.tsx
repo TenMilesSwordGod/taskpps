@@ -4,7 +4,6 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
 import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemirror/language';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintGutter } from '@codemirror/lint';
@@ -12,10 +11,32 @@ import { Alert, Button, Tooltip, Space } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import type { ValidationError } from '@/types';
 
+/**
+ * v5 (2026-08): 浅色主题 —— 与 DAG 画布的 n8n 风格统一。
+ * 此前用 oneDark 深色主题，与浅色画布并排时割裂感强（用户反馈"样式保持统一"）。
+ * 移除 oneDark 后 CodeMirror 回落到默认浅色语法高亮（defaultHighlightStyle fallback），
+ * 这里仅补充与 nodeTokens.INK 对齐的界面色（gutter/activeLine/选区等）。
+ */
+
 export interface YamlEditorRef {
   /** 滚动到指定行（1-indexed），并临时高亮 2s */
   scrollToLine: (line: number) => void;
 }
+
+/**
+ * v5 (2026-08): 浅色 CodeMirror 主题 —— 色值与 nodeTokens.INK（n8n 风格）对齐：
+ * 白底、slate 系 gutter/文本、淡灰 activeLine，与 DAG 画布并排时视觉统一
+ */
+const lightTheme = EditorView.theme({
+  '&': { backgroundColor: '#FFFFFF', color: '#334155' },
+  '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace', fontSize: 13 },
+  '.cm-gutters': { backgroundColor: '#F8FAFC', color: '#94A3B8', border: 'none', borderRight: '1px solid #E2E8F0' },
+  '.cm-activeLine': { backgroundColor: 'rgba(148, 163, 184, 0.08)' },
+  '.cm-activeLineGutter': { backgroundColor: 'rgba(148, 163, 184, 0.14)' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: '#BFDBFE' },
+  '.cm-cursor': { borderLeftColor: '#FF6D5A' },
+  '.cm-matchingBracket': { backgroundColor: 'rgba(148, 163, 184, 0.25)', outline: 'none' },
+});
 
 export interface YamlEditorProps {
   /** 初始 YAML 文本 */
@@ -110,7 +131,8 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
         highlightSelectionMatches(),
         lintGutter(),
         yaml(),
-        oneDark,
+        // v5 (2026-08): 移除 oneDark，改用与画布统一的浅色主题
+        lightTheme,
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
@@ -162,9 +184,9 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
 
   return (
     <div className="flex flex-col h-full">
-      {/* 工具栏 */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#252526] border-b border-[#333] shrink-0">
-        <span className="text-xs text-gray-400 font-medium">YAML 编辑器</span>
+      {/* 工具栏 —— v5 (2026-08): 浅色化，与页面工具栏（bg-gray-50 白系）统一 */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-white border-b border-[#E2E8F0] shrink-0">
+        <span className="text-xs text-[#64748B] font-medium">YAML 编辑器</span>
         <Space size="small">
           {onSave && (
             <Tooltip title="保存 (Ctrl+S)">
@@ -181,7 +203,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
 
       {/* v1 (2026-07): issue #195 — 错误信息统一展示 message + 可选 line/column/path */}
       {error && (
-        <div className="shrink-0 border-t border-[#333]">
+        <div className="shrink-0 border-t border-[#E2E8F0]">
           <Alert
             type="error"
             showIcon
@@ -195,7 +217,6 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
                 {error.message}
               </span>
             }
-            className="!bg-[#2d1b1b] !border-[#5a2020]"
           />
         </div>
       )}

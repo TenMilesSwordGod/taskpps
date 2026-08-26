@@ -1,10 +1,12 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   ReactFlow,
+  useReactFlow,
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   type NodeMouseHandler,
   type Node,
 } from '@xyflow/react';
@@ -14,10 +16,11 @@ import SubpipelineGroupNode from './nodes/SubpipelineGroupNode';
 import PostTaskNode from './nodes/PostTaskNode';
 import { StartNode, EndNode } from './nodes/StartEndNode';
 import DecisionNode from './nodes/DecisionNode';
+import EdgeLegend from './nodes/EdgeLegend';
 import { usePipelineGraph } from './hooks/usePipelineGraph';
 import { useAppStore } from '@/stores/appStore';
-import { TYPE_COLOR, STATUS_COLOR, INK } from './nodes/nodeTokens';
-import type { PipelineDetail, TaskStatus, TaskType } from '@/types';
+import { STATUS_COLOR, INK } from './nodes/nodeTokens';
+import type { PipelineDetail, TaskStatus } from '@/types';
 
 /** Start/End 节点包装组件 */
 function StartEndNodeWrapper(props: { data: { variant: 'start' | 'end'; [key: string]: unknown } }) {
@@ -25,6 +28,20 @@ function StartEndNodeWrapper(props: { data: { variant: 'start' | 'end'; [key: st
     ? <StartNode data={props.data as { variant: 'start' }} />
     : <EndNode data={props.data as { variant: 'end' }} />;
 }
+
+// v6 (2026-08): critique P2 — handle 点击热区扩展。
+// 实测全部 handle 渲染尺寸仅 ~4.2×4.2px（远低于 24px 可点下限）；
+// ::after 负 inset 在不改变视觉小点的前提下扩大命中区域（标准技巧）
+// v10 (2026-08): n8n 化 —— 查看模式是只读画布，端口点全部隐藏（n8n 画布无端口点），
+// 边仍锚定在原 handle 位置；作用域限定 .wf-viewer，不影响编辑模式画布
+const handleHotzoneStyle = `
+.wf-viewer .react-flow__handle { opacity: 0 !important; }
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+}
+`;
 
 /** 注册自定义节点类型 */
 const nodeTypes = {
@@ -35,27 +52,22 @@ const nodeTypes = {
   decisionNode: DecisionNode,
 };
 
-/** MiniMap 节点颜色 —— 按类型/状态着色，与节点强调色一致 */
+/** MiniMap 节点颜色 —— v11.1: 石墨中性（与画布节点一致；仅状态时用语义色）
+ * 为什么不用类型色：全 CMD 流水线的小地图会变成一片绿块（用户反馈"绿色很丑"）
+ */
 function miniMapNodeColor(node: Node): string {
   if (node.type === 'startEnd') {
-    return node.data?.variant === 'start' ? '#10B981' : '#94A3B8';
+    return '#343A43';
   }
-  if (node.type === 'decisionNode') return '#FDBA74';
-  if (node.type === 'subpipelineGroup') return '#E0E0E0';
-  if (node.type === 'postTask') return '#CBD5E1';
+  if (node.type === 'decisionNode') return '#C6CCD8';
+  if (node.type === 'subpipelineGroup') return '#C6CCD8';
+  if (node.type === 'postTask') return '#C6CCD8';
   if (node.type === 'taskNode') {
     const status = node.data?.status as TaskStatus | undefined;
     if (status) return STATUS_COLOR[status];
-    const task = node.data?.task as { invoke?: unknown; steps?: unknown; plugin?: unknown; git?: unknown; nexus?: unknown } | undefined;
-    let taskType: TaskType = 'command';
-    if (task?.invoke) taskType = 'invoke';
-    else if (task?.steps) taskType = 'steps';
-    else if (task?.plugin) taskType = 'plugin';
-    else if (task?.git) taskType = 'git';
-    else if (task?.nexus) taskType = 'nexus';
-    return TYPE_COLOR[taskType];
+    return '#343A43';
   }
-  return '#CBD5E1';
+  return '#C6CCD8';
 }
 
 interface PipelineGraphProps {
@@ -67,7 +79,7 @@ interface PipelineGraphProps {
   onNodeClick?: (taskId: string) => void;
 }
 
-/** DAG 画布组件，封装 ReactFlow —— 工程蓝图风格 */
+/** DAG 画布组件，封装 ReactFlow */
 export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, onNodeClick }: PipelineGraphProps) {
   const { nodes, edges } = usePipelineGraph({ pipeline, taskStatuses });
   const setSelectedNodeId = useAppStore((s) => s.setSelectedNodeId);
@@ -96,12 +108,14 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
   return (
     <div
       ref={wrapperRef}
+      className="wf-viewer"
       style={{
         width: '100%',
         height: '100%',
         backgroundColor: INK.canvas,
       }}
     >
+      <style>{handleHotzoneStyle}</style>
       <ReactFlow
         nodes={syncedNodes}
         edges={edges}
@@ -110,34 +124,69 @@ export default function PipelineGraph({ pipeline, taskStatuses, selectedTaskId, 
         onPaneClick={onPaneClick}
         fitView
         fitViewOptions={{ padding: 0.3, includeHiddenNodes: false }}
-        onlyRenderVisibleElements
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        defaultEdgeOptions={{ type: 'smoothstep' }}
+        // v11 (2026-08): bezier 曲线（'default'）—— LR 流向下控制点水平伸展，
+        // 画出 n8n 标志性的顺流曲线；仅兜底未显式指定 type 的边
+        defaultEdgeOptions={{ type: 'default' }}
       >
-        {/* 点状网格背景 —— 工程蓝图栅格 */}
+        {/* 点状网格背景 —— v11 (2026-08): n8n 画布语汇（gap=20 与编辑器画布一致） */}
         <Background
           variant={BackgroundVariant.Dots}
-          gap={18}
-          size={1}
-          color="#CBD5E1"
+          gap={20}
+          size={1.2}
+          color="#D3DAE4"
         />
         <Controls
-          className="!shadow-sm !border !border-[#E0E0E0] !rounded !overflow-hidden"
+          className="!bg-white/90 !backdrop-blur-sm !shadow-none !border !border-[#E4E9F0] !rounded-lg !overflow-hidden"
           showInteractive={false}
         />
-        <MiniMap
+          {/* v7.1: 画布容器尺寸变化时重新适应（打开 YAML 面板占 40% 宽后
+              视口变窄，不重新 fitView 会裁掉右侧节点 —— 部署环境实测问题）。
+              useReactFlow 必须在 ReactFlow 内部使用（error #001 教训） */}
+          <FitOnResize />
+          {/* v6 (2026-08): 边线型图例（左下角，可折叠）。
+              marginBottom 让出同位 React Flow Controls 的空间，避免遮挡缩放按钮 */}
+          <Panel position="bottom-left" style={{ marginBottom: 104 }}>
+            <EdgeLegend />
+          </Panel>
+          <MiniMap
+          // v11: 收敛尺寸 + 白底细边（大块彩色 minimap 是画布角落的噪音源）
+          style={{ width: 176, height: 120 }}
           nodeStrokeWidth={2}
           nodeColor={miniMapNodeColor}
           nodeStrokeColor="#fff"
-          maskColor="rgba(241, 245, 249, 0.6)"
-          className="!shadow-sm !border !border-[#E0E0E0] !rounded !overflow-hidden"
-          position="bottom-left"
+          maskColor="rgba(246, 248, 250, 0.78)"
+          className="!shadow-none !border !border-[#E4E9F0] !rounded-lg !overflow-hidden !bg-white/90"
+          position="bottom-right"
           zoomable
           pannable
         />
       </ReactFlow>
     </div>
   );
+}
+
+/** v7.1: 容器尺寸变化时自动 fitView（必须在 ReactFlow 内部渲染） */
+function FitOnResize() {
+  const { fitView } = useReactFlow();
+  const sizeRef = useRef<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    // 观察画布 wrapper（.react-flow 的父级由 RF 内部管理，这里观察自身容器）
+    const el = document.querySelector('.react-flow');
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      const prev = sizeRef.current;
+      // 仅在尺寸真正变化时触发（首次挂载不重复 fitView，RF 已有初始 fitView）
+      if (prev && (Math.abs(prev.w - width) > 1 || Math.abs(prev.h - height) > 1)) {
+        fitView({ padding: 0.3, duration: 300 });
+      }
+      sizeRef.current = { w: width, h: height };
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitView]);
+  return null;
 }

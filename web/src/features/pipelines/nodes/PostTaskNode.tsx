@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { INK, FONT_MONO, NODE_SIZE } from './nodeTokens';
+import { INK, NODE_SIZE, CARD_SHADOW, FONT_SANS } from './nodeTokens';
 
 export type PostVariant = 'on_fail' | 'on_success' | 'always';
 
@@ -11,18 +11,22 @@ interface PostTaskNodeData {
   [key: string]: unknown;
 }
 
+// v5 (2026-08): 变体色对齐语义色板（on_fail 红、on_ok 绿、always slate）
 const VARIANT_STYLE: Record<PostVariant, {
   color: string;
   tag: string;
 }> = {
-  on_fail: { color: '#EA580C', tag: 'ON_FAIL' },
-  on_success: { color: '#16A34A', tag: 'ON_OK' },
+  on_fail: { color: '#EF4444', tag: 'ON_FAIL' },
+  on_success: { color: '#10B981', tag: 'ON_OK' },
   always: { color: '#64748B', tag: 'ALWAYS' },
 };
 
 /**
- * Post 任务节点 —— 工程蓝图风格极简条
- * 左侧色条 + 等宽名称 + 变体标签
+ * Post 任务节点 —— v11 轻药丸
+ *
+ * v11 变化：左缘 3px 色条退役（craft-floor 禁 >1px 彩色 border-left），
+ * 变体语义改由「色点 + 变体码」承载；handles 左入右出（LR）。
+ * 尺寸/文案契约不变（POST_W 168 × POST_H 26，ON_FAIL/ON_OK/ALWAYS 标签）。
  */
 function PostTaskNodeComponent({ data }: { data: PostTaskNodeData }) {
   const { label, variant } = data;
@@ -32,39 +36,40 @@ function PostTaskNodeComponent({ data }: { data: PostTaskNodeData }) {
     <>
       <Handle
         type="target"
-        position={Position.Top}
-        className="!w-1 !h-1 !bg-slate-300 !border-0 !-top-[2px]"
+        position={Position.Left}
+        className="!w-1 !h-1 !bg-slate-300 !border-0 !-left-[2px]"
       />
 
       <div
-        className="flex items-center gap-1.5 bg-white select-none whitespace-nowrap"
+        className="flex items-center bg-white select-none whitespace-nowrap"
         style={{
           width: NODE_SIZE.POST_W,
           height: NODE_SIZE.POST_H,
-          padding: '0 6px 0 0',
-          border: `1px solid ${INK.border}`,
-          borderRadius: 3,
-          fontFamily: FONT_MONO,
+          padding: '0 8px 0 9px',
+          gap: 6,
+          border: `1px solid #E4E9F0`,
+          borderRadius: 6,
+          fontFamily: FONT_SANS,
+          boxShadow: CARD_SHADOW,
         }}
       >
-        {/* 左侧变体色条 */}
-        <div
+        {/* 变体色点（语义载体，替代旧左缘色条） */}
+        <span
+          aria-hidden
           style={{
-            width: 2,
-            alignSelf: 'stretch',
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
             backgroundColor: s.color,
-            borderTopLeftRadius: 3,
-            borderBottomLeftRadius: 3,
             flexShrink: 0,
           }}
         />
         <span
           className="truncate flex-1"
           style={{
-            fontSize: 10,
+            fontSize: 10.5,
             fontWeight: 500,
             color: INK.textPrimary,
-            padding: '0 4px',
           }}
         >
           {label}
@@ -72,10 +77,10 @@ function PostTaskNodeComponent({ data }: { data: PostTaskNodeData }) {
         <span
           className="shrink-0"
           style={{
-            fontSize: 8.5,
-            fontWeight: 700,
-            color: s.color,
-            letterSpacing: 0.5,
+            fontSize: 9,
+            fontWeight: 600,
+            color: INK.textSecondary,
+            letterSpacing: 0.4,
           }}
         >
           {s.tag}
@@ -84,8 +89,8 @@ function PostTaskNodeComponent({ data }: { data: PostTaskNodeData }) {
 
       <Handle
         type="source"
-        position={Position.Bottom}
-        className="!w-1 !h-1 !bg-slate-300 !border-0 !-bottom-[2px]"
+        position={Position.Right}
+        className="!w-1 !h-1 !bg-slate-300 !border-0 !-right-[2px]"
       />
     </>
   );

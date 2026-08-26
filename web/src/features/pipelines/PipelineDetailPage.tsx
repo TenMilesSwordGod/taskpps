@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Space, Tooltip, message, Spin, Alert, Modal } from 'antd';
+import { Button, Space, Tooltip, message, Spin, Alert, Modal, Dropdown } from 'antd';
 import {
   ExportOutlined,
   FileImageOutlined,
@@ -11,6 +11,7 @@ import {
   EditOutlined,
   EyeOutlined,
   SaveOutlined,
+  DownOutlined,
 } from '@ant-design/icons';
 import { usePipelineById, usePipelineByFile, useSavePipelineById, useSavePipelineByFile } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
@@ -70,6 +71,15 @@ export default function PipelineDetailPage() {
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // v6 (2026-08): critique P1 — YAML 草稿保护。
+  // 此前每次打开编辑器都 pipelineToYaml() 覆盖 yamlText，「打字→没保存→关闭→重开」
+  // 草稿静默蒸发，且与编辑模式（有确认+beforeunload）双标。现在跟踪 dirty：
+  // 有未保存修改时关闭需确认、重开恢复草稿、保存成功后自动清零。
+  const [yamlDirty, setYamlDirty] = useState(false);
+  // v6 (2026-08): 记录当前 yamlText 基于哪份 pipeline 生成 ——
+  // 仅当「非 dirty 且数据源已变化」（如保存后 refetch / 切换流水线返回）才允许重新生成，
+  // 否则一律保留编辑器现有文本（草稿或已保存的用户格式不被规范化覆盖）
+  const yamlSourceRef = useRef<PipelineDetail | null>(null);
 
   // v1 (2026-07): issue #206 — 可视化编辑器模式
   const [editMode, setEditMode] = useState(false);
@@ -90,12 +100,19 @@ export default function PipelineDetailPage() {
     if (!yamlText) return;
     if (isFileMode && actualFilePath) {
       saveByFileMutation.mutate({ file: actualFilePath, content: yamlText }, {
-        onSuccess: () => message.success('已保存'),
+        onSuccess: () => {
+          message.success('已保存');
+          // v6 (2026-08): 保存成功即草稿落盘，dirty 清零（此后关闭不再弹确认）
+          setYamlDirty(false);
+        },
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     } else if (definitionId) {
       saveByIdMutation.mutate(yamlText, {
-        onSuccess: () => message.success('已保存'),
+        onSuccess: () => {
+          message.success('已保存');
+          setYamlDirty(false);
+        },
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     }
@@ -202,20 +219,56 @@ export default function PipelineDetailPage() {
     }
   }, [isFileMode, fileData, yamlText]);
 
-  // 打开 YAML 编辑器时，用当前 pipeline 生成 YAML
+  // 打开/关闭 YAML 编辑器
+  // v6 (2026-08): critique P1 — 草稿保护重写切换逻辑：
+  //   打开时：有未保存草稿则恢复草稿（不重新生成），仅无文本或已同步时才从 pipeline 生成；
+  //   关闭时：dirty 需确认丢弃，防止「打字→没保存→关闭→重开」静默丢稿。
   const handleToggleEditor = useCallback(() => {
-    if (!yamlEditorOpen && pipeline) {
+    if (yamlEditorOpen) {
+      if (yamlDirty) {
+        Modal.confirm({
+          title: '放弃未保存的 YAML 修改？',
+          content: '关闭编辑器将丢失未保存的内容。',
+          okText: '放弃并关闭',
+          okButtonProps: { danger: true },
+          cancelText: '继续编辑',
+          onOk: () => {
+            // v6 (2026-08): e2e 实测发现仅关面板不清草稿，「放弃」名不副实。
+            // 放弃 = 回到最后一次已保存状态：重新生成 YAML、清除草稿标记
+            if (pipeline) {
+              const yaml = pipelineToYaml(pipeline);
+              setYamlText(yaml);
+              yamlSourceRef.current = pipeline;
+              setEditedPipeline(null);
+              setYamlError(null);
+            }
+            setYamlDirty(false);
+            setYamlEditorOpen(false);
+          },
+        });
+        return;
+      }
+      setYamlEditorOpen(false);
+      return;
+    }
+    // 打开：草稿优先 —— 仅在「无任何文本」或「非 dirty 且数据源已变化」时重新生成；
+    // 其余情况保留编辑器现有文本（用户草稿 / 已保存的用户格式）
+    if (pipeline && (!yamlText || (!yamlDirty && yamlSourceRef.current !== pipeline))) {
       const yaml = pipelineToYaml(pipeline);
       setYamlText(yaml);
+      yamlSourceRef.current = pipeline;
       setEditedPipeline(null);
       setYamlError(null);
+      setYamlDirty(false);
     }
-    setYamlEditorOpen((prev) => !prev);
-  }, [yamlEditorOpen, pipeline]);
+    setYamlEditorOpen(true);
+  }, [yamlEditorOpen, pipeline, yamlDirty, yamlText]);
 
   // YAML 内容变化时解析并更新流程图
   const handleYamlChange = useCallback((text: string) => {
     setYamlText(text);
+    // v6 (2026-08): 用户输入即产生未保存草稿
+    setYamlDirty(true);
     const result = parseYamlToPipeline(text);
     if (result.success) {
       setEditedPipeline(result.pipeline!);
@@ -342,23 +395,27 @@ export default function PipelineDetailPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 面包屑 — 显示项目名/流水线名 + 悬浮切换 */}
-      <div className="px-4 py-2 border-b border-gray-200 bg-white shrink-0">
-        <PipelineBreadcrumb
-          projectId={projectId!}
-          definitionId={definitionId}
-          pipelineName={pipeline?.name}
-          isFileMode={isFileMode}
-          filePath={actualFilePath}
-        />
-      </div>
+      {/* v11 (2026-08): 单行顶栏 —— 面包屑居左、操作居右。
+          旧版面包屑+工具栏两行通栏占 ~90px 且五个等权重按钮成"按钮汤"；
+          合并后垂直空间还给画布，导出三动作收敛为下拉（n8n 顶栏语汇） */}
+      <div
+        className="flex items-center justify-between gap-3 px-4 py-2 border-b bg-white shrink-0"
+        style={{ borderColor: '#E8EBF0' }}
+      >
+        <div className="flex items-center min-w-0 overflow-hidden">
+          <PipelineBreadcrumb
+            projectId={projectId!}
+            definitionId={definitionId}
+            pipelineName={pipeline?.name}
+            isFileMode={isFileMode}
+            filePath={actualFilePath}
+          />
+        </div>
 
-      {/* 工具栏 */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0">
-        <Space>
+        <Space className="flex items-center">
           {/* v1 (2026-07): issue #206 — 编辑/查看模式切换 */}
           {!isFileMode && (
-              <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'}>
+              <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'} placement="bottom">
                 <Button
                   icon={editMode ? <EyeOutlined /> : <EditOutlined />}
                   onClick={() => {
@@ -383,7 +440,7 @@ export default function PipelineDetailPage() {
               </Tooltip>
           )}
           {editMode && (
-            <Tooltip title="保存 (Ctrl+S)">
+            <Tooltip title="保存 (Ctrl+S)" placement="bottom">
               <Button
                 icon={<SaveOutlined />}
                 onClick={handleSaveFromEditor}
@@ -396,7 +453,7 @@ export default function PipelineDetailPage() {
           )}
           {!editMode && (
             <>
-              <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'}>
+              <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'} placement="bottom">
                 <Button
                   icon={yamlEditorOpen ? <CloseOutlined /> : <CodeOutlined />}
                   onClick={handleToggleEditor}
@@ -406,28 +463,25 @@ export default function PipelineDetailPage() {
                 </Button>
               </Tooltip>
               {!isFileMode && (
-                <>
-                  <Tooltip title="导出 PNG">
-                    <Button icon={<FileImageOutlined />} onClick={handleExportPng}>
-                      导出 PNG
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="导出 SVG">
-                    <Button icon={<ExportOutlined />} onClick={handleExportSvg}>
-                      导出 SVG
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="复制到剪贴板">
-                    <Button icon={<CopyOutlined />} onClick={handleCopy}>
-                      复制图片
-                    </Button>
-                  </Tooltip>
-                </>
+                // v11: 导出三动作（PNG/SVG/复制）收敛为下拉 —— 降低顶栏按钮密度，
+                // 低频动作不与高频动作（编辑模式/YAML）抢占同等视觉权重
+                <Dropdown
+                  placement="bottomRight"
+                  menu={{
+                    items: [
+                      { key: 'png', icon: <FileImageOutlined />, label: '导出 PNG', onClick: handleExportPng },
+                      { key: 'svg', icon: <ExportOutlined />, label: '导出 SVG', onClick: handleExportSvg },
+                      { key: 'copy', icon: <CopyOutlined />, label: '复制图片', onClick: handleCopy },
+                    ],
+                  }}
+                >
+                  <Button icon={<ExportOutlined />}>
+                    导出 <DownOutlined style={{ fontSize: 10 }} />
+                  </Button>
+                </Dropdown>
               )}
             </>
           )}
-        </Space>
-        <Space>
           {isFileMode && (
             <Alert
               type="warning"
@@ -440,7 +494,21 @@ export default function PipelineDetailPage() {
             <Button
               type="primary"
               icon={<PlayCircleOutlined />}
-              onClick={() => setTriggerOpen(true)}
+              // v6 (2026-08): critique P2 — 高风险时机守卫：编辑模式有未保存修改时，
+              // 运行的将是服务器上已保存的旧版本，须让用户显式确认而非静默执行
+              onClick={() => {
+                if (editMode && workflowEditorRef.current?.isDirty) {
+                  Modal.confirm({
+                    title: '画布存在未保存的修改',
+                    content: '本次运行将使用服务器上最近保存的版本，画布中的修改不会被包含。',
+                    okText: '仍要运行',
+                    cancelText: '返回保存',
+                    onOk: () => setTriggerOpen(true),
+                  });
+                  return;
+                }
+                setTriggerOpen(true);
+              }}
             >
               触发运行
             </Button>
@@ -450,9 +518,9 @@ export default function PipelineDetailPage() {
 
       {/* 主内容区：YAML 编辑器（可选） + DAG 画布/编辑器 + NodePalette */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* YAML 编辑器面板 — 仅查看模式 */}
+        {/* YAML 编辑器面板 — 仅查看模式。v5 (2026-08): 容器从深色 #1e1e1e 改白底，与画布 n8n 浅色风格统一 */}
         {!editMode && yamlEditorOpen && (
-          <div className="flex-shrink-0 border-r border-gray-200 bg-[#1e1e1e]" style={{ width: isFileMode ? '100%' : '40%', minWidth: 300 }}>
+          <div className="flex-shrink-0 border-r border-gray-200 bg-white" style={{ width: isFileMode ? '100%' : '40%', minWidth: 300 }}>
             <YamlEditor
               ref={yamlEditorRef}
               value={yamlText}
@@ -504,6 +572,8 @@ export default function PipelineDetailPage() {
                 onNodeSelect={handleEditorNodeSelect}
                 onGraphChange={handleGraphChange}
                 readOnly={!editMode}
+                // v6 (2026-08): critique P2 — 兑现工具栏「保存 (Ctrl+S)」承诺
+                onSave={handleSaveFromEditor}
               />
             </div>
             <NodePalette />

@@ -1,7 +1,6 @@
-import { memo, useCallback } from 'react';
-import { Handle, Position, useReactFlow, NodeResizer } from '@xyflow/react';
-import { FONT_MONO } from '@/features/pipelines/nodes/nodeTokens';
-import { SubPipelineIcon, CollapseIcon, ExpandIcon } from '../icons';
+import { memo } from 'react';
+import { Handle, Position, NodeResizer } from '@xyflow/react';
+import { INK, FONT_SANS } from '@/features/pipelines/nodes/nodeTokens';
 import { useReadOnly } from './ReadOnlyContext';
 
 interface EditorSubPipelineNodeData {
@@ -15,212 +14,136 @@ interface EditorSubPipelineNodeData {
 }
 
 /**
- * SubPipeline 可编辑容器节点 — n8n 风格
- * 蓝色虚线边框，左 in / 右 out / 底 post 端口，角标显示执行策略
+ * SubPipeline 可编辑容器节点 —— v11 (2026-08) 与查看模式 SubpipelineGroupNode 统一
  *
- * v2 (2026-07): SVG 图标替换 emoji + 折叠/展开按钮
- * v3 (2026-07): 折叠按钮添加 onClick — 通过 useReactFlow 直接操作 store 避免回调传递
+ * 为什么改：容器必须比节点安静一层（n8n 画布层级语法"画布 < 分组 < 节点"）。
+ * 极浅半透底 + 细边 + 无阴影；头部从芯片行收敛为 sans 弱文本
+ * 「名称 SEQ · N tasks」。
+ *
+ * 保留的契约（零改动波及）：
+ * - handle id（in/out/post）——isValidConnection 与边数据依赖；
+ *   v11 方位随 LR 流向迁移：in=Left / out=Right / post=Bottom
+ * - data 字段（label/executionStrategy/maxConcurrentTasks）——nodesToYaml 序列化来源
+ * - v7 移除折叠功能；data.collapsed 字段保留兼容历史数据
  */
-function EditorSubPipelineNode({ id, data, selected }: { id: string; data: EditorSubPipelineNodeData; selected?: boolean }) {
+function EditorSubPipelineNode({ data, selected }: { data: EditorSubPipelineNodeData; selected?: boolean }) {
   const readOnly = useReadOnly();
   const label = data.label || 'SubPipeline';
   const strategy = data.executionStrategy || 'sequential';
   const maxParallel = data.maxConcurrentTasks;
-  // 注意(2026-07): 只读模式下使用实线边框 + 无蓝色选中阴影
-  const borderStyle = readOnly ? 'solid' : 'dashed';
-  const borderColor = selected ? (readOnly ? '#64748b' : '#1d4ed8') : '#3b82f6';
-  const collapsed = data.collapsed === true;
+  // v9: 悬停加深走 CSS 变量（editor.css），选中直接染品牌橙
+  const borderColor = selected
+    ? INK.accent
+    : 'var(--wf-card-border, #E4E9F0)';
 
-  const { setNodes } = useReactFlow();
-
-  // v3 (2026-07): 折叠/展开按钮点击处理
-  // 通过 useReactFlow().setNodes 直接操作 store，避免通过 data 传递回调导致的闭包问题
-  const handleToggleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation(); // 防止触发节点选中
-      setNodes((nds) =>
-        nds.map((n) => {
-          if (n.id !== id) return n;
-          const nextCollapsed = !n.data?.collapsed;
-          return {
-            ...n,
-            data: { ...n.data, collapsed: nextCollapsed },
-            style: nextCollapsed
-              ? { ...(n.style as object), width: 140, height: 48 }
-              : n.style,
-          };
-        }),
-      );
-    },
-    [id, setNodes],
-  );
-
-  const badgeText = strategy === 'parallel'
+  const strategyCode = strategy === 'parallel'
     ? `PAR(${maxParallel || '∞'})`
     : 'SEQ';
-  const badgeBg = strategy === 'parallel' ? '#fce7f3' : '#e0e7ff';
-  const badgeColor = strategy === 'parallel' ? '#be185d' : '#4338ca';
-
-  if (collapsed) {
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          border: `2px solid ${borderColor}`,
-          borderRadius: 8,
-          background: '#eff6ff',
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-          minWidth: 120,
-          minHeight: 40,
-        }}
-      >
-        {!readOnly && <NodeResizer minWidth={120} minHeight={40} />}
-        <SubPipelineIcon style={{ width: 16, height: 16, color: '#3b82f6' }} />
-        <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#1e40af' }}>
-          {label}
-        </span>
-        {(data.childrenCount ?? 0) > 0 && (
-          <span style={{ fontSize: 10, color: '#6b7280' }}>
-            ({data.childrenCount} tasks{data.atomicCount ? `, ${data.atomicCount} atomic` : ''})
-          </span>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div
+      className="wf-card"
       style={{
         width: '100%',
         height: '100%',
-        border: `3px ${borderStyle} ${borderColor}`,
-        borderRadius: 12,
-        background: '#eff6ff',
+        border: `1px solid ${borderColor}`,
+        borderRadius: 14,
+        // 与查看模式 SubpipelineGroupNode 同款半透浅底
+        background: 'rgba(255, 255, 255, 0.55)',
         position: 'relative',
-        boxShadow: selected && !readOnly ? '0 0 0 4px rgba(59,130,246,0.12)' : undefined,
+        boxShadow: selected && !readOnly ? `0 0 0 2px ${INK.accent}40` : undefined,
         minWidth: 200,
         minHeight: 120,
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      {!readOnly && <NodeResizer minWidth={200} minHeight={120} />}
-      {/* 注意(2026-07): 只读模式下隐藏所有 Handle */}
+      {/* v7: 保留容器 resize；v9: 仅选中时出现缩放手柄 */}
+      {!readOnly && <NodeResizer isVisible={!!selected} minWidth={200} minHeight={120} />}
       {!readOnly && (
         <>
-          {/* In 端口 — 左侧 */}
+          {/* In 端口 — v11: 左缘（LR 入口） */}
           <Handle
             id="in"
             type="target"
             position={Position.Left}
             style={{
-              width: 8,
-              height: 8,
-              background: 'transparent',
+              width: 10,
+              height: 10,
+              background: '#FFFFFF',
               border: '2px solid #64748b',
               borderRadius: '50%',
-              left: -5,
+              left: -6,
               top: '50%',
             }}
           />
 
-          {/* Out 端口 — 右侧 */}
+          {/* Out 端口 — v11: 右缘（LR 出口） */}
           <Handle
             id="out"
             type="source"
             position={Position.Right}
             style={{
-              width: 8,
-              height: 8,
-              background: 'transparent',
+              width: 10,
+              height: 10,
+              background: '#FFFFFF',
               border: '2px solid #64748b',
               borderRadius: '50%',
-              right: -5,
+              right: -6,
               top: '50%',
             }}
           />
 
-          {/* Post 端口 — 底部 */}
+          {/* Post 端口 — v11: 底部（post 路由向下） */}
           <Handle
             id="post"
             type="source"
             position={Position.Bottom}
             style={{
-              width: 8,
-              height: 8,
-              background: 'transparent',
+              width: 10,
+              height: 10,
+              background: '#FFFFFF',
               border: '2px solid #ef4444',
               borderRadius: '50%',
-              bottom: -5,
+              bottom: -6,
+              left: '50%',
             }}
           />
         </>
       )}
 
-      {/* 标题栏 */}
+      {/* header 行：sans 弱文本（名称 + 策略 · 任务数），无芯片 */}
       <div
         style={{
-          position: 'absolute',
-          top: 8,
-          left: 12,
-          right: 12,
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: 'transparent',
+          alignItems: 'baseline',
+          gap: 7,
+          padding: '9px 14px 0',
+          fontFamily: FONT_SANS,
+          whiteSpace: 'nowrap',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* v2 (2026-07): SVG 图标替换 emoji */}
-          <SubPipelineIcon style={{ width: 18, height: 18, color: '#3b82f6' }} />
-          <span
-            style={{
-              fontFamily: FONT_MONO,
-              fontSize: 13,
-              fontWeight: 700,
-              color: '#1e40af',
-            }}
-          >
-            {label}
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#64748B',
+            letterSpacing: 0.1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {label}
+        </span>
+        {/* 策略码独立 span：containerValidation 测试以 getByText('SEQ') 精确匹配为契约 */}
+        <span style={{ fontSize: 10.5, fontWeight: 500, color: INK.textSecondary, letterSpacing: 0.2 }}>
+          {strategyCode}
+        </span>
+        {(data.childrenCount ?? 0) > 0 && (
+          <span style={{ fontSize: 10.5, fontWeight: 500, color: INK.textSecondary, letterSpacing: 0.2 }}>
+            · {data.childrenCount} tasks
           </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span
-            style={{
-              padding: '1px 6px',
-              borderRadius: 4,
-              background: badgeBg,
-              color: badgeColor,
-              fontSize: 10,
-              fontFamily: FONT_MONO,
-              fontWeight: 600,
-            }}
-          >
-            {badgeText}
-          </span>
-          {/* 注意(2026-07): 只读模式下隐藏折叠按钮 */}
-          {!readOnly && (
-            <span
-              style={{
-                cursor: 'pointer',
-                padding: '2px',
-                borderRadius: 4,
-                display: 'flex',
-                alignItems: 'center',
-                color: '#64748b',
-              }}
-              title="折叠"
-              className="collapse-toggle"
-              data-collapsed={collapsed ? 'true' : 'false'}
-              onClick={handleToggleClick}
-            >
-              <CollapseIcon style={{ width: 14, height: 14 }} />
-            </span>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
