@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -187,6 +188,50 @@ async def _seed_admin_account() -> None:
         logger.info("已 seed admin 账号: username=%s（请尽快修改默认密码）", admin_username)
 
 
+async def _ensure_default_project() -> None:
+    """启动时把默认项目目录注册为 project，让网页端开箱即可看到并运行流水线。
+
+    解析优先级：
+    1. settings.workdir（显式配置，支持 ~，必须绝对路径）
+    2. settings.server_home（显式配置）
+    3. 环境变量 TASKPPS_SERVER_HOME（systemd 部署注入部署路径，覆盖存量安装）
+    都没有则跳过 —— 避免 dev 裸跑时把 server/ 或仓库根误注册为项目。
+
+    为什么每次启动都确保存在：默认项目的语义是「部署路径始终可见」，
+    即使用户在网页注销，重启后也会恢复；实现为幂等的先查后建，不重复创建。
+    """
+    settings = get_settings()
+    configured = settings.workdir or settings.server_home or os.environ.get("TASKPPS_SERVER_HOME")
+    if not configured:
+        return
+
+    workdir = Path(configured).expanduser()
+    if not workdir.is_absolute():
+        logger.warning("默认项目路径必须是绝对路径，已跳过自动注册: %s", configured)
+        return
+    workdir = workdir.resolve()
+    if not workdir.is_dir():
+        logger.warning("默认项目目录不存在，已跳过自动注册: %s", workdir)
+        return
+
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import ProjectRepository
+
+    # 保证 pipelines/ 存在：注册后网页端即可新建/列出流水线
+    (workdir / "pipelines").mkdir(parents=True, exist_ok=True)
+
+    async with get_session_factory()() as session:
+        repo = ProjectRepository(session)
+        existing = await repo.get_project_by_workdir(str(workdir))
+        if existing is not None:
+            if not existing.active:
+                await repo.update_project(existing.id, active=True)
+                logger.info("默认项目已重新激活: id=%s workdir=%s", existing.id, workdir)
+            return
+        project = await repo.create_project(workdir=str(workdir), name=workdir.name)
+    logger.info("默认项目已注册: id=%s workdir=%s", project.id, workdir)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _plugin_manager
@@ -212,6 +257,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _recover_stale_runs()
     await _seed_admin_account()
+    # v3 (2026-09): 把部署路径/配置的 workdir 自动注册为默认项目
+    await _ensure_default_project()
 
     # Issue #106: 初始化全局并发信号量
     from taskpps.services.agent_manager import AgentManager

@@ -256,6 +256,10 @@ generate_config() {
 
 locale: zh
 
+# 默认项目目录（部署路径）：server 启动时自动注册为项目，可在网页端管理流水线。
+# 如需使用独立的项目目录（分离模式），修改为对应绝对路径即可。
+workdir: $SERVER_HOME
+
 server:
   host: 0.0.0.0
   port: 26521
@@ -505,7 +509,8 @@ install() {
     log_info "ppsctl:       /usr/local/bin/ppsctl"
     log_info "Env config:   /etc/profile.d/taskpps.sh"
     log_info ""
-    log_info "项目初始化: 请使用 ppsctl init --register-current-folder"
+    log_info "默认项目:    $SERVER_HOME（server 启动时自动注册；如需独立项目目录请修改 $SERVER_HOME/taskpps.yaml 的 workdir）"
+    log_info "其他项目:    使用 ppsctl init --register-current-folder 注册"
     log_info ""
     log_info "Endpoints:"
     log_info "  API:       http://$(hostname -I | awk '{print $1}'):26521/api"
