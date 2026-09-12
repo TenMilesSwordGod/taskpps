@@ -1,8 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Tree, Tooltip, Dropdown } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import { PartitionOutlined, AppstoreOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
-import { Loader2, RotateCcw, History } from 'lucide-react';
+import { Loader2, RotateCcw, History, AlertCircle } from 'lucide-react';
+import { PipelineIcon, SubPipelineIcon, ResultIcon } from '@/components/icons';
 
 import { useRunConsole } from '@/api/runs';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
@@ -336,7 +336,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
             )}
             {run?.error && (
               <Tooltip title={run.error} placement="topRight" styles={{ root: { maxWidth: 420 } }}>
-                <ExclamationCircleOutlined style={{ color: '#ef4444', fontSize: 12, flexShrink: 0 }} />
+                <AlertCircle size={12} color="#ef4444" style={{ flexShrink: 0 }} />
               </Tooltip>
             )}
             <span style={{ flex: 1, minWidth: 4 }} />
@@ -387,7 +387,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
             }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', whiteSpace: 'nowrap', cursor: 'pointer', minWidth: 0 }}
           >
-            <PartitionOutlined style={{ color: '#8b5cf6', flexShrink: 0 }} />
+            <SubPipelineIcon style={{ color: '#8b5cf6', flexShrink: 0 }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{sub.name}</span>
             <span style={{ flex: 1, minWidth: 4 }} />
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 20, height: 20, fontSize: 11, fontWeight: 600, borderRadius: 6, padding: '0 6px', background: '#8b5cf6' + '14', color: '#8b5cf6', flexShrink: 0 }}>
@@ -410,7 +410,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', whiteSpace: 'nowrap', cursor: 'pointer', minWidth: 0 }}
         >
-          <FileTextOutlined style={{ color: '#3b82f6', flexShrink: 0 }} />
+          <ResultIcon style={{ color: '#3b82f6', flexShrink: 0 }} />
           <span style={{ fontSize: 13, fontWeight: resultSelected ? 600 : 400, color: resultSelected ? '#1d4ed8' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>结果页</span>
         </div>
       ),
@@ -426,7 +426,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
       <style>{`.task-tree .ant-tree-switcher{width:0!important;padding:0!important;min-width:0!important;overflow:hidden!important}`}</style>
       <div className="px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10">
         <div className="flex items-center gap-2">
-          <AppstoreOutlined style={{ color: '#3b82f6', flexShrink: 0 }} />
+          <PipelineIcon style={{ color: '#3b82f6', flexShrink: 0 }} />
           <span className="text-sm font-medium truncate">{pipeline.name}</span>
         </div>
       </div>

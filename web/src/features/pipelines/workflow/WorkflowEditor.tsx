@@ -21,7 +21,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import { message, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
-import { ApartmentOutlined, ExpandOutlined, CameraOutlined } from '@ant-design/icons';
+import { ExpandOutlined } from '@ant-design/icons';
+import { AutoLayoutIcon, ExportImageIcon } from '@/components/icons';
 import EditorTaskNode from './nodes/EditorTaskNode';
 import EditorSubPipelineNode from './nodes/EditorSubPipelineNode';
 import EditorPostParentNode from './nodes/EditorPostParentNode';
@@ -777,7 +778,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
                 cursor: 'pointer', fontSize: 12, fontWeight: 500,
               }}
             >
-              <ApartmentOutlined />
+              <AutoLayoutIcon />
               布局
             </button>
           </Tooltip>
@@ -805,7 +806,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
                 cursor: 'pointer', fontSize: 12, fontWeight: 500,
               }}
             >
-              <CameraOutlined />
+              <ExportImageIcon />
               导出
             </button>
           </Tooltip>

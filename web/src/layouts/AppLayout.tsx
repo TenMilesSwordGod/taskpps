@@ -1,19 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ProLayout } from '@ant-design/pro-layout';
-import {
-  DashboardOutlined,
-  PartitionOutlined,
-  HistoryOutlined,
-  CloudServerOutlined,
-  ApiOutlined,
-  LogoutOutlined,
-  DownOutlined,
-} from '@ant-design/icons';
+import { LogOut, ChevronDown } from 'lucide-react';
 import { Avatar, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ReactNode } from 'react';
 import TaskPpsLogo from '@/components/TaskPpsLogo';
+import { DashboardIcon, PipelineIcon, RunHistoryIcon, ServerIcon, PluginIcon } from '@/components/icons';
 import { useMe, useLogout } from '@/api/auth';
 import type { AuthUser } from '@/api/auth';
 
@@ -49,31 +42,33 @@ function CurrentTime() {
 
 /** 菜单项定义 */
 // v1 (2026-07, issue #204): 首项 path 由 '/' 改为 '/dashboard'，与路由迁移对齐（spec 4.2）
+// v2 (2026-09): 导航图标由 AntD 默认图标替换为品牌图标库（工程蓝图风格），
+//   流水线/服务器/插件使用项目领域语义图形，避免与通用图标混淆。
 const menuRoutes = [
   {
     path: '/dashboard',
     name: '仪表盘',
-    icon: <DashboardOutlined />,
+    icon: <DashboardIcon />,
   },
   {
     path: '/pipelines',
     name: '流水线',
-    icon: <PartitionOutlined />,
+    icon: <PipelineIcon />,
   },
   {
     path: '/runs',
     name: '运行历史',
-    icon: <HistoryOutlined />,
+    icon: <RunHistoryIcon />,
   },
   {
     path: '/servers',
     name: '服务器',
-    icon: <CloudServerOutlined />,
+    icon: <ServerIcon />,
   },
   {
     path: '/plugins',
     name: '插件',
-    icon: <ApiOutlined />,
+    icon: <PluginIcon />,
   },
 ];
 
@@ -130,7 +125,7 @@ function UserMenuFooter({
     {
       key: 'logout',
       label: '退出登录',
-      icon: <LogoutOutlined />,
+      icon: <LogOut size={16} />,
       danger: true,
     },
   ];
@@ -187,7 +182,7 @@ function UserMenuFooter({
                 {user.username ?? ''}
               </div>
             </div>
-            <DownOutlined style={{ color: '#7C7F88', fontSize: 10 }} />
+            <ChevronDown size={12} style={{ color: '#7C7F88' }} />
           </>
         )}
       </div>

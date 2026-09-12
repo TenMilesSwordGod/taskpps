@@ -2,9 +2,8 @@ import { Tabs, Button, Tooltip } from 'antd'
 import {
   MinusOutlined,
   ExpandOutlined,
-  QuestionCircleOutlined,
-  BarsOutlined,
 } from '@ant-design/icons'
+import { HelpIcon, ExamplesIcon } from '@/components/icons'
 import ExamplePipelineView from './ExamplePipelineView'
 import VariableReference from './VariableReference'
 
@@ -33,7 +32,7 @@ export default function HelpPanel({
           <Button
             type="text"
             size="small"
-            icon={<QuestionCircleOutlined />}
+            icon={<HelpIcon />}
           />
         </Tooltip>
       </div>
@@ -48,7 +47,7 @@ export default function HelpPanel({
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
         <span className="text-sm font-medium text-gray-600">
-          <QuestionCircleOutlined className="mr-1" />Help
+          <HelpIcon className="mr-1" />Help
         </span>
         <div className="flex gap-1">
           {onToggleMaximized && (
@@ -83,7 +82,7 @@ export default function HelpPanel({
               key: 'example',
               label: (
                 <span>
-                  <BarsOutlined /> 示例 Pipeline
+                  <ExamplesIcon /> 示例 Pipeline
                 </span>
               ),
               children: (
@@ -96,7 +95,7 @@ export default function HelpPanel({
               key: 'variables',
               label: (
                 <span>
-                  <QuestionCircleOutlined /> 变量参考
+                  <HelpIcon /> 变量参考
                 </span>
               ),
               children: (
