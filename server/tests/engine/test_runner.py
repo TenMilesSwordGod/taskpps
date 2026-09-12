@@ -539,7 +539,9 @@ class TestPipelineRunnerCancel:
 class TestPipelineRunnerBoundary:
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0245", domain="server/engine", priority="P2")
-    async def test_empty_command_succeeds(self, mock_session_factory):
+    async def test_empty_command_fails(self, mock_session_factory):
+        # v2 (2026-09): 空命令由 no-op 成功改为配置错误失败（用户确认语义变更）。
+        # 直接判失败且不调用 executor，避免 `bash -c ""` 产生假成功；确定性错误不重试。
         run_repo, _task_repo = mock_session_factory
         tasks = [ResolvedTask(name="t1", task_type="command", command="")]
         pipeline = make_pipeline(tasks=tasks)
@@ -557,7 +559,8 @@ class TestPipelineRunnerBoundary:
         ):
             await runner.run()
 
-        assert run_repo.update_run_status.call_args[0][1] == "success"
+        assert run_repo.update_run_status.call_args[0][1] == "failed"
+        mock_executor.execute.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0246", domain="server/engine", priority="P2")
@@ -1244,7 +1247,6 @@ class TestPipelineRunnerExitCodeCoverage:
         with (
             patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
-            patch("taskpps.engine.runner.get_workspaces_dir"),
             patch("taskpps.engine.runner.get_event_bus"),
             patch("taskpps.engine.runner.build_pipeline_log_path", return_value=tmp_path / "console.log"),
         ):
@@ -1275,7 +1277,6 @@ class TestPipelineRunnerExitCodeCoverage:
         with (
             patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
             patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
-            patch("taskpps.engine.runner.get_workspaces_dir"),
             patch("taskpps.engine.runner.get_event_bus"),
             patch.object(runner, "_init_pipeline_log"),
         ):
@@ -1323,6 +1324,66 @@ class TestPipelineRunnerExitCodeCoverage:
             await runner.run()
 
         assert runner._unexpected_error is True
+
+
+class TestConsoleLogPhaseTags:
+    """v2 (2026-09): console.log phase 标签顺序与作用域回归测试。
+
+    前端按 [TASK/SUB/PIPELINE:*:SETUP|TEARDOWN] 标签给日志行归属作用域：
+    1. SETUP 标签必须写在任务/子流水线分隔线之前，否则分隔线会被归到上一个作用域；
+    2. 任务结束后、下一层级/汇总日志之前必须补发 SUB 作用域标签，
+       否则层级与汇总日志会被错误归到最后一个任务；
+    3. 子流水线成功汇总只允许出现一次，避免 pipeline 层重复输出。
+    """
+
+    async def _run_two_level_pipeline(self, tmp_path, session_factory) -> str:
+        _run_repo, _task_repo = session_factory
+        tasks = [
+            ResolvedTask(name="a", task_type="command", command="echo a"),
+            ResolvedTask(name="b", task_type="command", command="echo b", depends_on=["a"]),
+        ]
+        pipeline = make_pipeline(tasks=tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="tag-order")
+        runner = PipelineRunner(run_id="tag-order", pipeline=pipeline, context=ctx)
+        runner._task_run_ids = {"test.a": "tr-a", "test.b": "tr-b"}
+        runner._pipeline_id = "tag-pipe"
+        runner._pipeline_version = "v1"
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+        log_path = tmp_path / "console.log"
+
+        with (
+            patch("taskpps.engine.runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.runner.get_logs_dir", return_value=tmp_path),
+            patch("taskpps.engine.runner.get_event_bus"),
+            patch("taskpps.engine.runner.build_pipeline_log_path", return_value=log_path),
+        ):
+            await runner.run()
+        return log_path.read_text()
+
+    @pytest.mark.asyncio
+    async def test_task_setup_tag_precedes_start_separator(self, tmp_path, mock_session_factory):
+        content = await self._run_two_level_pipeline(tmp_path, mock_session_factory)
+        for task_name in ("test.a", "test.b"):
+            tag_idx = content.index(f"[TASK:{task_name}:SETUP]")
+            sep_idx = content.index(f"[task] {task_name} start")
+            assert tag_idx < sep_idx
+
+    @pytest.mark.asyncio
+    async def test_sub_scope_resumed_before_level_and_summary(self, tmp_path, mock_session_factory):
+        content = await self._run_two_level_pipeline(tmp_path, mock_session_factory)
+        # 第二级任务执行前，必须重新声明子流水线作用域
+        level2_idx = content.index("SubPipeline 'test' level 2")
+        assert content.rindex("[SUB:test:SETUP]", 0, level2_idx) > content.index("[TASK:test.a:TEARDOWN]")
+        # 成功汇总行也必须落在子流水线作用域内
+        summary_idx = content.index("SubPipeline 'test' completed successfully (2/2 tasks)")
+        assert content.rindex("[SUB:test:SETUP]", 0, summary_idx) > content.index("[TASK:test.b:TEARDOWN]")
+
+    @pytest.mark.asyncio
+    async def test_subpipeline_success_message_logged_once(self, tmp_path, mock_session_factory):
+        content = await self._run_two_level_pipeline(tmp_path, mock_session_factory)
+        assert content.count("SubPipeline 'test' completed successfully") == 1
 
 
 class TestFindCollectorOutput:

@@ -96,7 +96,9 @@ export default function LogViewer({
   const phaseFilter = useMemo(() => {
     if (!effectiveFilter || !effectiveFilter.startsWith('__phase__')) return null;
     const parts = effectiveFilter.split('__');
-    if (parts.length >= 4) return `__phase__${parts[2]}`;
+    // v2 (2026-09): 任务树 phase 节点 key 格式为 __phase__<scope>__<name>__<phase>，
+    // 名称在 parts[3]；旧实现取 parts[2]（scope）导致点选 phase 节点永远"无匹配日志"。
+    if (parts.length >= 4) return `__phase__${parts[3]}`;
     return effectiveFilter;
   }, [effectiveFilter]);
 

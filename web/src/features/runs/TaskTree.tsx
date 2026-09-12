@@ -5,6 +5,8 @@ import { Loader2, RotateCcw, History, AlertCircle, PanelLeftClose } from 'lucide
 import { PipelineIcon, SubPipelineIcon, ResultIcon } from '@/components/icons';
 
 import { useRunConsole } from '@/api/runs';
+// v2 (2026-09): phase 解析与 RunDetailPage 共用同一套 console.log 解析器，避免两处逻辑漂移
+import { tokenizeConsoleLog } from './consoleLog';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
 import { STATUS_COLOR, STATUS_SOFT_BG } from '@/features/pipelines/nodes/nodeTokens';
 
@@ -110,33 +112,25 @@ interface PhaseGroup {
 
 function parsePhaseGroups(content: string): PhaseGroup[] {
   const groups: PhaseGroup[] = [];
-  const lines = content.split('\n');
-
-  const phasePattern = /^\[(PIPELINE:SETUP|PIPELINE:TEARDOWN|SUB:([^:]+):SETUP|SUB:([^:]+):TEARDOWN|TASK:([^:]+):SETUP|TASK:([^:]+):TEARDOWN)\]/;
-
+  // v2 (2026-09): 同一 (scope, name, phase) 可能被后端重复声明
+  // （任务结束后会补发 SUB:SETUP 作用域标签），按首次出现位置合并，
+  // 避免树中出现多个同名 SETUP 分组。
+  const byKey = new Map<string, PhaseGroup>();
   let currentGroup: PhaseGroup | null = null;
 
-  for (const line of lines) {
-    const match = line.match(phasePattern);
-    if (match) {
-      const tag = match[1];
-      if (tag === 'PIPELINE:SETUP') {
-        currentGroup = { scope: 'pipeline', name: 'pipeline', phase: 'setup', lines: [] };
-      } else if (tag === 'PIPELINE:TEARDOWN') {
-        currentGroup = { scope: 'pipeline', name: 'pipeline', phase: 'teardown', lines: [] };
-      } else if (tag.startsWith('SUB:')) {
-        const parts = tag.split(':');
-        currentGroup = { scope: 'sub', name: parts[1], phase: parts[2].toLowerCase() as 'setup' | 'teardown', lines: [] };
-      } else if (tag.startsWith('TASK:')) {
-        const rest = tag.slice(5);
-        const lastColon = rest.lastIndexOf(':');
-        const name = rest.slice(0, lastColon);
-        const phase = rest.slice(lastColon + 1).toLowerCase() as 'setup' | 'teardown';
-        currentGroup = { scope: 'task', name, phase, lines: [] };
+  for (const token of tokenizeConsoleLog(content)) {
+    if (token.kind === 'tag') {
+      const { scope, name, phase } = token.tag;
+      const key = `${scope}:${name}:${phase}`;
+      let group = byKey.get(key);
+      if (!group) {
+        group = { scope, name, phase, lines: [] };
+        byKey.set(key, group);
+        groups.push(group);
       }
-      if (currentGroup) groups.push(currentGroup);
+      currentGroup = group;
     } else if (currentGroup) {
-      currentGroup.lines.push(line);
+      currentGroup.lines.push(token.content);
     }
   }
 

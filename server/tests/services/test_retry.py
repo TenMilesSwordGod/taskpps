@@ -282,6 +282,38 @@ class TestRetryRunner:
         call_kwargs = mock_executor.execute.call_args[1]
         assert call_kwargs["command"] == "echo custom_command"
 
+    async def test_retry_empty_command_fails(self):
+        # v2 (2026-09): 与 PipelineRunner 保持一致 — 空命令是配置错误，
+        # 重试直接判失败且不调用 executor，避免空跑成功。
+        tasks = [ResolvedTask(name="t1", task_type="command", command="")]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_retry")
+
+        runner = RetryRunner(run_id="retry_empty", pipeline=pipeline, context=ctx)
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0)
+
+        task_plan = [
+            {
+                "name": "sub.t1",
+                "command": "",
+                "retry_record_id": "rec_empty",
+                "log_path": "/tmp/retry_empty.log",
+            }
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            results = await runner.retry_tasks(task_plan)
+
+        assert not results["sub.t1"].success
+        mock_executor.execute.assert_not_called()
+
     @pytest.mark.zentao("TC-S0392", domain="server/services", priority="P1")
     async def test_retry_task_not_found(self):
         pipeline = self._make_pipeline([])

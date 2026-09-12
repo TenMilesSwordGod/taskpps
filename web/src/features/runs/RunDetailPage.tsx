@@ -14,6 +14,7 @@ import RetryModal from './RetryModal';
 import RetryVersionsDrawer from './RetryVersionsDrawer';
 import ArtifactsDrawer from './ArtifactsDrawer';
 import { useSSELogs } from './hooks/useSSELogs';
+import { mergePhaseAndTaskLogs, parsePhaseLogEntries } from './consoleLog';
 import type { RunResponse, TaskStatus, TaskYAML } from '@/types';
 import type { LogEntry } from './hooks/useSSELogs';
 
@@ -151,40 +152,19 @@ export default function RunDetailPage() {
   // Debug 模式：拉取 console.log 并合并 phase 日志
   const { data: consoleData } = useRunConsole(debugVisible ? id : undefined, 500);
 
-  // 解析 phase groups 并转为 LogEntry
-  const phaseLogEntries = useMemo(() => {
-    if (!debugVisible || !consoleData?.content) return [];
-    const entries: LogEntry[] = [];
-    const lines = consoleData.content.split('\n');
-    let currentPhase = '';
-    for (const line of lines) {
-      const phaseMatch = line.match(/^\[(PIPELINE:SETUP|PIPELINE:TEARDOWN|SUB:([^:]+):SETUP|SUB:([^:]+):TEARDOWN|TASK:([^:]+):SETUP|TASK:([^:]+):TEARDOWN)\]/);
-      if (phaseMatch) {
-        const tag = phaseMatch[1];
-        if (tag.startsWith('TASK:')) {
-          const rest = tag.slice(5);
-          const lastColon = rest.lastIndexOf(':');
-          currentPhase = rest.slice(0, lastColon);
-        } else if (tag.startsWith('SUB:')) {
-          const parts = tag.split(':');
-          currentPhase = parts[1];
-        } else {
-          currentPhase = 'pipeline';
-        }
-        continue;
-      }
-      if (line.trim()) {
-        entries.push({ taskName: `__phase__${currentPhase}`, content: line, timestamp: 0, seq: 0 });
-      }
-    }
-    return entries;
-  }, [debugVisible, consoleData?.content]);
-
-  // 合并日志：debug 模式下 phase 日志在前，任务日志在后
+  // v2 (2026-09): phase 日志解析与任务日志插入统一由 consoleLog 工具处理，
+  // 任务输出不再整体堆在流水线结束之后，而是插回各自任务的 phase 块。
   const logs = useMemo(() => {
-    if (!debugVisible || phaseLogEntries.length === 0) return baseLogs;
-    return [...phaseLogEntries, ...baseLogs];
-  }, [baseLogs, debugVisible, phaseLogEntries]);
+    if (!debugVisible || !consoleData?.content) return baseLogs;
+    const phaseLogs: LogEntry[] = parsePhaseLogEntries(consoleData.content).map((entry, i) => ({
+      // phase 条目用负数 seq，避免与 SSE 的全局自增 seq 冲突
+      seq: -(i + 1),
+      taskName: `__phase__${entry.phase}`,
+      content: entry.content,
+      timestamp: entry.timestamp,
+    }));
+    return mergePhaseAndTaskLogs(phaseLogs, baseLogs);
+  }, [baseLogs, debugVisible, consoleData?.content]);
 
   const connected = sseResult.connected;
   const clearLogs = sseResult.clearLogs;

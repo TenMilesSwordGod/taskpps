@@ -1585,12 +1585,12 @@
       "file": "scenario/test_pipeline_comprehensive.py",
       "priority": "P1"
     },
-    "scenario/test_pipeline_comprehensive.py::test_empty_commands_list_returns_success": {
+    "scenario/test_pipeline_comprehensive.py::test_empty_commands_list_fails": {
       "tc_local_id": "TC-S0177",
       "zentao_id": 222,
       "domain": "server/scenario",
       "source": "server",
-      "test_name": "test_empty_commands_list_returns_success",
+      "test_name": "test_empty_commands_list_fails",
       "file": "scenario/test_pipeline_comprehensive.py",
       "priority": "P2"
     },
@@ -2197,12 +2197,12 @@
       "file": "engine/test_runner.py",
       "priority": "P1"
     },
-    "engine/test_runner.py::test_empty_command_succeeds": {
+    "engine/test_runner.py::test_empty_command_fails": {
       "tc_local_id": "TC-S0245",
       "zentao_id": 290,
       "domain": "server/engine",
       "source": "server",
-      "test_name": "test_empty_command_succeeds",
+      "test_name": "test_empty_command_fails",
       "file": "engine/test_runner.py",
       "priority": "P2"
     },

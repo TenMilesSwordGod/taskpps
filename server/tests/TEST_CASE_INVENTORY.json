@@ -2481,15 +2481,15 @@
     "id": "TC-0178",
     "epic": "流水线管理",
     "feature": "流水线综合场景",
-    "story": "验证流水线综合场景模块中empty commands list returns success的功能正确性",
-    "test_name": "test_empty_commands_list_returns_success",
+    "story": "验证流水线综合场景模块中empty commands list fails的功能正确性",
+    "test_name": "test_empty_commands_list_fails",
     "file": "scenario/test_pipeline_comprehensive.py",
     "domain": "scenario",
     "test_type": "Scenario",
     "priority": "P2",
     "db_usage": "Yes",
     "status": "Active",
-    "description": "test empty commands list returns success"
+    "description": "test empty commands list fails"
   },
   {
     "id": "TC-0179",
@@ -3433,15 +3433,15 @@
     "id": "TC-0246",
     "epic": "任务执行",
     "feature": "Runner执行引擎",
-    "story": "验证Runner执行引擎模块中empty command succeeds的功能正确性",
-    "test_name": "test_empty_command_succeeds",
+    "story": "验证Runner执行引擎模块中empty command fails的功能正确性",
+    "test_name": "test_empty_command_fails",
     "file": "engine/test_runner.py",
     "domain": "engine",
     "test_type": "Unit",
     "priority": "P2",
     "db_usage": "No",
     "status": "Active",
-    "description": "test empty command succeeds"
+    "description": "test empty command fails"
   },
   {
     "id": "TC-0247",

@@ -266,9 +266,19 @@ async def get_run_logs(
                         prev_statuses[task_name] = status_str
 
                 for task_name, log_path in log_paths.items():
-                    if not log_path.exists():  # pragma: no cover
-                        active = True  # pragma: no cover
-                        continue  # pragma: no cover
+                    if not log_path.exists():
+                        # v2 (2026-09): 终态任务可能永远不会生成日志文件（空命令失败、
+                        # when 跳过、依赖失败跳过都不调用 executor）。只有非终态任务才
+                        # 需要继续等待文件出现，否则 SSE 永不发送 done，"已连接"常驻。
+                        task_status = statuses.get(task_name)
+                        if task_status and task_status not in (
+                            TS.SUCCESS,
+                            TS.FAILED,
+                            TS.CANCELLED,
+                            TS.SKIPPED,
+                        ):
+                            active = True
+                        continue
 
                     had_output = False
                     lines, new_pos = _read_log_lines(log_path, positions[task_name])

@@ -221,6 +221,10 @@ class RetryRunner:
             return await run_commands(executor, task.commands, env, log_path, timeout, effective_cwd)
         else:
             cmd = command or task.command or ""
+            if not cmd.strip():
+                # v2 (2026-09): 与 PipelineRunner 一致 — 空命令视为配置错误直接失败，
+                # 不调用 executor（避免 `bash -c ""` 的假成功）
+                return ExecutorResult(exit_code=1, stderr=f"Task '{task.name}' has an empty command")
             return await executor.execute(
                 command=cmd,
                 env=env,

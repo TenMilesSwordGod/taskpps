@@ -347,8 +347,9 @@ class PipelineRunner:
                                         "SKIP", f"Marking dependent subpipeline '{dep_sub}' as failed"
                                     )
                         else:
+                            # v2 (2026-09): 成功汇总已由 _execute_subpipeline 输出（含完成数），
+                            # 这里不再重复写 "completed successfully" 造成重复日志
                             completed_subpipelines.add(sub_name)
-                            self._write_pipeline_log("SUCCESS", f"SubPipeline '{sub_name}' completed successfully")
 
             except Exception as e:
                 error_msg = f"Pipeline runner {self.run_id} encountered an unexpected error: {e}"
@@ -566,8 +567,9 @@ class PipelineRunner:
             len(sub.tasks),
         )
         self.context.get_subpipeline_env(sub)
-        self._write_separator("=", f"[subpipeline] {sub_name} start")
+        # v2 (2026-09): SETUP 标签必须先于分隔线写入，前端才能把分隔线归到本子流水线
         self._write_pipeline_log(f"SUB:{sub_name}:SETUP", "")
+        self._write_separator("=", f"[subpipeline] {sub_name} start")
         self._write_pipeline_log("INFO", f"Starting SubPipeline '{sub_name}' with {len(sub.tasks)} tasks")
 
         try:
@@ -599,6 +601,10 @@ class PipelineRunner:
                 self._write_pipeline_log("WARN", f"SubPipeline '{sub_name}' cancelled at level {level_idx + 1}")
                 break
 
+            if level_idx > 0:
+                # v2 (2026-09): 上一级任务 TEARDOWN 后重新声明子流水线作用域，
+                # 使层级/执行策略日志归属子流水线而不是最后一个任务（前端按最近标签归属）
+                self._write_pipeline_log(f"SUB:{sub_name}:SETUP", "")
             self._write_pipeline_log("DEBUG", f"SubPipeline '{sub_name}' level {level_idx + 1}: {level}")
 
             tasks_to_run = []
@@ -764,6 +770,9 @@ class PipelineRunner:
                             "SUCCESS", f"Task '{qualified_name}' completed with exit code: {exit_code}"
                         )
 
+        # v2 (2026-09): 汇总日志前重新声明子流水线作用域，
+        # 否则前端（按最近标签归属）会把汇总挂到最后一个任务名下
+        self._write_pipeline_log(f"SUB:{sub_name}:SETUP", "")
         if failed_tasks:
             self._write_pipeline_log(
                 "FAILED", f"SubPipeline '{sub_name}' finished with {len(failed_tasks)} failed tasks"
@@ -864,8 +873,9 @@ class PipelineRunner:
             self._write_pipeline_log("CANCELLED", f"Task '{qualified_name}' cancelled before execution")
             return ExecutorResult(exit_code=-1, stdout="Task cancelled")
 
-        self._write_separator("-", f"[task] {qualified_name} start")
+        # v2 (2026-09): SETUP 标签先于分隔线写入，保证前端把 [task] start 分隔线归到本任务
         self._write_pipeline_log(f"TASK:{qualified_name}:SETUP", "")
+        self._write_separator("-", f"[task] {qualified_name} start")
         self._write_pipeline_log(
             "INFO", f"Executing task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})"
         )
@@ -894,6 +904,8 @@ class PipelineRunner:
         max_retries = task.retry
 
         last_result = ExecutorResult(exit_code=0)
+        # v2 (2026-09): 空命令属于确定性配置错误，重试无法恢复，用标志跳出重试循环
+        fatal_config_error = False
         for attempt in range(max_retries + 1):
             if attempt > 0:
                 logger.info(t("Task '{task}' retry {n}/{max}", task=task.name, n=attempt, max=max_retries))
@@ -963,16 +975,23 @@ class PipelineRunner:
                 else:
                     cmd = task.command or ""
                     if not cmd.strip():
-                        self._write_pipeline_log("WARN", f"Task '{qualified_name}' has an empty command")
-                    logger.debug(f"[DEBUG-EXEC] '{qualified_name}': single command path, cmd={cmd!r:.200}")
-                    logger.info("PipelineRunner: task '%s' dispatching to single command executor", qualified_name)
-                    result = await executor.execute(
-                        command=cmd,
-                        env=env,
-                        log_path=log_path,
-                        timeout=timeout,
-                        cwd=effective_cwd,
-                    )
+                        # v2 (2026-09): 空命令由 no-op 成功改为配置错误失败 —
+                        # 不调用 executor（避免 `bash -c ""` 的假成功），确定性错误不重试。
+                        result = ExecutorResult(
+                            exit_code=1,
+                            stderr=f"Task '{qualified_name}' has an empty command",
+                        )
+                        fatal_config_error = True
+                    else:
+                        logger.debug(f"[DEBUG-EXEC] '{qualified_name}': single command path, cmd={cmd!r:.200}")
+                        logger.info("PipelineRunner: task '%s' dispatching to single command executor", qualified_name)
+                        result = await executor.execute(
+                            command=cmd,
+                            env=env,
+                            log_path=log_path,
+                            timeout=timeout,
+                            cwd=effective_cwd,
+                        )
             except Exception as e:
                 error_msg = f"Unexpected error executing task '{qualified_name}': {e}"
                 logger.exception(error_msg)
@@ -1004,6 +1023,9 @@ class PipelineRunner:
             )
 
             if result.success:
+                break
+            if fatal_config_error:
+                # 确定性配置错误不进入下一次重试（否则每次重试都等待 5s 且必然失败）
                 break
 
         if self._cancelled:
@@ -1265,8 +1287,9 @@ class PipelineRunner:
             self._write_pipeline_log("SKIP", f"Post task '{qualified_name}' skipped (when condition not met)")
             return ExecutorResult(exit_code=0, stdout="Post task skipped (when condition not met)")
 
-        self._write_separator("-", f"[post task] {qualified_name} start")
+        # v2 (2026-09): SETUP 标签先于分隔线写入，保证前端把 [post task] start 归到本任务
         self._write_pipeline_log(f"TASK:{qualified_name}:SETUP", "")
+        self._write_separator("-", f"[post task] {qualified_name} start")
         self._write_pipeline_log(
             "INFO",
             f"Executing post task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})",
@@ -1416,8 +1439,9 @@ class PipelineRunner:
             self._write_pipeline_log("SKIP", f"Post task '{qualified_name}' skipped (when condition not met)")
             return ExecutorResult(exit_code=0, stdout="Post task skipped (when condition not met)")
 
-        self._write_separator("-", f"[post task] {qualified_name} start")
+        # v2 (2026-09): SETUP 标签先于分隔线写入，保证前端把 [post task] start 归到本任务
         self._write_pipeline_log(f"TASK:{qualified_name}:SETUP", "")
+        self._write_separator("-", f"[post task] {qualified_name} start")
         self._write_pipeline_log(
             "INFO",
             f"Executing post task '{qualified_name}' (type: {task.task_type}, timeout: {task.timeout or 'default'})",

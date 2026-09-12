@@ -89,4 +89,23 @@ describe('<LogViewer /> Issue #71 - 任务颜色优化', () => {
 
     expect(screen.queryByRole('button', { name: '复制' })).not.toBeInTheDocument();
   });
+
+  it('v2 (2026-09): 选中任务树 phase 节点时按 phase 名过滤，而不是过滤 scope', () => {
+    // 任务树 phase 节点 key 为 __phase__<scope>__<name>__<phase>
+    const logs: LogEntry[] = [
+      makeLog(1, '__phase__test.hello', '[INFO] Executing task hello'),
+      makeLog(2, '__phase__test.test', '[WARN] empty command'),
+    ];
+    render(
+      <LogViewer
+        logs={logs}
+        {...baseProps}
+        selectedTaskId="__phase__task__test.hello__setup"
+        onClearTaskFilter={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('[INFO] Executing task hello')).toBeInTheDocument();
+    expect(screen.queryByText('[WARN] empty command')).not.toBeInTheDocument();
+  });
 });

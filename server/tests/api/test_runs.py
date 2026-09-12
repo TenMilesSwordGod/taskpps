@@ -245,6 +245,61 @@ async def test_get_run_logs(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
+async def test_follow_logs_done_when_terminal_task_has_no_log_file(setup_project, tmp_project, db_engine, clean_db):
+    """v2 (2026-09): 终态任务可能没有日志文件（空命令失败、when/依赖跳过都不调用 executor）。
+
+    此时 follow SSE 必须仍然发送 done，否则前端"已连接"常驻、连接永不释放。
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    import taskpps.config as cfg
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository, TaskRunRepository
+    from taskpps.models.run import RunStatus, TaskStatus
+
+    cfg.set_project_root(tmp_project)
+    cfg._settings = None
+    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
+
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        run = await run_repo.create_run(pipeline_name="empty-cmd", pipeline_id="empty-cmd", pipeline_version="1")
+        task_repo = TaskRunRepository(session)
+        task_run = await task_repo.create_task_run(
+            run_id=run.id,
+            task_name="sub.t1",
+            task_type="command",
+            subpipeline_name="sub",
+            log_path=str(tmp_project / "logs" / "missing-task.log"),
+        )
+        now = datetime.now(timezone.utc)
+        await task_repo.update_task_status(task_run.id, TaskStatus.FAILED, exit_code=1, finished_at=now)
+        await run_repo.update_run_status(run.id, RunStatus.FAILED, finished_at=now)
+
+    # ASGITransport 会缓冲整个响应，无法验证 SSE 流；直接驱动端点返回的 body_iterator。
+    # 注意：直接调用时 FastAPI 的 Query(...) 默认值是 truthy 对象，必须显式传 None。
+    from taskpps.api.runs import get_run_logs
+
+    response = await get_run_logs(run.id, task=None, tail=None, follow=True)
+
+    async def consume_until_done() -> bool:
+        # body_iterator 在 sse-starlette 中直接产出事件 dict（ASGI 阶段才格式化），
+        # 兼容未来改为 bytes/str 的情况
+        async for chunk in response.body_iterator:
+            if isinstance(chunk, dict):
+                if chunk.get("event") == "done":
+                    return True
+                continue
+            text = chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk)
+            if "event: done" in text:
+                return True
+        return False
+
+    assert await asyncio.wait_for(consume_until_done(), timeout=5)
+
+
+@pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0991", domain="server/api", priority="P1")
 async def test_clean_runs(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg

@@ -67,7 +67,9 @@ class TestExecuteCommands:
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0177", domain="server/scenario", priority="P2")
-    async def test_empty_commands_list_returns_success(self, db_engine, clean_db):
+    async def test_empty_commands_list_fails(self, db_engine, clean_db):
+        # v2 (2026-09): 空命令由 no-op 成功改为配置错误失败（用户确认语义变更），
+        # 任务直接判失败且不调用 executor。
         _setup_config()
         task = ResolvedTask(
             name="empty-cmds",
@@ -95,7 +97,7 @@ class TestExecuteCommands:
         ):
             await runner.run()
 
-        mock_executor.execute.assert_called_once()
+        mock_executor.execute.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0178", domain="server/scenario", priority="P1")
@@ -610,7 +612,7 @@ class TestParallelWithDependencies:
 
         execution_order: list[str] = []
 
-        async def fake_execute_task(task, sub_name=""):
+        async def fake_execute_task(task, sub_name="", max_parallel=None):
             qualified = f"{sub_name}.{task.name}" if sub_name else task.name
             execution_order.append(f"start:{qualified}")
             await asyncio.sleep(0.01)
