@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Tree, Tooltip, Dropdown } from 'antd';
+import { Tree, Tooltip, Dropdown, Button } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import { Loader2, RotateCcw, History, AlertCircle } from 'lucide-react';
+import { Loader2, RotateCcw, History, AlertCircle, PanelLeftClose } from 'lucide-react';
 import { PipelineIcon, SubPipelineIcon, ResultIcon } from '@/components/icons';
 
 import { useRunConsole } from '@/api/runs';
@@ -53,6 +53,8 @@ interface TaskTreeProps {
   onSelectResult?: () => void;
   /** Issue #154: 是否选中结果页 */
   resultSelected?: boolean;
+  /** v3 (2026-09): 收起任务树回调 — 开关放进树自己的头部，控制项靠近被控对象 */
+  onCollapse?: () => void;
 }
 
 /** 推断任务类型 */
@@ -149,7 +151,7 @@ const PHASE_BADGE: Record<'setup' | 'teardown', { bg: string; color: string; lab
 /** 紧凑层级任务树 + 可选 system debug log */
 const RESULT_PAGE_KEY = '__result_page__';
 
-export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap, onRetry, onShowVersions, retryCounts, onSelectResult, resultSelected }: TaskTreeProps) {
+export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap, onRetry, onShowVersions, retryCounts, onSelectResult, resultSelected, onCollapse }: TaskTreeProps) {
   // SSE 状态更新：合并到 taskRuns 中
   // Issue #61: 防止陈旧的 SSE 状态覆盖服务端更新的终态状态
   // （SSE 断连重连期间 taskStatusMap 可能停留在旧的 running，而服务端已 failed）
@@ -424,11 +426,22 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
   return (
     <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#fafafa', borderRight: '1px solid #e5e7eb' }}>
       <style>{`.task-tree .ant-tree-switcher{width:0!important;padding:0!important;min-width:0!important;overflow:hidden!important}`}</style>
-      <div className="px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <PipelineIcon style={{ color: '#3b82f6', flexShrink: 0 }} />
-          <span className="text-sm font-medium truncate">{pipeline.name}</span>
-        </div>
+      <div className="px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10 flex items-center gap-2">
+        <PipelineIcon style={{ color: '#3b82f6', flexShrink: 0 }} />
+        <span className="text-sm font-medium truncate">{pipeline.name}</span>
+        <span style={{ flex: 1 }} />
+        {/* v3 (2026-09): 收起按钮放在树面板头部右侧，紧邻被收起的对象 */}
+        {onCollapse && (
+          <Tooltip title="隐藏任务树">
+            <Button
+              type="text"
+              size="small"
+              aria-label="隐藏任务树"
+              icon={<PanelLeftClose size={15} />}
+              onClick={onCollapse}
+            />
+          </Tooltip>
+        )}
       </div>
       <Tree
         className="task-tree"

@@ -147,6 +147,25 @@ describe('<RunStagePanel />', () => {
     expect(lines.length).toBeGreaterThan(0);
   });
 
+  // v2 (2026-09): stage 名称低于 12px 下限，且隐藏滚动条导致溢出不可发现
+  it('stage 名称标签使用不小于 12px 的字号', () => {
+    render(<RunStagePanel pipeline={makePipeline()} taskRuns={[]} />);
+
+    const label = screen.getByText('build');
+    expect(label).toHaveStyle({ fontSize: '12px' });
+  });
+
+  // v3 (2026-09): 面板改为进度徽标悬浮窗内容，恢复自然宽度（不再占满整行）
+  it('面板保持自然宽度以适配悬浮窗，并保留可发现的横向滚动', () => {
+    render(<RunStagePanel pipeline={makePipeline()} taskRuns={[]} />);
+
+    const panel = screen.getByTestId('stage-panel');
+    expect(panel.style.display).toBe('inline-flex');
+    expect(panel.style.maxWidth).toBe('520px');
+    expect(panel.style.overflowX).toBe('auto');
+    expect(panel.style.scrollbarWidth).toBe('thin');
+  });
+
   it('运行记录中存在但流水线定义中不存在的任务追加为新 stage', () => {
     const pipeline = makePipeline();
     const taskRuns: TaskRunResponse[] = [

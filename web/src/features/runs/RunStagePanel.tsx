@@ -129,7 +129,12 @@ function VLine() {
   );
 }
 
-/** 运行历史详情页顶部的小面板：Jenkins Blue Ocean 风格的 stage 级执行图 */
+/** 运行历史详情页顶部的小面板：Jenkins Blue Ocean 风格的 stage 级执行图
+ * v2 (2026-09): 面板从右侧角落移到标题下方整行 — 原先 maxWidth 520 + 隐藏滚动条，
+ *   stage 较多时溢出不可发现；改为撑满容器并保留 thin 滚动条作为溢出提示。
+ * v3 (2026-09): 改为进度徽标的悬浮窗内容 — 不再占用头部整行，恢复自然宽度（maxWidth 520），
+ *   保留 12px 字号与 thin 滚动条，长流水线在悬浮窗内可横向滚动。
+ */
 export default function RunStagePanel({ pipeline, taskRuns }: RunStagePanelProps) {
   const groups = useMemo<StageGroup[]>(() => {
     const runMap = new Map<string, TaskRunResponse>();
@@ -243,9 +248,9 @@ export default function RunStagePanel({ pipeline, taskRuns }: RunStagePanelProps
         </div>
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12,
             color: '#6b7280',
-            maxWidth: 80,
+            maxWidth: 112,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -263,6 +268,7 @@ export default function RunStagePanel({ pipeline, taskRuns }: RunStagePanelProps
 
   return (
     <div
+      data-testid="stage-panel"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -271,8 +277,7 @@ export default function RunStagePanel({ pipeline, taskRuns }: RunStagePanelProps
         maxWidth: 520,
         padding: '2px 4px',
         overflowX: 'auto',
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none',
+        scrollbarWidth: 'thin',
       }}
     >
       {children}

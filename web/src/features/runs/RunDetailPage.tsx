@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert } from 'antd';
-import { XCircle, ListTree, RefreshCw, Clock, CheckCircle2, AlertCircle, Loader2, Bug } from 'lucide-react';
+import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert, Popover } from 'antd';
+import { XCircle, RefreshCw, Clock, AlertCircle, Loader2, Bug, Package, PanelLeftOpen } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot, useRetryVersions, useResultPage } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
@@ -240,71 +240,62 @@ export default function RunDetailPage() {
         <Breadcrumb
           items={[
             { title: <Link to="/runs">运行历史</Link> },
-            { title: <Tooltip title={run.id}>{run.display_name || run.id.slice(0, 8)}</Tooltip> },
+            // v2 (2026-09): 面包屑展示所属流水线，运行名留给 h1，避免两个名字都无标签地并排
+            { title: <Tooltip title={run.id}>{run.pipeline_name}</Tooltip> },
           ]}
           style={{ marginBottom: 8 }}
         />
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <Space size={12} wrap align="center">
-            {/* Issue #113: 常用操作收拢到标题左侧图标区 */}
-            <Space size={4}>
-              <Tooltip title="手动刷新运行状态">
-                <Button size="small" icon={<RefreshCw size={14} />} onClick={handleRefresh}>
-                  刷新
-                </Button>
-              </Tooltip>
-              <Tooltip title={treeCollapsed ? '显示任务树' : '隐藏任务树'}>
-                <Button
-                  size="small"
-                  icon={<ListTree size={14} />}
-                  onClick={() => setTreeCollapsed((v) => !v)}
-                >
-                  {treeCollapsed ? '显示任务树' : '隐藏任务树'}
-                </Button>
-              </Tooltip>
-              <Tooltip title={debugVisible ? '关闭 Debug' : 'Debug'}>
-                <Button
-                  size="small"
-                  icon={<Bug size={14} />}
-                  onClick={() => setDebugVisible((v) => !v)}
-                  type={debugVisible ? 'primary' : 'default'}
-                >
-                  {debugVisible ? '关闭 Debug' : 'Debug'}
-                </Button>
-              </Tooltip>
-              <Tooltip title="Artifacts 下载">
-                <Button
-                  size="small"
-                  onClick={() => setArtifactsOpen(true)}
-                >
-                  Artifacts
-                </Button>
-              </Tooltip>
-            </Space>
-            <span style={{ fontSize: 18, fontWeight: 600 }}>{run.pipeline_name}</span>
+        {/* Issue #113: 常用操作收拢到标题左侧图标区 */}
+        {/* v2 (2026-09): 头部重排 — 标题优先（左），操作区右置；切换按钮固定文案+aria-pressed，消除宽度抖动 */}
+        {/* v3 (2026-09): 任务树开关移入树面板头部（控制项靠近被控对象）；Debug 保留在此，因其同时影响树与日志两个面板 */}
+        <div className="flex items-start justify-between flex-wrap gap-x-4 gap-y-2">
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+            <h1 className="text-lg font-semibold truncate" style={{ margin: 0 }} title={run.id}>
+              {run.display_name || run.id.slice(0, 8)}
+            </h1>
             <StatusTag status={run.status} error={run.error} />
             <ProgressBadge
               done={progress.done}
               total={progress.total}
               failed={progress.failed}
               running={progress.running}
+              // v3 (2026-09): Issue #113 的 stage 执行图改为进度徽标悬浮内容，头部不再常驻占位
+              detail={pipeline ? <RunStagePanel pipeline={pipeline} taskRuns={run.tasks} /> : undefined}
             />
-            {progress.running > 0 && (
-              <Tag color="processing" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>运行中 {progress.running}</Tag>
-            )}
-          </Space>
-          <Space size={12} wrap align="center">
-            {/* Issue #113: 右侧新增执行节点顺序面板 */}
-            {pipeline && run.tasks && (
-              <RunStagePanel pipeline={pipeline} taskRuns={run.tasks} />
-            )}
-            {run.started_at && (
+            {durationMs != null && run.started_at && (
               <Tooltip title={`开始: ${new Date(run.started_at).toLocaleString('zh-CN')}${run.finished_at ? `\n结束: ${new Date(run.finished_at).toLocaleString('zh-CN')}` : ''}`}>
                 <Tag icon={<Clock size={12} />} color="default" style={{ margin: 0, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: '20px', height: 24 }}>
-                  {formatDuration(durationMs ?? 0)}
+                  {formatDuration(durationMs)}
                 </Tag>
               </Tooltip>
             )}
+          </div>
+          <Space size={8} wrap align="center">
+            <Tooltip title="手动刷新运行状态">
+              <Button size="small" icon={<RefreshCw size={14} />} onClick={handleRefresh}>
+                刷新
+              </Button>
+            </Tooltip>
+            <Tooltip title={debugVisible ? '关闭 Debug' : 'Debug'}>
+              <Button
+                size="small"
+                icon={<Bug size={14} />}
+                type={debugVisible ? 'primary' : 'default'}
+                aria-pressed={debugVisible}
+                onClick={() => setDebugVisible((v) => !v)}
+              >
+                Debug
+              </Button>
+            </Tooltip>
+            <Tooltip title="Artifacts 下载">
+              <Button
+                size="small"
+                icon={<Package size={14} />}
+                onClick={() => setArtifactsOpen(true)}
+              >
+                Artifacts
+              </Button>
+            </Tooltip>
             {canCancel && (
               <Popconfirm title="确认取消运行？" onConfirm={handleCancel}>
                 <Button danger size="small" icon={<XCircle size={14} />} loading={cancelRun.isPending}>
@@ -314,6 +305,9 @@ export default function RunDetailPage() {
             )}
           </Space>
         </div>
+        {/* Issue #113: 右侧新增执行节点顺序面板 */}
+        {/* v2 (2026-09): 执行节点面板移到标题下方整行，给 stage 图更宽的展示空间 */}
+        {/* v3 (2026-09): 节点面板改为进度徽标悬浮内容（见 ProgressBadge detail），头部恢复紧凑 */}
       </div>
 
       {/* 失败原因横幅 */}
@@ -330,7 +324,22 @@ export default function RunDetailPage() {
       )}
 
       {/* 主内容区：树 + 日志/结果页（可拖拽调整） */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 gap-2">
+        {/* v3 (2026-09): 树收起后在同位置保留窄栏展开入口，开关不跑到别处 */}
+        {treeCollapsed && (
+          <div className="shrink-0 w-8 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col items-center gap-2 pt-2">
+            <Tooltip title="显示任务树" placement="right">
+              <Button
+                type="text"
+                size="small"
+                aria-label="显示任务树"
+                icon={<PanelLeftOpen size={15} />}
+                onClick={() => setTreeCollapsed(false)}
+              />
+            </Tooltip>
+            <span className="text-xs text-gray-500 select-none" style={{ writingMode: 'vertical-rl' }}>任务树</span>
+          </div>
+        )}
         {treeCollapsed ? (
           // 树隐藏时，日志占满
           <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
@@ -380,6 +389,7 @@ export default function RunDetailPage() {
                     setSelectedTaskId(null);
                   }}
                   resultSelected={resultViewVisible}
+                  onCollapse={() => setTreeCollapsed(true)}
                 />
               ) : snapshotLoading ? (
                 <div className="p-3 text-gray-400 text-sm">加载历史快照中…</div>
@@ -453,8 +463,11 @@ export default function RunDetailPage() {
   );
 }
 
-/** 任务进度徽标：mini 圆形 Progress + 文字 + 状态图标 */
-function ProgressBadge({ done, total, failed, running }: { done: number; total: number; failed: number; running: number }) {
+/** 任务进度徽标：mini 圆形 Progress + 文字 + 状态图标
+ * v3 (2026-09): 支持 detail 悬浮内容 — 有流水线快照时用 Popover 展示 stage 执行图，
+ *   把"进度数字"和"卡在哪一步"就近关联；trigger 含 focus 以保证键盘可达。
+ */
+function ProgressBadge({ done, total, failed, running, detail }: { done: number; total: number; failed: number; running: number; detail?: React.ReactNode }) {
   const safeTotal = Math.max(total, 1);
   const percent = Math.min(100, Math.round((done / safeTotal) * 100));
   const isFailed = failed > 0;
@@ -474,49 +487,67 @@ function ProgressBadge({ done, total, failed, running }: { done: number; total: 
   const label = isFailed ? `${failed} 失败` : `${done}/${total}`;
 
   // 提示文字
+  // v2 (2026-09): 运行中数量并入 tooltip，避免头部再挂一个与进度徽标重复的 Tag
   const tooltipText = isFailed
     ? `失败 ${failed} / 总数 ${total}（已处理 ${done}）`
     : isDone
       ? `已完成 ${done} / ${total}`
-      : `进行中：已处理 ${done} / ${total}（${percent}%）`;
+      : `进行中：已处理 ${done} / ${total}（${percent}%）${running > 0 ? `，运行中 ${running}` : ''}`;
+
+  const badge = (
+    <div
+      data-testid="progress-badge"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '2px 8px 2px 6px',
+        margin: 0,
+        height: 24,
+        lineHeight: '20px',
+        fontSize: 12,
+        background: '#fff',
+        border: `1px solid ${color}`,
+        borderRadius: 12,
+        color: isFailed ? '#b91c1c' : isDone ? '#047857' : '#1d4ed8',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <Progress
+        type="circle"
+        percent={isDone ? 100 : percent}
+        size={16}
+        strokeWidth={14}
+        showInfo={false}
+        strokeColor={color}
+        status={status === 'normal' ? 'normal' : status}
+      />
+      <span style={{ fontWeight: 500 }}>{label}</span>
+      {/* v2 (2026-09): 成功态不再附加对勾 — 与 StatusTag 的"成功"语义重复；仅保留运行中/失败的过程提示 */}
+      {running > 0 ? (
+        <Loader2 size={11} color={color} className="animate-spin" />
+      ) : isFailed ? (
+        <AlertCircle size={11} color={color} />
+      ) : null}
+    </div>
+  );
+
+  // 无悬浮详情时退化为纯文字提示
+  if (!detail) {
+    return <Tooltip title={tooltipText}>{badge}</Tooltip>;
+  }
 
   return (
-    <Tooltip title={tooltipText}>
-      <div
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '2px 8px 2px 6px',
-          margin: 0,
-          height: 24,
-          lineHeight: '20px',
-          fontSize: 12,
-          background: '#fff',
-          border: `1px solid ${color}`,
-          borderRadius: 12,
-          color: isFailed ? '#b91c1c' : isDone ? '#047857' : '#1d4ed8',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        <Progress
-          type="circle"
-          percent={isDone ? 100 : percent}
-          size={16}
-          strokeWidth={14}
-          showInfo={false}
-          strokeColor={color}
-          status={status === 'normal' ? 'normal' : status}
-        />
-        <span style={{ fontWeight: 500 }}>{label}</span>
-        {running > 0 ? (
-          <Loader2 size={11} color={color} className="animate-spin" />
-        ) : isFailed ? (
-          <AlertCircle size={11} color={color} />
-        ) : isDone ? (
-          <CheckCircle2 size={11} color={color} />
-        ) : null}
+    <Popover
+      title={tooltipText}
+      content={detail}
+      placement="bottomLeft"
+      trigger={['hover', 'focus']}
+    >
+      {/* tabIndex 让 keyboard 用户也能打开悬浮窗（防止仅有 hover 可达） */}
+      <div tabIndex={0} aria-label={`运行进度 ${label}`} style={{ display: 'inline-flex', borderRadius: 12 }}>
+        {badge}
       </div>
-    </Tooltip>
+    </Popover>
   );
 }
