@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from taskpps.schemas.common import RESOURCE_ID_PATTERN
 
 
 class AgentCheckRequest(BaseModel):
@@ -56,6 +58,7 @@ class AgentWithConfig(BaseModel):
 
     agent_id: str
     name: str = ""
+    description: str = ""
     type: str = ""
     host: str = ""
     port: int = 0
@@ -64,6 +67,11 @@ class AgentWithConfig(BaseModel):
     # 所属项目信息
     project_id: str = ""
     project_name: str = ""
+    # 配置回填字段（编辑弹窗需要，不包含任何凭据密文）
+    username: str = ""
+    credential_id: str = ""
+    execution_agent: bool = True
+    agent_auto_bootstrap: bool = True
     # 实时状态字段（未连接时为空）
     hostname: str = ""
     platform: str = ""
@@ -81,6 +89,65 @@ class AgentWithConfig(BaseModel):
     net_status: str = "unknown"
     # 最近一次命令执行完成时间（Unix 时间戳，秒）
     last_execution_time: float = 0
+
+
+def _validate_resource_id(v: str) -> str:
+    import re
+
+    if not re.match(RESOURCE_ID_PATTERN, v or ""):
+        raise ValueError("ID 只能包含字母、数字、下划线、点和短横线，且以字母或数字开头")
+    return v
+
+
+class AgentConfigCreateRequest(BaseModel):
+    """新建 agent 配置（仅暴露网页表单字段，其余 YAML 高级字段保持未知不写）。"""
+
+    project_id: str
+    id: str
+    name: str = ""
+    description: str = ""
+    type: str = "ssh-username-password"
+    host: str = ""
+    port: int = 22
+    username: str = "root"
+    credential_id: str = ""
+    max_parallel: int = 1
+    execution_agent: bool = True
+    agent_auto_bootstrap: bool = True
+
+    @field_validator("id")
+    @classmethod
+    def _check_id(cls, v: str) -> str:
+        return _validate_resource_id(v)
+
+    @field_validator("port")
+    @classmethod
+    def _check_port(cls, v: int) -> int:
+        if not 1 <= v <= 65535:
+            raise ValueError("端口必须在 1-65535 之间")
+        return v
+
+
+class AgentConfigUpdateRequest(BaseModel):
+    """编辑 agent 配置：只提交需要变更的字段，未知 YAML 字段由服务层保留。"""
+
+    name: str | None = None
+    description: str | None = None
+    type: str | None = None
+    host: str | None = None
+    port: int | None = None
+    username: str | None = None
+    credential_id: str | None = None
+    max_parallel: int | None = None
+    execution_agent: bool | None = None
+    agent_auto_bootstrap: bool | None = None
+
+    @field_validator("port")
+    @classmethod
+    def _check_port(cls, v: int | None) -> int | None:
+        if v is not None and not 1 <= v <= 65535:
+            raise ValueError("端口必须在 1-65535 之间")
+        return v
 
 
 class AgentDeployRequest(BaseModel):

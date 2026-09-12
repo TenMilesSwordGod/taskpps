@@ -8,11 +8,24 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from taskpps.api import agents, artifacts, auth, health, pipelines, plugins, projects, runs, triggers, ws_agent
+from taskpps.api import (
+    agents,
+    artifacts,
+    auth,
+    credentials,
+    health,
+    pipelines,
+    plugins,
+    projects,
+    runs,
+    triggers,
+    ws_agent,
+)
 from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale
@@ -324,6 +337,20 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error", "path": request.url.path})
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """把 pydantic 校验错误压成一句可读中文。
+
+    设计决策：FastAPI 默认 422 返回 detail 为对象数组，前端 axios 拦截器只处理字符串，
+    会退化成 "Request failed with status code 422" 无法定位；统一格式化后表单能直接展示。
+    """
+    messages = []
+    for err in exc.errors():
+        field = ".".join(str(part) for part in err.get("loc", ()) if part not in ("body", "query", "path"))
+        messages.append(f"{field}: {err.get('msg', '')}" if field else str(err.get("msg", "")))
+    return JSONResponse(status_code=422, content={"detail": "参数校验失败: " + "; ".join(messages)})
+
+
 app.include_router(health.router, prefix="/api")
 # Issue #204: 认证路由（/api/v1/auth/*）
 app.include_router(auth.router, prefix="/api")
@@ -333,6 +360,7 @@ app.include_router(triggers.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(ws_agent.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
+app.include_router(credentials.router, prefix="/api")
 app.include_router(artifacts.router, prefix="/api")
 app.include_router(plugins.router, prefix="/api")
 

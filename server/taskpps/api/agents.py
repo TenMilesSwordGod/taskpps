@@ -7,12 +7,13 @@ import uuid
 from pathlib import Path
 
 import paramiko
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
+from taskpps.auth.dependencies import require_role
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
 
@@ -37,6 +38,8 @@ from taskpps.schemas.agent import (
     AgentCheckResult,
     AgentCompleteRequest,
     AgentCompleteResult,
+    AgentConfigCreateRequest,
+    AgentConfigUpdateRequest,
     AgentDeployRequest,
     AgentDeployResult,
     AgentExecRequest,
@@ -46,6 +49,7 @@ from taskpps.schemas.agent import (
     AgentWithConfig,
     PendingCommandItem,
 )
+from taskpps.services import agent_config_service
 from taskpps.services.agent_manager import AgentManager
 from taskpps.services.agent_service import AgentService
 
@@ -62,6 +66,17 @@ async def _query_all_projects() -> list:
     async with get_session_factory()() as session:
         repo = ProjectRepository(session)
         return await repo.list_projects()
+
+
+def _as_bool(value: object, default: bool) -> bool:
+    """YAML 布尔兼容解析：CLI 可能写 "false" 字符串，不能直接 bool() 判真。"""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 
 async def _load_agents_from_projects() -> tuple[list[dict], list]:
@@ -131,7 +146,7 @@ async def _load_agent_max_parallel_map() -> dict[str, int]:
 @router.post("/try-connect", response_model=AgentCheckResult)
 async def try_connect(body: AgentCheckRequest):
     try:
-        result = _agent_service.try_connect(body.agent_id, body.timeout)
+        result = await _agent_service.try_connect_async(body.agent_id, body.timeout)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -268,6 +283,7 @@ async def agent_all():
         item = AgentWithConfig(
             agent_id=agent_id,
             name=str(cfg.get("name", "") or ""),
+            description=str(cfg.get("description", "") or ""),
             type=str(cfg.get("type", "") or ""),
             host=str(cfg.get("host", "") or ""),
             port=int(cfg.get("port", 0) or 0),
@@ -275,6 +291,11 @@ async def agent_all():
             project_id=str(cfg.get("_project_id", "") or ""),
             project_name=str(cfg.get("_project_name", "") or ""),
             max_parallel=int(cfg.get("max_parallel", 1) or 1),
+            # 编辑弹窗回填字段（不含任何凭据密文）
+            username=str(cfg.get("username", "") or ""),
+            credential_id=str(cfg.get("credential_id", "") or ""),
+            execution_agent=_as_bool(cfg.get("execution_agent"), default=True),
+            agent_auto_bootstrap=_as_bool(cfg.get("agent_auto_bootstrap"), default=True),
         )
         if manager.is_connected(agent_id):
             conn = manager.get_connection(agent_id)
@@ -715,3 +736,71 @@ async def get_agent_host_info(agent_id: str):
     finally:
         with contextlib.suppress(Exception):
             client.close()
+
+
+# ----------------------------------------------------------------------------
+# Agent 配置写接口（仅管理员）
+#
+# 设计决策（为什么单独放在文件尾部）：
+# - 读接口（check/all/exec/deploy）历史上面向运维自动化，保持无角色依赖；
+#   写接口是本次新增的网页端能力，统一挂 require_role("admin")，与凭据 API 一致。
+# - 每次写盘后必须 invalidate_agents_cache()，否则 /agents/all 最长 10s 脏读，
+#   刚保存的服务器不会出现在列表里，用户会误以为保存失败。
+# ----------------------------------------------------------------------------
+
+
+def _project_workdir_or_404(project_id: str) -> Path:
+    from taskpps.config import get_project_workdir_by_id
+
+    workdir = get_project_workdir_by_id(project_id)
+    if workdir is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return workdir
+
+
+@router.post("/", dependencies=[Depends(require_role("admin"))], status_code=201)
+async def create_agent_config(body: AgentConfigCreateRequest):
+    workdir = _project_workdir_or_404(body.project_id)
+    try:
+        result = agent_config_service.create_agent(workdir, body.model_dump())
+        invalidate_agents_cache()
+        return result
+    except FileExistsError:
+        raise HTTPException(status_code=409, detail=f"服务器已存在: {body.id}") from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.error("创建 agent 配置失败: project=%s id=%s", body.project_id, body.id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error") from None
+
+
+@router.put("/{project_id}/{agent_id}", dependencies=[Depends(require_role("admin"))])
+async def update_agent_config(project_id: str, agent_id: str, body: AgentConfigUpdateRequest):
+    workdir = _project_workdir_or_404(project_id)
+    updates = body.model_dump(exclude_unset=True)
+    try:
+        result = agent_config_service.update_agent(workdir, project_id, agent_id, updates)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.error("更新 agent 配置失败: project=%s id=%s", project_id, agent_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error") from None
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"服务器不存在: {agent_id}")
+    invalidate_agents_cache()
+    return result
+
+
+@router.delete("/{project_id}/{agent_id}", dependencies=[Depends(require_role("admin"))])
+async def delete_agent_config(project_id: str, agent_id: str):
+    workdir = _project_workdir_or_404(project_id)
+    references = agent_config_service.find_agent_pipeline_references(workdir, agent_id)
+    if references:
+        raise HTTPException(
+            status_code=409,
+            detail=f"服务器仍被流水线引用，无法删除: {', '.join(references)}",
+        )
+    if not agent_config_service.delete_agent(workdir, agent_id):
+        raise HTTPException(status_code=404, detail=f"服务器不存在: {agent_id}")
+    invalidate_agents_cache()
+    return {"message": "服务器已删除"}

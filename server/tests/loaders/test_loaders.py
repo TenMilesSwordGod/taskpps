@@ -256,6 +256,57 @@ class TestCredentialLoader:
         assert data["key_path"] == "~/.ssh/deploy_key"
         assert "plaintext password" not in caplog.text
 
+    def test_load_decrypts_encrypted_password(self, tmp_path, monkeypatch, caplog):
+        """密文密码经 loader 读取后应为明文，且不再触发明文告警。"""
+        from cryptography.fernet import Fernet
+
+        from taskpps.auth.secret_box import encrypt_secret
+
+        monkeypatch.setenv("TASKPPS_CREDENTIAL_KEY", Fernet.generate_key().decode())
+        creds_dir = tmp_path / "credentials"
+        creds_dir.mkdir()
+        cipher = encrypt_secret("real-pass")
+        (creds_dir / "enc-cred.yaml").write_text(f"username: deploy\npassword: '{cipher}'\n")
+        loader = CredentialLoader(creds_dir)
+        with caplog.at_level(logging.WARNING):
+            data = loader.load("enc-cred")
+        assert data["password"] == "real-pass"
+        assert "plaintext password" not in caplog.text
+
+    def test_load_all_decrypts_list_form(self, tmp_path, monkeypatch):
+        """列表形态 credentials: [...] 中每个条目的敏感字段都应解密。"""
+        from cryptography.fernet import Fernet
+
+        from taskpps.auth.secret_box import encrypt_secret
+
+        monkeypatch.setenv("TASKPPS_CREDENTIAL_KEY", Fernet.generate_key().decode())
+        creds_dir = tmp_path / "credentials"
+        creds_dir.mkdir()
+        cipher = encrypt_secret("list-pass")
+        (creds_dir / "group.yaml").write_text(
+            "credentials:\n"
+            "  - id: cred-a\n"
+            "    username: user-a\n"
+            f"    password: '{cipher}'\n"
+        )
+        loader = CredentialLoader(creds_dir)
+        assert loader.load_all()["cred-a"]["password"] == "list-pass"
+        assert loader.get_field("cred-a", "password") == "list-pass"
+
+    def test_load_get_field_encrypted(self, tmp_path, monkeypatch):
+        """get_field 也要返回解密后的值（变量替换 ${credential:x.password} 依赖此路径）。"""
+        from cryptography.fernet import Fernet
+
+        from taskpps.auth.secret_box import encrypt_secret
+
+        monkeypatch.setenv("TASKPPS_CREDENTIAL_KEY", Fernet.generate_key().decode())
+        creds_dir = tmp_path / "credentials"
+        creds_dir.mkdir()
+        cipher = encrypt_secret("field-pass")
+        (creds_dir / "field-cred.yaml").write_text(f"password: '{cipher}'\n")
+        loader = CredentialLoader(creds_dir)
+        assert loader.get_field("field-cred", "password") == "field-pass"
+
 
 class TestSubstituteEnvVars:
     @pytest.mark.zentao("TC-S0826", domain="server/loaders", priority="P2")

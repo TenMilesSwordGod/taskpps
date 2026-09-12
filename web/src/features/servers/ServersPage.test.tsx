@@ -14,11 +14,36 @@ vi.mock('@/api/agents', () => ({
   useUpdateDeployAgent: () => ({ mutate: vi.fn(), isPending: false, variables: null }),
   usePendingCommands: () => ({ data: [] }),
   useAgentStatus: () => ({ data: undefined, isLoading: false, isFetching: false, dataUpdatedAt: 0 }),
+  // 管理端 hooks：ServersPage 始终渲染新增/编辑弹窗，需要这些导出存在
+  useCreateAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useTryConnectAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}))
+
+/** Mock 权限 hook：默认非管理员，管理员用例单独打开 */
+const mockUseIsAdmin = vi.fn()
+vi.mock('@/hooks/useIsAdmin', () => ({
+  useIsAdmin: () => mockUseIsAdmin(),
+}))
+
+/** Mock 凭据 hooks（弹窗未打开时不发请求，这里只保证导出存在） */
+vi.mock('@/api/credentials', () => ({
+  useCredentials: () => ({ data: [], isLoading: false, isError: false, error: null }),
+  useCreateCredential: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateCredential: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteCredential: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 /** Mock api/client */
 vi.mock('@/api/client', () => ({
   default: { post: vi.fn(async () => ({ data: { results: [] } })) },
+}))
+
+/** Mock api/projects 的 useProjects hook（空配置引导需要展示项目的 agents 目录） */
+const mockUseProjects = vi.fn()
+vi.mock('@/api/projects', () => ({
+  useProjects: () => mockUseProjects(),
 }))
 
 /** 构造测试用 agent 数据 */
@@ -63,6 +88,12 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe('<ServersPage />', () => {
   beforeEach(() => {
     mockUseAgentsWithConfig.mockReset()
+    mockUseProjects.mockReset()
+    mockUseIsAdmin.mockReset()
+    // 默认非管理员：保持原有用例的界面（不出现写入口）
+    mockUseIsAdmin.mockReturnValue(false)
+    // 默认：无已注册项目（多数用例走通用引导文案）
+    mockUseProjects.mockReturnValue({ data: [], isLoading: false })
   })
 
   it('正常渲染 agent 列表', async () => {
@@ -418,5 +449,111 @@ describe('<ServersPage />', () => {
     await waitFor(() => {
       expect(screen.getByText('FoldableNode')).toBeInTheDocument()
     })
+  })
+
+  // ─── 空配置 / 请求失败：区分真实原因，不再展示猜测性诊断面板 ───
+
+  it('API 成功返回空数组：展示配置引导，不展示猜测性"可能原因"与手动检测按钮', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [], isLoading: false, refetch: vi.fn(), isFetching: false, error: null, dataUpdatedAt: Date.now(),
+    })
+    mockUseProjects.mockReturnValue({ data: [], isLoading: false })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('暂无 agent 配置')).toBeInTheDocument())
+    // 明确说明配置位置（agents/*.yaml）
+    expect(screen.getByText('agents/*.yaml')).toBeInTheDocument()
+    // 旧的猜测性诊断 UI 必须消失
+    expect(screen.queryByText('诊断信息')).not.toBeInTheDocument()
+    expect(screen.queryByText('可能原因：')).not.toBeInTheDocument()
+    expect(screen.queryByText('检测 API 响应')).not.toBeInTheDocument()
+  })
+
+  it('已注册项目但无 agent 配置：列出各项目 workdir 下的 agents 目录', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [], isLoading: false, refetch: vi.fn(), isFetching: false, error: null, dataUpdatedAt: Date.now(),
+    })
+    mockUseProjects.mockReturnValue({
+      data: [
+        { id: 'p1', name: '项目甲', workdir: '/srv/proj-a', registered_at: '', last_used_at: null, active: true },
+        { id: 'p2', name: '', workdir: '/srv/proj-b', registered_at: '', last_used_at: null, active: true },
+      ],
+      isLoading: false,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('/srv/proj-a/agents')).toBeInTheDocument())
+    expect(screen.getByText('/srv/proj-b/agents')).toBeInTheDocument()
+    // name 为空时回退展示项目 id
+    expect(screen.getByText('p2')).toBeInTheDocument()
+  })
+
+  it('项目列表获取失败：明确提示失败，不谎称"未注册项目"', async () => {
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [], isLoading: false, refetch: vi.fn(), isFetching: false, error: null, dataUpdatedAt: Date.now(),
+    })
+    mockUseProjects.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText(/项目列表获取失败/)).toBeInTheDocument())
+    expect(screen.queryByText(/当前未注册项目/)).not.toBeInTheDocument()
+  })
+
+  it('请求失败：展示真实错误与重试按钮，不展示猜测性原因', async () => {
+    const refetch = vi.fn()
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [], isLoading: false, refetch, isFetching: false,
+      error: new Error('Request failed with status code 404'), dataUpdatedAt: 0,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('无法获取服务器列表')).toBeInTheDocument())
+    expect(screen.getByText(/Request failed with status code 404/)).toBeInTheDocument()
+    expect(screen.queryByText('可能原因：')).not.toBeInTheDocument()
+    expect(screen.queryByText('检测 API 响应')).not.toBeInTheDocument()
+    // antd 会在两个中文字符间自动插空格，故用正则匹配
+    fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
+    expect(refetch).toHaveBeenCalled()
+  })
+
+  // ─── 权限：管理端写入口仅管理员可见 ───
+
+  it('非管理员：不展示新增服务器/凭据管理与卡片编辑删除入口', async () => {
+    mockUseIsAdmin.mockReturnValue(false)
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [makeAgent({ agent_id: 'plain-1' })],
+      isLoading: false, refetch: vi.fn(), isFetching: false, error: null,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByText('服务器列表')).toBeInTheDocument())
+    expect(screen.queryByText('新增服务器')).not.toBeInTheDocument()
+    expect(screen.queryByText('凭据管理')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('编辑服务器配置')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('删除服务器配置')).not.toBeInTheDocument()
+  })
+
+  it('管理员：卡片展示编辑/删除入口', async () => {
+    mockUseIsAdmin.mockReturnValue(true)
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [makeAgent({ agent_id: 'adm-1', project_id: 'p1', project_name: '项目甲' })],
+      isLoading: false, refetch: vi.fn(), isFetching: false, error: null,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    await waitFor(() => expect(screen.getByLabelText('编辑服务器配置')).toBeInTheDocument())
+    expect(screen.getByLabelText('删除服务器配置')).toBeInTheDocument()
+  })
+
+  it('管理员：点击新增服务器打开表单弹窗', async () => {
+    mockUseIsAdmin.mockReturnValue(true)
+    mockUseAgentsWithConfig.mockReturnValue({
+      data: [], isLoading: false, refetch: vi.fn(), isFetching: false, error: null, dataUpdatedAt: Date.now(),
+    })
+    mockUseProjects.mockReturnValue({
+      data: [
+        { id: 'p1', name: '项目甲', workdir: '/srv/p1', registered_at: '', last_used_at: null, active: true },
+      ],
+      isLoading: false,
+    })
+    render(<ServersPage />, { wrapper: Wrapper })
+    // 工具栏与空态引导各有一个入口，点第一个即可
+    const addButtons = await screen.findAllByRole('button', { name: /新增服务器/ })
+    fireEvent.click(addButtons[0])
+    await waitFor(() => expect(screen.getByText('服务器 ID')).toBeInTheDocument())
   })
 })

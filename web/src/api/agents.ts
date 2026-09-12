@@ -1,7 +1,98 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import apiClient from './client';
-import type { AgentStatus, AgentWithConfig, AgentHostInfo, PendingCommandItem } from '@/types';
+import type { AgentCheckResult, AgentStatus, AgentWithConfig, AgentHostInfo, PendingCommandItem } from '@/types';
+
+/** 新增服务器请求体（字段与后端 AgentConfigCreateRequest 对齐） */
+export interface AgentCreatePayload {
+  project_id: string;
+  id: string;
+  name?: string;
+  description?: string;
+  type?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  credential_id?: string;
+  max_parallel?: number;
+  execution_agent?: boolean;
+  agent_auto_bootstrap?: boolean;
+}
+
+/** 编辑服务器请求体（id/project 不可改） */
+export type AgentUpdatePayload = Omit<AgentCreatePayload, 'project_id' | 'id'>;
+
+/** 新增服务器：成功后刷新列表（后端会清理自身缓存） */
+export function useCreateAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: AgentCreatePayload) => {
+      const res = await apiClient.post('/api/agents/', payload);
+      return res.data as { agent_id: string };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agents', 'all'] });
+      qc.invalidateQueries({ queryKey: ['agents', 'list'] });
+    },
+  });
+}
+
+/** 编辑服务器：仅提交变更字段，未提交的字段由后端保留 */
+export function useUpdateAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      agentId,
+      payload,
+    }: {
+      projectId: string;
+      agentId: string;
+      payload: AgentUpdatePayload;
+    }) => {
+      const res = await apiClient.put(
+        `/api/agents/${encodeURIComponent(projectId)}/${encodeURIComponent(agentId)}`,
+        payload,
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agents', 'all'] });
+      qc.invalidateQueries({ queryKey: ['agents', 'list'] });
+      qc.invalidateQueries({ queryKey: ['agents', 'status'] });
+    },
+  });
+}
+
+/** 删除服务器：被流水线引用时后端返回 409，由调用方展示错误 */
+export function useDeleteAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, agentId }: { projectId: string; agentId: string }) => {
+      await apiClient.delete(
+        `/api/agents/${encodeURIComponent(projectId)}/${encodeURIComponent(agentId)}`,
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agents', 'all'] });
+      qc.invalidateQueries({ queryKey: ['agents', 'list'] });
+    },
+  });
+}
+
+/** 测试连接（仅对已保存的 agent 可用：后端按 agent_id 读取配置与凭据） */
+export function useTryConnectAgent() {
+  return useMutation({
+    mutationFn: async (agentId: string) => {
+      const res = await apiClient.post<AgentCheckResult>(
+        '/api/agents/try-connect',
+        { agent_id: agentId, timeout: 8 },
+        { timeout: 15000 },
+      );
+      return res.data;
+    },
+  });
+}
 
 /** 部署/引导 agent（未连接时） */
 export function useDeployAgent() {

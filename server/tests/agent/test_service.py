@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from taskpps.services.agent_service import AgentService, _match_file_filter
 
 

@@ -327,6 +327,8 @@ export interface AgentHostInfo {
 export interface AgentWithConfig {
   agent_id: string;
   name: string;
+  /** 配置描述（后端 yaml，用于展示/编辑回填） */
+  description?: string;
   type: string;
   host: string;
   port: number;
@@ -336,6 +338,14 @@ export interface AgentWithConfig {
   project_id: string;
   /** 所属项目名称 */
   project_name: string;
+  /** 登录用户名（编辑回填用；密码永不回传） */
+  username?: string;
+  /** 绑定的凭据 ID（编辑回填用） */
+  credential_id?: string;
+  /** 是否优先走 WebSocket execution-agent */
+  execution_agent?: boolean;
+  /** 是否允许自动部署 agent */
+  agent_auto_bootstrap?: boolean;
   hostname: string;
   platform: string;
   system: string;
@@ -352,6 +362,20 @@ export interface AgentWithConfig {
   net_status: 'unknown' | 'reachable' | 'unreachable';
   /** 最近一次命令执行完成时间（Unix 时间戳，秒） */
   last_execution_time: number;
+}
+
+/** 凭据元数据（后端永不回传密码/口令明文） */
+export interface CredentialView {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  username: string;
+  key_path: string;
+  has_password: boolean;
+  has_passphrase: boolean;
+  source_file: string;
+  project_id: string;
 }
 
 /** Agent 正在执行或等待执行的命令 */
@@ -500,12 +524,18 @@ export interface ResultPageResponse {
     total_count: number;
     started_at: string | null;
     finished_at: string | null;
+    /** v2 (2026-09): 服务端预格式化的可读时间（兼容保留，前端优先本地格式化） */
+    started_display?: string | null;
+    finished_display?: string | null;
     duration: string;
   };
   html_content: string;
   md_content: string;
   collector_mode: string | null;
   has_collector: boolean;
+  /** v2 (2026-09): 插件原始产物；老 result.json 无该字段（undefined） */
+  collector_html?: string | null;
+  collector_md?: string | null;
   generated_at: string | null;
 }
 

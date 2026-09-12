@@ -81,7 +81,7 @@ def create_executor(
                 agent_data = {**agent_data, "max_parallel": effective_max_parallel}
             return AgentExecutor(agent_id=task.host, manager=manager, agent_data=agent_data)
 
-        return _make_ssh_executor(host, port, agent_data, task)
+        return _make_ssh_executor(host, port, agent_data, task, project_workdir)
 
     return LocalExecutor()
 
@@ -149,8 +149,8 @@ def _create_plugin_remote_delegate(
                     manager=manager,
                     agent_data=agent_data,
                 )
-            return _make_ssh_executor(host, port, agent_data, task)
-        return _make_ssh_executor(host, port, agent_data, task)
+            return _make_ssh_executor(host, port, agent_data, task, project_workdir)
+        return _make_ssh_executor(host, port, agent_data, task, project_workdir)
 
     if task.host:
         manager = AgentManager.instance()
@@ -164,14 +164,23 @@ def _create_plugin_remote_delegate(
     return SSHExecutor(host=task.host)
 
 
-def _make_ssh_executor(host: str, port: int, agent_data: dict[str, Any], task: ResolvedTask) -> SSHExecutor:
+def _make_ssh_executor(
+    host: str, port: int, agent_data: dict[str, Any], task: ResolvedTask, project_workdir: str | None = None
+) -> SSHExecutor:
     username = None
     password = None
     key_path = None
 
     credential_id = task.credential or agent_data.get("credential_id")
     if credential_id:
-        cred_loader = CredentialLoader()
+        # 项目级凭据目录：不同项目可以定义同名凭据/凭据内容不同，
+        # 用默认 workdir 会读到错误的凭据（Issue: 网页新增服务器到非默认项目后 SSH 执行失败）。
+        if project_workdir:
+            from taskpps.config import get_credentials_dir
+
+            cred_loader = CredentialLoader(get_credentials_dir(Path(project_workdir)))
+        else:
+            cred_loader = CredentialLoader()
         cred_data = _resolve_credential(cred_loader, credential_id)
         if cred_data:
             username = cred_data.get("username")
