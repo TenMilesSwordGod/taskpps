@@ -17,6 +17,8 @@ export interface AgentCreatePayload {
   max_parallel?: number;
   execution_agent?: boolean;
   agent_auto_bootstrap?: boolean;
+  /** agent 回连服务端的地址；留空由服务端自动探测（远端不可达时必填） */
+  server_ws_host?: string;
 }
 
 /** 编辑服务器请求体（id/project 不可改） */
@@ -102,6 +104,9 @@ export function useDeployAgent() {
       const res = await apiClient.post<{ success: boolean; agent_id: string; message?: string }>(
         '/api/agents/deploy',
         { agent_id: agentId, timeout: 30 },
+        // v2 (2026-09): 后端握手等待固定 60s（BOOTSTRAP_TIMEOUT），默认 30s 的全局超时
+        // 会让 UI 先断开、看不到服务端返回的失败原因；这里放大到 90s 覆盖握手 + SSH 上传耗时
+        { timeout: 90000 },
       );
       return res.data;
     },

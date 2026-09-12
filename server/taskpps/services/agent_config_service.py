@@ -38,6 +38,8 @@ _FORM_FIELDS = (
     "max_parallel",
     "execution_agent",
     "agent_auto_bootstrap",
+    # v2 (2026-09): agent 回连地址纳入表单字段，否则远端主机不可达时只能手改 YAML
+    "server_ws_host",
 )
 
 

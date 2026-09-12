@@ -343,6 +343,8 @@ export interface AgentWithConfig {
   username?: string;
   /** 绑定的凭据 ID（编辑回填用） */
   credential_id?: string;
+  /** agent 回连服务端的地址（编辑回填用）；留空表示服务端自动探测 */
+  server_ws_host?: string;
   /** 是否优先走 WebSocket execution-agent */
   execution_agent?: boolean;
   /** 是否允许自动部署 agent */

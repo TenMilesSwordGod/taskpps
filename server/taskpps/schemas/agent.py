@@ -72,6 +72,8 @@ class AgentWithConfig(BaseModel):
     credential_id: str = ""
     execution_agent: bool = True
     agent_auto_bootstrap: bool = True
+    # agent 回连服务端的地址（留空则服务端自动探测）；远端无法反连探测 IP 时靠它覆盖
+    server_ws_host: str = ""
     # 实时状态字段（未连接时为空）
     hostname: str = ""
     platform: str = ""
@@ -114,6 +116,9 @@ class AgentConfigCreateRequest(BaseModel):
     max_parallel: int = 1
     execution_agent: bool = True
     agent_auto_bootstrap: bool = True
+    # v2 (2026-09): 暴露给网页表单。服务端自动探测的 IP 对远端主机可能不可达，
+    # 没有这个字段时用户只能手改 YAML，部署会一直等待握手直到超时。
+    server_ws_host: str = ""
 
     @field_validator("id")
     @classmethod
@@ -141,6 +146,8 @@ class AgentConfigUpdateRequest(BaseModel):
     max_parallel: int | None = None
     execution_agent: bool | None = None
     agent_auto_bootstrap: bool | None = None
+    # v2 (2026-09): 与 create 对齐，编辑时允许覆盖/清空回连地址
+    server_ws_host: str | None = None
 
     @field_validator("port")
     @classmethod

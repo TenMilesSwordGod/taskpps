@@ -99,6 +99,47 @@ class TestAgentConfigCrud:
         assert "host: 10.0.0.1" in data
         assert "credential_id: c1" in data
 
+    async def test_create_and_update_server_ws_host(self, app, project_dir):
+        """server_ws_host 必须可由网页端配置并回填。
+
+        设计决策（为什么需要网页配置）：服务端自动探测的 IP（如内网 172.x）
+        远端 agent 主机往往无法反向连接；server_ws_host 是唯一能指定
+        远端可达回连地址的入口，只能在 YAML 手工配置会导致部署一直握手超时。
+        """
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _admin_headers(client)
+            pid = await _project_id(project_dir)
+            resp = await client.post(
+                "/api/agents/",
+                headers=headers,
+                json={
+                    "project_id": pid,
+                    "id": "ws-1",
+                    "type": "ssh-username-password",
+                    "host": "10.0.0.1",
+                    "server_ws_host": "vpn.example.com",
+                },
+            )
+            assert resp.status_code == 201, resp.text
+
+            listing = await client.get("/api/agents/all")
+            item = next((a for a in listing.json() if a["agent_id"] == "ws-1"), None)
+            assert item is not None
+            assert item["server_ws_host"] == "vpn.example.com"
+
+            updated = await client.put(
+                f"/api/agents/{pid}/ws-1",
+                headers=headers,
+                json={"server_ws_host": "203.0.113.9"},
+            )
+            assert updated.status_code == 200, updated.text
+
+        import yaml
+
+        doc = yaml.safe_load((project_dir / "agents" / "ws-1.yaml").read_text())
+        assert doc["server_ws_host"] == "203.0.113.9"
+
     async def test_create_duplicate_returns_409(self, app, project_dir):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:

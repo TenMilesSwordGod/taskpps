@@ -136,6 +136,30 @@ describe('<AgentFormModal />', () => {
     expect(call.payload.execution_agent).toBe(false)
   })
 
+  it('编辑：回填并提交 server_ws_host（远端不可达时指定回连地址）', async () => {
+    mockUpdate.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(
+      <AgentFormModal
+        open
+        agent={{ ...editAgent, server_ws_host: 'vpn.example.com' }}
+        projects={projects}
+        onClose={vi.fn()}
+      />,
+      { wrapper: Wrapper },
+    )
+
+    const input = screen.getByPlaceholderText('203.0.113.9（留空自动探测）')
+    expect(input).toHaveValue('vpn.example.com')
+
+    await user.clear(input)
+    await user.type(input, '203.0.113.9')
+    await user.click(screen.getByRole('button', { name: /保\s*存/ }))
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1))
+    expect(mockUpdate.mock.calls[0][0].payload.server_ws_host).toBe('203.0.113.9')
+  })
+
   it('编辑：测试连接成功给出结果反馈', async () => {
     mockTry.mockResolvedValue({ status: 'connected', latency_ms: 12, error: null })
     const user = userEvent.setup()

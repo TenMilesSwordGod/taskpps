@@ -69,6 +69,8 @@ export default function AgentFormModal({ open, agent, projects, defaultProjectId
         max_parallel: agent.max_parallel || 1,
         execution_agent: agent.execution_agent ?? true,
         agent_auto_bootstrap: agent.agent_auto_bootstrap ?? true,
+        // v2 (2026-09): 回连地址回填，远端不可达时用户才能在网页端修正后重新部署
+        server_ws_host: agent.server_ws_host ?? '',
       });
     } else {
       form.resetFields();
@@ -99,6 +101,8 @@ export default function AgentFormModal({ open, agent, projects, defaultProjectId
       max_parallel: Number(values.max_parallel ?? 1),
       execution_agent: values.execution_agent ?? true,
       agent_auto_bootstrap: values.agent_auto_bootstrap ?? true,
+      // v2 (2026-09): 非 SSH 类型清空，避免切类型后残留无效的回连地址
+      server_ws_host: needsSsh ? (values.server_ws_host ?? '') : '',
     };
   };
 
@@ -118,6 +122,7 @@ export default function AgentFormModal({ open, agent, projects, defaultProjectId
           max_parallel: values.max_parallel,
           execution_agent: values.execution_agent,
           agent_auto_bootstrap: values.agent_auto_bootstrap,
+          server_ws_host: values.server_ws_host,
         };
         await updateAgent.mutateAsync({ projectId: agent.project_id, agentId: agent.agent_id, payload });
         message.success(`服务器 ${agent.agent_id} 已更新`);
@@ -299,6 +304,14 @@ export default function AgentFormModal({ open, agent, projects, defaultProjectId
                   />
                 </Form.Item>
               </div>
+
+              <Form.Item
+                name="server_ws_host"
+                label="Agent 回连地址（可选）"
+                extra="agent 向本服务器建立 WebSocket 的地址。留空自动探测；若探测到的 IP（如内网地址）远端连不上，填写远端可达的地址（VPN/公网 IP）"
+              >
+                <Input placeholder="203.0.113.9（留空自动探测）" />
+              </Form.Item>
             </>
           )}
 

@@ -296,6 +296,8 @@ async def agent_all():
             credential_id=str(cfg.get("credential_id", "") or ""),
             execution_agent=_as_bool(cfg.get("execution_agent"), default=True),
             agent_auto_bootstrap=_as_bool(cfg.get("agent_auto_bootstrap"), default=True),
+            # v2 (2026-09): 回填回连地址，网页端才能看到/修改当前生效的 server_ws_host
+            server_ws_host=str(cfg.get("server_ws_host", "") or ""),
         )
         if manager.is_connected(agent_id):
             conn = manager.get_connection(agent_id)
