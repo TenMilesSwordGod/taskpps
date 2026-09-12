@@ -198,7 +198,8 @@ export interface PipelineConfig {
   retry: number;
   on_failure: string;
   execution_strategy: string;
-  max_parallel?: number | null;
+  // 注意(2026-09): 删除旧字段 max_parallel —— 后端 Issue #106 已更名 max_concurrent_runs，
+  // 接口 model_dump 不会再返回旧名，保留只会让读取方永远取到空值
   max_concurrent_runs?: number | null;
   max_concurrent_tasks?: number | null;
   cwd?: string | null;
@@ -424,11 +425,23 @@ export interface AgentCheckResponse {
 export interface ParamFieldDef {
   key: string;
   path: string;
+  /**
+   * YAML 中的真实字段名，与展示用 label 解耦
+   * 注意(2026-09): 之前读写都用 label，导致 strategy（真实 key execution_strategy）、
+   * max_parallel（真实 key max_concurrent_runs）永远取不到值，故显式区分
+   */
+  dataKey: string;
   label: string;
   type: 'number' | 'string' | 'select' | 'json' | 'host' | 'env';
   options?: { label: string; value: string }[];
   placeholder?: string;
   hint?: string;
+  /**
+   * pipeline 级有效默认值，仅用于表单回填展示
+   * 注意(2026-09): 与 server/taskpps/schemas/pipeline.py 的 PipelineConfig 默认值保持一致；
+   * 未定义的字段（如 timeout/host）默认 None，表示未设置，表单保持空
+   */
+  default?: unknown;
 }
 
 /** 项目信息 */

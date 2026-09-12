@@ -401,10 +401,11 @@ function SubpipelinePanel({ sub }: { sub: SubPipeline }) {
               <Input value={String(config.retry)} readOnly size="small" />
             </div>
           )}
-          {config.max_parallel != null && (
+          {/* 注意(2026-09): 后端 Issue #106 已将 max_parallel 更名为 max_concurrent_runs */}
+          {config.max_concurrent_runs != null && (
             <div>
               <label className="text-xs text-gray-500 mb-1 block">最大并行数</label>
-              <Input value={String(config.max_parallel)} readOnly size="small" />
+              <Input value={String(config.max_concurrent_runs)} readOnly size="small" />
             </div>
           )}
           {config.cwd && (
