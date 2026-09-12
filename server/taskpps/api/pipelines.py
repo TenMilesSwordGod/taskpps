@@ -336,7 +336,12 @@ async def get_pipeline_by_id(definition_id: str, project_id: str | None = Query(
             raise HTTPException(status_code=404, detail=f"Definition not found: {definition_id}")
         if project_id and d.project_id != project_id:
             raise HTTPException(status_code=404, detail="Definition not found in project")
-        return json.loads(d.content)
+        data = json.loads(d.content)
+        # v3 (2026-09): 附带文件原文 —— Web「YAML 编辑器」若仅由模型反序列化，
+        # Pydantic schema 未声明的字段（如裸 `task:` 列表）会静默丢失，编辑器内容 ≠ 真实文件。
+        # raw_content 由 _sync_pipeline_definitions 在文件 hash 变化时同步，保证与磁盘一致。
+        data["raw_content"] = d.raw_content or ""
+        return data
 
 
 class SavePipelineByIdRequest(BaseModel):

@@ -260,6 +260,12 @@ export interface PipelineDetail {
   tasks?: TaskYAML[] | null;
   pipelines?: SubPipeline[] | null;
   artifacts?: ArtifactDeclaration[];
+  /**
+   * v3 (2026-09): 文件原文，仅 /by-id 接口返回（旧数据可能为空）。
+   * YAML 编辑器优先展示它——已解析模型会丢失 schema 未声明字段（如裸 task:），
+   * 直接用模型反序列化会让编辑器内容 ≠ 真实文件。
+   */
+  raw_content?: string | null;
 }
 
 /** 健康检查响应 */

@@ -57,6 +57,56 @@ async def test_get_pipeline_by_id_not_found(app, db_engine, clean_db):
 
 
 @pytest.mark.asyncio
+@pytest.mark.zentao("TC-S2006", domain="server/api", priority="P1")
+async def test_get_pipeline_by_id_includes_raw_content(app, setup_project, tmp_project, db_engine, clean_db):
+    """by-id 必须返回文件原文 raw_content。
+
+    为什么需要（v3 2026-09）：Web「YAML 编辑器」此前只能用已解析模型反序列化，
+    Pydantic schema 未声明的字段（如用户实测的裸 `task:` 列表）会被静默丢弃，
+    导致编辑器内容 ≠ 真实文件；前端改为优先展示 raw_content 后需要后端返回该字段。
+    """
+    pipelines_dir = tmp_project / "pipelines"
+    custom_file = pipelines_dir / "raw_fidelity.yaml"
+    raw_text = (
+        "name: raw-fidelity\n"
+        "pipelines:\n"
+        "  - name: test\n"
+        "    tasks:\n"
+        "      - name: hello\n"
+        "        task:\n"
+        "          - run: ls\n"
+        "        retry: 0\n"
+    )
+    custom_file.write_text(raw_text, encoding="utf-8")
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await register_and_auth_headers(client)
+            create_resp = await client.post(
+                "/api/projects/",
+                json={"workdir": str(tmp_project), "name": "my-project"},
+                headers=headers,
+            )
+            assert create_resp.status_code == 201
+            project_id = create_resp.json()["id"]
+
+            list_resp = await client.get("/api/pipelines/", params={"project_id": project_id})
+            assert list_resp.status_code == 200
+            item = next(i for i in list_resp.json()["items"] if i["file"] == "raw_fidelity.yaml")
+
+            detail_resp = await client.get(
+                f"/api/pipelines/by-id/{item['id']}",
+                params={"project_id": project_id},
+            )
+            assert detail_resp.status_code == 200
+            data = detail_resp.json()
+            # 原文逐字节一致：未知字段不能在传输环节被模型过滤
+            assert data["raw_content"] == raw_text
+    finally:
+        custom_file.unlink(missing_ok=True)
+
+
+@pytest.mark.asyncio
 @pytest.mark.zentao("TC-S2002", domain="server/api", priority="P1")
 async def test_get_pipeline_by_id_wrong_project(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)

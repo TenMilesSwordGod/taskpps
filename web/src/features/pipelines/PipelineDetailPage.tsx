@@ -15,7 +15,7 @@ import {
 import { usePipelineById, usePipelineByFile, useSavePipelineById, useSavePipelineByFile } from '@/api/pipelines';
 import PipelineGraph from './PipelineGraph';
 import YamlEditor from './YamlEditor';
-import type { YamlEditorRef } from './YamlEditor';
+import type { YamlEditorRef, VariableHoverData } from './YamlEditor';
 import { HelpPanel } from './HelpPanel';
 import TriggerRunModal from '@/components/TriggerRunModal';
 import PipelineBreadcrumb from '@/components/PipelineBreadcrumb';
@@ -23,6 +23,10 @@ import { exportAsPng, exportAsSvg, copyToClipboard } from '@/utils/exportImage';
 import { useAppStore } from '@/stores/appStore';
 import { parseYamlToPipeline, pipelineToYaml } from '@/utils/yamlParser';
 import type { PipelineDetail, ValidationError } from '@/types';
+import { buildVariableIndex, type AgentVariableSource, type CredentialVariableSource } from '@/utils/yamlVariables';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
+import { useAgentsWithConfig } from '@/api/agents';
+import { useCredentials } from '@/api/credentials';
 import WorkflowEditor, { type WorkflowEditorRef } from './workflow/WorkflowEditor';
 import NodePalette from './workflow/NodePalette';
 import PropertyPanel from './workflow/PropertyPanel';
@@ -205,7 +209,12 @@ export default function PipelineDetailPage() {
   // 打开 YAML 编辑器时，用当前 pipeline 生成 YAML
   const handleToggleEditor = useCallback(() => {
     if (!yamlEditorOpen && pipeline) {
-      const yaml = pipelineToYaml(pipeline);
+      // v3 (2026-09): 优先展示文件原文 raw_content。
+      // 为什么：pipelineToYaml(pipeline) 是从后端已解析模型反序列化的，Pydantic schema
+      // 未声明的字段（如用户实测的裸 `task:` 步骤列表）已被静默丢弃，编辑器内容 ≠ 真实文件。
+      // 旧数据 raw_content 为空时回退旧逻辑，保证兼容。
+      const raw = pipeline.raw_content;
+      const yaml = raw && raw.trim() ? raw : pipelineToYaml(pipeline);
       setYamlText(yaml);
       setEditedPipeline(null);
       setYamlError(null);
@@ -272,6 +281,36 @@ export default function PipelineDetailPage() {
     const nodeId = taskNameToNodeId.get(taskName) ?? taskName;
     setSelectedTaskId(nodeId);
   }, [taskNameToNodeId]);
+
+  // v3 (2026-09): YAML 编辑器 ${...} 悬浮解析数据。
+  // 仅在文本确实含对应引用时才拉项目配置，避免无变量流水线也发请求；
+  // agent 快照关掉 5s 轮询（悬浮只需要静态配置），凭据接口仅管理员可用，
+  // 非管理员展示"需管理员权限"而不是误报"未找到"。
+  const isAdmin = useIsAdmin();
+  const hasAgentRef = yamlText.includes('${agent:');
+  const hasCredentialRef = yamlText.includes('${credential:');
+  const { data: agentsWithConfig } = useAgentsWithConfig(hasAgentRef, { refetchInterval: false });
+  const { data: credentials } = useCredentials(projectId, hasCredentialRef && isAdmin);
+
+  const variableHover = useMemo<VariableHoverData | undefined>(() => {
+    if (!yamlText) return undefined;
+    const agentMap = new Map<string, AgentVariableSource>();
+    for (const agent of agentsWithConfig ?? []) {
+      agentMap.set(agent.agent_id, agent);
+      if (agent.name) agentMap.set(agent.name, agent);
+    }
+    const credentialMap = new Map<string, CredentialVariableSource>();
+    for (const credential of credentials ?? []) {
+      credentialMap.set(credential.id, credential);
+      credentialMap.set(credential.name, credential);
+    }
+    return {
+      index: buildVariableIndex(yamlText),
+      agents: agentMap,
+      credentials: credentialMap,
+      credentialsUnavailable: hasCredentialRef && !isAdmin,
+    };
+  }, [yamlText, agentsWithConfig, credentials, hasCredentialRef, isAdmin]);
 
   // 加载状态
   const isLoading = isFileMode ? fileLoading : pipelineLoading;
@@ -461,6 +500,7 @@ export default function PipelineDetailPage() {
               onCursorTaskChange={handleCursorTaskChange}
               onSave={handleSave}
               saving={saving}
+              variableHover={variableHover}
             />
           </div>
         )}

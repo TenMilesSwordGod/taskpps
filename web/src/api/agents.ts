@@ -183,8 +183,12 @@ export function useAgents(enabled = true) {
   });
 }
 
-/** 获取所有 yaml 配置的 agent + 实时连接状态（含离线） */
-export function useAgentsWithConfig(enabled = true) {
+/** 获取所有 yaml 配置的 agent + 实时连接状态（含离线）
+ *
+ * v3 (2026-09): 新增 options.refetchInterval —— 流水线详情页只需要一次性快照做
+ * 变量悬浮解析，默认 5s 轮询在这里是浪费，可按需传 false 关闭。
+ */
+export function useAgentsWithConfig(enabled = true, options?: { refetchInterval?: number | false }) {
   return useQuery<AgentWithConfig[]>({
     queryKey: ['agents', 'all'],
     queryFn: async () => {
@@ -193,7 +197,7 @@ export function useAgentsWithConfig(enabled = true) {
       return Array.isArray(res.data) ? (res.data as AgentWithConfig[]) : [];
     },
     enabled,
-    refetchInterval: 5000,
+    refetchInterval: options?.refetchInterval ?? 5000,
     refetchIntervalInBackground: false,
     staleTime: 2000,
     // 保留上一次成功的列表数据：再次进入 /servers 时（缓存未失效）立即展示老数据，

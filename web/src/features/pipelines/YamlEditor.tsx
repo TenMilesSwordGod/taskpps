@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, hoverTooltip } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
@@ -11,10 +11,27 @@ import { lintGutter } from '@codemirror/lint';
 import { Alert, Button, Tooltip, Space } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import type { ValidationError } from '@/types';
+import {
+  buildVariableTooltipDom,
+  findVariableAt,
+  resolveVariableInfo,
+  type AgentVariableSource,
+  type CredentialVariableSource,
+  type YamlVariableIndex,
+} from '@/utils/yamlVariables';
 
 export interface YamlEditorRef {
   /** 滚动到指定行（1-indexed），并临时高亮 2s */
   scrollToLine: (line: number) => void;
+}
+
+/** 变量悬浮所需的数据：YAML 上下文索引 + 调用方注入的项目配置 */
+export interface VariableHoverData {
+  index: YamlVariableIndex;
+  agents?: Map<string, AgentVariableSource>;
+  credentials?: Map<string, CredentialVariableSource>;
+  /** 凭据不可见（非管理员）时不误报"未找到" */
+  credentialsUnavailable?: boolean;
 }
 
 export interface YamlEditorProps {
@@ -34,10 +51,12 @@ export interface YamlEditorProps {
   onSave?: () => void;
   /** 是否正在保存 */
   saving?: boolean;
+  /** v3 (2026-09): ${...} 悬浮解析数据；不传则无悬浮提示 */
+  variableHover?: VariableHoverData;
 }
 
 /** CodeMirror YAML 编辑器组件 */
-const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEditor({ value, onChange, error, height = '100%', readOnly = false, onCursorTaskChange, onSave, saving }, ref) {
+const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEditor({ value, onChange, error, height = '100%', readOnly = false, onCursorTaskChange, onSave, saving, variableHover }, ref) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -48,6 +67,10 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
   onSaveRef.current = onSave;
   const onCursorTaskChangeRef = useRef(onCursorTaskChange);
   onCursorTaskChangeRef.current = onCursorTaskChange;
+  // v3 (2026-09): 悬浮扩展在挂载时创建一次，通过 ref 读取最新解析数据，
+  // 避免每次 value/项目配置变化都重建 CodeMirror extension
+  const variableHoverRef = useRef(variableHover);
+  variableHoverRef.current = variableHover;
 
   // 暴露 scrollToLine 给父组件
   useImperativeHandle(ref, () => ({
@@ -111,6 +134,26 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
         lintGutter(),
         yaml(),
         oneDark,
+        // v3 (2026-09): ${...} 悬浮展示解析值；数据通过 ref 读取，
+        // 扩展本身只创建一次，避免编辑器频繁重建
+        hoverTooltip((view, pos) => {
+          const data = variableHoverRef.current;
+          if (!data) return null;
+          const line = view.state.doc.lineAt(pos);
+          const found = findVariableAt(line.text, pos - line.from);
+          if (!found) return null;
+          const info = resolveVariableInfo(found.expression, data.index, {
+            lineNumber: line.number,
+            agents: data.agents,
+            credentials: data.credentials,
+            credentialsUnavailable: data.credentialsUnavailable,
+          });
+          return {
+            pos: line.from + found.from,
+            end: line.from + found.to,
+            create: () => ({ dom: buildVariableTooltipDom(info) }),
+          };
+        }),
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
