@@ -709,3 +709,79 @@ class PipelineDefinitionRepository:
             stmt = stmt.where(PipelineDefinition.active == True)  # noqa: E712
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def rename_file_path(self, project_id: str, old_path: str, new_path: str) -> int:
+        """重命名单个流水线定义的 file_path。
+
+        为什么原地改 file_path 而不删旧建新：definition_id 被 runs.definition_id 外键引用，
+        删旧建新会导致历史运行记录失去关联（列表成功率/最近运行全部丢失）。
+        """
+        now = datetime.now(timezone.utc)
+        stmt = select(PipelineDefinition).where(
+            PipelineDefinition.project_id == project_id,
+            PipelineDefinition.file_path == old_path,
+            PipelineDefinition.active == True,  # noqa: E712
+        )
+        result = await self.session.execute(stmt)
+        records = result.scalars().all()
+        for r in records:
+            r.file_path = new_path
+            r.updated_at = now
+        await self.session.commit()
+        return len(records)
+
+    async def rename_prefix(self, project_id: str, old_prefix: str, new_prefix: str) -> int:
+        """文件夹重命名/移动时批量替换 file_path 前缀，保留各 definition_id。
+
+        为什么用 startswith(old_prefix)：文件夹移动影响目录下所有流水线；
+        prefix 由调用方保证带结尾分隔符，避免 "debug" 误匹配 "debug2/x.yaml"。
+        """
+        now = datetime.now(timezone.utc)
+        stmt = select(PipelineDefinition).where(
+            PipelineDefinition.project_id == project_id,
+            PipelineDefinition.active == True,  # noqa: E712
+            PipelineDefinition.file_path.startswith(old_prefix, autoescape=True),
+        )
+        result = await self.session.execute(stmt)
+        records = result.scalars().all()
+        for r in records:
+            r.file_path = new_prefix + r.file_path[len(old_prefix):]
+            r.updated_at = now
+        await self.session.commit()
+        return len(records)
+
+    async def deactivate_file(self, project_id: str, file_path: str) -> int:
+        """软删除单条流水线定义（active=False）。
+
+        为什么不物理删除：pipeline_definitions.id 被 runs 外键引用，
+        物理删除会破坏历史运行记录；软删除后列表接口不再展示该流水线。
+        """
+        now = datetime.now(timezone.utc)
+        stmt = select(PipelineDefinition).where(
+            PipelineDefinition.project_id == project_id,
+            PipelineDefinition.file_path == file_path,
+            PipelineDefinition.active == True,  # noqa: E712
+        )
+        result = await self.session.execute(stmt)
+        records = result.scalars().all()
+        for r in records:
+            r.active = False
+            r.updated_at = now
+        await self.session.commit()
+        return len(records)
+
+    async def deactivate_prefix(self, project_id: str, prefix: str) -> int:
+        """软删除文件夹下所有流水线定义（active=False），保留运行历史关联。"""
+        now = datetime.now(timezone.utc)
+        stmt = select(PipelineDefinition).where(
+            PipelineDefinition.project_id == project_id,
+            PipelineDefinition.active == True,  # noqa: E712
+            PipelineDefinition.file_path.startswith(prefix, autoescape=True),
+        )
+        result = await self.session.execute(stmt)
+        records = result.scalars().all()
+        for r in records:
+            r.active = False
+            r.updated_at = now
+        await self.session.commit()
+        return len(records)

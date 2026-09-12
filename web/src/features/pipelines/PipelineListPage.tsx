@@ -1,14 +1,19 @@
 import { useState, useMemo, useCallback, useRef, useEffect, useDeferredValue } from 'react';
-import { Card, Table, Button, Input, Space, Tooltip, Tag } from 'antd';
-import { Search, RefreshCw, Play, ChevronRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Card, Table, Button, Input, Space, Tooltip, Tag, Dropdown, App } from 'antd';
+import type { MenuProps } from 'antd';
+import { Search, RefreshCw, Play, ChevronRight, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MoreHorizontal, FilePlus, FolderPlus, FolderInput } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { usePipelines } from '@/api/pipelines';
+import { usePipelines, useDeletePipeline, useDeleteFolder } from '@/api/pipelines';
 import StatusTag from '@/components/StatusTag';
 import TriggerRunModal from '@/components/TriggerRunModal';
+import CreatePipelineModal from './components/CreatePipelineModal';
+import CreateFolderModal from './components/CreateFolderModal';
+import RegisterProjectModal from './components/RegisterProjectModal';
+import RenameModal from './components/RenameModal';
 import SuccessRateChart from './components/SuccessRateChart';
 import type { RunSummary } from './components/SuccessRateChart';
-import type { PipelineSummary, RunStatus, ValidationError } from '@/types';
+import type { PipelineSummary, RunStatus } from '@/types';
 
 // v2 (2026-07): 性能优化 — 稳定的空数组引用，避免 `record.recent_runs || []` 在每次
 // 渲染时生成新数组引用，导致 React.memo(SuccessRateChart) 失效而全表重渲染 SVG。
@@ -17,7 +22,7 @@ const EMPTY_RUNS: RunSummary[] = [];
 /** 行类型 */
 type Row =
   | (PipelineSummary & { kind: 'project'; children: Row[]; pipelineCount: number })
-  | (PipelineSummary & { kind: 'folder'; children: PipelineSummary[]; pipelineCount: number })
+  | (PipelineSummary & { kind: 'folder'; children: PipelineSummary[]; pipelineCount: number; descendantCount: number })
   | (PipelineSummary & { kind: 'pipeline' });
 
 export default function PipelineListPage() {
@@ -36,6 +41,67 @@ export default function PipelineListPage() {
   // 改为仅在 Set 变化时生成新数组，保持引用稳定。
   const expandedKeys = useMemo(() => [...expandedRowKeys], [expandedRowKeys]);
 
+  // v3 (2026-09): 网页端新建/注册/重命名/删除的状态与操作
+  const { message, modal } = App.useApp();
+  const [createPipelineOpen, setCreatePipelineOpen] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [registerProjectOpen, setRegisterProjectOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{
+    kind: 'pipeline' | 'folder';
+    projectId: string;
+    current: string;
+  } | null>(null);
+  const deletePipeline = useDeletePipeline();
+  const deleteFolder = useDeleteFolder();
+  // mutateAsync 引用稳定，解构出来可让下方 useCallback 依赖保持稳定（避免整列重建）
+  const { mutateAsync: deletePipelineAsync } = deletePipeline;
+  const { mutateAsync: deleteFolderAsync } = deleteFolder;
+
+  const handleDeletePipeline = useCallback((record: Row) => {
+    if (record.kind !== 'pipeline' || !record.project_id) return;
+    const projectId = record.project_id;
+    modal.confirm({
+      title: '删除流水线',
+      content: `确定删除「${record.name}」(${record.file})？删除后运行历史仍会保留。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deletePipelineAsync({ projectId, file: record.file });
+          message.success('流水线已删除');
+        } catch (e) {
+          message.error(e instanceof Error ? e.message : '删除失败');
+          throw e;
+        }
+      },
+    });
+  }, [modal, message, deletePipelineAsync]);
+
+  const handleDeleteFolder = useCallback((record: Row) => {
+    if (record.kind !== 'folder' || !record.project_id) return;
+    const projectId = record.project_id;
+    // descendantCount 含子文件夹中的流水线，避免嵌套目录下确认数量为 0 却触发后端 409
+    const count = record.descendantCount;
+    modal.confirm({
+      title: '删除文件夹',
+      content:
+        count > 0
+          ? `文件夹「${record.folder}」包含 ${count} 条流水线，确定递归删除？此操作不可恢复（运行历史保留）。`
+          : `确定删除空文件夹「${record.folder}」？`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deleteFolderAsync({ projectId, folder: record.folder, recursive: count > 0 });
+          message.success('文件夹已删除');
+        } catch (e) {
+          message.error(e instanceof Error ? e.message : '删除失败');
+          throw e;
+        }
+      },
+    });
+  }, [modal, message, deleteFolderAsync]);
+
   const filtered = useMemo(() => {
     const list = data?.items ?? [];
     if (!deferredKeyword.trim()) return list;
@@ -47,12 +113,34 @@ export default function PipelineListPage() {
 
   // 按 project -> folder 两级分组
   const rows = useMemo<Row[]>(() => {
+    // v3 (2026-09): 搜索时只保留命中流水线的分组；空文件夹没有可匹配内容，直接隐藏
+    const keywordActive = !!deferredKeyword.trim();
     // 先按 project 分组
     const projectGroups = new Map<string, PipelineSummary[]>();
+    const projectNames = new Map<string, string | null>();
+    // 仅包含空文件夹的项目（可能一条流水线都没有，需要靠 folders 才能出现在分组里）
+    const emptyFolders = new Map<string, Set<string>>();
+
     for (const p of filtered) {
       const pid = p.project_id || '__default__';
-      if (!projectGroups.has(pid)) projectGroups.set(pid, []);
+      if (!projectGroups.has(pid)) {
+        projectGroups.set(pid, []);
+        projectNames.set(pid, p.project_name);
+      }
       projectGroups.get(pid)!.push(p);
+    }
+
+    // 合并后端目录扫描返回的空文件夹
+    if (!keywordActive) {
+      for (const f of data?.folders ?? []) {
+        const pid = f.project_id || '__default__';
+        if (!projectGroups.has(pid)) {
+          projectGroups.set(pid, []);
+          projectNames.set(pid, f.project_name ?? null);
+        }
+        if (!emptyFolders.has(pid)) emptyFolders.set(pid, new Set());
+        emptyFolders.get(pid)!.add(f.folder);
+      }
     }
 
     const out: Row[] = [];
@@ -61,7 +149,7 @@ export default function PipelineListPage() {
     for (const pid of sortedProjects) {
       const projectPipelines = projectGroups.get(pid)!;
       // Issue #184: 折叠行显示 project_name 而非 project_id
-      const projectName = projectPipelines[0]?.project_name || pid;
+      const projectName = projectNames.get(pid) || projectPipelines[0]?.project_name || pid;
       const projectLabel = pid === '__default__' ? '' : projectName;
 
       // 在 project 内按 folder 分组
@@ -70,6 +158,10 @@ export default function PipelineListPage() {
         const folder = p.folder || '';
         if (!folderGroups.has(folder)) folderGroups.set(folder, []);
         folderGroups.get(folder)!.push(p);
+      }
+      // 补上没有任何流水线的空文件夹
+      for (const folder of emptyFolders.get(pid) ?? []) {
+        if (!folderGroups.has(folder)) folderGroups.set(folder, []);
       }
 
       const children: Row[] = [];
@@ -83,6 +175,10 @@ export default function PipelineListPage() {
             children.push({ ...p, kind: 'pipeline' as const });
           }
         } else {
+          // 递归删除时的真实影响范围：包含子文件夹中的流水线
+          const descendantCount = projectPipelines.filter(
+            (p) => (p.folder || '') === folder || (p.folder || '').startsWith(`${folder}/`),
+          ).length;
           children.push({
             id: '',
             name: folder,
@@ -104,6 +200,7 @@ export default function PipelineListPage() {
             kind: 'folder',
             children: folderPipelines.map((p) => ({ ...p, kind: 'pipeline' as const })),
             pipelineCount: folderPipelines.length,
+            descendantCount,
           });
         }
       }
@@ -140,7 +237,7 @@ export default function PipelineListPage() {
       }
     }
     return out;
-  }, [filtered]);
+  }, [filtered, data?.folders, deferredKeyword]);
 
   const isExpandable = (r: Row) => r.kind === 'project' || r.kind === 'folder';
 
@@ -346,19 +443,53 @@ export default function PipelineListPage() {
     {
       title: '操作',
       key: 'action',
-      width: 80,
+      width: 110,
       render: (_: unknown, record: Row) => {
-        if (record.kind !== 'pipeline') return null;
+        if (record.kind === 'project') return null;
+        // project_id 为空说明是未注册项目的回退分组，无法执行写操作
+        const canManage = !!record.project_id;
+        const items: MenuProps['items'] = [
+          {
+            key: 'rename',
+            icon: <Pencil size={14} />,
+            label: '重命名',
+            disabled: !canManage,
+            onClick: () => {
+              if (!record.project_id) return;
+              setRenameTarget({
+                kind: record.kind === 'pipeline' ? 'pipeline' : 'folder',
+                projectId: record.project_id,
+                current: record.kind === 'pipeline' ? record.file : record.folder,
+              });
+            },
+          },
+          {
+            key: 'delete',
+            icon: <Trash2 size={14} />,
+            label: '删除',
+            danger: true,
+            disabled: !canManage,
+            onClick: () => {
+              if (record.kind === 'pipeline') handleDeletePipeline(record);
+              else handleDeleteFolder(record);
+            },
+          },
+        ];
         return (
           <Space>
-            <Tooltip title="触发运行">
-              <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.id, record.project_id)} />
-            </Tooltip>
+            {record.kind === 'pipeline' && (
+              <Tooltip title="触发运行">
+                <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.id, record.project_id)} />
+              </Tooltip>
+            )}
+            <Dropdown menu={{ items }} trigger={['click']}>
+              <Button type="text" size="small" icon={<MoreHorizontal size={14} />} aria-label="更多操作" />
+            </Dropdown>
           </Space>
         );
       },
     },
-  ], [handleOpenTrigger]);
+  ], [handleOpenTrigger, handleDeletePipeline, handleDeleteFolder]);
 
   return (
     <div className="p-6 h-full overflow-auto">
@@ -382,8 +513,21 @@ export default function PipelineListPage() {
                 prefix={<Search size={14} color="#7C7F88" />}
               />
               <Space>
+                <Dropdown
+                  trigger={['click']}
+                  menu={{
+                    items: [
+                      { key: 'pipeline', icon: <FilePlus size={14} />, label: '新建流水线', onClick: () => setCreatePipelineOpen(true) },
+                      { key: 'folder', icon: <FolderPlus size={14} />, label: '新建文件夹', onClick: () => setCreateFolderOpen(true) },
+                      { type: 'divider' },
+                      { key: 'project', icon: <FolderInput size={14} />, label: '注册项目目录', onClick: () => setRegisterProjectOpen(true) },
+                    ],
+                  }}
+                >
+                  <Button type="primary" icon={<Plus size={14} />}>新建</Button>
+                </Dropdown>
                 <Button icon={<RefreshCw size={14} />} onClick={() => refetch()}>刷新</Button>
-                <Button type="primary" icon={<Play size={14} />} onClick={() => handleOpenTrigger(undefined)}>触发运行</Button>
+                <Button icon={<Play size={14} />} onClick={() => handleOpenTrigger(undefined)}>触发运行</Button>
               </Space>
             </div>
           )}
@@ -445,6 +589,18 @@ export default function PipelineListPage() {
         onClose={() => setTriggerOpen(false)}
         defaultDefinitionId={triggerDefinitionId}
         defaultProjectId={triggerProjectId}
+      />
+
+      {/* v3 (2026-09): 网页端新建/注册/重命名弹窗 */}
+      <CreatePipelineModal open={createPipelineOpen} onClose={() => setCreatePipelineOpen(false)} />
+      <CreateFolderModal open={createFolderOpen} onClose={() => setCreateFolderOpen(false)} />
+      <RegisterProjectModal open={registerProjectOpen} onClose={() => setRegisterProjectOpen(false)} />
+      <RenameModal
+        open={!!renameTarget}
+        onClose={() => setRenameTarget(null)}
+        kind={renameTarget?.kind ?? 'pipeline'}
+        projectId={renameTarget?.projectId ?? null}
+        current={renameTarget?.current ?? ''}
       />
 
       {/* Issue #104: 展开/折叠动画样式 */}

@@ -4,11 +4,27 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from taskpps.main import app as _app
+from tests.auth._helpers import register_and_auth_headers
 
 
 @pytest.fixture
 def app():
     return _app
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_created_pipeline_files(tmp_project):
+    """清理本模块测试写入 session 级 tmp_project 的临时 YAML。
+
+    为什么需要：tmp_project 是 session 作用域，本模块多个用例会放入非法/临时
+    pipeline 文件；若不清理会污染同一 session 内其他用例（如 sync 计数断言）。
+    """
+    pipelines_dir = tmp_project / "pipelines"
+    before = {p.name for p in pipelines_dir.iterdir()}
+    yield
+    for p in pipelines_dir.iterdir():
+        if p.name not in before and p.is_file():
+            p.unlink()
 
 
 @pytest.mark.asyncio
@@ -17,10 +33,12 @@ async def test_list_pipelines_returns_project_name(app, setup_project, tmp_proje
     """Issue #91: 流水线列表应返回 project_name 而非仅 project_id"""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         # 注册项目（使用 tmp_project 作为 workdir，确保有 pipeline 文件）
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
 
@@ -44,10 +62,12 @@ async def test_list_pipelines_project_name_fallback_to_workdir(app, setup_projec
     """Issue #91: 项目 name 为空时，project_name 应回退到 workdir 最后一段路径"""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         # 注册项目，不指定 name
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project)},
+            headers=headers,
         )
         assert create_resp.status_code == 201
 
@@ -75,9 +95,11 @@ async def test_list_pipelines_valid_pipelines_have_valid_true(app, setup_project
     """TC-S1002: 合法 pipeline 返回 valid=true, validation_error=null"""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "test-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
 
@@ -99,7 +121,6 @@ async def test_list_pipelines_valid_pipelines_have_valid_true(app, setup_project
 @pytest.mark.zentao("TC-S1001", domain="server/api", priority="P1")
 async def test_list_pipelines_includes_invalid_yaml(app, setup_project, tmp_project, db_engine, clean_db):
     """TC-S1001: 非法 YAML pipeline 出现于列表中，valid=false, validation_error 非空"""
-    import os
 
     # 在项目 pipelines 目录下放置非法 YAML 文件
     pipelines_dir = tmp_project / "pipelines"
@@ -108,9 +129,11 @@ async def test_list_pipelines_includes_invalid_yaml(app, setup_project, tmp_proj
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "test-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
 
@@ -143,9 +166,11 @@ async def test_list_pipelines_invalid_empty_yaml(app, setup_project, tmp_project
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "test-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
 
@@ -171,9 +196,11 @@ async def test_list_pipelines_invalid_missing_name(app, setup_project, tmp_proje
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "test-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
 
@@ -204,11 +231,12 @@ async def test_list_invalid_pipeline_includes_raw_content(app, setup_project, tm
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        headers = await register_and_auth_headers(client)
+        await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"}, headers=headers)
         response = await client.get("/api/pipelines/")
         assert response.status_code == 200
         items = response.json()["items"]
-        bad = [i for i in items if i.get("file") == "bad_raw.yaml"][0]
+        bad = next(i for i in items if i.get("file") == "bad_raw.yaml")
         assert bad["raw_content"] == raw
 
 
@@ -222,7 +250,8 @@ async def test_get_pipeline_by_file_returns_raw_content(app, setup_project, tmp_
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        headers = await register_and_auth_headers(client)
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"}, headers=headers)
         assert create_resp.status_code == 201
         pid = create_resp.json()["id"]
 
@@ -239,7 +268,8 @@ async def test_get_pipeline_by_file_not_found(app, setup_project, tmp_project, d
     """GET /by-file/{project_id}?file=... 文件不存在 → 404"""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        headers = await register_and_auth_headers(client)
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"}, headers=headers)
         pid = create_resp.json()["id"]
 
         resp = await client.get(f"/api/pipelines/by-file/{pid}", params={"file": "nonexistent.yaml"})
@@ -257,12 +287,14 @@ async def test_save_pipeline_by_file_writes_disk(app, setup_project, tmp_project
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        headers = await register_and_auth_headers(client)
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"}, headers=headers)
         pid = create_resp.json()["id"]
 
         resp = await client.put(
             f"/api/pipelines/by-file/{pid}",
             json={"file": "new.yaml", "content": raw},
+            headers=headers,
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
@@ -280,12 +312,14 @@ async def test_save_pipeline_by_file_yaml_syntax_error(app, setup_project, tmp_p
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"})
+        headers = await register_and_auth_headers(client)
+        create_resp = await client.post("/api/projects/", json={"workdir": str(tmp_project), "name": "test-project"}, headers=headers)
         pid = create_resp.json()["id"]
 
         resp = await client.put(
             f"/api/pipelines/by-file/{pid}",
             json={"file": "syntax.yaml", "content": "name: bad\n  bad indent: yes\n"},
+            headers=headers,
         )
         assert resp.status_code == 400
 
@@ -322,7 +356,7 @@ async def test_list_pipelines_last_operator(app, setup_project, tmp_project, db_
         # 拿到 deploy.yaml 的 definition_id 并触发一次运行（带 token）
         list_resp = await client.get("/api/pipelines/")
         items = list_resp.json()["items"]
-        deploy = [i for i in items if i.get("file") == "deploy.yaml"][0]
+        deploy = next(i for i in items if i.get("file") == "deploy.yaml")
         assert deploy["id"]
 
         run_resp = await client.post(
@@ -335,6 +369,6 @@ async def test_list_pipelines_last_operator(app, setup_project, tmp_project, db_
         # 再次拉取列表，校验该 pipeline 的 last_operator / last_operator_nickname
         list_resp2 = await client.get("/api/pipelines/")
         items2 = list_resp2.json()["items"]
-        deploy2 = [i for i in items2 if i.get("file") == "deploy.yaml"][0]
+        deploy2 = next(i for i in items2 if i.get("file") == "deploy.yaml")
         assert deploy2["last_operator"] == "alice"
         assert deploy2["last_operator_nickname"] == "Alice"

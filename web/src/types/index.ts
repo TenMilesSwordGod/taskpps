@@ -132,9 +132,19 @@ export interface PipelineSummary {
   raw_content?: string;
 }
 
+/** 流水线文件夹（v3 2026-09: 支持展示暂无 YAML 的空文件夹） */
+export interface PipelineFolder {
+  project_id: string | null;
+  folder: string;
+  /** 所属项目名称（空文件夹所在项目可能没有流水线，需靠它渲染分组标题） */
+  project_name?: string | null;
+}
+
 /** 流水线列表响应 */
 export interface PipelineListResponse {
   items: PipelineSummary[];
+  /** 真实存在的文件夹列表（含空文件夹），由后端目录扫描返回 */
+  folders?: PipelineFolder[];
 }
 
 /** Invoke 规格 */

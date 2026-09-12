@@ -4,6 +4,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from taskpps.main import app as _app
+from tests.auth._helpers import register_and_auth_headers
 
 
 @pytest.fixture
@@ -16,9 +17,11 @@ def app():
 async def test_get_pipeline_by_id(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -58,9 +61,11 @@ async def test_get_pipeline_by_id_not_found(app, db_engine, clean_db):
 async def test_get_pipeline_by_id_wrong_project(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -82,9 +87,11 @@ async def test_get_pipeline_by_id_wrong_project(app, setup_project, tmp_project,
 async def test_put_pipeline_by_id_overwrite(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -97,6 +104,7 @@ async def test_put_pipeline_by_id_overwrite(app, setup_project, tmp_project, db_
         put_resp = await client.put(
             f"/api/pipelines/by-id/{definition_id}",
             json={"content": new_yaml},
+            headers=headers,
         )
         assert put_resp.status_code == 200
         data = put_resp.json()
@@ -116,9 +124,11 @@ async def test_put_pipeline_by_id_overwrite(app, setup_project, tmp_project, db_
 async def test_put_pipeline_by_id_not_found(app, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         response = await client.put(
             "/api/pipelines/by-id/nonexistent",
             json={"content": "name: test\n"},
+            headers=headers,
         )
         assert response.status_code == 404
 
@@ -128,9 +138,11 @@ async def test_put_pipeline_by_id_not_found(app, db_engine, clean_db):
 async def test_put_pipeline_by_id_invalid_yaml(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -142,5 +154,6 @@ async def test_put_pipeline_by_id_invalid_yaml(app, setup_project, tmp_project, 
         response = await client.put(
             f"/api/pipelines/by-id/{definition_id}",
             json={"content": "{invalid: yaml: :"},
+            headers=headers,
         )
         assert response.status_code == 400

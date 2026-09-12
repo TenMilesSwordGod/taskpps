@@ -81,3 +81,152 @@ export function useSavePipelineById(definitionId: string | undefined) {
     },
   });
 }
+
+// v3 (2026-09): 网页端新建/重命名/删除流水线与文件夹
+// 统一在成功后失效 ['pipelines'] 列表缓存，列表页自动刷新。
+
+/** 新建流水线响应 */
+export interface CreatePipelineResult {
+  status: string;
+  file: string;
+  definition_id: string | null;
+}
+
+/**
+ * 新建流水线。
+ * 设计决策：走 POST 而非复用 PUT —— 后端 POST 对已存在文件返回 409，
+ * 避免用户重名时静默覆盖已有流水线。
+ * projectId 作为 mutation 变量传入：列表页/弹窗可能在多个项目间操作。
+ */
+export function useCreatePipeline() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      file,
+      content,
+    }: {
+      projectId: string;
+      file: string;
+      content: string;
+    }) => {
+      const res = await apiClient.post(
+        `/api/pipelines/by-file/${encodeURIComponent(projectId)}`,
+        { file, content },
+      );
+      return res.data as CreatePipelineResult;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    },
+  });
+}
+
+/** 重命名/移动流水线文件（不修改 YAML 内的 name） */
+export function useRenamePipeline() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      file,
+      newFile,
+    }: {
+      projectId: string;
+      file: string;
+      newFile: string;
+    }) => {
+      const res = await apiClient.patch(
+        `/api/pipelines/by-file/${encodeURIComponent(projectId)}`,
+        { file, new_file: newFile },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    },
+  });
+}
+
+/** 删除流水线文件（后端软删除定义，保留运行历史） */
+export function useDeletePipeline() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, file }: { projectId: string; file: string }) => {
+      const res = await apiClient.delete(
+        `/api/pipelines/by-file/${encodeURIComponent(projectId)}`,
+        { params: { file } },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    },
+  });
+}
+
+/** 新建流水线文件夹（支持多级路径） */
+export function useCreateFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, folder }: { projectId: string; folder: string }) => {
+      const res = await apiClient.post(
+        `/api/pipelines/folders/${encodeURIComponent(projectId)}`,
+        { folder },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    },
+  });
+}
+
+/** 重命名/移动流水线文件夹 */
+export function useRenameFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      folder,
+      newFolder,
+    }: {
+      projectId: string;
+      folder: string;
+      newFolder: string;
+    }) => {
+      const res = await apiClient.patch(
+        `/api/pipelines/folders/${encodeURIComponent(projectId)}`,
+        { folder, new_folder: newFolder },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    },
+  });
+}
+
+/** 删除流水线文件夹；非空时必须 recursive=true（后端强校验） */
+export function useDeleteFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      folder,
+      recursive,
+    }: {
+      projectId: string;
+      folder: string;
+      recursive?: boolean;
+    }) => {
+      const res = await apiClient.delete(
+        `/api/pipelines/folders/${encodeURIComponent(projectId)}`,
+        { params: { folder, recursive: recursive ?? false } },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    },
+  });
+}
