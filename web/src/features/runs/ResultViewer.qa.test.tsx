@@ -11,6 +11,9 @@ import ResultViewer from './ResultViewer'
 import type { ResultPageResponse } from '@/types'
 
 function makeResultPage(overrides: Partial<ResultPageResponse> = {}): ResultPageResponse {
+  // v2 (2026-09): 组件默认结果页改为原生渲染，HTML/MD 注入仅用于插件产物。
+  // 这里让 collector_html 与 html_content 同步并设为 append，保持原有「HTML 注入 + 消毒」用例的覆盖。
+  const htmlContent = overrides.html_content ?? '<h1>Test Result</h1><p>All tests passed.</p>'
   return {
     run_id: 'run-1',
     pipeline_name: 'test-pipeline',
@@ -27,10 +30,11 @@ function makeResultPage(overrides: Partial<ResultPageResponse> = {}): ResultPage
       finished_at: '2024-01-01T00:01:00',
       duration: '1m 0s',
     },
-    html_content: '<h1>Test Result</h1><p>All tests passed.</p>',
+    html_content: htmlContent,
+    collector_html: htmlContent,
     md_content: '# Test Result\n\nAll tests passed.',
-    collector_mode: null,
-    has_collector: false,
+    collector_mode: 'append',
+    has_collector: true,
     generated_at: '2024-01-01T00:01:00',
     ...overrides,
   }

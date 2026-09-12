@@ -602,8 +602,11 @@ async def select_retry_report(run_id: str, retry_id: str, body: SelectReportRequ
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("/{run_id}/result", response_model=ResultPageResponse)
+@router.get("/{run_id}/result", response_model=ResultPageResponse, response_model_exclude_unset=True)
 async def get_result_page(run_id: str):
+    # v2 (2026-09): exclude_unset 让老 result.json 缺失的 collector_html/collector_md
+    # 字段不出现在响应里（而非被 Pydantic 默认值填成 null），前端据此区分
+    # 「老数据走整段 HTML 回退」与「新数据原生渲染」
     async with get_session_factory()() as session:
         run_repo = RunRepository(session)
         run = await run_repo.get_run(run_id)

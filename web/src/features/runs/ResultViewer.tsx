@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Tooltip } from 'antd';
 import { FileText } from 'lucide-react';
 import { marked } from 'marked';
+import ResultSummary from './ResultSummary';
 import type { ResultPageResponse } from '@/types';
 
 interface ResultViewerProps {
@@ -23,14 +24,41 @@ function sanitizeHtml(html: string): string {
   return html;
 }
 
+/** 注入 HTML 的统一容器：prose 样式保证插件输出的表格/代码块可读 */
+function HtmlBlock({ html }: { html: string }) {
+  if (!html) return null;
+  return (
+    <div
+      className="prose prose-sm max-w-none prose-table:w-full [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-50 [&_td]:border [&_td]:border-gray-200"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 export default function ResultViewer({ data }: ResultViewerProps) {
-  const htmlContent = useMemo(() => {
-    if (!data) return '';
-    const raw = data.format === 'md'
-      ? (marked.parse(data.md_content) as string)
-      : data.html_content;
-    return sanitizeHtml(raw);
-  }, [data]);
+  const isMd = data?.format === 'md';
+  const mdHtml = useMemo(
+    () => (data && isMd ? sanitizeHtml(marked.parse(data.md_content) as string) : ''),
+    [data, isMd],
+  );
+  const collectorHtml = useMemo(
+    () => (data?.collector_html ? sanitizeHtml(data.collector_html) : ''),
+    [data],
+  );
+  const collectorMdHtml = useMemo(
+    () => (data?.collector_md ? sanitizeHtml(marked.parse(data.collector_md) as string) : ''),
+    [data],
+  );
+  // v2 (2026-09): 老 result.json 无 collector_html/md 字段，回退旧的整段注入逻辑，
+  // 保证历史运行记录仍能展示插件内容
+  const isLegacyCollector = data
+    ? data.collector_html === undefined && data.collector_md === undefined
+    : false;
+  const legacyHtml = useMemo(
+    () =>
+      data && isLegacyCollector && data.has_collector ? sanitizeHtml(data.html_content) : '',
+    [data, isLegacyCollector],
+  );
 
   if (!data) {
     return (
@@ -39,6 +67,10 @@ export default function ResultViewer({ data }: ResultViewerProps) {
       </div>
     );
   }
+
+  const isCollectorReplace = data.has_collector && data.collector_mode === 'replace';
+  // 只有声明了插件输出时才渲染额外内容，避免默认结果页被重复注入
+  const extraHtml = data.has_collector ? collectorHtml || collectorMdHtml || legacyHtml : '';
 
   return (
     <div className="flex flex-col h-full">
@@ -56,10 +88,25 @@ export default function ResultViewer({ data }: ResultViewerProps) {
         </div>
       </div>
       <div className="flex-1 overflow-auto bg-white">
-        <div
-          className="p-6 prose prose-sm max-w-none prose-table:w-full [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-50 [&_td]:border [&_td]:border-gray-200"
-          dangerouslySetInnerHTML={{ __html: htmlContent }}
-        />
+        {isMd ? (
+          <div className="p-6">
+            <HtmlBlock html={mdHtml} />
+          </div>
+        ) : isCollectorReplace ? (
+          // 插件声明 replace 时尊重其输出：只展示插件内容
+          <div className="p-6">
+            <HtmlBlock html={collectorHtml || sanitizeHtml(data.html_content)} />
+          </div>
+        ) : (
+          <>
+            <ResultSummary data={data} />
+            {extraHtml && (
+              <div className="border-t border-slate-200 p-6">
+                <HtmlBlock html={extraHtml} />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

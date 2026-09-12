@@ -24,18 +24,26 @@ function makeResultPage(overrides: Partial<ResultPageResponse> = {}): ResultPage
     md_content: '# Test Result\n\nAll tests passed.',
     collector_mode: null,
     has_collector: false,
+    collector_html: null,
+    collector_md: null,
     generated_at: '2024-01-01T00:01:00',
     ...overrides,
   }
 }
 
 describe('<ResultViewer />', () => {
-  it('renders html content by default', () => {
+  it('renders native summary by default instead of injected html', () => {
     const data = makeResultPage()
     render(<ResultViewer data={data} />)
     expect(screen.getByText('执行结果')).toBeDefined()
-    const htmlContent = document.querySelector('.flex-1.overflow-auto')
-    expect(htmlContent?.innerHTML).toContain('Test Result')
+    expect(screen.getByText('test-pipeline')).toBeDefined()
+    expect(screen.getByText('100.0%')).toBeDefined()
+    expect(screen.getByText('通过')).toBeDefined()
+    expect(screen.getByText('失败')).toBeDefined()
+    expect(screen.getByText('1m 0s')).toBeDefined()
+    // 默认页不再注入后端的 html_content，避免外部样式污染
+    const container = document.querySelector('.flex-1.overflow-auto')
+    expect(container?.innerHTML).not.toContain('Test Result')
   })
 
   it('renders md content when format is md', () => {
@@ -48,6 +56,52 @@ describe('<ResultViewer />', () => {
     expect(screen.getByText('执行结果')).toBeDefined()
     const htmlContent = document.querySelector('.flex-1.overflow-auto')
     expect(htmlContent?.innerHTML).toContain('MD Title')
+  })
+
+  it('renders only collector html when collector replaces default result', () => {
+    const data = makeResultPage({
+      has_collector: true,
+      collector_mode: 'replace',
+      collector_html: '<h1>ONLY COLLECTOR</h1>',
+      collector_md: '# ONLY COLLECTOR',
+    })
+    render(<ResultViewer data={data} />)
+    expect(screen.getByText('ONLY COLLECTOR')).toBeDefined()
+    expect(screen.queryByText('通过率')).toBeNull()
+  })
+
+  it('renders native summary plus collector html in append mode', () => {
+    const data = makeResultPage({
+      has_collector: true,
+      collector_mode: 'append',
+      collector_html: '<h1>EXTRA CONTENT</h1>',
+      collector_md: '# EXTRA CONTENT',
+    })
+    render(<ResultViewer data={data} />)
+    expect(screen.getByText('通过率')).toBeDefined()
+    expect(screen.getByText('EXTRA CONTENT')).toBeDefined()
+  })
+
+  it('sanitizes collector html', () => {
+    const data = makeResultPage({
+      has_collector: true,
+      collector_mode: 'append',
+      collector_html: '<h1>Safe</h1><script>alert("xss")</script>',
+      collector_md: '',
+    })
+    render(<ResultViewer data={data} />)
+    const container = document.querySelector('.flex-1.overflow-auto')
+    expect(container?.innerHTML).not.toContain('<script')
+    expect(container?.innerHTML).toContain('Safe')
+  })
+
+  it('falls back to legacy html injection for old result.json without collector fields', () => {
+    const data = makeResultPage({ has_collector: true, collector_mode: 'append' })
+    delete data.collector_html
+    delete data.collector_md
+    render(<ResultViewer data={data} />)
+    const container = document.querySelector('.flex-1.overflow-auto')
+    expect(container?.innerHTML).toContain('Test Result')
   })
 
   it('shows collector badge when has_collector is true', () => {

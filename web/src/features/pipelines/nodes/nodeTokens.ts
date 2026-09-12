@@ -59,6 +59,20 @@ export const STATUS_SOFT_BG: Record<TaskStatus, string> = {
   cancelled: '#F3F4F6',
 };
 
+/** 任务状态 → 高对比文本/数据色
+ * v2 (2026-09): 结果页指标数字与进度条需要满足 WCAG 对比度（正文 4.5:1 / 图形 ≥3:1），
+ *   STATUS_COLOR 的亮色（如 success #10B981 白底仅 2.54:1）不达标，
+ *   故文本与数据场景改用加深版本；强调条/边框等大面积图形仍用 STATUS_COLOR。
+ */
+export const STATUS_TEXT_COLOR: Record<TaskStatus, string> = {
+  pending: '#64748B', // slate-500，白底 4.76:1
+  running: '#0369A1', // sky-700，白底 5.90:1
+  success: '#047857', // emerald-700，白底 5.48:1（与 RunDetailPage 已有深绿一致）
+  failed: '#DC2626', // red-600，白底 4.83:1
+  skipped: '#B45309', // amber-700，白底 5.02:1
+  cancelled: '#475569', // slate-600，白底 7.58:1
+};
+
 /** 任务状态 → 短代码（等宽徽章） */
 export const STATUS_CODE: Record<TaskStatus, string> = {
   pending: 'PEND',

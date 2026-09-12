@@ -187,6 +187,10 @@ class ResultPageResponse(BaseModel):
     format: str = "html"
     collector_mode: str | None = None
     has_collector: bool = False
+    # v2 (2026-09): 单独暴露插件原始产物，前端默认结果页改为原生渲染后需要
+    # 区分「内置页面」与「插件内容」；老 result.json 无此字段时为 None
+    collector_html: str | None = None
+    collector_md: str | None = None
     generated_at: str | None = None
 
 
