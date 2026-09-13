@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -385,10 +385,17 @@ describe('<PipelineListPage /> v3 - 新建与行操作入口', () => {
     const user = userEvent.setup()
     render(<PipelineListPage />, { wrapper: Wrapper })
 
-    await user.click(screen.getByRole('button', { name: /新建/ }))
-    expect(await screen.findByText('新建流水线')).toBeInTheDocument()
-    expect(screen.getByText('新建文件夹')).toBeInTheDocument()
-    expect(screen.getByText('注册项目目录')).toBeInTheDocument()
+    // 注意(2026-09, issue #218): 空态现在也有「新建流水线」CTA，
+    // 因此工具栏按钮用精确名「新建」，下拉项在菜单容器内断言，避免歧义
+    await user.click(screen.getByRole('button', { name: '新建' }))
+    const menu = await waitFor(() => {
+      const el = document.querySelector('.ant-dropdown-menu')
+      if (!el) throw new Error('下拉菜单未打开')
+      return el as HTMLElement
+    })
+    expect(within(menu).getByText('新建流水线')).toBeInTheDocument()
+    expect(within(menu).getByText('新建文件夹')).toBeInTheDocument()
+    expect(within(menu).getByText('注册项目目录')).toBeInTheDocument()
   })
 
   it('点击「新建流水线」打开新建弹窗', async () => {
@@ -396,8 +403,13 @@ describe('<PipelineListPage /> v3 - 新建与行操作入口', () => {
     const user = userEvent.setup()
     render(<PipelineListPage />, { wrapper: Wrapper })
 
-    await user.click(screen.getByRole('button', { name: /新建/ }))
-    await user.click(await screen.findByText('新建流水线'))
+    await user.click(screen.getByRole('button', { name: '新建' }))
+    const menu = await waitFor(() => {
+      const el = document.querySelector('.ant-dropdown-menu')
+      if (!el) throw new Error('下拉菜单未打开')
+      return el as HTMLElement
+    })
+    await user.click(within(menu).getByText('新建流水线'))
     expect(await screen.findByTestId('create-pipeline-modal')).toBeInTheDocument()
   })
 

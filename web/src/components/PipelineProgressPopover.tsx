@@ -52,6 +52,8 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
   // 每次 hover 时从 API 获取最新任务详情
   const [loadedTasks, setLoadedTasks] = useState<TaskRunResponse[] | null>(null);
   const [loading, setLoading] = useState(false);
+  // v2 (2026-09, issue #221): 记录加载失败，替代旧实现的静默吞错
+  const [loadError, setLoadError] = useState<string | null>(null);
   const fetchingRef = useRef(false);
 
   const handleOpenChange = useCallback(async (visible: boolean) => {
@@ -62,6 +64,7 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
     if (fetchingRef.current) return;
 
     setLoading(true);
+    setLoadError(null);
     fetchingRef.current = true;
     try {
       const res = await fetch(`/api/runs/${runId}`);
@@ -70,9 +73,12 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
         setLoadedTasks(data.tasks ?? []);
         // 顺便写入缓存
         queryClient.setQueryData(['run', runId], data);
+      } else {
+        setLoadError(`HTTP ${res.status}`);
       }
-    } catch {
-      // 静默失败
+    } catch (err) {
+      // v2 (2026-09, issue #221): 失败必须让用户可见，不能停留在旧数据上假装正常
+      setLoadError(err instanceof Error ? err.message : '网络错误');
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -112,7 +118,14 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
         </div>
       )}
 
-      {!loading && groups && groups.size > 0 && (
+      {/* v2 (2026-09, issue #221): 失败提示，避免用户误读旧数据 */}
+      {!loading && loadError && (
+        <div style={{ padding: '8px 4px', color: '#ef4444', fontSize: 12 }}>
+          加载失败：{loadError}
+        </div>
+      )}
+
+      {!loading && !loadError && groups && groups.size > 0 && (
         <div data-testid="task-list-scroll" style={{ maxHeight: 480, overflowY: 'auto' }}>
           {[...groups.entries()].map(([subpipeline, subTasks]) => (
             <div key={subpipeline} style={{ marginBottom: 8 }}>
@@ -210,7 +223,7 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
       )}
 
       {/* fallback：无 tasks 数据时显示 taskSummary 计数 */}
-      {!loading && !groups && taskSummary && Object.keys(taskSummary).length > 0 && (
+      {!loading && !loadError && !groups && taskSummary && Object.keys(taskSummary).length > 0 && (
         <div style={{ padding: '4px 0' }}>
           {Object.entries(taskSummary).map(([status, count]) => (
             <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '2px 0' }}>
@@ -228,7 +241,8 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
     <Popover
       content={content}
       title="任务进度"
-      trigger="hover"
+      // v2 (2026-09, issue #219): hover + focus，让键盘用户也能打开任务进度浮层
+      trigger={['hover', 'focus']}
       open={open}
       onOpenChange={handleOpenChange}
       mouseEnterDelay={0.3}

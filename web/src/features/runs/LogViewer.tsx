@@ -370,6 +370,12 @@ export default function LogViewer({
             ● 已连接
           </span>
         )}
+        {/* v2 (2026-09, issue #220): 断开时给出明确反馈，避免用户误以为日志已跑完 */}
+        {!connected && (
+          <span style={{ color: '#fca5a5', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            ● 连接已断开，重连中…
+          </span>
+        )}
       </div>
 
       <div

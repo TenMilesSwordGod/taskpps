@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect, useDeferredValue } from 'react';
-import { Card, Table, Button, Input, Space, Tooltip, Tag, Dropdown, App } from 'antd';
+import { Card, Table, Button, Input, Space, Tooltip, Tag, Dropdown, App, Alert, Empty } from 'antd';
 import type { MenuProps } from 'antd';
 import { Search, RefreshCw, Play, ChevronRight, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MoreHorizontal, FilePlus, FolderPlus, FolderInput } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -26,7 +26,7 @@ type Row =
   | (PipelineSummary & { kind: 'pipeline' });
 
 export default function PipelineListPage() {
-  const { data, isLoading, refetch } = usePipelines();
+  const { data, isLoading, error, refetch } = usePipelines();
   const [keyword, setKeyword] = useState('');
   // v2 (2026-07): 性能优化 — 搜索输入立即响应，但分组/过滤这类重计算延迟到下一帧，
   // 避免每次按键都重建整张分组表格（含几十个 SVG 成功率图）。
@@ -295,6 +295,55 @@ export default function PipelineListPage() {
     setTriggerOpen(true);
   }, []);
 
+  /**
+   * 表格空态/错误态统一渲染（issue #215 / #218）。
+   *
+   * 设计决策（为什么这么写）：
+   * - 旧实现接口失败会落到 antd 默认「暂无数据」，用户无法区分「没有流水线」与「接口挂了」，
+   *   因此优先渲染错误 + 重试；
+   * - 搜索无结果与真·无数据分开文案，并给出「清除搜索 / 新建流水线 / 注册项目目录」的下一步入口；
+   * - 用 locale.emptyText 而非整表替换，保留工具栏与搜索框，用户不会「无路可走」。
+   */
+  const renderEmptyState = () => {
+    if (error && !data) {
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message="流水线加载失败"
+          description={error instanceof Error ? error.message : '请稍后重试'}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              重试
+            </Button>
+          }
+          style={{ margin: '24px auto', maxWidth: 520, textAlign: 'left' }}
+        />
+      );
+    }
+    if (deferredKeyword.trim()) {
+      return (
+        <Empty description={<span style={{ color: '#7C7F88' }}>无匹配的流水线</span>} className="my-10">
+          <Button size="small" onClick={() => setKeyword('')}>
+            清除搜索
+          </Button>
+        </Empty>
+      );
+    }
+    return (
+      <Empty description={<span style={{ color: '#7C7F88' }}>还没有流水线</span>} className="my-10">
+        <Space>
+          <Button type="primary" size="small" onClick={() => setCreatePipelineOpen(true)}>
+            新建流水线
+          </Button>
+          <Button size="small" onClick={() => setRegisterProjectOpen(true)}>
+            注册项目目录
+          </Button>
+        </Space>
+      </Empty>
+    );
+  };
+
   const columns = useMemo(() => [
     {
       title: '名称',
@@ -479,7 +528,7 @@ export default function PipelineListPage() {
           <Space>
             {record.kind === 'pipeline' && (
               <Tooltip title="触发运行">
-                <Button type="text" size="small" icon={<Play size={14} />} onClick={() => handleOpenTrigger(record.id, record.project_id)} />
+                <Button type="text" size="small" icon={<Play size={14} />} aria-label="触发运行" onClick={() => handleOpenTrigger(record.id, record.project_id)} />
               </Tooltip>
             )}
             <Dropdown menu={{ items }} trigger={['click']}>
@@ -535,6 +584,7 @@ export default function PipelineListPage() {
           columns={columns}
           dataSource={rows}
           loading={isLoading}
+          locale={{ emptyText: isLoading ? undefined : renderEmptyState() }}
           pagination={{ pageSize: 50, showSizeChanger: false }}
           size="middle"
           scroll={{ x: 'max-content' }}

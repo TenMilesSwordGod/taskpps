@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, TreeSelect, Popconfirm } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, TreeSelect, Popconfirm, Alert, Empty } from 'antd';
+import { useNavigate, Link } from 'react-router-dom';
 import { Eye, Play, Trash2, RefreshCw, History, CircleDot, Search } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
@@ -58,7 +58,7 @@ export default function RunListPage() {
   const cleanRuns = useCleanRuns();
   const deleteRun = useDeleteRun();
 
-  const { data, isLoading, refetch, isFetching } = useRuns();
+  const { data, isLoading, error, refetch, isFetching } = useRuns();
   const { data: statsData } = useRunStats();
 
   // 动态计算表格滚动高度，避免页面出现滚动条
@@ -180,6 +180,61 @@ export default function RunListPage() {
     }
   }, [deleteRun, message]);
 
+  /** 清除全部筛选条件（issue #218：筛选无结果时给用户一条出路） */
+  const handleClearFilters = useCallback(() => {
+    setStatusFilter('all');
+    setGlobalSearch('');
+    setTreeSelectValue(undefined);
+    setDateRange(null);
+  }, []);
+
+  /**
+   * 表格空态/错误态渲染（issue #215 / #218）。
+   *
+   * 设计决策（为什么这么写）：
+   * - 接口失败必须显式报警 + 重试，不能落成空表；
+   * - 无任何运行记录 → 提供「触发运行」引导；
+   * - 有记录但筛选无命中 → 区分文案并给出「清除筛选」，避免用户以为数据丢了。
+   */
+  const renderEmptyState = () => {
+    if (error && !data) {
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message="运行历史加载失败"
+          description={error instanceof Error ? error.message : '请稍后重试'}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              重试
+            </Button>
+          }
+          style={{ margin: '24px auto', maxWidth: 520, textAlign: 'left' }}
+        />
+      );
+    }
+    if (allItems.length === 0) {
+      return (
+        <Empty description={<span style={{ color: '#7C7F88' }}>还没有运行记录</span>} className="my-10">
+          <Button type="primary" size="small" onClick={() => setTriggerOpen(true)}>
+            触发运行
+          </Button>
+        </Empty>
+      );
+    }
+    const hasActiveFilter = statusFilter !== 'all' || !!globalSearch || !!treeSelectValue || !!dateRange;
+    if (hasActiveFilter) {
+      return (
+        <Empty description={<span style={{ color: '#7C7F88' }}>无匹配运行</span>} className="my-10">
+          <Button size="small" onClick={handleClearFilters}>
+            清除筛选
+          </Button>
+        </Empty>
+      );
+    }
+    return null;
+  };
+
   const columns = useMemo(() => [
     {
       title: '运行名',
@@ -188,9 +243,10 @@ export default function RunListPage() {
       width: 140,
       render: (_: string, record: RunResponse) => (
         <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
-          <a onClick={() => handleOpenDetail(record.id)} style={{ color: '#3D5BFF', fontWeight: 500 }}>
+          {/* v2 (2026-09, issue #219): 用真实链接替代 <a onClick>，使运行名可 Tab 聚焦/回车打开 */}
+          <Link to={`/runs/${record.id}`} style={{ color: '#3D5BFF', fontWeight: 500 }}>
             {record.display_name || record.id.slice(0, 8)}
-          </a>
+          </Link>
         </PipelineProgressPopover>
       ),
     },
@@ -394,6 +450,7 @@ export default function RunListPage() {
           columns={columns}
           dataSource={filtered}
           loading={isLoading}
+          locale={{ emptyText: isLoading ? undefined : renderEmptyState() }}
           pagination={{ pageSize, showSizeChanger: true, pageSizeOptions: [12, 20, 50, 100], showTotal: (t) => `共 ${t} 条`, size: 'small', onChange: (_page, _pageSize) => setPageSize(_pageSize), onShowSizeChange: (_current, _size) => setPageSize(_size) }}
           size="small"
           scroll={tableScrollY ? { y: tableScrollY } : undefined}

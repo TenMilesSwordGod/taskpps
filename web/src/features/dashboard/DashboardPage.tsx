@@ -1,10 +1,10 @@
-import { Card, Col, Row, Statistic, Table, Tag, Button, Select, Segmented } from 'antd';
-import type { CSSProperties } from 'react';
+import { Card, Col, Row, Statistic, Table, Tag, Button, Select, Segmented, Alert, Skeleton } from 'antd';
+import type { CSSProperties, ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import { GitBranch, Play, Loader, AlertCircle, History } from 'lucide-react';
+import { GitBranch, Play, Loader, AlertCircle, History, RefreshCw } from 'lucide-react';
 import dayjs from 'dayjs';
 import { STATUS_COLOR } from '@/features/pipelines/nodes/nodeTokens';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { usePipelines } from '@/api/pipelines';
 import { useRuns } from '@/api/runs';
 import { useProjects } from '@/api/projects';
@@ -63,6 +63,36 @@ const statCardStyle: CSSProperties = {
   boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
 };
 
+/**
+ * 统计卡片（issue #217）。
+ *
+ * 设计决策（为什么这么写）：加载中渲染骨架而不是数字 0，
+ * 避免首屏「0 → 真实值」跳变造成误读。
+ */
+function StatCard({
+  title,
+  value,
+  icon,
+  valueStyle,
+  loading,
+}: {
+  title: string;
+  value: number;
+  icon: ReactNode;
+  valueStyle?: CSSProperties;
+  loading: boolean;
+}) {
+  return (
+    <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
+      {loading ? (
+        <Skeleton active paragraph={{ rows: 1 }} title={false} />
+      ) : (
+        <Statistic title={title} value={value} prefix={icon} valueStyle={valueStyle} />
+      )}
+    </Card>
+  );
+}
+
 const TREND_DAYS = 14;
 const RECENT_RUNS_COUNT = 15;
 
@@ -70,9 +100,33 @@ type TrendView = 'daily' | 'recent';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { data: pipelinesData } = usePipelines();
-  const { data: runsData } = useRuns({ limit: 500 });
-  const { data: projectsData } = useProjects();
+  const {
+    data: pipelinesData,
+    isLoading: pipelinesLoading,
+    error: pipelinesError,
+    refetch: refetchPipelines,
+  } = usePipelines();
+  const {
+    data: runsData,
+    isLoading: runsLoading,
+    error: runsError,
+    refetch: refetchRuns,
+  } = useRuns({ limit: 500 });
+  const {
+    data: projectsData,
+    isLoading: projectsLoading,
+    error: projectsError,
+    refetch: refetchProjects,
+  } = useProjects();
+
+  // v2 (2026-09, issue #217): 三种查询的加载/失败聚合，供统计卡骨架与错误提示使用
+  const isLoading = pipelinesLoading || runsLoading || projectsLoading;
+  const loadError = pipelinesError || runsError || projectsError;
+  const refetchAll = () => {
+    refetchPipelines();
+    refetchRuns();
+    refetchProjects();
+  };
 
   const pipelines = useMemo(() => pipelinesData?.items ?? [], [pipelinesData]);
   const runs = useMemo(() => runsData?.items ?? [], [runsData]);
@@ -165,9 +219,10 @@ export default function DashboardPage() {
       width: 220,
       render: (_: string, record: RunResponse) => (
         <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
-          <a onClick={() => navigate(`/runs/${record.id}`)} style={{ color: '#3D5BFF', fontWeight: 500 }}>
+          {/* v2 (2026-09, issue #219): 真实链接，键盘可聚焦 */}
+          <Link to={`/runs/${record.id}`} style={{ color: '#3D5BFF', fontWeight: 500 }}>
             {record.display_name || record.id.slice(0, 8)}
-          </a>
+          </Link>
         </PipelineProgressPopover>
       ),
     },
@@ -215,10 +270,30 @@ export default function DashboardPage() {
       ellipsis: true,
       render: (_: unknown, record: RunResponse) => formatDuration(record.duration_ms),
     },
-  ], [navigate]);
+  // 注意(2026-09, issue #219): 运行名改为 <Link> 后列定义不再依赖 navigate，依赖数组清空
+  ], []);
 
   return (
     <div className="p-6 space-y-4 overflow-auto h-full">
+      {/* v2 (2026-09, issue #217): 手动刷新入口 + 加载失败提示 */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button size="small" icon={<RefreshCw size={14} />} onClick={refetchAll} disabled={isLoading}>
+          刷新
+        </Button>
+      </div>
+      {loadError && (
+        <Alert
+          type="error"
+          showIcon
+          message="看板数据加载失败"
+          description={loadError instanceof Error ? loadError.message : '请稍后重试'}
+          action={
+            <Button size="small" onClick={refetchAll}>
+              重试
+            </Button>
+          }
+        />
+      )}
       <Row gutter={[16, 16]} align="stretch">
         {/* 左侧：2×2 统计卡片 */}
         <Col xs={24} lg={8}>
@@ -231,38 +306,34 @@ export default function DashboardPage() {
               height: '100%',
             }}
           >
-            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
-              <Statistic
-                title="流水线总数"
-                value={pipelineCount}
-                prefix={<GitBranch size={18} color="#94A3B8" />}
-                valueStyle={{ color: '#0F172A', fontWeight: 500 }}
-              />
-            </Card>
-            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
-              <Statistic
-                title="今日运行"
-                value={todayRuns}
-                prefix={<Play size={18} color="#94A3B8" />}
-                valueStyle={{ color: '#0F172A', fontWeight: 500 }}
-              />
-            </Card>
-            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
-              <Statistic
-                title="运行中"
-                value={runningCount}
-                prefix={<Loader size={18} color={STATUS_COLOR.running} />}
-                valueStyle={{ color: STATUS_COLOR.running, fontWeight: 500 }}
-              />
-            </Card>
-            <Card style={{ ...statCardStyle, height: '100%' }} styles={{ body: { padding: 16 } }}>
-              <Statistic
-                title="失败"
-                value={failedCount}
-                prefix={<AlertCircle size={18} color={failedCount > 0 ? STATUS_COLOR.failed : '#94A3B8'} />}
-                valueStyle={failedCount > 0 ? { color: STATUS_COLOR.failed, fontWeight: 500 } : { color: '#0F172A', fontWeight: 500 }}
-              />
-            </Card>
+            <StatCard
+              title="流水线总数"
+              value={pipelineCount}
+              icon={<GitBranch size={18} color="#94A3B8" />}
+              valueStyle={{ color: '#0F172A', fontWeight: 500 }}
+              loading={isLoading}
+            />
+            <StatCard
+              title="今日运行"
+              value={todayRuns}
+              icon={<Play size={18} color="#94A3B8" />}
+              valueStyle={{ color: '#0F172A', fontWeight: 500 }}
+              loading={isLoading}
+            />
+            <StatCard
+              title="运行中"
+              value={runningCount}
+              icon={<Loader size={18} color={STATUS_COLOR.running} />}
+              valueStyle={{ color: STATUS_COLOR.running, fontWeight: 500 }}
+              loading={isLoading}
+            />
+            <StatCard
+              title="失败"
+              value={failedCount}
+              icon={<AlertCircle size={18} color={failedCount > 0 ? STATUS_COLOR.failed : '#94A3B8'} />}
+              valueStyle={failedCount > 0 ? { color: STATUS_COLOR.failed, fontWeight: 500 } : { color: '#0F172A', fontWeight: 500 }}
+              loading={isLoading}
+            />
           </div>
         </Col>
 

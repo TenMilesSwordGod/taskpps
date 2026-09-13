@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Space, Tooltip, message, Spin, Alert, Modal } from 'antd';
+import { Button, Space, Tooltip, message, Spin, Alert, Modal, Tag } from 'antd';
 import {
   ExportOutlined,
   FileImageOutlined,
@@ -76,6 +76,8 @@ export default function PipelineDetailPage() {
 
   // v1 (2026-07): issue #206 — 可视化编辑器模式
   const [editMode, setEditMode] = useState(false);
+  // v5 (2026-09, issue #216): 查看模式 YAML 的未保存标记
+  const [yamlDirty, setYamlDirty] = useState(false);
   // v4 (2026-07): dirty 状态驱动"保存"按钮 disabled；保存成功后清除
   const [editorDirty, setEditorDirty] = useState(false);
   const [editNodes, setEditNodes] = useState<Node<EditorNodeData>[]>([]);
@@ -93,14 +95,19 @@ export default function PipelineDetailPage() {
 
   const handleSave = useCallback(() => {
     if (!yamlText) return;
+    // v5 (2026-09, issue #216): 保存成功后清除未保存标记
+    const onSuccess = () => {
+      message.success('已保存');
+      setYamlDirty(false);
+    };
     if (isFileMode && actualFilePath) {
       saveByFileMutation.mutate({ file: actualFilePath, content: yamlText }, {
-        onSuccess: () => message.success('已保存'),
+        onSuccess,
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     } else if (definitionId) {
       saveByIdMutation.mutate(yamlText, {
-        onSuccess: () => message.success('已保存'),
+        onSuccess,
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     }
@@ -136,19 +143,37 @@ export default function PipelineDetailPage() {
   }, [editNodes, editEdges, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
 
   // v2 (2026-07): 未保存修改的离开守卫
-  // 在编辑模式下注册 beforeunload 事件，关闭/刷新页面时提示用户
-  // dirty 状态通过 workflowEditorRef 读取（ref getter，始终返回最新值）
+  // v5 (2026-09, issue #216): 守卫范围从「仅编辑模式」扩展到「编辑模式或查看模式 YAML 编辑器」；
+  // 查看模式没有 workflowEditorRef，用 yamlDirtyRef 读取最新值（避免闭包过期）。
+  const yamlDirtyRef = useRef(false);
   useEffect(() => {
-    if (!editMode) return;
+    yamlDirtyRef.current = yamlDirty;
+  }, [yamlDirty]);
+
+  useEffect(() => {
+    if (!editMode && !yamlEditorOpen) return;
     const handler = (e: BeforeUnloadEvent) => {
-      if (workflowEditorRef.current?.isDirty) {
+      if (workflowEditorRef.current?.isDirty || yamlDirtyRef.current) {
         e.preventDefault();
         e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [editMode]);
+  }, [editMode, yamlEditorOpen]);
+
+  // v5 (2026-09, issue #216): 补齐「保存 (Ctrl+S)」提示承诺的快捷键（旧实现仅画布支持 Delete/Backspace）
+  useEffect(() => {
+    if (!editMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveFromEditor();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editMode, handleSaveFromEditor]);
 
   // v4 (2026-07): 退出编辑模式时清除 dirty 指示，避免残留到下次进入
   useEffect(() => {
@@ -225,6 +250,21 @@ export default function PipelineDetailPage() {
 
   // 打开 YAML 编辑器时，用当前 pipeline 生成 YAML
   const handleToggleEditor = useCallback(() => {
+    // v5 (2026-09, issue #216): 关闭前若存在未保存修改，先确认再丢弃
+    if (yamlEditorOpen && yamlDirty) {
+      Modal.confirm({
+        title: '未保存的修改',
+        content: '关闭编辑器将丢失未保存的修改，确定继续？',
+        okText: '确定关闭',
+        cancelText: '继续编辑',
+        okButtonProps: { danger: true },
+        onOk: () => {
+          setYamlEditorOpen(false);
+          setYamlDirty(false);
+        },
+      });
+      return;
+    }
     if (!yamlEditorOpen && pipeline) {
       // v3 (2026-09): 优先展示文件原文 raw_content。
       // 为什么：pipelineToYaml(pipeline) 是从后端已解析模型反序列化的，Pydantic schema
@@ -235,13 +275,16 @@ export default function PipelineDetailPage() {
       setYamlText(yaml);
       setEditedPipeline(null);
       setYamlError(null);
+      setYamlDirty(false);
     }
     setYamlEditorOpen((prev) => !prev);
-  }, [yamlEditorOpen, pipeline]);
+  }, [yamlEditorOpen, yamlDirty, pipeline]);
 
   // YAML 内容变化时解析并更新流程图
   const handleYamlChange = useCallback((text: string) => {
     setYamlText(text);
+    // v5 (2026-09, issue #216): 任何编辑都标记未保存，供工具栏与 beforeunload 使用
+    setYamlDirty(true);
     const result = parseYamlToPipeline(text);
     if (result.success) {
       setEditedPipeline(result.pipeline!);
@@ -462,6 +505,8 @@ export default function PipelineDetailPage() {
                 >
                   {yamlEditorOpen ? '关闭编辑器' : 'YAML 编辑器'}
                 </Button>
+                {/* v5 (2026-09, issue #216): 查看模式 YAML 修改后的未保存提示 */}
+                {yamlEditorOpen && yamlDirty && <Tag color="warning">未保存</Tag>}
               </Tooltip>
               {!isFileMode && (
                 <>
