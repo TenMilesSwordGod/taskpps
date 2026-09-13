@@ -1,0 +1,65 @@
+{
+  "issue": 183,
+  "issue_url": "http://10.98.72.23:8418/AM-SYS/taskpps/issues/183",
+  "title": "在web ui 的pipelines render 后的界面出发运行失败",
+  "type": "bug",
+  "complexity": "simple",
+  "complexity_reason": "根因明确的单点问题，已由 #191 (e480b9f Phase 2 重构) 移除函数内局部 import 修复；无新 API、无 UI 设计、现有回归测试直接覆盖（5/5 维度满足）",
+  "priority": "high",
+  "phase": "fast_dev_done",
+  "product": null,
+  "product_name": null,
+  "execution": null,
+  "project_name": null,
+  "story": null,
+  "tasks": {
+    "req": null,
+    "dev": null,
+    "test_investigate": null,
+    "test_verify": null,
+    "uiux": null
+  },
+  "bug_id": null,
+  "tag_audit": {
+    "audited_at": "2026-09-13T16:22:13+08:00",
+    "decided_kind": "Kind/Bug",
+    "decided_priority": "Priority/High",
+    "auto_fixes": [
+      "Priority/High"
+    ],
+    "warnings": [
+      "仓库存在历史畸形标签 'Kind/Bug,Priority/High' (id 52)，本次未使用"
+    ]
+  },
+  "manager": {
+    "decision": "fast_path_verify",
+    "priority": "high",
+    "decided_at": "2026-09-13T16:22:13+08:00",
+    "investigation": {
+      "root_cause": "旧版 create_run 中 `from taskpps.config import get_pipelines_dir` 是函数内局部 import（仅传 project_id 分支执行），使该名字在整个函数作用域内成为局部变量；无 project_id 的请求走 else 分支时局部 import 未执行，函数尾部无条件调用 get_pipelines_dir() 抛 UnboundLocalError",
+      "broken_commit": "409f536 及之前（issue 报告时 main）",
+      "fix_commit": "e480b9f (#191 Phase 2 重构, 2026-07-13) 将 get_pipelines_dir 统一为模块级 import，移除局部遮蔽",
+      "current_main_verified": "server/tests/services/test_create_run_by_definition.py 6 passed（不传 project_id 场景）",
+      "prod_verified": "/opt/taskpps/server 代码与工作区 pipeline_service.py 完全相同，无局部 import，生产服务 2026-09-12 更新",
+      "no_code_change_needed": true
+    }
+  },
+  "pm": null,
+  "dev": {
+    "status": "done",
+    "no_code_change": true,
+    "fix_commit": "e480b9f",
+    "verified_at": "2026-09-13T16:26:05+08:00",
+    "evidence": [
+      ".debug/issue_183/report.md",
+      ".debug/issue_183/repro_unbound_local.py (旧代码复现: ValueError 加载流水线失败:cannot access local variable 'get_pipelines_dir', __cause__=UnboundLocalError)",
+      ".debug/issue_183/verify_issue_183.py (PASS: create_run 不传 project_id 正常返回)",
+      "pytest tests/services/test_create_run_by_definition.py: 6 passed",
+      "diff server/taskpps/services/pipeline_service.py /opt/taskpps/server/...: NO_DIFF",
+      ".debug/issue_183/scan_local_import_shadow.py (85 文件, 1 处误报 agent_bootstrap.py:421)"
+    ]
+  },
+  "qa": null,
+  "tester": null,
+  "uiux": null
+}
