@@ -32,9 +32,14 @@
 3. 全局状态/DB 泄漏导致的顺序相关失败（`test_create_run_stores_snapshot_in_db` 单跑通过）
 4. `taskpps/main.py:292` 日志仍称 "No API key configured — all API endpoints are accessible without authentication"（API key 机制已被 JWT 取代，误导运维）
 
-## 四、遗留治理缺口（未做）
+## 四、遗留治理缺口
 
-- server S2：`POST /api/agents/check-stream`、`POST /api/agents/update-deploy`、`GET /api/runs/{id}/result` 3 个路由无测试；错误 `detail` 断言 244 处 status 仅 17 处 detail；api/auth.py 硬编码中文与 `t()` 混用
+已完成（`16272c4`）：
+- server S2 三个未测路由已补 API 级用例：`POST /api/agents/check-stream`（成功流/未知 agent/未登录 401）、`POST /api/agents/update-deploy`（成功/404/500 detail/422）、`GET /api/runs/{id}/result`（成功/404/文件缺失/legacy 字段排除）
+- i18n：`api/auth.py` 三处硬编码中文改 `t()`（zh 输出逐字不变，en 回退英文 key），补 locale 切换测试
+
+未做：
+- 错误 `detail` 断言仍少（244 处 status 断言仅 17 处 detail），只补了本轮涉及路径
 - web：`zentao_testcase_map.json` 170 条 vs 实际测试函数 874 个；1 条映射指向已不存在文件
 - 映射回填：server 654 + agent 50 条 pending，待 Zentao 恢复后执行 `backfill_pending_mappings.py`
 
