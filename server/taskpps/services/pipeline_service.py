@@ -302,9 +302,11 @@ class PipelineService:
                     )
                     task_run_ids[qualified_name] = task_run.id
 
-        src = (get_pipelines_dir(Path(project_workdir) if project_workdir else None) /
-               (Path(pipeline_file).relative_to(Path(project_workdir) / "pipelines") if project_workdir and Path(project_workdir).resolve() in Path(pipeline_file).resolve().parents else Path(pipeline_file)))
-        # Simpler: just use the pipeline_file relative to pipelines_dir
+        # v2 (2026-09): 修复 issue #210 — 原实现在此先算 src 再被下方覆盖，但旧算法用进程 CWD
+        # 解析相对 file_path 后再 relative_to(pipelines_dir)，生产环境 CWD==项目根目录时
+        # 对任意相对路径恒抛 ValueError（'test/test.yaml' is not in the subpath of ...），
+        # 且此时 run 已入库，留下永久 pending 的孤儿运行记录。
+        # 相对路径直接用 pipelines_dir 拼接即可；绝对路径拼接时 Path 语义会自动覆盖左侧。
         pipelines_dir = get_pipelines_dir(Path(project_workdir) if project_workdir else None)
         p = Path(pipeline_file)
         if len(p.parts) > 0 and p.parts[0] == pipelines_dir.name:

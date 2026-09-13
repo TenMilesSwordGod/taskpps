@@ -65,13 +65,16 @@ async function rightClickNode(page: PageType, index: number) {
   const nodes = page.locator('.react-flow__node');
   const count = await nodes.count();
   if (count <= index) return false;
-  await nodes.nth(index).dispatchEvent('contextmenu');
+  // v2 (2026-07): 用带真实坐标的右键；dispatchEvent('contextmenu') 坐标为 0
+  // 会导致菜单渲染到视口外无法点击
+  await nodes.nth(index).click({ button: 'right', force: true });
   await page.waitForTimeout(600);
   return true;
 }
 
 async function clickMenuItem(page: PageType, text: string): Promise<boolean> {
-  const item = page.locator('.ant-dropdown-menu-item').filter({ hasText: text });
+  // v2 (2026-07): 右键菜单已改为自定义 fixed 定位 div（移除 antd Dropdown），同步选择器
+  const item = page.locator('div[style*="position: fixed"] div').filter({ hasText: text }).first();
   if (await item.isVisible().catch(() => false)) {
     await item.click();
     await page.waitForTimeout(500);
@@ -135,18 +138,20 @@ test.describe('User Journey 1: 基本编辑工作流', () => {
     await page.waitForTimeout(800);
 
     // 属性面板应打开
-    const panelTitle = page.locator('text=节点属性');
+    const panelTitle = page.locator('text=属性编辑');
     const panelVisible = await panelTitle.isVisible().catch(() => false);
 
     if (panelVisible) {
       // 找到输入框，修改节点名称
-      const nameInput = page.locator('input').first();
+      // v2 (2026-07): 页面首个小 input 是 NodePalette 搜索框，必须限定在属性面板（Drawer）内
+      const nameInput = page.locator('.ant-drawer-body input').first();
       await nameInput.clear();
       await nameInput.fill('compile-backend');
       await page.waitForTimeout(200);
 
-      // 点保存
-      const saveBtn = page.locator('button').filter({ hasText: /保存|确认/ }).first();
+      // 点保存（属性面板的 primary 按钮；页面顶部也有"保存"按钮，需区分）
+      // v2 (2026-07): antd 双字按钮会插入空格（"确 认"），用 primary 类定位
+      const saveBtn = page.locator('.ant-drawer-body button.ant-btn-primary').first();
       if (await saveBtn.isVisible().catch(() => false)) {
         await saveBtn.click();
         await page.waitForTimeout(500);
@@ -167,16 +172,15 @@ test.describe('User Journey 1: 基本编辑工作流', () => {
     const before = await getNodeCount(page);
 
     // 右键最后节点 → 删除
+    // v2 (2026-07): dispatchEvent('contextmenu') 无坐标会导致菜单定位异常，
+    // 改用带真实坐标的右键点击
     const lastNode = page.locator('.react-flow__node').last();
-    await lastNode.dispatchEvent('contextmenu');
+    await lastNode.click({ button: 'right', force: true });
     await page.waitForTimeout(800);
 
-    // 点击删除菜单项
-    const deleteItem = page.locator('.ant-dropdown-menu-item').filter({ hasText: '删除' });
-    if (await deleteItem.isVisible().catch(() => false)) {
-      await deleteItem.click();
-      await page.waitForTimeout(600);
-    }
+    // 点击删除菜单项（自定义 fixed 菜单）
+    const deleted = await clickMenuItem(page, '删除');
+    expect(deleted, '右键菜单应包含删除项').toBe(true);
 
     expect(await getNodeCount(page)).toBeLessThan(before);
   });
@@ -255,8 +259,8 @@ test.describe('User Journey 2: 完整流水线构建', () => {
     const postNodes = page.locator('.react-flow__node-editorPostParent');
     expect(await postNodes.count()).toBeGreaterThanOrEqual(1);
 
-    // 3. 拖 on_fail 子容器到画布
-    await dragToCanvas(page, 'on_fail 子容器', 500, 200);
+    // 3. 拖 on_fail 子容器到画布（面板文案为"失败后"）
+    await dragToCanvas(page, '失败后', 500, 200);
 
     // 4. 验证 on_fail 子容器也被添加了
     const postChildNodes = page.locator('.react-flow__node-editorPostChild');
@@ -349,12 +353,13 @@ test.describe('User Journey 3: 节点操作与状态一致性', () => {
     // 右键第一个可选节点（Task 类型）
     const taskNode = page.locator('.react-flow__node-editorTask').first();
     if (await taskNode.isVisible().catch(() => false)) {
-      await taskNode.dispatchEvent('contextmenu');
+      // v2 (2026-07): 真实右键坐标，避免菜单定位到视口外
+      await taskNode.click({ button: 'right', force: true });
       await page.waitForTimeout(800);
 
-      // 应有"属性"和"删除"选项
-      const propItem = page.locator('.ant-dropdown-menu-item').filter({ hasText: '属性' });
-      const deleteItem = page.locator('.ant-dropdown-menu-item').filter({ hasText: '删除' });
+      // 应有"属性"和"删除"选项（自定义 fixed 菜单）
+      const propItem = page.locator('div[style*="position: fixed"] div').filter({ hasText: '属性' });
+      const deleteItem = page.locator('div[style*="position: fixed"] div').filter({ hasText: '删除' });
       expect(await propItem.isVisible().catch(() => false) ||
              await deleteItem.isVisible().catch(() => false)).toBeTruthy();
 
@@ -492,12 +497,13 @@ test.describe('User Journey 5: PDP 集成体验', () => {
     await enterEditMode(page);
 
     // 在编辑模式下右键画布空白 → 应弹出菜单
+    // v2 (2026-07): 真实右键坐标，避免菜单定位到视口外
     const canvas = page.locator('.react-flow__pane').first();
-    await canvas.dispatchEvent('contextmenu');
+    await canvas.click({ button: 'right', position: { x: 40, y: 40 }, force: true });
     await page.waitForTimeout(800);
 
-    // 菜单应有添加节点选项
-    const addSubPipeline = page.locator('.ant-dropdown-menu-item').filter({ hasText: '添加 SubPipeline' });
+    // 菜单应有添加节点选项（自定义 fixed 菜单）
+    const addSubPipeline = page.locator('div[style*="position: fixed"] div').filter({ hasText: '添加 SubPipeline' });
     expect(await addSubPipeline.isVisible().catch(() => false)).toBeTruthy();
   });
 

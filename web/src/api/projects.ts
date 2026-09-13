@@ -2,14 +2,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from './client';
 import type { ProjectResponse } from '@/types';
 
-/** 获取所有已注册项目 */
-export function useProjects() {
+/**
+ * 获取所有已注册项目。
+ * v2 (2026-09): 新增 enabled 参数——服务器列表页仅在"无 agent 配置"时用它
+ * 展示各项目确切的 agents 目录，有数据时无需发这次请求。
+ */
+export function useProjects(enabled = true) {
   return useQuery<ProjectResponse[]>({
     queryKey: ['projects'],
     queryFn: async () => {
       const res = await apiClient.get('/api/projects/');
       return res.data;
     },
+    enabled,
   });
 }
 

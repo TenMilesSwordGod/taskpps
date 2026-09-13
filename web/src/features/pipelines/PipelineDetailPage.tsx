@@ -13,7 +13,6 @@ import {
   SaveOutlined,
 } from '@ant-design/icons';
 import { usePipelineById, usePipelineByFile, useSavePipelineById, useSavePipelineByFile } from '@/api/pipelines';
-import PipelineGraph from './PipelineGraph';
 import YamlEditor from './YamlEditor';
 import type { YamlEditorRef, VariableHoverData } from './YamlEditor';
 import { HelpPanel } from './HelpPanel';
@@ -77,6 +76,8 @@ export default function PipelineDetailPage() {
 
   // v1 (2026-07): issue #206 — 可视化编辑器模式
   const [editMode, setEditMode] = useState(false);
+  // v4 (2026-07): dirty 状态驱动"保存"按钮 disabled；保存成功后清除
+  const [editorDirty, setEditorDirty] = useState(false);
   const [editNodes, setEditNodes] = useState<Node<EditorNodeData>[]>([]);
   const [editEdges, setEditEdges] = useState<Edge<EditorEdgeData>[]>([]);
   const [propertyPanelVisible, setPropertyPanelVisible] = useState(false);
@@ -115,14 +116,20 @@ export default function PipelineDetailPage() {
       return;
     }
     const yaml = pipelineToYaml(editedPipeline);
+    const onSuccess = () => {
+      message.success('已保存');
+      // v4 (2026-07): 保存成功后清除 dirty（保存按钮回到 disabled，离开守卫同步重置）
+      workflowEditorRef.current?.markClean();
+      setEditorDirty(false);
+    };
     if (isFileMode && actualFilePath) {
       saveByFileMutation.mutate({ file: actualFilePath, content: yaml }, {
-        onSuccess: () => message.success('已保存'),
+        onSuccess,
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     } else if (definitionId) {
       saveByIdMutation.mutate(yaml, {
-        onSuccess: () => message.success('已保存'),
+        onSuccess,
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     }
@@ -143,6 +150,11 @@ export default function PipelineDetailPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [editMode]);
 
+  // v4 (2026-07): 退出编辑模式时清除 dirty 指示，避免残留到下次进入
+  useEffect(() => {
+    if (!editMode) setEditorDirty(false);
+  }, [editMode]);
+
   // 编辑器节点选择处理
   const handleEditorNodeSelect = useCallback((nodeId: string | null) => {
     setSelectedTaskId(nodeId);
@@ -159,7 +171,9 @@ export default function PipelineDetailPage() {
   }, [editNodes]);
 
   // 编辑器节点属性保存
+  // v4 (2026-07): 同步画布内部状态，否则属性面板改名后画布节点文字不变
   const handlePropertySave = useCallback((updatedNode: Node<EditorNodeData>) => {
+    workflowEditorRef.current?.updateNode(updatedNode);
     setEditNodes(prev => prev.map(n => n.id === updatedNode.id ? updatedNode : n));
   }, []);
 
@@ -181,10 +195,13 @@ export default function PipelineDetailPage() {
   // 节点而得到 name='unnamed'、pipelines=[]。这里与 WorkflowEditor 内部节点 ID 对齐，
   // 保证保存序列化能还原真实流水线名与 SubPipeline/Task 结构。
   // 退出编辑模式时重置标记，使再次进入能重新从最新 pipeline 初始化。
+  // v3 (2026-07): 数据源改为 displayPipeline —— 查看模式 YAML 编辑器里的未保存修改
+  // 必须带入编辑模式，否则切换时画布回退到 API 旧数据（e2e 压力测试暴露的不一致）。
   useEffect(() => {
     if (editMode && !isFileMode && pipeline) {
       if (!editInitializedRef.current) {
-        const g = yamlToNodes(pipeline);
+        const source = yamlEditorOpen && editedPipeline ? editedPipeline : pipeline;
+        const g = yamlToNodes(source);
         setEditNodes(g.nodes);
         setEditEdges(g.edges);
         editInitializedRef.current = true;
@@ -192,7 +209,7 @@ export default function PipelineDetailPage() {
     } else {
       editInitializedRef.current = false;
     }
-  }, [editMode, pipeline, isFileMode]);
+  }, [editMode, pipeline, editedPipeline, yamlEditorOpen, isFileMode]);
 
   // v2 (2026-07): 文件模式下，数据加载后自动填充编辑器
   useEffect(() => {
@@ -235,12 +252,14 @@ export default function PipelineDetailPage() {
     }
   }, []);
 
-  // 点击 DAG 节点 → YAML 编辑器滚动到对应行 + 高亮节点
-  const handleNodeClick = useCallback((taskId: string) => {
-    setSelectedTaskId(taskId || null);
-    if (!yamlEditorOpen || !taskId) return;
-    // 节点 ID 格式: "subpipeline.taskname"，YAML 中只有 "taskname"
-    const taskName = taskId.includes('.') ? taskId.split('.').pop()! : taskId;
+  // 查看模式点击画布节点 → 选中 + YAML 编辑器滚动到对应行
+  // v3 (2026-07): 统一为 WorkflowEditor 后节点 ID 为 __task__<sub>.<task> 格式
+  const handleViewNodeSelect = useCallback((nodeId: string | null) => {
+    setSelectedTaskId(nodeId);
+    if (!nodeId || !yamlEditorOpen) return;
+    const taskName = nodeId.startsWith('__task__')
+      ? nodeId.slice('__task__'.length).split('.').pop()!
+      : nodeId;
     const escaped = taskName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const lines = yamlText.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -257,18 +276,17 @@ export default function PipelineDetailPage() {
     return pipeline;
   }, [yamlEditorOpen, editedPipeline, pipeline]);
 
-  // YAML 光标所在行 → DAG 节点高亮（taskName → node ID 映射）
+  // YAML 光标所在行 → 画布节点高亮（taskName → 编辑器节点 ID 映射）
+  // v3 (2026-07): 查看模式统一为 WorkflowEditor 后节点 ID 使用 __task__<sub>.<task>，
+  // 不再使用旧只读图的 <sub>.<task>；顶层 tasks 编辑器不支持（与编辑模式一致）。
   const taskNameToNodeId = useMemo(() => {
     const map = new Map<string, string>();
     const p = displayPipeline;
     if (!p) return map;
     p.pipelines?.forEach((sub) => {
       sub.tasks?.forEach((t) => {
-        map.set(t.name, `${sub.name}.${t.name}`);
+        map.set(t.name, `__task__${sub.name}.${t.name}`);
       });
-    });
-    p.tasks?.forEach((t) => {
-      map.set(t.name, t.name);
     });
     return map;
   }, [displayPipeline]);
@@ -427,6 +445,7 @@ export default function PipelineDetailPage() {
                 icon={<SaveOutlined />}
                 onClick={handleSaveFromEditor}
                 loading={saving}
+                disabled={!editorDirty}
                 type="primary"
               >
                 保存
@@ -505,7 +524,9 @@ export default function PipelineDetailPage() {
           </div>
         )}
 
-        {/* DAG 画布 — 文件模式下隐藏，仅查看模式 */}
+        {/* DAG 画布 — 文件模式下隐藏，仅查看模式
+            v3 (2026-07): 查看模式复用 WorkflowEditor（readOnly），与编辑模式同一套
+            图模型/布局/节点视觉，删除旧只读 PipelineGraph 双轨渲染。 */}
         {!isFileMode && !editMode && (
           <div ref={graphWrapperRef} className="flex-1 min-w-0 overflow-hidden flex flex-col">
             {/* v1 (2026-07): issue #195 — 画布错误态横幅 */}
@@ -528,7 +549,12 @@ export default function PipelineDetailPage() {
               />
             )}
             <div className="flex-1 min-h-0">
-              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
+              <WorkflowEditor
+                pipeline={displayPipeline}
+                selectedNodeId={selectedTaskId}
+                onNodeSelect={handleViewNodeSelect}
+                readOnly
+              />
             </div>
           </div>
         )}
@@ -539,10 +565,11 @@ export default function PipelineDetailPage() {
             <div className="flex-1 min-w-0 overflow-hidden">
               <WorkflowEditor
                 ref={workflowEditorRef}
-                pipeline={pipeline!}
+                pipeline={displayPipeline}
                 selectedNodeId={selectedTaskId}
                 onNodeSelect={handleEditorNodeSelect}
                 onGraphChange={handleGraphChange}
+                onDirtyChange={setEditorDirty}
                 readOnly={!editMode}
               />
             </div>

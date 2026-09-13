@@ -45,26 +45,25 @@ function EditorPostChildNode({ data, selected }: { data: EditorPostChildNodeData
         boxShadow: selected && !readOnly ? `0 0 0 4px ${style.accent}20` : undefined,
       }}
     >
-      {/* 注意(2026-07): 只读模式下隐藏 Handle */}
-      {!readOnly && (
-        <Handle
-          id="in"
-          type="target"
-          position={Position.Left}
-          style={{
-            width: 8,
-            height: 8,
-            background: 'transparent',
-            border: `2px solid ${style.accent}`,
-            borderRadius: '50%',
-            left: -5,
-            top: '50%',
-          }}
-        />
-      )}
+      {/* v3 (2026-07): Handle 是 React Flow 边锚点，只读时不能移除；透明且不可连接 */}
+      {/* v4 (2026-07): in 端口改到顶部，与 TB 布局一致 */}
+      <Handle
+        id="in"
+        type="target"
+        position={Position.Top}
+        isConnectable={!readOnly}
+        style={{
+          width: 8,
+          height: 8,
+          background: 'transparent',
+          border: `2px solid ${style.accent}`,
+          borderRadius: '50%',
+          ...(readOnly ? { opacity: 0, pointerEvents: 'none' } : null),
+        }}
+      />
 
       {/* 标题 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         <span
           style={{
             padding: '1px 6px',
@@ -74,16 +73,22 @@ function EditorPostChildNode({ data, selected }: { data: EditorPostChildNodeData
             fontSize: 10,
             fontFamily: FONT_MONO,
             fontWeight: 600,
+            flexShrink: 0,
           }}
         >
           {style.label}
         </span>
+        {/* v2 (2026-07): 超长任务名撑爆节点宽度（与 EditorTaskNode 同类问题），加 ellipsis */}
         <span
           style={{
             fontFamily: FONT_MONO,
             fontSize: 12,
             fontWeight: 600,
             color: '#0f172a',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 130,
           }}
         >
           {taskName}

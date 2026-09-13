@@ -29,6 +29,8 @@ test.describe('Keyboard Delete', () => {
     await newNode.click({ force: true });
     await page.waitForTimeout(400);
 
+    // v2 (2026-07): 键盘事件只在 WorkflowEditor 容器聚焦时触发，先显式聚焦
+    await page.locator('[data-testid="workflow-editor-root"]').focus();
     // press Delete key
     await page.keyboard.press('Delete');
     await page.waitForTimeout(500);
@@ -54,6 +56,8 @@ test.describe('Keyboard Delete', () => {
     await newNode.click({ force: true });
     await page.waitForTimeout(400);
 
+    // v2 (2026-07): 键盘事件依赖 WorkflowEditor 容器焦点
+    await page.locator('[data-testid="workflow-editor-root"]').focus();
     await page.keyboard.press('Backspace');
     await page.waitForTimeout(500);
 

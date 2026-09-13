@@ -161,7 +161,7 @@ describe('Nodes to YAML serialization', () => {
       expect(pipelinesIsEmpty(pipeline));
     });
 
-    it('task 节点缺少 subpipelineName → 被忽略', () => {
+    it('无 SubPipeline 归属的 task → 包装为同名隐式 SubPipeline（对齐后端 _normalize）', () => {
       const nodes: Node<EditorNodeData>[] = [
         {
           id: 'orphan-task',
@@ -177,9 +177,12 @@ describe('Nodes to YAML serialization', () => {
         },
       ];
 
+      // v3 (2026-07): 根级 task 不再报错/丢失，而是包装成以流水线名命名的隐式 SubPipeline，
+      // 保证后端（pipelines 优先解析）也会执行这些任务，不静默丢数据。
       const { pipeline, errors } = nodesToYaml(nodes, []);
-      // 没有 SubPipeline 容器的 task 节点会产生错误
-      expect(errors.length).toBeGreaterThan(0);
+      expect(errors).toEqual([]);
+      const implicit = pipeline?.pipelines?.find(s => s.name === 'test');
+      expect(implicit?.tasks.map(t => t.name)).toEqual(['orphan']);
     });
   });
 
@@ -243,6 +246,137 @@ describe('Nodes to YAML serialization', () => {
       const buildSub = pipeline?.pipelines?.find(s => s.name === 'build');
       const taskB = buildSub?.tasks.find(t => t.name === 'b');
       expect(taskB?.depends_on).toContain('a');
+    });
+  });
+
+  describe('v3 结构解析与跨容器连线', () => {
+    const pipelineNode: Node<EditorNodeData> = {
+      id: '__pipeline__',
+      type: 'editorPipeline',
+      position: { x: 0, y: 0 },
+      data: { label: 'test-v3' },
+    };
+    const makeSubNode = (id: string, label: string): Node<EditorNodeData> => ({
+      id,
+      type: 'editorSubPipeline',
+      parentId: '__pipeline__',
+      position: { x: 0, y: 0 },
+      data: { label, executionStrategy: 'sequential' },
+    });
+    const makeTaskNode = (
+      id: string,
+      parentId: string | undefined,
+      name: string,
+      subpipelineName?: string,
+    ): Node<EditorNodeData> => ({
+      id,
+      type: 'editorTask',
+      parentId,
+      position: { x: 0, y: 0 },
+      data: {
+        task: { name, env: {}, retry: 0, depends_on: [] },
+        taskType: 'command',
+        ...(subpipelineName !== undefined ? { subpipelineName } : {}),
+      },
+    });
+
+    it('拖拽新增的 task（subpipelineName 为空）按 parentId 归入 SubPipeline', () => {
+      const nodes = [
+        pipelineNode,
+        makeSubNode('__pipeline__build', 'build'),
+        makeTaskNode('__new__1', '__pipeline__build', 'dragged'), // 模拟拖拽新增：无 subpipelineName
+      ];
+      const { pipeline, errors } = nodesToYaml(nodes, []);
+      expect(errors).toEqual([]);
+      const build = pipeline?.pipelines?.find(s => s.name === 'build');
+      expect(build?.tasks.map(t => t.name)).toEqual(['dragged']);
+    });
+
+    it('跨容器 task→task 手动连线映射为 target sub 的 depends_on', () => {
+      const nodes = [
+        pipelineNode,
+        makeSubNode('__pipeline__build', 'build'),
+        makeSubNode('__pipeline__deploy', 'deploy'),
+        makeTaskNode('__task__build.compile', '__pipeline__build', 'compile', 'build'),
+        makeTaskNode('__task__deploy.push', '__pipeline__deploy', 'push', 'deploy'),
+      ];
+      const edges: Edge<EditorEdgeData>[] = [
+        {
+          id: 'manual-cross',
+          source: '__task__build.compile',
+          target: '__task__deploy.push',
+          type: 'smoothstep',
+          data: { edgeType: 'explicit', explicit: true, implicit: false },
+        },
+      ];
+      const { pipeline, errors } = nodesToYaml(nodes, edges);
+      expect(errors).toEqual([]);
+      const deploy = pipeline?.pipelines?.find(s => s.name === 'deploy');
+      expect(deploy?.depends_on).toContain('build');
+    });
+
+    it('sub→sub 手动连线映射为 depends_on', () => {
+      const nodes = [
+        pipelineNode,
+        makeSubNode('__pipeline__a', 'a'),
+        makeSubNode('__pipeline__b', 'b'),
+        makeTaskNode('__task__a.t', '__pipeline__a', 't', 'a'),
+        makeTaskNode('__task__b.t', '__pipeline__b', 't', 'b'),
+      ];
+      const edges: Edge<EditorEdgeData>[] = [
+        {
+          id: 'manual-sub',
+          source: '__pipeline__a',
+          target: '__pipeline__b',
+          type: 'smoothstep',
+          data: { edgeType: 'explicit', explicit: true, implicit: false },
+        },
+      ];
+      const { pipeline, errors } = nodesToYaml(nodes, edges);
+      expect(errors).toEqual([]);
+      expect(pipeline?.pipelines?.find(s => s.name === 'b')?.depends_on).toContain('a');
+    });
+
+    it('START→END 直连 → 报错而非静默丢弃', () => {
+      const nodes: Node<EditorNodeData>[] = [
+        pipelineNode,
+        { id: '__start__', type: 'editorStartEnd', position: { x: 0, y: 0 }, data: { variant: 'start' } },
+        { id: '__end__', type: 'editorStartEnd', position: { x: 0, y: 200 }, data: { variant: 'end' } },
+      ];
+      const edges: Edge<EditorEdgeData>[] = [
+        {
+          id: 'start-to-end',
+          source: '__start__',
+          target: '__end__',
+          type: 'smoothstep',
+          data: { edgeType: 'explicit', explicit: true, implicit: false },
+        },
+      ];
+      const { pipeline, errors } = nodesToYaml(nodes, edges);
+      expect(pipeline).toBeNull();
+      expect(errors.join(' ')).toContain('无法保存的连线');
+    });
+
+    it('根级 task 之间的依赖写入隐式 sub 的 depends_on', () => {
+      const nodes = [
+        pipelineNode,
+        makeTaskNode('__new__a', undefined, 'a'),
+        makeTaskNode('__new__b', undefined, 'b'),
+      ];
+      const edges: Edge<EditorEdgeData>[] = [
+        {
+          id: 'root-edge',
+          source: '__new__a',
+          target: '__new__b',
+          type: 'smoothstep',
+          data: { edgeType: 'explicit', explicit: true, implicit: false },
+        },
+      ];
+      const { pipeline, errors } = nodesToYaml(nodes, edges);
+      expect(errors).toEqual([]);
+      const implicit = pipeline?.pipelines?.find(s => s.name === 'test-v3');
+      expect(implicit?.tasks.map(t => t.name).sort()).toEqual(['a', 'b']);
+      expect(implicit?.tasks.find(t => t.name === 'b')?.depends_on).toEqual(['a']);
     });
   });
 });

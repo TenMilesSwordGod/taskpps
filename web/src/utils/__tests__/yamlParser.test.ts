@@ -107,7 +107,7 @@ pipelines:
     expect(task?.post?.on_success).toHaveLength(1);
   });
 
-  it('处理只有 tasks 没有 pipelines 的情况', () => {
+  it('只有 tasks 没有 pipelines：规范化为同名 SubPipeline（对齐后端 _normalize）', () => {
     const yaml = `
 name: flat
 tasks:
@@ -116,8 +116,32 @@ tasks:
 `;
     const result = parseYamlToPipeline(yaml);
     expect(result.success).toBe(true);
+    // v2 (2026-07): 与后端 schema PipelineYAML._normalize 对齐 —— 顶层 tasks 包装为
+    // 以流水线名命名的 SubPipeline。否则统一渲染的画布看不到这些任务（被误判数据丢失），
+    // 而保存后后端又会自动规范化，造成"预览 ≠ 保存后视图"。
+    expect(result.pipeline?.pipelines).toHaveLength(1);
+    expect(result.pipeline?.pipelines?.[0].name).toBe('flat');
+    expect(result.pipeline?.pipelines?.[0].tasks).toHaveLength(1);
+    expect(result.pipeline?.pipelines?.[0].tasks[0].name).toBe('run');
+    expect(result.pipeline?.tasks).toBeNull();
+  });
+
+  it('同时存在 pipelines 与 tasks：不触发规范化（与后端条件一致）', () => {
+    const yaml = `
+name: mixed
+pipelines:
+  - name: build
+    tasks:
+      - name: compile
+        command: make
+tasks:
+  - name: legacy
+    command: echo
+`;
+    const result = parseYamlToPipeline(yaml);
+    expect(result.success).toBe(true);
+    expect(result.pipeline?.pipelines).toHaveLength(1);
     expect(result.pipeline?.tasks).toHaveLength(1);
-    expect(result.pipeline?.pipelines).toBeUndefined();
   });
 });
 

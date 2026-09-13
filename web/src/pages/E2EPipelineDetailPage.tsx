@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { Button, Space, Tooltip, message, Alert } from 'antd';
 import { EditOutlined, EyeOutlined, SaveOutlined, CodeOutlined, CloseOutlined } from '@ant-design/icons';
-import PipelineGraph from '@/features/pipelines/PipelineGraph';
 import YamlEditor from '@/features/pipelines/YamlEditor';
 import type { YamlEditorRef } from '@/features/pipelines/YamlEditor';
-import WorkflowEditor from '@/features/pipelines/workflow/WorkflowEditor';
+import WorkflowEditor, { type WorkflowEditorRef } from '@/features/pipelines/workflow/WorkflowEditor';
 import NodePalette from '@/features/pipelines/workflow/NodePalette';
 import PropertyPanel from '@/features/pipelines/workflow/PropertyPanel';
 import { nodesToYaml } from '@/features/pipelines/workflow/nodesToYaml';
@@ -20,8 +19,8 @@ import type { Node, Edge } from '@xyflow/react';
  * - 生产路由 /pipelines/:projectId/:definitionId 在 RequireAuth 守卫内，
  *   且依赖 usePipelineById API。Playwright 在 CI/无后端环境下无法直接访问。
  * - 此页面加载 mock pipeline 数据，独立渲染 PipelineDetailPage 的核心结构：
- *   编辑/查看模式切换、WorkflowEditor、NodePalette、PropertyPanel、PipelineGraph、
- *   YamlEditor、保存功能。
+ *   编辑/查看模式切换、WorkflowEditor（查看模式 readOnly 复用）、
+ *   NodePalette、PropertyPanel、YamlEditor、保存功能。（v2: 旧只读 PipelineGraph 已删除）
  * - 与 E2EWorkflowEditorPage 使用相同的 mock pipeline 结构，保证一致性。
  */
 
@@ -68,6 +67,9 @@ export default function E2EPipelineDetailPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
+  // v3 (2026-07): dirty 状态驱动编辑模式"保存"按钮 disabled，保存成功后清除
+  const [editorDirty, setEditorDirty] = useState(false);
+  const editorRef = useRef<WorkflowEditorRef>(null);
 
   // 保存：nodes/edges → YAML → 模拟写回（不调真实 API）
   const handleSaveFromEditor = useCallback(() => {
@@ -79,6 +81,9 @@ export default function E2EPipelineDetailPage() {
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
+      // 保存成功后清除 dirty（保存按钮回到 disabled）
+      editorRef.current?.markClean();
+      setEditorDirty(false);
       message.success('已保存');
     }, 300);
   }, [editNodes, editEdges]);
@@ -99,12 +104,16 @@ export default function E2EPipelineDetailPage() {
   }, [editNodes]);
 
   // 编辑器节点属性保存
+  // v3 (2026-07): 同步 WorkflowEditor 内部节点状态，否则画布文字不更新
   const handlePropertySave = useCallback((updatedNode: Node<EditorNodeData>) => {
+    editorRef.current?.updateNode(updatedNode);
     setEditNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
   }, []);
 
   // 编辑器节点删除
+  // v3 (2026-07): 委托给 WorkflowEditor.deleteNode（单数据源），避免画布与父状态脱节
   const handlePropertyDelete = useCallback((nodeId: string) => {
+    editorRef.current?.deleteNode(nodeId);
     setEditNodes((prev) => prev.filter((n) => n.id !== nodeId));
     setEditEdges((prev) => prev.filter((e) => e.source !== nodeId && e.target !== nodeId));
   }, []);
@@ -138,11 +147,14 @@ export default function E2EPipelineDetailPage() {
     }
   }, []);
 
-  // 点击 DAG 节点 → YAML 编辑器滚动到对应行 + 高亮节点
-  const handleNodeClick = useCallback((taskId: string) => {
-    setSelectedTaskId(taskId || null);
-    if (!yamlEditorOpen || !taskId) return;
-    const taskName = taskId.includes('.') ? taskId.split('.').pop()! : taskId;
+  // 查看模式点击画布节点 → YAML 编辑器滚动到对应行 + 高亮节点
+  // v2 (2026-07): 查看模式统一为 WorkflowEditor 后，节点 ID 为 __task__<sub>.<task>
+  const handleViewNodeSelect = useCallback((nodeId: string | null) => {
+    setSelectedTaskId(nodeId);
+    if (!nodeId || !yamlEditorOpen) return;
+    const taskName = nodeId.startsWith('__task__')
+      ? nodeId.slice('__task__'.length).split('.').pop()!
+      : nodeId;
     const escaped = taskName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const lines = yamlText.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -160,17 +172,15 @@ export default function E2EPipelineDetailPage() {
   }, [yamlEditorOpen, editedPipeline, pipeline]);
 
   // YAML 光标所在行 → taskName 映射
+  // v2 (2026-07): 统一为编辑器的 __task__<sub>.<task> ID（顶层 tasks 编辑器不支持）
   const taskNameToNodeId = useMemo(() => {
     const map = new Map<string, string>();
     const p = displayPipeline;
     if (!p) return map;
     p.pipelines?.forEach((sub) => {
       sub.tasks?.forEach((t) => {
-        map.set(t.name, `${sub.name}.${t.name}`);
+        map.set(t.name, `__task__${sub.name}.${t.name}`);
       });
-    });
-    p.tasks?.forEach((t) => {
-      map.set(t.name, t.name);
     });
     return map;
   }, [displayPipeline]);
@@ -225,6 +235,7 @@ export default function E2EPipelineDetailPage() {
                 icon={<SaveOutlined />}
                 onClick={handleSaveFromEditor}
                 loading={saving}
+                disabled={!editorDirty}
                 type="primary"
               >
                 保存
@@ -284,7 +295,13 @@ export default function E2EPipelineDetailPage() {
               />
             )}
             <div style={{ flex: 1, minHeight: 0 }}>
-              <PipelineGraph pipeline={displayPipeline} onNodeClick={handleNodeClick} selectedTaskId={selectedTaskId} />
+              {/* v2 (2026-07): 查看模式复用 WorkflowEditor（readOnly），与生产页面统一 */}
+              <WorkflowEditor
+                pipeline={displayPipeline}
+                selectedNodeId={selectedTaskId}
+                onNodeSelect={handleViewNodeSelect}
+                readOnly
+              />
             </div>
           </div>
         )}
@@ -294,10 +311,12 @@ export default function E2EPipelineDetailPage() {
           <>
             <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
               <WorkflowEditor
-                pipeline={pipeline}
+                ref={editorRef}
+                pipeline={displayPipeline}
                 selectedNodeId={selectedTaskId}
                 onNodeSelect={handleEditorNodeSelect}
                 onGraphChange={handleGraphChange}
+                onDirtyChange={setEditorDirty}
               />
             </div>
             <NodePalette />

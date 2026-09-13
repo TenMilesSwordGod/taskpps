@@ -60,7 +60,7 @@ test.describe('模式切换 + 保存场景', () => {
 
     // 切到查看模式
     await exitEditMode(page);
-    // 查看模式应显示 PipelineGraph（节点数可能变化，因为渲染方式不同）
+    // 查看模式应显示只读画布（与编辑模式统一为 WorkflowEditor，节点数一致）
     await page.waitForTimeout(500);
 
     // 切回编辑模式
@@ -80,12 +80,10 @@ test.describe('模式切换 + 保存场景', () => {
     // 默认是查看模式（只读）
     const before = await getNodeCount(page);
 
-    // 尝试拖 SubPipeline → 不应成功
-    const subCard = page.locator('[draggable="true"]', { hasText: 'SubPipeline' }).first();
-    const canvas = page.locator('.react-flow__pane').first();
-    await subCard.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 300, y: 300 } });
-    await page.waitForTimeout(800);
-
+    // v2 (2026-07): 查看模式统一为 WorkflowEditor readOnly 后不渲染节点面板，
+    // 用户没有任何可拖拽入口；原先"拖卡片"的验证方式因面板不存在而无法执行，
+    // 改为直接断言面板不可见 + 画布节点数不变。
+    await expect(page.getByText('节点面板')).not.toBeVisible();
     expect(await getNodeCount(page)).toBe(before);
   });
 
@@ -107,6 +105,8 @@ test.describe('模式切换 + 保存场景', () => {
     expect(await getNodeCount(page)).toBe(before);
   });
 
+  // v3 (2026-07): 已实现"未编辑时保存按钮 disabled"（dirty 由内容变化驱动，
+  // 尺寸测量/选中不计入），去掉 fixme 正式启用
   test('编辑模式 → 未做编辑 → 保存按钮 disabled', async ({ page }) => {
     await page.goto(TEST_URL);
     await waitForPage(page);

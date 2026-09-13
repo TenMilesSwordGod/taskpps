@@ -162,8 +162,8 @@ install_project_deps() {
         cd $SERVER_HOME/server
         python3 -m venv ${VENV_DIR}
         source ${VENV_DIR}/bin/activate
-        pip install --upgrade pip setuptools wheel
-        pip install -e '.[dev]'
+        pip install -i ${PIP_MIRROR} --trusted-host pypi.tuna.tsinghua.edu.cn --upgrade pip setuptools wheel
+        pip install -i ${PIP_MIRROR} --trusted-host pypi.tuna.tsinghua.edu.cn -e '.[dev]'
     "
 
     chown -R taskpps:taskpps "$SERVER_HOME/server/.venv"

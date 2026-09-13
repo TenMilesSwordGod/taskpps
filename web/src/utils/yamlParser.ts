@@ -1,5 +1,6 @@
 import { load, dump, YAMLException } from 'js-yaml';
 import type { PipelineDetail, ValidationError } from '@/types';
+import { normalizeTopLevelTasks } from './normalizePipeline';
 
 export interface YamlParseResult {
   success: boolean;
@@ -142,7 +143,9 @@ export function parseYamlToPipeline(yamlText: string): YamlParseResult {
       pipeline.pipelines = obj.pipelines as PipelineDetail['pipelines'];
     }
 
-    return { success: true, pipeline };
+    // v2 (2026-07): 顶层 tasks 规范化为同名 SubPipeline（与后端 _normalize 对齐），
+    // 保证实时预览与保存后视图一致，见 normalizePipeline.ts
+    return { success: true, pipeline: normalizeTopLevelTasks(pipeline) };
   } catch (err) {
     if (err instanceof YAMLException) {
       return {

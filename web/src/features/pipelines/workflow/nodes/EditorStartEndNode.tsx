@@ -46,35 +46,40 @@ function EditorStartEndNode({ data, selected }: { data: EditorStartEndNodeData; 
       />
       <span>{isStart ? 'START' : 'END'}</span>
 
-      {!readOnly && (isStart ? (
+      {/* v2 (2026-07): Handle 是 React Flow 边锚点，只读时不能移除，
+          否则 START→Pipeline / Pipeline→END 的连线消失；透明且不可连接。
+          v3 (2026-07): start 的 out 改到底部、end 的 in 改到顶部，与 TB 布局一致 */}
+      {isStart ? (
         <Handle
           id="out"
           type="source"
-          position={Position.Right}
+          position={Position.Bottom}
+          isConnectable={!readOnly}
           style={{
             width: 8,
             height: 8,
             background: 'transparent',
             border: '2px solid #64748b',
             borderRadius: '50%',
-            right: -5,
+            ...(readOnly ? { opacity: 0, pointerEvents: 'none' } : null),
           }}
         />
       ) : (
         <Handle
           id="in"
           type="target"
-          position={Position.Left}
+          position={Position.Top}
+          isConnectable={!readOnly}
           style={{
             width: 8,
             height: 8,
             background: 'transparent',
             border: '2px solid #64748b',
             borderRadius: '50%',
-            left: -5,
+            ...(readOnly ? { opacity: 0, pointerEvents: 'none' } : null),
           }}
         />
-      ))}
+      )}
     </div>
   );
 }

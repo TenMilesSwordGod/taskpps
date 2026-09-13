@@ -12,7 +12,7 @@ import type { PipelineDetail } from '@/types';
  *   2. 拖放节点 → onGraphChange 被调用
  *   3. 点击"适应"按钮 → fitView 被触发（reactFlowInstance 已初始化）
  *   4. 点击"布局"按钮触发自动布局
- *   5. 只读模式下工具栏隐藏
+ *   5. 只读模式下仅保留"适应"按钮（v2: 布局/导出隐藏）
  *   6. 非只读模式渲染 3 个工具栏按钮（布局/适应/导出）
  *
  * v4 (2026-07): 移除 WorkflowEditor 内部"保存"按钮（假保存），
@@ -179,7 +179,7 @@ describe('工具栏 — isDirty 状态与脏标记', () => {
 });
 
 describe('工具栏 — 只读模式', () => {
-  it('只读模式下不渲染工具栏按钮', async () => {
+  it('只读模式下仅保留"适应"按钮，布局/导出不可用', async () => {
     const { container, unmount } = render(
       <WorkflowEditor
         pipeline={makeSimplePipeline()}
@@ -193,8 +193,11 @@ describe('工具栏 — 只读模式', () => {
       expect(container.querySelector('.react-flow')).toBeInTheDocument();
     });
 
+    // v2 (2026-07): 查看模式保留"适应窗口" —— 大图在只读画布上无法用编辑工具，
+    // 没有适应按钮时只能看到局部（复杂场景压力测试暴露的 UX 问题）。
+    // 布局/导出仍仅编辑模式可用。
     expect(screen.queryByText('布局')).not.toBeInTheDocument();
-    expect(screen.queryByText('适应')).not.toBeInTheDocument();
+    expect(screen.getByText('适应')).toBeInTheDocument();
     expect(screen.queryByText('导出')).not.toBeInTheDocument();
 
     unmount();

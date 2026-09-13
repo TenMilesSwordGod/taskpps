@@ -116,7 +116,9 @@ test.describe('B. 拖拽节点完整流程', () => {
 
     await taskCard.dragTo(canvas, {
       sourcePosition: { x: 20, y: 20 },
-      targetPosition: { x: 500, y: 400 },
+      // v2 (2026-07): 固定拖到画布左上空白 —— 原 (500,400) 并发/布局变化时
+      // 可能命中已有 Task 容器内部而被 R7 拒绝，导致节点数不变（flake）
+      targetPosition: { x: 80, y: 140 },
     });
 
     await page.waitForTimeout(500);
@@ -130,8 +132,8 @@ test.describe('B. 拖拽节点完整流程', () => {
 
     const initialNodes = await page.locator('.react-flow__node').count();
 
-    const atomicHeader = page.locator('.ant-collapse-header', { hasText: '原子行为' });
-    const atomicPanel = page.locator('.ant-collapse-item').filter({ hasText: '原子行为' });
+    const atomicHeader = page.locator('.ant-collapse-header', { hasText: '基础任务' });
+    const atomicPanel = page.locator('.ant-collapse-item').filter({ hasText: '基础任务' });
     const isExpanded = await atomicPanel.locator('.ant-collapse-content-active').count();
     if (isExpanded === 0) {
       await atomicHeader.click();
@@ -157,8 +159,8 @@ test.describe('B. 拖拽节点完整流程', () => {
 
     const initialNodes = await page.locator('.react-flow__node').count();
 
-    const atomicHeader = page.locator('.ant-collapse-header', { hasText: '原子行为' });
-    const atomicPanel = page.locator('.ant-collapse-item').filter({ hasText: '原子行为' });
+    const atomicHeader = page.locator('.ant-collapse-header', { hasText: '基础任务' });
+    const atomicPanel = page.locator('.ant-collapse-item').filter({ hasText: '基础任务' });
     const isExpanded = await atomicPanel.locator('.ant-collapse-content-active').count();
     if (isExpanded === 0) {
       await atomicHeader.click();
@@ -170,7 +172,8 @@ test.describe('B. 拖拽节点完整流程', () => {
 
     await invokeCard.dragTo(canvas, {
       sourcePosition: { x: 20, y: 20 },
-      targetPosition: { x: 650, y: 450 },
+      // v2 (2026-07): 固定拖到画布左上空白 —— 原子节点落入 SubPipeline 会被 R5 拒绝
+      targetPosition: { x: 110, y: 170 },
     });
 
     await page.waitForTimeout(500);
@@ -178,20 +181,15 @@ test.describe('B. 拖拽节点完整流程', () => {
     expect(newNodes).toBeGreaterThan(initialNodes);
   });
 
-  test('保存按钮 isDirty 状态切换：初始 enabled → 保存后 disabled → 拖放后 enabled', async ({ page }) => {
+  test('保存按钮 isDirty 状态切换：初始 disabled → 拖放后 enabled → 保存后 disabled', async ({ page }) => {
     await page.goto(TEST_URL);
     await waitForCanvas(page);
 
-    // 注：ReactFlow 初始化触发 onNodesChange（layout 测量），导致 isDirty 变为 true
+    // v3 (2026-07): 尺寸测量/选中不再标记 dirty，"未编辑"初始应为 disabled
     const saveBtn = page.getByText('保存').first();
-    await expect(saveBtn).toBeEnabled();
-
-    // 保存 → isDirty 重置
-    await saveBtn.click();
-    await page.waitForTimeout(500);
     await expect(saveBtn).toBeDisabled();
 
-    // 拖放节点 → isDirty 再次 true
+    // 拖放节点 → isDirty 变为 true
     const subPipelineCard = page.locator('[draggable="true"]', { hasText: 'SubPipeline' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await subPipelineCard.dragTo(canvas, {
@@ -200,6 +198,11 @@ test.describe('B. 拖拽节点完整流程', () => {
     });
     await page.waitForTimeout(500);
     await expect(saveBtn).toBeEnabled();
+
+    // 保存 → isDirty 重置
+    await saveBtn.click();
+    await page.waitForTimeout(500);
+    await expect(saveBtn).toBeDisabled();
   });
 });
 
@@ -300,7 +303,9 @@ test.describe('D. 右键菜单完整交互', () => {
     await page.waitForTimeout(1000);
 
     const pane = page.locator('.react-flow__pane').first();
-    await pane.click({ button: 'right' });
+    // v2 (2026-07): 原实现点 pane 中心，节点尺寸/位置变化后中心可能命中节点而弹出
+    // 节点菜单；改为明确点击左上角空白区域
+    await pane.click({ button: 'right', position: { x: 40, y: 40 } });
     await page.waitForTimeout(500);
 
     const menuItem = page.getByText('添加 SubPipeline').first();
@@ -320,7 +325,8 @@ test.describe('D. 右键菜单完整交互', () => {
     const initialNodes = await page.locator('.react-flow__node').count();
 
     const pane = page.locator('.react-flow__pane').first();
-    await pane.click({ button: 'right' });
+    // v2 (2026-07): 同 D1，固定点击空白区域避免命中节点
+    await pane.click({ button: 'right', position: { x: 40, y: 40 } });
     await page.waitForTimeout(500);
 
     const menuItem = page.getByText('添加 SubPipeline').first();
@@ -455,17 +461,16 @@ test.describe('F. 保存完整流程', () => {
     await page.goto(TEST_URL);
     await waitForCanvas(page);
 
-    // 先保存一次重置 isDirty
+    // v3 (2026-07): 初始未编辑即 disabled，无需"先保存一次重置"
     const saveBtn = page.getByText('保存').first();
-    await saveBtn.click();
-    await page.waitForTimeout(500);
+    await expect(saveBtn).toBeDisabled();
 
-    // 拖放 SubPipeline
+    // 拖放 SubPipeline 到左上空白（避免落入已有 SubPipeline 内部被 R1 拒绝）
     const subPipelineCard = page.locator('[draggable="true"]', { hasText: 'SubPipeline' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await subPipelineCard.dragTo(canvas, {
       sourcePosition: { x: 20, y: 20 },
-      targetPosition: { x: 400, y: 300 },
+      targetPosition: { x: 80, y: 140 },
     });
     await page.waitForTimeout(500);
 

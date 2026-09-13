@@ -83,7 +83,9 @@ test.describe('真实 PDP 集成测试', () => {
     expect(nodes).toBeGreaterThan(0);
 
     // 确认流水线名称出现在页面上
-    const pipelineName = page.getByText('integration-test');
+    // v2 (2026-07): 统一渲染后画布根容器标签也含流水线名，getByText 会命中多个元素
+    // 触发 strict mode violation，取 first 即可（面包屑或容器标签任一可见都满足）
+    const pipelineName = page.getByText('integration-test').first();
     expect(await pipelineName.isVisible().catch(() => false)).toBeTruthy();
   });
 
@@ -151,12 +153,14 @@ test.describe('真实 PDP 集成测试', () => {
     const before = await page.locator('.react-flow__node').count();
 
     // 右键画布空白 → 菜单出现
+    // v2 (2026-07): dispatchEvent('contextmenu') 无坐标会导致菜单定位到视口外，
+    // 改用带真实坐标的右键点击
     const canvas = page.locator('.react-flow__pane').first();
-    await canvas.dispatchEvent('contextmenu');
+    await canvas.click({ button: 'right', position: { x: 40, y: 40 }, force: true });
     await page.waitForTimeout(800);
 
-    // 点"添加 SubPipeline"菜单
-    const addSub = page.locator('.ant-dropdown-menu-item').filter({ hasText: '添加 SubPipeline' });
+    // 点"添加 SubPipeline"菜单（自定义 fixed 定位菜单，非 antd Dropdown）
+    const addSub = page.locator('div[style*="position: fixed"] div').filter({ hasText: '添加 SubPipeline' });
     expect(await addSub.isVisible().catch(() => false)).toBeTruthy();
     await addSub.click();
     await page.waitForTimeout(800);
@@ -362,7 +366,7 @@ test.describe('补测: 保存流程', () => {
 
     await page.goto('/');
     await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
-    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.goto(REAL_PDP, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForSelector('.react-flow', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
@@ -405,7 +409,7 @@ test.describe('补测: 文件模式', () => {
     page.on('pageerror', err => console.log('F1 ERR:', err.message));
     await page.goto('/');
     await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
-    await page.goto('/pipelines/test-proj/_file/pipelines/my-pipeline.yaml', { waitUntil: 'networkidle', timeout: 15000 });
+    await page.goto('/pipelines/test-proj/_file/pipelines/my-pipeline.yaml', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(3000);
     console.log('F1 API calls:', apiCalls);
 
@@ -433,7 +437,7 @@ test.describe('补测: YAML ↔ DAG 双向同步', () => {
     });
     await page.goto('/');
     await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
-    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.goto(REAL_PDP, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForSelector('.react-flow', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
@@ -464,7 +468,7 @@ test.describe('补测: 大流水线性能', () => {
     });
     await page.goto('/');
     await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
-    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.goto(REAL_PDP, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForSelector('.react-flow', { timeout: 15000 });
     await page.waitForTimeout(1000);
 
@@ -490,7 +494,7 @@ test.describe('补测: 浏览器导航', () => {
     });
     await page.goto('/');
     await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
-    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.goto(REAL_PDP, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForSelector('.react-flow', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
@@ -533,7 +537,7 @@ test.describe('补测: 自动布局', () => {
     });
     await page.goto('/');
     await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 'test-token');
-    await page.goto(REAL_PDP, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.goto(REAL_PDP, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForSelector('.react-flow', { timeout: 10000 });
     await page.waitForTimeout(1000);
 

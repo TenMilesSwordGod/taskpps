@@ -1,6 +1,8 @@
-import type { Node, Edge, XYPosition } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
 import type { PipelineDetail, PipelineConfig, TaskYAML, TaskType } from '@/types';
+import { layoutGraph } from './layoutGraph';
+import { normalizeTopLevelTasks } from '@/utils/normalizePipeline';
 
 /**
  * YAML (PipelineDetail) → React Flow nodes + edges 反序列化
@@ -43,10 +45,7 @@ export interface EditorNodeData {
   [key: string]: unknown;
 }
 
-const GAP_X = 60;
-const GAP_Y = 80;
 const NODE_W = 180;
-const NODE_H = 56;
 const CONTAINER_PADDING = 40;
 
 /** 推断任务类型 */
@@ -78,6 +77,11 @@ export interface YamlToNodesResult {
  * @returns 包含节点数组和边数组的结果
  */
 export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
+  // v3 (2026-07): 与后端 _normalize 对齐，顶层 tasks 统一包装为同名 SubPipeline。
+  // 放在渲染入口而不是只放在 parse 层，保证所有调用方（API 数据/YAML 解析/测试构造）
+  // 的渲染行为一致，避免"某入口能看到任务、某入口看不到"。
+  pipeline = normalizeTopLevelTasks(pipeline);
+
   const nodes: Node<EditorNodeData>[] = [];
   const edges: Edge<EditorEdgeData>[] = [];
 
@@ -154,8 +158,8 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
     subpipelineOrder.push(...order);
 
     // === 布局计算 ===
-    let currentX = CONTAINER_PADDING;
-    let currentY = CONTAINER_PADDING;
+    // 位置交给统一的容器感知布局 layoutGraph 计算（见文件末尾），
+    // 这里只构建结构，初始 position 统一 {0,0}，避免两套布局算法互相打架。
 
     // 先创建所有 SubPipeline 节点
     for (const subName of subpipelineOrder) {
@@ -163,25 +167,18 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
       const subId = `__pipeline__${sub.name}`;
       const strategy = resolveStrategy(sub.config, topOptions);
 
-      const taskCount = (sub.tasks || []).length;
-      // 动态计算容器高度
-      const containerH = CONTAINER_PADDING * 2 +
-        taskCount * (NODE_H + GAP_Y) + 40;
-
       nodes.push({
         id: subId,
         type: 'editorSubPipeline',
         parentId: pipelineId,
-        position: { x: currentX, y: currentY },
-        style: { width: NODE_W + CONTAINER_PADDING * 2, height: Math.max(140, containerH) },
+        position: { x: 0, y: 0 },
+        style: { width: NODE_W + CONTAINER_PADDING * 2, height: 140 },
         data: {
           label: sub.name,
           executionStrategy: strategy,
           maxConcurrentTasks: sub.config?.max_concurrent_tasks ?? topOptions?.max_concurrent_tasks ?? undefined,
         },
       });
-
-      currentX += (NODE_W + CONTAINER_PADDING * 2) + GAP_X;
     }
 
     // 创建 Task 节点
@@ -190,15 +187,37 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
       const strategy = resolveStrategy(sub.config, topOptions);
 
       const tasks = sub.tasks || [];
+      // v2 (2026-07): 数据健壮性 —— 同容器重名任务会生成重复节点 ID，
+      // 直接击穿 React key 约束并让布局位置互相覆盖；depends_on 引用不存在的任务
+      // 会生成悬空边（React Flow 无法渲染）。这里在反序列化层做最小容错：
+      // 重名任务只保留第一个，depends_on 只对存在的任务建边。
+      const validTaskNames = new Set(tasks.map((t) => t.name));
+      const renderedTaskNames = new Set<string>();
+      let lastRenderedTaskName: string | null = null;
+
       for (let i = 0; i < tasks.length; i++) {
         const task = tasks[i];
+
+        if (renderedTaskNames.has(task.name)) {
+          // 重名任务：跳过渲染并显式告警，避免画布静默损坏
+          console.warn(
+            `[yamlToNodes] SubPipeline "${sub.name}" 存在重名任务 "${task.name}"，已跳过重复项`,
+          );
+          continue;
+        }
+        renderedTaskNames.add(task.name);
+
         const taskId = `__task__${sub.name}.${task.name}`;
 
         nodes.push({
           id: taskId,
           type: 'editorTask',
           parentId: subId,
-          position: { x: CONTAINER_PADDING, y: CONTAINER_PADDING + 40 + i * (NODE_H + GAP_Y) },
+          position: { x: 0, y: 0 },
+          // v2 (2026-07): 显式尺寸必须与 layoutGraph 的默认估算一致。
+          // 否则节点在浏览器中由内容自适应宽度（when 标签/长名称会撑宽），
+          // 初始布局按 180 估算会导致子节点越出容器（e2e 实测暴露）。
+          style: { width: 180, height: 56 },
           data: {
             task,
             taskType: inferType(task),
@@ -206,8 +225,14 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
           },
         });
 
-        // depends_on 显式边
+        // depends_on 显式边 —— 仅当被依赖任务存在时创建，避免悬空边
+        // v3 (2026-07): 去重 + 跳过自依赖 —— 重复依赖会生成相同边 ID（React key 冲突），
+        // 自依赖会生成自环边（执行引擎同样将其视为非法环）
+        const seenDeps = new Set<string>();
         for (const dep of task.depends_on || []) {
+          if (dep === task.name || seenDeps.has(dep)) continue;
+          seenDeps.add(dep);
+          if (!validTaskNames.has(dep)) continue;
           edges.push({
             id: `__edge__${sub.name}.${dep}_to_${sub.name}.${task.name}`,
             source: `__task__${sub.name}.${dep}`,
@@ -226,15 +251,17 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
           });
         }
 
-        // 隐式边（sequential 且没有显式 depends_on 时）
-        if (i > 0 && strategy !== 'parallel') {
-          const prevTask = tasks[i - 1];
-          const existingDep = (task.depends_on || []).includes(prevTask.name);
-          if (!existingDep) {
-            const prevTaskId = `__task__${sub.name}.${prevTask.name}`;
+        // 隐式边（sequential 且任务没有任何显式 depends_on 时）
+        // v2 (2026-07): 与执行引擎语义对齐（server/taskpps/domain/dag.py:30 — 仅当
+        // depends_on 为空才补充"依赖前一个任务"）。原实现只要前一个任务不在
+        // depends_on 里就补边，会把菱形依赖渲染成串行长链（截图/压测暴露）。
+        // 注意用 lastRenderedTaskName：重名跳过时 tasks[i-1] 可能未渲染
+        if (lastRenderedTaskName !== null && strategy !== 'parallel') {
+          const hasExplicitDeps = (task.depends_on?.length ?? 0) > 0;
+          if (!hasExplicitDeps) {
             edges.push({
-              id: `__edge__implicit_${sub.name}.${prevTask.name}_to_${sub.name}.${task.name}`,
-              source: prevTaskId,
+              id: `__edge__implicit_${sub.name}.${lastRenderedTaskName}_to_${sub.name}.${task.name}`,
+              source: `__task__${sub.name}.${lastRenderedTaskName}`,
               target: taskId,
               type: 'smoothstep',
               markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color: '#cbd5e1' },
@@ -242,7 +269,7 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
               data: {
                 edgeType: 'implicit',
                 subpipelineName: sub.name,
-                sourceTask: prevTask.name,
+                sourceTask: lastRenderedTaskName,
                 targetTask: task.name,
                 explicit: false,
                 implicit: true,
@@ -250,6 +277,8 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
             });
           }
         }
+
+        lastRenderedTaskName = task.name;
       }
 
       // === Post 处理 ===
@@ -260,7 +289,7 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
           id: postParentId,
           type: 'editorPostParent',
           parentId: pipelineId,
-          position: { x: 0, y: 0 }, // 会在连接后由布局调整
+          position: { x: 0, y: 0 },
           style: { width: 280, height: 200 },
           data: { label: `${sub.name} Post`, parentTaskId: subId },
         });
@@ -290,7 +319,9 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
               id: childId,
               type: 'editorPostChild',
               parentId: postParentId,
-              position: { x: CONTAINER_PADDING, y: CONTAINER_PADDING + childIdx * (NODE_H + GAP_Y) },
+              position: { x: 0, y: 0 },
+              // v2 (2026-07): 与 layoutGraph 默认估算一致，避免内容撑宽导致越界
+              style: { width: 180, height: 56 },
               data: {
                 task: pt,
                 taskType: inferType(pt),
@@ -304,12 +335,16 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
     }
 
     // 跨 SubPipeline depends_on 边
+    // v2 (2026-07): 去掉"源/目标容器都必须有任务"的限制 —— 空容器同样表达顺序依赖，
+    // 否则空容器与下游容器的先后关系在布局中丢失（压力测试暴露：normal 不再排在 empty-one 下方）。
+    // v3 (2026-07): 去重 + 跳过自依赖，避免重复边 ID 与容器自环边。
     for (const sub of subpipelines) {
+      const seenSubDeps = new Set<string>();
       for (const dep of sub.depends_on || []) {
-        const sourceTasks = subpipelines.find(s => s.name === dep)?.tasks || [];
-        const targetTasks = sub.tasks || [];
-
-        if (sourceTasks.length > 0 && targetTasks.length > 0) {
+        if (dep === sub.name || seenSubDeps.has(dep)) continue;
+        seenSubDeps.add(dep);
+        const depExists = subpipelines.some(s => s.name === dep);
+        if (depExists) {
           edges.push({
             id: `__edge__cross_pipeline_${dep}_${sub.name}`,
             source: `__pipeline__${dep}`,
@@ -338,28 +373,12 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
     data: { edgeType: 'cross_container', explicit: true, implicit: false },
   });
 
-  // === 调整 Pipeline 容器大小以包裹所有子节点 ===
-  const pipelineChildren = nodes.filter(n => n.parentId === pipelineId);
-  if (pipelineChildren.length > 0) {
-    let maxX = 0, maxY = 0;
-    for (const child of pipelineChildren) {
-      const childW = (child.style as { width?: number })?.width ?? NODE_W;
-      const childH = (child.style as { height?: number })?.height ?? NODE_H;
-      const right = child.position.x + (typeof childW === 'number' ? childW : 0);
-      const bottom = child.position.y + (typeof childH === 'number' ? childH : 0);
-      maxX = Math.max(maxX, right);
-      maxY = Math.max(maxY, bottom);
-    }
-    const pNode = nodes.find(n => n.id === pipelineId);
-    if (pNode) {
-      pNode.style = {
-        width: maxX + CONTAINER_PADDING + 100,
-        height: maxY + CONTAINER_PADDING + 100,
-      };
-    }
-  }
+  // === 统一布局 ===
+  // 结构构建完成后交给容器感知布局，初始加载与"自动布局"按钮结果一致，
+  // 避免两套布局算法造成模式切换时的位置跳变。
+  const laidOutNodes = layoutGraph(nodes, edges);
 
-  return { nodes, edges };
+  return { nodes: laidOutNodes, edges };
 }
 
 /**

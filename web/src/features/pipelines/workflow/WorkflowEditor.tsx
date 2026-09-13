@@ -31,10 +31,11 @@ import EditorStartEndNode from './nodes/EditorStartEndNode';
 import EditorPipelineNode from './nodes/EditorPipelineNode';
 import { ReadOnlyCtx } from './nodes/ReadOnlyContext';
 import { yamlToNodes } from './yamlToNodes';
+import { layoutGraph } from './layoutGraph';
+import { applyCollapse } from './collapse';
 import { INK } from '../nodes/nodeTokens';
 import type { EditorNodeData, EditorEdgeData } from './yamlToNodes';
 import type { PipelineDetail } from '@/types';
-import { applyDagreLayout } from '@/utils/dagreLayout';
 import { exportAsPng } from '@/utils/exportImage';
 import { validateDrop, findDropParentContext, getAbsolutePosition, type DropContext } from './validateDrop';
 
@@ -69,6 +70,10 @@ const NODE_TYPES: NodeTypes = {
 
 export interface WorkflowEditorRef {
   deleteNode: (nodeId: string) => void;
+  /** 更新单个节点（属性面板编辑后同步到画布，避免受控数据与画布脱节） */
+  updateNode: (node: Node<EditorNodeData>) => void;
+  /** 保存成功后清除 dirty 状态（由父组件在保存成功回调中调用） */
+  markClean: () => void;
   /** 画布是否有未保存修改（供父组件做 beforeunload/模式切换守卫） */
   readonly isDirty: boolean;
 }
@@ -79,6 +84,8 @@ interface WorkflowEditorProps {
   selectedNodeId: string | null;
   onNodeSelect: (nodeId: string | null) => void;
   onGraphChange?: (nodes: Node<EditorNodeData>[], edges: Edge<EditorEdgeData>[]) => void;
+  /** dirty 状态变化回调，供父组件驱动"保存"按钮的 disabled 状态 */
+  onDirtyChange?: (dirty: boolean) => void;
   readOnly?: boolean;
 }
 
@@ -97,6 +104,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
   selectedNodeId,
   onNodeSelect,
   onGraphChange,
+  onDirtyChange,
   readOnly = false,
 }, ref) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -104,6 +112,12 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
 
   // 追踪画布是否有未保存修改
   const [isDirty, setIsDirty] = useState(false);
+  // v5 (2026-07): 统一 dirty 设置入口 —— 同步 state、ref 与父组件回调，
+  // 供"保存"按钮 disabled 状态使用
+  const setDirty = useCallback((dirty: boolean) => {
+    setIsDirty(dirty);
+    onDirtyChange?.(dirty);
+  }, [onDirtyChange]);
   // v3 (2026-07): ref 同步 isDirty，供 useImperativeHandle 暴露给父组件
   // 不用状态值的原因是 useImperativeHandle 的 getter 需要稳定引用
   const isDirtyRef = useRef(false);
@@ -112,21 +126,35 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
-  // 从 pipeline 解析初始 nodes/edges
-  const initialGraph = useMemo(() => {
-    if (!pipeline) return { nodes: [] as Node<EditorNodeData>[], edges: [] as Edge<EditorEdgeData>[] };
-    return yamlToNodes(pipeline);
-  }, [pipeline]);
+  // v2 (2026-07): 原实现用 useMemo 在渲染期 setState 重置画布（React 反模式），
+  // 且重置条件只看 name / pipelines.length，任务结构变化不会同步，是"布局跳动/状态
+  // 被覆盖"的根因之一。现在改为：
+  //   - 挂载时用 lazy state 计算初始图（编辑模式进入时由父组件保证 pipeline 最新）
+  //   - 查看模式（readOnly）用 useEffect 响应 pipeline 变化，实时跟随 YAML 预览
+  const [initialGraph] = useState(() =>
+    pipeline
+      ? yamlToNodes(pipeline)
+      : { nodes: [] as Node<EditorNodeData>[], edges: [] as Edge<EditorEdgeData>[] },
+  );
 
   const [nodes, setNodes, onNodesChangeRaw] = useNodesState<Node<EditorNodeData>>(initialGraph.nodes as Node<EditorNodeData>[]);
   const [edges, setEdges, onEdgesChangeRaw] = useEdgesState<Edge<EditorEdgeData>>(initialGraph.edges as Edge<EditorEdgeData>[]);
 
-  // 当 pipeline 改变时重置状态
-  useMemo(() => {
-    setNodes(initialGraph.nodes);
-    setEdges(initialGraph.edges);
-    setIsDirty(false);
-  }, [pipeline?.name, pipeline?.pipelines?.length]);
+  // 查看模式：pipeline 变化（YAML 实时预览）即重建画布；编辑模式保持非受控，
+  // 避免外部数据刷新覆盖用户正在进行的编辑。
+  useEffect(() => {
+    if (!readOnly || !pipeline) return;
+    const g = yamlToNodes(pipeline);
+    setNodes(g.nodes as Node<EditorNodeData>[]);
+    setEdges(g.edges as Edge<EditorEdgeData>[]);
+    setDirty(false);
+    // v2 (2026-07): 数据重建后等 React Flow 完成节点测量再适配视图。
+    // 否则大图重建后视口停在旧位置，用户只能看到局部（截图验证的 UX 问题）。
+    const timer = setTimeout(() => {
+      reactFlowInstanceRef.current?.fitView({ padding: 0.2, includeHiddenNodes: false });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [readOnly, pipeline, setNodes, setEdges, setDirty]);
 
   // 连线处理
   const onConnect: OnConnect = useCallback(
@@ -150,18 +178,27 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       const newEdges = addEdge(newEdge, edges);
       setEdges(newEdges);
       onGraphChange?.(nodes, newEdges);
+      // v5 (2026-07): 连线属于内容变更，必须标记 dirty（否则保存按钮保持 disabled）
+      setDirty(true);
     },
-    [readOnly, setEdges, edges, nodes, onGraphChange],
+    [readOnly, setEdges, edges, nodes, onGraphChange, setDirty],
   );
 
+  // 节点变化处理 — 标记 dirty
   // 节点变化处理 — 标记 dirty
   const handleNodesChange: OnNodesChange = useCallback(
     (changes) => {
       if (readOnly) return;
       onNodesChangeRaw(changes);
-      setIsDirty(true);
+      // v6 (2026-07): 仅内容变化（拖拽/增删）算 dirty；React Flow 初始化的尺寸测量
+      // （dimensions）与选中（select）不应把"未编辑"画布标记为已修改，
+      // 否则"未编辑 → 保存按钮 disabled"契约无法成立
+      const hasContentChange = changes.some(
+        (c) => c.type !== 'select' && c.type !== 'dimensions',
+      );
+      if (hasContentChange) setDirty(true);
     },
-    [readOnly, onNodesChangeRaw],
+    [readOnly, onNodesChangeRaw, setDirty],
   );
 
   // 边变化处理 — 标记 dirty
@@ -169,9 +206,11 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
     (changes: Parameters<OnEdgesChange>[0]) => {
       if (readOnly) return;
       onEdgesChangeRaw(changes as never);
-      setIsDirty(true);
+      // v6 (2026-07): 仅选中变化不算内容修改
+      const hasContentChange = changes.some((c) => c.type !== 'select');
+      if (hasContentChange) setDirty(true);
     },
-    [readOnly, onEdgesChangeRaw],
+    [readOnly, onEdgesChangeRaw, setDirty],
   );
 
   // 节点点击 → 选中
@@ -356,12 +395,12 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         const newNodes = [...nodes, newNode];
         setNodes(newNodes);
         onGraphChange?.(newNodes, edges);
-        setIsDirty(true);
+        setDirty(true);
       }
 
       message.success(`已添加节点: ${label || nodeTypeName}`);
     },
-    [setNodes, nodes, edges, onGraphChange],
+    [setNodes, nodes, edges, onGraphChange, setDirty],
   );
 
   // === 右键菜单处理 ===
@@ -418,16 +457,19 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       if (selectedNodeId === nodeId) {
         onNodeSelect(null);
       }
-      setIsDirty(true);
+      setDirty(true);
       message.success('节点已删除');
       setContextMenu(null);
     },
-    [setNodes, setEdges, selectedNodeId, onNodeSelect, onGraphChange, nodes, edges],
+    [setNodes, setEdges, selectedNodeId, onNodeSelect, onGraphChange, nodes, edges, setDirty],
   );
 
   // v4 (2026-07): 键盘 Delete/Backspace 删除选中节点
+  // v2 (2026-07): 增加 readOnly 守卫 —— 查看模式复用同一组件后，
+  // 原实现只在画布交互层禁用拖拽/连线，键盘删除仍可触发，属于只读漏洞。
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      if (readOnly) return;
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNodeId) {
         const node = nodes.find(n => n.id === selectedNodeId);
         // 不允许删除哨兵节点（Start/End/Pipeline）
@@ -437,31 +479,24 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         }
       }
     },
-    [selectedNodeId, nodes, handleDeleteNode],
+    [readOnly, selectedNodeId, nodes, handleDeleteNode],
   );
 
   // 折叠/展开节点
+  // v2 (2026-07): 统一走 applyCollapse —— 折叠时隐藏后代节点、保存原尺寸供展开恢复，
+  // 修复"展开后容器保持小尺寸导致子节点溢出"与"后代节点仍渲染"两个问题。
   const handleToggleCollapse = useCallback(
     (nodeId: string) => {
       // bug #35 关联：折叠虽不影响 YAML（不标 dirty），但仍应回传新图，
       // 保证父组件 editNodes 与画布一致，避免后续保存基于过期数据。
-      const newNodes = nodes.map((n) => {
-        if (n.id !== nodeId) return n;
-        const collapsed = !n.data?.collapsed;
-        return {
-          ...n,
-          data: { ...n.data, collapsed },
-          style: collapsed
-            ? { ...(n.style as object), width: 140, height: 48 }
-            : n.style,
-        };
-      });
+      const nextCollapsed = nodes.find((n) => n.id === nodeId)?.data?.collapsed !== true;
+      const newNodes = applyCollapse(nodes, nodeId, nextCollapsed);
       setNodes(newNodes);
       onGraphChange?.(newNodes, edges);
-      setIsDirty(false); // 折叠不影响 YAML，不标 dirty
+      setDirty(false); // 折叠不影响 YAML，不标 dirty
       setContextMenu(null);
     },
-    [setNodes, nodes, edges, onGraphChange],
+    [setNodes, nodes, edges, onGraphChange, setDirty],
   );
 
   // 查看节点属性（选中节点）
@@ -584,51 +619,31 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
         const newNodes = [...nodes, newNode];
         setNodes(newNodes);
         onGraphChange?.(newNodes, edges);
-        setIsDirty(true);
+        setDirty(true);
       }
       message.success(`已添加节点: ${nodeTypeName}`);
       setContextMenu(null);
     },
-    [setNodes, nodes, edges, onGraphChange, contextMenu],
+    [setNodes, nodes, edges, onGraphChange, contextMenu, setDirty],
   );
 
   // === 工具栏操作 ===
 
   const handleAutoLayout = useCallback(() => {
     try {
-      const layouted = applyDagreLayout(
-        nodes as unknown as Node<Record<string, unknown>>[],
-        edges as unknown as Edge<Record<string, unknown>>[],
-      );
-      // v5 (2026-07 / bug #46): 将子节点 position 从绝对坐标转为相对父容器的偏移
-      // 根因：dagre 给所有节点输出 canvas 级别的绝对坐标，但 ReactFlow 对有 parentId
-      // 的子节点将 position 解释为相对父容器的偏移。若不转换，子节点会以绝对坐标+
-      // 父容器偏移叠加渲染，导致节点"到处乱飞"。
-      // 这里的转换逻辑与 usePipelineGraph.ts:648-663 保持一致。
-      const layoutedMap = new Map(layouted.map((n) => [n.id, n]));
-      const adjusted = layouted.map((node) => {
-        if (node.parentId) {
-          const parent = layoutedMap.get(node.parentId);
-          if (parent) {
-            return {
-              ...node,
-              position: {
-                x: (node.position.x as number) - (parent.position.x as number),
-                y: (node.position.y as number) - (parent.position.y as number),
-              },
-            };
-          }
-        }
-        return { ...node };
-      });
-      setNodes(adjusted as unknown as Node<EditorNodeData>[]);
-      onGraphChange?.(adjusted as unknown as Node<EditorNodeData>[], edges);
-      setIsDirty(true);
+      // v2 (2026-07): 改用容器感知分层布局 layoutGraph，替代原「dagre 全节点布局 +
+      // 绝对坐标转相对坐标」方案。根因：dagre 不认识 parentId 嵌套容器，会把子节点
+      // 和容器一起平铺，再做坐标转换必然错位（bug #46）。新布局自底向上分层计算，
+      // 子节点坐标天然相对父容器，且容器尺寸由内容撑开。
+      const layouted = layoutGraph(nodes, edges);
+      setNodes(layouted);
+      onGraphChange?.(layouted, edges);
+      setDirty(true);
       message.success('自动布局完成');
     } catch {
       message.error('自动布局失败');
     }
-  }, [nodes, edges, setNodes, onGraphChange]);
+  }, [nodes, edges, setNodes, onGraphChange, setDirty]);
 
   const handleFitView = useCallback(() => {
     reactFlowInstanceRef.current?.fitView({ padding: 0.3, duration: 300 });
@@ -720,12 +735,25 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
     return [];
   }, [contextMenu, nodes, handleAddNodeFromContext, handleToggleCollapse, handleNodeProperties, handleDeleteNode]);
 
+  // v5 (2026-07): 属性面板保存后同步画布节点（否则画布停留旧值，直到重新进入编辑模式）
+  const handleUpdateNode = useCallback((updatedNode: Node<EditorNodeData>) => {
+    const newNodes = nodes.map((n) => (n.id === updatedNode.id ? updatedNode : n));
+    setNodes(newNodes);
+    onGraphChange?.(newNodes, edges);
+    setDirty(true);
+  }, [nodes, edges, setNodes, onGraphChange, setDirty]);
+
+  // 保存成功后由父组件调用，清除 dirty 状态（保存按钮回到 disabled）
+  const markClean = useCallback(() => setDirty(false), [setDirty]);
+
   // v4 (2026-07): 暴露 deleteNode + isDirty 给父组件
   // isDirty 通过 ref getter 暴露，在 beforeunload/模式切换时读取最新值
   useImperativeHandle(ref, () => ({
     deleteNode: (nodeId: string) => handleDeleteNode(nodeId),
+    updateNode: (node) => handleUpdateNode(node),
+    markClean: () => markClean(),
     get isDirty() { return isDirtyRef.current; },
-  }), [handleDeleteNode]);
+  }), [handleDeleteNode, handleUpdateNode, markClean]);
 
   // 同步选中状态到节点
   const syncedNodes = useMemo(
@@ -741,6 +769,7 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
     <div
       ref={wrapperRef}
       tabIndex={0}
+      data-testid="workflow-editor-root"
       style={{
         width: '100%',
         height: '100%',
@@ -754,21 +783,23 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {/* v2 (2026-07): 工具栏 */}
-      {!readOnly && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '6px 12px',
-            borderBottom: '1px solid #e5e7eb',
-            background: '#ffffff',
-            flexShrink: 0,
-            zIndex: 10,
-          }}
-        >
-          <Tooltip title="自动布局（dagre）">
+      {/* v2 (2026-07): 工具栏
+          查看模式保留"适应窗口"（大图初始只需一次 fitView，数据变化后视口可能失效）；
+          "布局/导出/dirty 提示"仍仅编辑模式可见 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '6px 12px',
+          borderBottom: '1px solid #e5e7eb',
+          background: '#ffffff',
+          flexShrink: 0,
+          zIndex: 10,
+        }}
+      >
+        {!readOnly && (
+          <Tooltip title="自动布局">
             <button
               onClick={handleAutoLayout}
               style={{
@@ -782,41 +813,45 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
               布局
             </button>
           </Tooltip>
-          <Tooltip title="适应窗口">
-            <button
-              onClick={handleFitView}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: 6,
-                background: '#ffffff', color: '#374151',
-                cursor: 'pointer', fontSize: 12, fontWeight: 500,
-              }}
-            >
-              <ExpandOutlined />
-              适应
-            </button>
-          </Tooltip>
-          <Tooltip title="导出为图片">
-            <button
-              onClick={handleExportImage}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: 6,
-                background: '#ffffff', color: '#374151',
-                cursor: 'pointer', fontSize: 12, fontWeight: 500,
-              }}
-            >
-              <ExportImageIcon />
-              导出
-            </button>
-          </Tooltip>
-          {isDirty && (
-            <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 8 }}>
-              有未保存的修改
-            </span>
-          )}
-        </div>
-      )}
+        )}
+        <Tooltip title="适应窗口">
+          <button
+            onClick={handleFitView}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: 6,
+              background: '#ffffff', color: '#374151',
+              cursor: 'pointer', fontSize: 12, fontWeight: 500,
+            }}
+          >
+            <ExpandOutlined />
+            适应
+          </button>
+        </Tooltip>
+        {!readOnly && (
+          <>
+            <Tooltip title="导出为图片">
+              <button
+                onClick={handleExportImage}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: 6,
+                  background: '#ffffff', color: '#374151',
+                  cursor: 'pointer', fontSize: 12, fontWeight: 500,
+                }}
+              >
+                <ExportImageIcon />
+                导出
+              </button>
+            </Tooltip>
+            {isDirty && (
+              <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 8 }}>
+                有未保存的修改
+              </span>
+            )}
+          </>
+        )}
+      </div>
 
       {/* 画布区域 */}
       <div style={{ flex: 1, position: 'relative' }}>
@@ -940,11 +975,14 @@ const WorkflowEditor = forwardRef<WorkflowEditorRef, WorkflowEditorProps>(functi
 // v4 (2026-07 / Bug#45): 连接校验函数
 // 只要 source 端是 out/post 类 handle 且 target 端是 in 类 handle 即允许，
 // 确保不会出现 target→target 或 source→source 等无效连接
+// v5 (2026-07): 禁止 START→END 直连 —— 该连线无法映射到任何 YAML 结构，
+// 保存时会被序列化层拒绝，不如在连接时就阻止
 export function isValidConnection(
   connection: { source: string; target: string; sourceHandle: string | null; targetHandle: string | null },
 ): boolean {
-  const { sourceHandle, targetHandle } = connection;
+  const { source, target, sourceHandle, targetHandle } = connection;
   if (!sourceHandle || !targetHandle) return false;
+  if (source === '__start__' && target === '__end__') return false;
 
   const sourceIsOutput = sourceHandle === 'out' || sourceHandle === 'post';
   const targetIsInput = targetHandle === 'in';

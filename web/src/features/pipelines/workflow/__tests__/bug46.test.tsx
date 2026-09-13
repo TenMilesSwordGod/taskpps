@@ -1,45 +1,26 @@
 /**
- * Bug #46 RED 测试 — 自适应窗口/布局按钮造成子节点位置错乱
+ * Bug #46 回归测试 — 自适应窗口/布局按钮造成子节点位置错乱
  *
  * 复现步骤：在 Pipeline 编辑器中编排混合布局（task + pipeline + subpipeline），
  * 点击工具栏"布局"按钮 → 子节点（有 parentId）的 position 为 dagre 输出的绝对坐标，
  * 但 ReactFlow 将其按相对父容器的偏移解释，导致节点"到处乱飞"。
  *
- * 根因：handleAutoLayout 调用 applyDagreLayout 后直接将 dagre 的绝对坐标
+ * 原根因：handleAutoLayout 调用 applyDagreLayout 后直接将 dagre 的绝对坐标
  * 赋值给所有节点，未将子节点（有 parentId）的 position 转换为相对父容器的偏移。
  *
- * RED 测试策略：
- *   1. mock applyDagreLayout 返回已知绝对坐标
- *   2. 点击布局按钮触发 handleAutoLayout（fix 后含转换逻辑）
- *   3. 通过 onGraphChange 回调断言子节点（有 parentId）的 position 已转为
- *      相对父容器的偏移（小值），而非 dagre 的绝对大值
+ * v2 (2026-07): 新布局内核 layoutGraph 自底向上分层计算，子节点坐标天然相对父容器，
+ * 不再有"绝对坐标转相对坐标"这一步骤。本回归测试因此改为断言布局结果的
+ * 结构性性质（子节点必须落在父容器范围内），不再 mock 已废弃的 applyDagreLayout，
+ * 避免把测试绑定到具体像素值上。
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import WorkflowEditor from '../WorkflowEditor';
-import type { Node } from '@xyflow/react';
-
-// mock dagreLayout 以精确控制返回的绝对坐标
-vi.mock('@/utils/dagreLayout', () => ({
-  applyDagreLayout: vi.fn(),
-}));
-
-import { applyDagreLayout } from '@/utils/dagreLayout';
 
 describe('Bug #46 — 自动布局后子节点 position 应为相对父容器的偏移', () => {
-  it('RED: 布局后子节点（有 parentId）的 position 应为相对父容器的偏移', async () => {
-    // 模拟 dagre 布局返回的绝对坐标（dagre 对所有节点一视同仁，输出 canvas 级绝对坐标）
-    const dagreOutput: Node[] = [
-      { id: '__start__', position: { x: 75, y: 0 }, data: {} },
-      { id: '__pipeline__', position: { x: 75, y: 50 }, data: {} },
-      { id: '__end__', position: { x: 75, y: 600 }, data: {} },
-      { id: '__pipeline__build', position: { x: 200, y: 150 }, data: {}, parentId: '__pipeline__' },
-      { id: '__task__build.compile', position: { x: 280, y: 220 }, data: {}, parentId: '__pipeline__build' },
-    ];
-    vi.mocked(applyDagreLayout).mockReturnValue(dagreOutput as any);
-
+  it('布局后子节点（有 parentId）的相对 position 必须落在父容器范围内', async () => {
     const onGraphChange = vi.fn();
     const { unmount } = render(
       <WorkflowEditor
@@ -71,21 +52,29 @@ describe('Bug #46 — 自动布局后子节点 position 应为相对父容器的
     });
 
     const lastCall = onGraphChange.mock.calls[onGraphChange.mock.calls.length - 1];
-    const changedNodes = lastCall[0] as Array<{ id: string; parentId?: string; position: { x: number; y: number } }>;
+    const changedNodes = lastCall[0] as Array<{
+      id: string;
+      parentId?: string;
+      position: { x: number; y: number };
+      style?: { width?: number; height?: number };
+    }>;
 
-    // 找到子节点 __task__build.compile
     const taskNode = changedNodes.find((n) => n.id === '__task__build.compile');
+    const subNode = changedNodes.find((n) => n.id === '__pipeline__build');
     expect(taskNode, '布局后应包含 task 节点').toBeTruthy();
     expect(taskNode!.parentId, 'task 节点应有 parentId').toBe('__pipeline__build');
 
-    // 关键断言：子节点 position 应为相对父容器的偏移
-    // dagre 绝对坐标：{x:280, y:220}；父容器绝对坐标：{x:200, y:150}
-    // 转换后应为：{x:80, y:70}（280-200=80, 220-150=70）
-    //
-    // 修复前：onGraphChange 中的 task 节点 position 为 {x:280, y:220}（绝对坐标当相对用） ❌
-    // 修复后：onGraphChange 中的 task 节点 position 为 {x:80, y:70}（正确的相对偏移） ✅
-    expect(taskNode!.position.x).toBe(80);
-    expect(taskNode!.position.y).toBe(70);
+    // 关键断言：子节点相对坐标必须为有限的非负值，且右/下边界不超出父容器。
+    // 修复前（绝对坐标当相对坐标用）task.position 会是 {x:280, y:220} 这类大值，
+    // 在父容器尺寸之外 —— 即"到处乱飞"。
+    const subW = (subNode?.style?.width as number) ?? 0;
+    const subH = (subNode?.style?.height as number) ?? 0;
+    expect(Number.isFinite(taskNode!.position.x)).toBe(true);
+    expect(Number.isFinite(taskNode!.position.y)).toBe(true);
+    expect(taskNode!.position.x).toBeGreaterThanOrEqual(0);
+    expect(taskNode!.position.y).toBeGreaterThanOrEqual(0);
+    expect(taskNode!.position.x + 180).toBeLessThanOrEqual(subW);
+    expect(taskNode!.position.y + 56).toBeLessThanOrEqual(subH);
 
     unmount();
   });

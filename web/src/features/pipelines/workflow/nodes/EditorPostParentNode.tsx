@@ -12,6 +12,32 @@ interface EditorPostParentNodeData {
 }
 
 /**
+ * Post 父容器端口（仅 in）
+ *
+ * v3 (2026-07): Handle 是 React Flow 边锚点，只读/折叠时移除会导致
+ * SubPipeline→Post 的路由连线消失；只读时透明且不可连接。
+ * v4 (2026-07): in 端口改到顶部，与 TB 布局一致。
+ */
+function PostParentHandles({ readOnly }: { readOnly: boolean }) {
+  return (
+    <Handle
+      id="in"
+      type="target"
+      position={Position.Top}
+      isConnectable={!readOnly}
+      style={{
+        width: 8,
+        height: 8,
+        background: 'transparent',
+        border: '2px solid #ef4444',
+        borderRadius: '50%',
+        ...(readOnly ? { opacity: 0, pointerEvents: 'none' } : null),
+      }}
+    />
+  );
+}
+
+/**
  * Post 父容器节点 — 红色虚线边框
  * 仅左侧 in 端口（接收 Post 连线），无 out / post 端口
  *
@@ -43,6 +69,7 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
         }}
       >
         {!readOnly && <NodeResizer minWidth={100} minHeight={40} />}
+        <PostParentHandles readOnly={readOnly} />
         <PostParentIcon style={{ width: 16, height: 16, color: '#ef4444' }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 12, fontWeight: 600, color: '#991b1b' }}>
           {label}
@@ -66,23 +93,7 @@ function EditorPostParentNode({ data, selected }: { data: EditorPostParentNodeDa
       }}
     >
       {!readOnly && <NodeResizer minWidth={200} minHeight={150} />}
-      {/* 注意(2026-07): 只读模式下隐藏 Handle */}
-      {!readOnly && (
-        <Handle
-          id="in"
-          type="target"
-          position={Position.Left}
-          style={{
-            width: 8,
-            height: 8,
-            background: 'transparent',
-            border: '2px solid #ef4444',
-            borderRadius: '50%',
-            left: -5,
-            top: '50%',
-          }}
-        />
-      )}
+      <PostParentHandles readOnly={readOnly} />
 
       {/* 标题 */}
       <div

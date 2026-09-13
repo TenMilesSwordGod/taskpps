@@ -12,7 +12,7 @@ import type { PipelineDetail } from '@/types';
  * 验证真实用户折叠/展开操作的状态切换：
  *   1. 展开态 → 右击节点菜单 → 菜单包含"折叠"
  *   2. 折叠态 → 右击节点菜单 → 菜单包含"展开"  
- *   3. 节点组件层：折叠态不渲染端口，展开态渲染完整端口
+ *   3. 节点组件层：折叠态与展开态都保留端口（Handle 是边锚点，折叠不能断开连线）
  *   4. WorkflowEditor 层：通过 handleToggleCollapse 回调切换折叠状态
  *
  * 设计决策：
@@ -108,8 +108,9 @@ describe('折叠/展开 — 通过右键菜单交互', () => {
     unmount();
   });
 
-  it('展开态 SubPipeline 渲染 handles 端口，折叠态 SubPipeline 组件不渲染端口', () => {
-    // 组件层：展开态 handles=3, 折叠态 handles=0
+  it('展开态与折叠态 SubPipeline 都保留端口（折叠不能断开连线）', () => {
+    // 组件层：展开态 handles=3；v3 (2026-07) 折叠态也保留 3 个端口 ——
+    // Handle 是 React Flow 边锚点，折叠时移除会让入/出边消失（压力测试暴露）
     const { container: expandedContainer, unmount: u1 } = renderWithProvider(
       <EditorSubPipelineNode
         data={{ label: 'deploy', executionStrategy: 'sequential' }}
@@ -129,7 +130,7 @@ describe('折叠/展开 — 通过右键菜单交互', () => {
       />,
     );
     const collapsedHandles = collapsedContainer.querySelectorAll('[data-handleid]');
-    expect(collapsedHandles.length).toBe(0);
+    expect(collapsedHandles.length).toBe(3);
 
     u1();
     u2();
@@ -155,7 +156,7 @@ describe('折叠/展开 — 节点组件渲染验证', () => {
     unmount();
   });
 
-  it('折叠态 SubPipeline 显示紧凑摘要（label + childrenCount），不渲染端口', () => {
+  it('折叠态 SubPipeline 显示紧凑摘要（label + childrenCount），并保留端口', () => {
     const { container, unmount } = renderWithProvider(
       <EditorSubPipelineNode
         data={{
@@ -171,8 +172,9 @@ describe('折叠/展开 — 节点组件渲染验证', () => {
     expect(screen.getByText('ci-build')).toBeInTheDocument();
     expect(screen.getByText('(5 tasks, 2 atomic)')).toBeInTheDocument();
 
+    // v3 (2026-07): 折叠态保留端口作为边锚点（视觉上小圆点仍在，边不断）
     const handles = container.querySelectorAll('[data-handleid]');
-    expect(handles.length).toBe(0);
+    expect(handles.length).toBe(3);
 
     // 折叠态不显示 SEQ/PAR 角标
     expect(screen.queryByText('SEQ')).not.toBeInTheDocument();
