@@ -64,6 +64,14 @@ function validatePipelineStructure(doc: Record<string, unknown>): ValidationErro
         const taskErr = validateTaskStructure(task, `pipelines[${i}].tasks[${j}]`);
         if (taskErr) return taskErr;
       }
+      // v1 (2026-09): issue #211 — 同一 subpipeline 内禁止同名 task
+      const subDup = findDuplicateTaskName(sub.tasks as unknown[]);
+      if (subDup) {
+        return {
+          message: `任务名重复: "${subDup}"（同一 pipeline 内 task name 必须唯一）`,
+          path: `pipelines[${i}].tasks`,
+        };
+      }
     }
   }
 
@@ -73,6 +81,14 @@ function validatePipelineStructure(doc: Record<string, unknown>): ValidationErro
       const task = (doc.tasks as unknown[])[i] as Record<string, unknown> | null;
       const taskErr = validateTaskStructure(task, `tasks[${i}]`);
       if (taskErr) return taskErr;
+    }
+    // v1 (2026-09): issue #211 — 顶层 tasks 规范化后属于同一 pipeline，同样禁止同名
+    const dup = findDuplicateTaskName(doc.tasks as unknown[]);
+    if (dup) {
+      return {
+        message: `任务名重复: "${dup}"（同一 pipeline 内 task name 必须唯一）`,
+        path: 'tasks',
+      };
     }
   }
 
@@ -101,6 +117,23 @@ function validateTaskStructure(task: Record<string, unknown> | null, path: strin
   }
   if (task.post !== undefined && task.post !== null && (typeof task.post !== 'object' || Array.isArray(task.post))) {
     return { message: `${path}.post 应为对象`, path: `${path}.post` };
+  }
+  return null;
+}
+
+/**
+ * v1 (2026-09): issue #211 — 返回 tasks 列表中首个重复的 name，无重复返回 null。
+ * 后端执行器按 task name 索引任务（只取首个匹配），同名时第二个 task 会静默复用第一个的
+ * 日志/结果；本校验与后端 pydantic SubPipeline/PipelineYAML 校验保持一致，在解析阶段拒绝。
+ */
+function findDuplicateTaskName(tasks: unknown[]): string | null {
+  const seen = new Set<string>();
+  for (const t of tasks) {
+    if (!t || typeof t !== 'object') continue;
+    const name = (t as Record<string, unknown>).name;
+    if (typeof name !== 'string') continue;
+    if (seen.has(name)) return name;
+    seen.add(name);
   }
   return null;
 }

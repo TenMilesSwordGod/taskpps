@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from taskpps.models.trigger import TriggerType
 from taskpps.schemas.agent import AgentCheckRequest, AgentExecRequest
-from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineConfig, PipelineYAML, TaskYAML
+from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineConfig, PipelineYAML, SubPipeline, TaskYAML
 from taskpps.schemas.run import CleanRequest, CreateRunRequest
 from taskpps.schemas.trigger import CreateTriggerRequest
 
@@ -177,6 +177,61 @@ class TestPipelineYAMLBoundary:
         assert isinstance(cfg, PipelineConfig)
 
 
+class TestDuplicateTaskNameBoundary:
+    # v1 (2026-09): issue #211 — 同一 pipeline 内 task name 必须唯一。
+    # 执行器按 task name 索引任务（ResolvedSubPipeline.get_task_by_name 只返回首个匹配），
+    # 同名时第二个任务会被静默复用第一个的日志/结果，故 schema 层直接拒绝。
+
+    def test_duplicate_top_level_task_names_rejected(self):
+        with pytest.raises(ValidationError) as exc:
+            PipelineYAML(
+                name="dup",
+                tasks=[
+                    TaskYAML(name="build", command="echo 1"),
+                    TaskYAML(name="build", command="echo 2"),
+                ],
+            )
+        assert "build" in str(exc.value)
+
+    def test_duplicate_task_names_in_subpipeline_rejected(self):
+        with pytest.raises(ValidationError) as exc:
+            PipelineYAML(
+                name="dup",
+                pipelines=[
+                    SubPipeline(
+                        name="stage",
+                        tasks=[
+                            TaskYAML(name="build", command="echo 1"),
+                            TaskYAML(name="build", command="echo 2"),
+                        ],
+                    )
+                ],
+            )
+        assert "build" in str(exc.value)
+
+    def test_same_task_name_across_subpipelines_allowed(self):
+        p = PipelineYAML(
+            name="multi-stage",
+            pipelines=[
+                SubPipeline(name="stage-a", tasks=[TaskYAML(name="build", command="echo 1")]),
+                SubPipeline(name="stage-b", tasks=[TaskYAML(name="build", command="echo 2")]),
+            ],
+        )
+        assert len(p.pipelines) == 2
+
+    def test_third_duplicate_still_rejected(self):
+        with pytest.raises(ValidationError) as exc:
+            PipelineYAML(
+                name="dup",
+                tasks=[
+                    TaskYAML(name="a", command="echo 1"),
+                    TaskYAML(name="b", command="echo 2"),
+                    TaskYAML(name="a", command="echo 3"),
+                ],
+            )
+        assert "a" in str(exc.value)
+
+
 class TestCreateRunRequestBoundary:
     @pytest.mark.zentao("TC-S0706", domain="server/schemas", priority="P2")
     def test_pipeline_required(self):
@@ -311,4 +366,3 @@ class TestAgentExecRequestBoundary:
         assert req.timeout == 30
         assert req.cwd == "/tmp"
         assert req.env == {"KEY": "VALUE"}
-
