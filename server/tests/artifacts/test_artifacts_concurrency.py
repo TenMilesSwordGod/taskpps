@@ -14,7 +14,7 @@ from taskpps.services.artifact_service import collect_task_artifacts, promote_ar
 
 
 class TestConcurrentPromote:
-    @pytest.mark.zentao("TC-C0001", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3134", domain="server/artifacts", priority="P1")
     async def test_concurrent_promote_same_path(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine, tmp_path
     ):
@@ -42,7 +42,7 @@ class TestConcurrentPromote:
 
 
 class TestConcurrentZipDownload:
-    @pytest.mark.zentao("TC-C0002", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3135", domain="server/artifacts", priority="P2")
     async def test_concurrent_zip_downloads(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine, tmp_path
     ):
@@ -73,7 +73,7 @@ class TestConcurrentZipDownload:
 
 
 class TestConcurrentArtifactCollection:
-    @pytest.mark.zentao("TC-C0003", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3136", domain="server/artifacts", priority="P1")
     async def test_parallel_task_artifact_collection(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -122,7 +122,7 @@ class TestConcurrentArtifactCollection:
 
 
 class TestConcurrentUpload:
-    @pytest.mark.zentao("TC-C0004", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3137", domain="server/artifacts", priority="P1")
     async def test_concurrent_uploads_from_multiple_agents(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine
     ):

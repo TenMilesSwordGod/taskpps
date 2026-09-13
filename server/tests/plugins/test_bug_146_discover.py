@@ -15,7 +15,7 @@ class TestBug146PluginDiscovery:
     内建 CronTrigger 不在 project plugins 目录下，不会被 discover。
     """
 
-    @pytest.mark.zentao("TC-S0506", domain="server/plugins", priority="P1")
+    @pytest.mark.zentao("TC-S3335", domain="server/plugins", priority="P1")
     def test_discover_empty_plugins_dir_returns_empty(self, tmp_path):
         """verify: plugins/ 目录为空时 discover_plugins() 返回空列表（当前行为，作为 baseline）。"""
         pm = PluginManager()
@@ -25,7 +25,7 @@ class TestBug146PluginDiscovery:
             pm.discover_plugins()
         assert pm.list_plugins() == []
 
-    @pytest.mark.zentao("TC-S0507", domain="server/plugins", priority="P1")
+    @pytest.mark.zentao("TC-S3336", domain="server/plugins", priority="P1")
     def test_cron_trigger_not_discovered_from_empty_dir(self, tmp_path):
         """verify: 空 plugins/ 目录下 discover_plugins() 不会注册 CronTrigger。
         
@@ -39,7 +39,7 @@ class TestBug146PluginDiscovery:
             pm.discover_plugins()
         assert "cron" not in str(pm.list_plugins())
 
-    @pytest.mark.zentao("TC-S0508", domain="server/plugins", priority="P1")
+    @pytest.mark.zentao("TC-S3337", domain="server/plugins", priority="P1")
     def test_no_triggers_from_empty_config(self):
         """verify: triggers=[] 时 start_triggers() 不注册任何触发器。"""
         pm = PluginManager()
@@ -48,7 +48,7 @@ class TestBug146PluginDiscovery:
             pm.start_triggers()
         assert pm.list_plugins() == []
 
-    @pytest.mark.zentao("TC-S0509", domain="server/plugins", priority="P1")
+    @pytest.mark.zentao("TC-S3338", domain="server/plugins", priority="P1")
     def test_discover_with_plugins_in_dir_registers_them(self, tmp_path):
         """verify: plugins/ 目录下有合法插件时 discover_plugins() 能注册它们。
         
@@ -88,14 +88,14 @@ class MyPlugin(TriggerPlugin):
             pm.discover_plugins()
         assert "my-plugin" in pm.list_plugins()
 
-    @pytest.mark.zentao("TC-S0510", domain="server/plugins", priority="P1")
+    @pytest.mark.zentao("TC-S3339", domain="server/plugins", priority="P1")
     def test_cron_trigger_isinstance_trigger_plugin(self):
         """verify: CronTrigger 正确继承 TriggerPlugin 并可正常实例化。"""
         trigger = CronTrigger(expression="0 * * * *", pipeline_file="deploy.yaml")
         from taskpps.services.plugin_base import TriggerPlugin
         assert isinstance(trigger, TriggerPlugin)
 
-    @pytest.mark.zentao("TC-S0511", domain="server/plugins", priority="P1")
+    @pytest.mark.zentao("TC-S3340", domain="server/plugins", priority="P1")
     def test_discover_plugins_dir_nonexistent_no_error(self, tmp_path):
         """verify: plugins/ 目录不存在时 discover_plugins() 不报错，列表为空。"""
         pm = PluginManager()
@@ -104,7 +104,7 @@ class MyPlugin(TriggerPlugin):
             pm.discover_plugins()
         assert pm.list_plugins() == []
 
-    @pytest.mark.zentao("TC-S0512", domain="server/plugins", priority="P2")
+    @pytest.mark.zentao("TC-S3341", domain="server/plugins", priority="P2")
     def test_start_triggers_with_cron_config_creates_trigger_plugin(self, tmp_path):
         """verify: triggers 配置中有 cron 类型时 start_triggers 创建并注册 CronTrigger。"""
         from taskpps.config import Settings, TriggerConfig

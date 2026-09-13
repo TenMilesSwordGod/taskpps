@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from taskpps.events.bus import (
     SIGNAL_PIPELINE_STARTED,
     SIGNAL_RUN_CANCELLED,

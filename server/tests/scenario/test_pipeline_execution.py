@@ -276,12 +276,17 @@ class TestPipelineExecution:
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0209", domain="server/scenario", priority="P2")
-    async def test_empty_pipeline_returns_immediately(self, db_engine, clean_db):
+    async def test_empty_pipeline_returns_immediately(self, db_engine, clean_db, run_probe):
+        # v2 (2026-09 治理): 原用例零断言。重写为断言空 pipeline（无 subpipeline）
+        # 走快速路径并落 success 终态。
         _setup_config()
+        run_id = await run_probe.create("empty")
         pipeline = ResolvedPipeline(name="empty", subpipelines=[])
-        ctx = ExecutionContext(pipeline=pipeline, run_id="exec-empty")
-        runner = PipelineRunner(run_id="exec-empty", pipeline=pipeline, context=ctx)
+        ctx = ExecutionContext(pipeline=pipeline, run_id=run_id)
+        runner = PipelineRunner(run_id=run_id, pipeline=pipeline, context=ctx)
 
         with patch("taskpps.engine.runner.get_event_bus"):
             await runner.run()
+
+        assert await run_probe.status(run_id) == "success"
 

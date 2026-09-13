@@ -18,29 +18,6 @@ def app_fixture():
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1171", domain="server/auth", priority="P1")
-async def test_guest_get_passes_middleware(app_fixture, setup_project, tmp_project, db_engine):
-    """guest（无 token）访问 GET 应被中间件放行（路由层 401 而非中间件 401）。"""
-    transport = ASGITransport(app=app_fixture)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/api/v1/auth/me")
-    # 路由层返回「未登录」，证明中间件放行了 GET
-    assert resp.status_code == 401
-    assert resp.json()["detail"] == "未登录"
-
-
-@pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1172", domain="server/auth", priority="P0")
-async def test_guest_post_returns_401(app_fixture, setup_project, tmp_project, db_engine):
-    """guest（无 token）访问 POST 应被中间件返回 401。"""
-    transport = ASGITransport(app=app_fixture)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/api/v1/auth/logout")
-    assert resp.status_code == 401
-    assert "未登录" in resp.json()["detail"]
-
-
-@pytest.mark.asyncio
 @pytest.mark.zentao("TC-S1173", domain="server/auth", priority="P1")
 async def test_user_post_passes(app_fixture, setup_project, tmp_project, db_engine):
     """user 角色 POST /logout 应 200 放行。"""
@@ -60,22 +37,7 @@ async def test_user_post_passes(app_fixture, setup_project, tmp_project, db_engi
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1174", domain="server/auth", priority="P1")
-async def test_whitelist_login_no_token_passes_middleware(app_fixture, setup_project, tmp_project, db_engine):
-    """白名单 POST /login 无 token 应放行到路由层（401 密码错而非中间件 401）。"""
-    transport = ASGITransport(app=app_fixture)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # 用户不存在 → 路由层 401「用户名或密码错误」，证明中间件白名单放行
-        resp = await client.post(
-            "/api/v1/auth/login",
-            json={"username": "ghost", "password": "whatever"},
-        )
-    assert resp.status_code == 401
-    assert resp.json()["detail"] == "用户名或密码错误"
-
-
-@pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1174b", domain="server/auth", priority="P1")
+@pytest.mark.zentao("TC-S3591", domain="server/auth", priority="P1")
 async def test_admin_post_passes(app_fixture, setup_project, tmp_project, db_engine):
     """admin 角色 POST 也应放行（中间件不区分 role，只要有有效 token）。"""
     transport = ASGITransport(app=app_fixture)

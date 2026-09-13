@@ -160,6 +160,143 @@ def test_real_execution_agent_mapping_is_consistent():
     )
 
 
+# ---------------------------------------------------------------- pytest 解析器
+
+
+def write_pytest_file(root: Path, rel: str, body: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
+
+
+def test_collect_pytest_tests_keys_and_markers(tmp_path):
+    write_pytest_file(
+        tmp_path,
+        "svc/test_sample.py",
+        """
+import pytest
+
+@pytest.mark.zentao("TC-S0001", domain="server/svc", priority="P1")
+def test_unique_name():
+    assert True
+
+class TestAlpha:
+    @pytest.mark.asyncio
+    @pytest.mark.zentao("TC-S0002", domain="server/svc", priority="P2")
+    async def test_same_name(self):
+        assert True
+
+    @pytest.mark.parametrize("x", [1, 2])
+    @pytest.mark.zentao("TC-S0003", domain="server/svc", priority="P2")
+    def test_parametrized(self, x):
+        assert x
+
+class TestBeta:
+    @pytest.mark.zentao("TC-S0004", domain="server/svc", priority="P2")
+    def test_same_name(self):
+        assert True
+""",
+    )
+    write_pytest_file(tmp_path, "svc/helper.py", "def test_not_collected():\n    pass\n")
+
+    tests = checker.collect_pytest_tests(tmp_path)
+    assert set(tests) == {
+        "svc/test_sample.py::test_unique_name",
+        "svc/test_sample.py::TestAlpha::test_same_name",
+        "svc/test_sample.py::test_parametrized",
+        "svc/test_sample.py::TestBeta::test_same_name",
+    }
+    assert tests["svc/test_sample.py::TestAlpha::test_same_name"].markers == ("TC-S0002",)
+    assert tests["svc/test_sample.py::test_unique_name"].priority == "P1"
+    assert tests["svc/test_sample.py::test_parametrized"].markers == ("TC-S0003",)
+
+
+def test_check_server_mapping_clean_and_marker_alignment(tmp_path):
+    write_pytest_file(
+        tmp_path,
+        "svc/test_sample.py",
+        """
+import pytest
+
+@pytest.mark.zentao("TC-S0001", domain="server/svc", priority="P1")
+def test_one():
+    assert True
+
+def test_two():
+    assert True
+""",
+    )
+    make_map(
+        tmp_path,
+        {
+            "svc/test_sample.py::test_one": active_entry("TC-S0001", 100, "svc/test_sample.py", "test_one"),
+            "svc/test_sample.py::test_two": {
+                **active_entry("TC-S0002", 101, "svc/test_sample.py", "test_two"),
+                "zentao_id": None,
+                "sync_status": "pending",
+            },
+        },
+    )
+    report = checker.check_mapping("server", tmp_path)
+    assert report.ok, report.format()
+    assert report.active == 1 and report.pending == 1
+    assert report.marker_mismatch == []
+
+
+def test_check_server_mapping_detects_marker_mismatch(tmp_path):
+    write_pytest_file(
+        tmp_path,
+        "svc/test_sample.py",
+        """
+import pytest
+
+@pytest.mark.zentao("TC-S9999", domain="server/svc", priority="P1")
+def test_one():
+    assert True
+""",
+    )
+    make_map(
+        tmp_path,
+        {"svc/test_sample.py::test_one": active_entry("TC-S0001", 100, "svc/test_sample.py", "test_one")},
+    )
+    report = checker.check_mapping("server", tmp_path)
+    assert not report.ok
+    assert len(report.marker_mismatch) == 1
+    assert "TC-S9999" in report.marker_mismatch[0]
+
+
+def test_check_active_file_field_mismatch(tmp_path):
+    write_pytest_file(
+        tmp_path,
+        "svc/test_sample.py",
+        """
+@pytest.mark.zentao("TC-S0001", domain="server/svc", priority="P1")
+def test_one():
+    assert True
+""",
+    )
+    make_map(
+        tmp_path,
+        {"svc/test_sample.py::test_one": active_entry("TC-S0001", 100, "svc/test_sample.py", "test_one")},
+    )
+    (tmp_path / "TEST_CASE_ACTIVE.json").write_text(
+        json.dumps([{"id": "TC-S0001", "file": "wrong.py", "test_name": "test_one"}]), encoding="utf-8"
+    )
+    report = checker.check_mapping(
+        "server", tmp_path, active_path=tmp_path / "TEST_CASE_ACTIVE.json"
+    )
+    assert not report.ok
+    assert len(report.active_file_field_mismatch) == 1
+
+
+def test_real_server_mapping_is_consistent():
+    """server 端真实数据必须通过校验（issue #223 S1 验收命令的自动化版本）。"""
+    assert (
+        checker.main(["server", "--source-root", str(REPO_ROOT / "server" / "tests")])
+        == 0
+    )
+
+
 # ---------------------------------------------------------------- backfill
 
 
@@ -289,3 +426,42 @@ def test_backfill_unparseable_output_stays_pending(tmp_path):
 def test_backfill_main_requires_product_id(monkeypatch, tmp_path):
     monkeypatch.delenv("ZENTAO_PRODUCT_ID", raising=False)
     assert backfill.main(["--map", str(make_map(tmp_path, {}))]) == 2
+
+
+# ------------------------------------------------- backfill server 适配
+
+
+def test_resolve_map_path_by_source(tmp_path):
+    assert backfill.resolve_map_path("server", None, tmp_path) == (
+        tmp_path / "server" / "tests" / "zentao_testcase_map.json"
+    ).resolve()
+    assert backfill.resolve_map_path("execution_agent", None, tmp_path) == (
+        tmp_path / "execution_agent" / "zentao_testcase_map.json"
+    ).resolve()
+    # 显式 --map 优先于 --source
+    explicit = tmp_path / "custom.json"
+    assert backfill.resolve_map_path("server", str(explicit), tmp_path) == explicit
+
+
+def test_resolve_map_path_rejects_unknown_source():
+    with pytest.raises(ValueError):
+        backfill.resolve_map_path("web", None)
+    with pytest.raises(ValueError):
+        backfill.resolve_map_path(None, None)
+
+
+def test_backfill_accepts_server_class_qualified_keys(tmp_path):
+    """server 端 key 可能是 file.py::Class::method，回填逻辑对 key 保持 opaque。"""
+    key = "services/test_plugin_center.py::TestPluginCenterAPI::test_list_plugins_empty"
+    meta = make_meta("TC-S3519", "P2", source="server", name="TestPluginCenterAPI::test_list_plugins_empty")
+    meta["file"] = "services/test_plugin_center.py"
+    map_path = make_map(tmp_path, {key: meta})
+
+    def fake_runner(args):
+        return subprocess.CompletedProcess(args, 0, '{"id": 9001}', "")
+
+    result = backfill.backfill(map_path, product_id=3, runner=fake_runner)
+    assert result.created == [(key, 9001)]
+    title = next(a for a in result.planned[0][1] if a.startswith("--title="))
+    assert "TC-S3519" in title and "server" in title
+

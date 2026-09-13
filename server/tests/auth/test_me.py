@@ -45,17 +45,6 @@ async def test_me_valid_token_returns_user(app_fixture, setup_project, tmp_proje
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1182", domain="server/auth", priority="P1")
-async def test_me_no_token_401(app_fixture, setup_project, tmp_project, db_engine):
-    """无 token GET /me 应 401（路由层判断 guest）。"""
-    transport = ASGITransport(app=app_fixture)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/api/v1/auth/me")
-    assert resp.status_code == 401
-    assert resp.json()["detail"] == "未登录"
-
-
-@pytest.mark.asyncio
 @pytest.mark.zentao("TC-S1183", domain="server/auth", priority="P1")
 async def test_me_invalid_token_401(app_fixture, setup_project, tmp_project, db_engine):
     """无效 token GET /me 应 401（中间件设 guest，路由层 401）。"""

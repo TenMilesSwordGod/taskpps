@@ -106,7 +106,7 @@ class TestPipelineLoader:
 
 
 class TestAgentLoader:
-    @pytest.mark.zentao("TC-S0811", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3298", domain="server/loaders", priority="P2")
     def test_load(self, setup_project, tmp_project):
         loader = AgentLoader(tmp_project / "agents")
         data = loader.load("staging-server")
@@ -114,25 +114,25 @@ class TestAgentLoader:
         assert data["port"] == 22
         assert data["username"] == "test"
 
-    @pytest.mark.zentao("TC-S0815", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3299", domain="server/loaders", priority="P1")
     def test_not_found(self, setup_project, tmp_project):
         loader = AgentLoader(tmp_project / "agents")
         with pytest.raises(FileNotFoundError):
             loader.load("nonexistent")
 
-    @pytest.mark.zentao("TC-S0814", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3300", domain="server/loaders", priority="P2")
     def test_load_all(self, setup_project, tmp_project):
         loader = AgentLoader(tmp_project / "agents")
         all_agents = loader.load_all()
         assert "staging-server" in all_agents
 
-    @pytest.mark.zentao("TC-S0817", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3301", domain="server/loaders", priority="P2")
     def test_load_all_no_dir(self, tmp_path):
         loader = AgentLoader(tmp_path / "nonexistent")
         result = loader.load_all()
         assert result == {}
 
-    @pytest.mark.zentao("TC-S0820", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3302", domain="server/loaders", priority="P2")
     def test_load_all_includes_yml(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -174,25 +174,25 @@ class TestAgentLoader:
 
 
 class TestCredentialLoader:
-    @pytest.mark.zentao("TC-S0811", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3303", domain="server/loaders", priority="P2")
     def test_load(self, setup_project, tmp_project):
         loader = CredentialLoader(tmp_project / "credentials")
         data = loader.load("default-cred")
         assert data["password"] == "testpass"
 
-    @pytest.mark.zentao("TC-S0815", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3304", domain="server/loaders", priority="P1")
     def test_not_found(self, setup_project, tmp_project):
         loader = CredentialLoader(tmp_project / "credentials")
         with pytest.raises(FileNotFoundError):
             loader.load("nonexistent")
 
-    @pytest.mark.zentao("TC-S0817", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3305", domain="server/loaders", priority="P2")
     def test_load_all_no_dir(self, tmp_path):
         loader = CredentialLoader(tmp_path / "nonexistent")
         result = loader.load_all()
         assert result == {}
 
-    @pytest.mark.zentao("TC-S0820", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3306", domain="server/loaders", priority="P2")
     def test_load_all_includes_yml(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -202,7 +202,7 @@ class TestCredentialLoader:
         result = loader.load_all()
         assert "test-cred" in result
 
-    @pytest.mark.zentao("TC-S0821", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3307", domain="server/loaders", priority="P2")
     def test_empty_yaml(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -212,7 +212,7 @@ class TestCredentialLoader:
         with pytest.raises(ValueError, match="empty"):
             loader.load("empty")
 
-    @pytest.mark.zentao("TC-S0822", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3308", domain="server/loaders", priority="P1")
     def test_load_all_with_exception(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()
@@ -222,7 +222,7 @@ class TestCredentialLoader:
         result = loader.load_all()
         assert result == {}
 
-    @pytest.mark.zentao("TC-S0823", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3309", domain="server/loaders", priority="P2")
     def test_load_yml_extension(self, tmp_path):
         creds_dir = tmp_path / "credentials"
         creds_dir.mkdir()

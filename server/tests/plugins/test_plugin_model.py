@@ -10,7 +10,7 @@ from taskpps.models.plugin import Plugin
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0500", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3342", domain="server/plugins", priority="P1")
 async def test_plugin_table_exists(db_engine):
     """验证 Plugin 表可通过 SQLModel.metadata.create_all 创建。"""
     tables = SQLModel.metadata.tables
@@ -19,7 +19,7 @@ async def test_plugin_table_exists(db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0501", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3343", domain="server/plugins", priority="P1")
 async def test_create_plugin(db_engine):
     """验证可以创建 Plugin 记录并写入 DB。"""
     async with get_session_factory()() as session:
@@ -40,7 +40,7 @@ async def test_create_plugin(db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0502", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3344", domain="server/plugins", priority="P1")
 async def test_plugin_default_enabled_false(db_engine):
     """验证 Plugin 默认 enabled 为 False。"""
     async with get_session_factory()() as session:
@@ -53,7 +53,7 @@ async def test_plugin_default_enabled_false(db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0503", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3345", domain="server/plugins", priority="P1")
 async def test_plugin_unique_name(db_engine):
     """验证 Plugin name 唯一约束。"""
     async with get_session_factory()() as session:
@@ -69,7 +69,7 @@ async def test_plugin_unique_name(db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0504", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3346", domain="server/plugins", priority="P1")
 async def test_plugin_query_by_type(db_engine):
     """验证可以按 type 查询插件。"""
     async with get_session_factory()() as session:
@@ -86,7 +86,7 @@ async def test_plugin_query_by_type(db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0505", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3347", domain="server/plugins", priority="P1")
 async def test_plugin_updated_at_auto(db_engine):
     """验证 updated_at 在更新时自动刷新。"""
     import asyncio

@@ -1,5 +1,7 @@
 """Issue #106: PipelineConfig max_parallel → max_concurrent_runs 向后兼容测试"""
 
+import pytest
+
 from taskpps.schemas.pipeline import PipelineConfig
 
 

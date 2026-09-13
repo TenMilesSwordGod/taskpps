@@ -528,9 +528,12 @@ class TestPartialVsFailed:
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0188", domain="server/scenario", priority="P2")
-    async def test_partial_status_when_some_succeed(self, db_engine, clean_db):
+    async def test_partial_status_when_some_succeed(self, db_engine, clean_db, run_probe):
         """部分 subpipeline 成功、部分失败时应返回 PARTIAL"""
+        # v2 (2026-09 治理): 原用例零断言。重写为预创建 run 行后从真实 DB
+        # 读回终态，断言 PARTIAL 而不是只看 run() 不抛异常。
         _setup_config()
+        run_id = await run_probe.create("p")
         sub_a = ResolvedSubPipeline(
             name="A",
             config=PipelineConfig(),
@@ -542,8 +545,8 @@ class TestPartialVsFailed:
             tasks=[ResolvedTask(name="b1", task_type="command", command="echo b")],
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub_a, sub_b], top_config=PipelineConfig())
-        ctx = ExecutionContext(pipeline=pipeline, run_id="partial-test")
-        runner = PipelineRunner(run_id="partial-test", pipeline=pipeline, context=ctx)
+        ctx = ExecutionContext(pipeline=pipeline, run_id=run_id)
+        runner = PipelineRunner(run_id=run_id, pipeline=pipeline, context=ctx)
         runner._task_run_ids = {"A.a1": "tr-a", "B.b1": "tr-b"}
 
         async def fake_execute_task(task, sub_name=""):
@@ -558,11 +561,15 @@ class TestPartialVsFailed:
         ):
             await runner.run()
 
+        assert await run_probe.status(run_id) == "partial"
+
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0189", domain="server/scenario", priority="P1")
-    async def test_failed_status_when_all_fail(self, db_engine, clean_db):
+    async def test_failed_status_when_all_fail(self, db_engine, clean_db, run_probe):
         """所有 subpipeline 都失败时应返回 FAILED"""
+        # v2 (2026-09 治理): 原用例零断言，重写为从 DB 读回 FAILED 终态。
         _setup_config()
+        run_id = await run_probe.create("p")
         sub_a = ResolvedSubPipeline(
             name="A",
             config=PipelineConfig(),
@@ -574,8 +581,8 @@ class TestPartialVsFailed:
             tasks=[ResolvedTask(name="b1", task_type="command", command="exit 1")],
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub_a, sub_b], top_config=PipelineConfig())
-        ctx = ExecutionContext(pipeline=pipeline, run_id="all-fail")
-        runner = PipelineRunner(run_id="all-fail", pipeline=pipeline, context=ctx)
+        ctx = ExecutionContext(pipeline=pipeline, run_id=run_id)
+        runner = PipelineRunner(run_id=run_id, pipeline=pipeline, context=ctx)
         runner._task_run_ids = {"A.a1": "tr-a", "B.b1": "tr-b"}
 
         async def fake_execute_task(task, sub_name=""):
@@ -587,6 +594,8 @@ class TestPartialVsFailed:
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert await run_probe.status(run_id) == "failed"
 
 
 class TestParallelWithDependencies:
@@ -631,9 +640,13 @@ class TestParallelWithDependencies:
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0191", domain="server/scenario", priority="P1")
-    async def test_parallel_mixed_success_and_failure(self, db_engine, clean_db):
+    async def test_parallel_mixed_success_and_failure(self, db_engine, clean_db, run_probe):
         """parallel 模式下，部分 task 成功部分失败时结果正确处理"""
+        # v2 (2026-09 治理): 原用例零断言。重写为断言两个 task 都被调度，
+        # 且唯一 subpipeline 失败时 run 终态为 failed（PARTIAL 仅适用于
+        # 多个 subpipeline 部分成功的 run 级场景）。
         _setup_config()
+        run_id = await run_probe.create("p")
         task_a = ResolvedTask(name="a", task_type="command", command="echo a")
         task_b = ResolvedTask(name="b", task_type="command", command="exit 1")
         sub = ResolvedSubPipeline(
@@ -642,11 +655,14 @@ class TestParallelWithDependencies:
             tasks=[task_a, task_b],
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
-        ctx = ExecutionContext(pipeline=pipeline, run_id="par-mixed")
-        runner = PipelineRunner(run_id="par-mixed", pipeline=pipeline, context=ctx)
+        ctx = ExecutionContext(pipeline=pipeline, run_id=run_id)
+        runner = PipelineRunner(run_id=run_id, pipeline=pipeline, context=ctx)
         runner._task_run_ids = {"sub.a": "tr-a", "sub.b": "tr-b"}
 
-        async def fake_execute_task(task, sub_name=""):
+        executed: list[str] = []
+
+        async def fake_execute_task(task, sub_name="", max_parallel=None):
+            executed.append(task.name)
             if task.name == "b":
                 return ExecutorResult(exit_code=1, stderr="fail")
             return ExecutorResult(exit_code=0)
@@ -657,6 +673,9 @@ class TestParallelWithDependencies:
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert set(executed) == {"a", "b"}
+        assert await run_probe.status(run_id) == "failed"
 
 
 class TestTaskOnFailureOverride:
@@ -713,16 +732,19 @@ class TestEmptySubpipeline:
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0193", domain="server/scenario", priority="P2")
-    async def test_empty_subpipeline_succeeds(self, db_engine, clean_db):
+    async def test_empty_subpipeline_succeeds(self, db_engine, clean_db, run_probe):
+        # v2 (2026-09 治理): 原用例只跑 run() 不断状态。重写为断言空
+        # subpipeline 仍让 run 到达 success 终态。
         _setup_config()
+        run_id = await run_probe.create("p")
         sub = ResolvedSubPipeline(
             name="empty",
             config=PipelineConfig(),
             tasks=[],
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
-        ctx = ExecutionContext(pipeline=pipeline, run_id="empty-sub")
-        runner = PipelineRunner(run_id="empty-sub", pipeline=pipeline, context=ctx)
+        ctx = ExecutionContext(pipeline=pipeline, run_id=run_id)
+        runner = PipelineRunner(run_id=run_id, pipeline=pipeline, context=ctx)
         runner._task_run_ids = {}
 
         with (
@@ -730,6 +752,8 @@ class TestEmptySubpipeline:
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert await run_probe.status(run_id) == "success"
 
 
 class TestEvaluateWhenEnvMerge:

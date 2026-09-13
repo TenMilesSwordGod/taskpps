@@ -400,7 +400,9 @@ class TestPipelineService:
 
 class TestPipelineServiceMore:
     @pytest.mark.asyncio
-    @pytest.mark.zcustom("TC-S0345", domain="server/services", priority="P2")
+    # v2 (2026-09 治理): 原为 @pytest.mark.zcustom 拼写错误，未注册的 marker 不生效，
+    # 导致映射校验查不到该用例；修正为 zentao。
+    @pytest.mark.zentao("TC-S0345", domain="server/services", priority="P2")
     # v2 (2026-07): Phase 2 快照从磁盘改存 DB，断言改为查 runs.snapshot_content 非空。旧磁盘断言保留注释以供参考
     async def test_save_pipeline_snapshot(self, setup_project, tmp_project, db_engine):
         _setup_config(tmp_project)
@@ -418,7 +420,8 @@ class TestPipelineServiceMore:
             assert getattr(run, "snapshot_content", None), "snapshot_content 不应为空"
 
     @pytest.mark.asyncio
-    @pytest.mark.zcustom("TC-S0346", domain="server/services", priority="P2")
+    # v2 (2026-09 治理): 同 TC-S0345，修正 zcustom 拼写错误。
+    @pytest.mark.zentao("TC-S0346", domain="server/services", priority="P2")
     async def test_save_pipeline_snapshot_nonexistent_file(self, tmp_project, db_engine):
         _setup_config(tmp_project)
 
@@ -429,7 +432,8 @@ class TestPipelineServiceMore:
         assert "id" in result
 
     @pytest.mark.asyncio
-    @pytest.mark.zcustom("TC-S0347", domain="server/services", priority="P2")
+    # v2 (2026-09 治理): 同 TC-S0345，修正 zcustom 拼写错误。
+    @pytest.mark.zentao("TC-S0347", domain="server/services", priority="P2")
     # v2 (2026-07): Phase 2 快照从磁盘改存 DB，断言改为查 runs.snapshot_content 非空
     async def test_save_pipeline_snapshot_multi_project(self, tmp_project, db_engine):
         """Issue #58: 非默认项目的 pipeline 快照应能正确存入 DB"""
@@ -479,46 +483,53 @@ class TestPipelineServiceMore:
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0349", domain="server/services", priority="P1")
-    async def test_handle_run_error_cancelled(self, setup_project, tmp_project, db_engine):
+    async def test_handle_run_error_cancelled(self, setup_project, tmp_project, db_engine, caplog):
+        # v2 (2026-09 治理): 原用例零断言（弱化成 "Should not raise"）。重写为
+        # 断言 CancelledError 被记录 info 日志，证明取消分支真的被执行。
         _setup_config(tmp_project)
         import asyncio
+        import logging
 
-        # Create a cancelled task
         async def _raise_cancelled():
             raise asyncio.CancelledError()
 
         task = asyncio.create_task(_raise_cancelled())
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
-        # Should not raise
-        PipelineService._handle_run_error(task)
+        with caplog.at_level(logging.INFO, logger="taskpps"):
+            PipelineService._handle_run_error(task)
+
+        assert any("cancelled" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0350", domain="server/services", priority="P1")
-    async def test_handle_run_error_generic(self, setup_project, tmp_project, db_engine):
+    async def test_handle_run_error_generic(self, setup_project, tmp_project, db_engine, caplog):
+        # v2 (2026-09 治理): 原用例零断言。重写为断言异常信息被写入 error 日志。
         _setup_config(tmp_project)
         import asyncio
+        import logging
 
         async def _raise_error():
             raise RuntimeError("test error")
 
         task = asyncio.create_task(_raise_error())
-        try:
+        with contextlib.suppress(RuntimeError):
             await task
-        except RuntimeError:
-            pass
 
-        # Should not raise
-        PipelineService._handle_run_error(task)
+        with caplog.at_level(logging.ERROR, logger="taskpps"):
+            PipelineService._handle_run_error(task)
+
+        assert any("test error" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0351", domain="server/services", priority="P1")
-    async def test_handle_run_error_success(self, setup_project, tmp_project, db_engine):
+    async def test_handle_run_error_success(self, setup_project, tmp_project, db_engine, caplog):
+        # v2 (2026-09 治理): 原用例只调用不校验。重写为断言成功 task 不产生
+        # 任何 error 日志（成功路径静默是 _handle_run_error 的契约）。
         _setup_config(tmp_project)
         import asyncio
+        import logging
 
         async def _ok():
             return "done"
@@ -526,8 +537,10 @@ class TestPipelineServiceMore:
         task = asyncio.create_task(_ok())
         await task
 
-        # Should not raise
-        PipelineService._handle_run_error(task)
+        with caplog.at_level(logging.INFO, logger="taskpps"):
+            PipelineService._handle_run_error(task)
+
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0352", domain="server/services", priority="P1")

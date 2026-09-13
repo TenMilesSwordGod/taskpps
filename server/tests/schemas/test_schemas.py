@@ -1,3 +1,5 @@
+import pytest
+
 from taskpps.models.trigger import TriggerType
 from taskpps.schemas.pipeline import InvokeSpec, OptionsYAML, PipelineYAML, TaskYAML
 from taskpps.schemas.run import CleanRequest, CreateRunRequest

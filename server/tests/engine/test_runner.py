@@ -1077,7 +1077,9 @@ class TestPipelineRunnerExitCodeCoverage:
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0268", domain="server/engine", priority="P1")
     async def test_subpipeline_not_found_produces_failure(self, mock_session_factory):
-        _run_repo, _task_repo = mock_session_factory
+        # v2 (2026-09 治理): 原用例零断言，名字承诺 "produces failure" 却不校验。
+        # 重写为断言 run 终态写入 failed（subpipeline 查不到必须让 run 失败）。
+        run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
         sub.name = "sub1"
         sub.tasks = []
@@ -1098,10 +1100,14 @@ class TestPipelineRunnerExitCodeCoverage:
         ):
             await runner.run()
 
+        assert run_repo.update_run_status.call_args[0][1] == "failed"
+
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0269", domain="server/engine", priority="P1")
     async def test_subpipeline_dag_error_produces_failure(self, mock_session_factory):
-        _run_repo, _task_repo = mock_session_factory
+        # v2 (2026-09 治理): 原用例注入 DAG 异常后零断言。重写为断言
+        # runner 标记 unexpected_error 且 run 终态为 failed。
+        run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
         sub.name = "sub1"
         sub.tasks = [ResolvedTask(name="t1", task_type="command", command="echo hi")]
@@ -1122,25 +1128,28 @@ class TestPipelineRunnerExitCodeCoverage:
         ):
             await runner.run()
 
+        assert runner._unexpected_error is True
+        assert run_repo.update_run_status.call_args[0][1] == "failed"
+
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0270", domain="server/engine", priority="P1")
     async def test_subpipeline_with_depends_on_skip(self, mock_session_factory):
-        _run_repo, _task_repo = mock_session_factory
-        sub1 = MagicMock()
-        sub1.name = "sub1"
-        sub1.tasks = [ResolvedTask(name="t1", task_type="command", command="exit 1")]
-        sub1.config = MagicMock()
-        sub1.config.execution_strategy = "sequential"
-        sub1.config.on_failure = "fail"
-        sub1.depends_on = []
+        # v2 (2026-09 治理): 原用例只跑不验。重写为使用真实 ResolvedSubPipeline
+        # 并断言依赖 sub1 失败的 sub2 不执行（executor 只调用一次）且 run 终态 failed。
+        run_repo, _task_repo = mock_session_factory
+        sub1 = ResolvedSubPipeline(
+            name="sub1",
+            tasks=[ResolvedTask(name="t1", task_type="command", command="exit 1")],
+            config=PipelineConfig(on_failure="fail"),
+            depends_on=[],
+        )
 
-        sub2 = MagicMock()
-        sub2.name = "sub2"
-        sub2.tasks = [ResolvedTask(name="t2", task_type="command", command="echo ok")]
-        sub2.config = MagicMock()
-        sub2.config.execution_strategy = "sequential"
-        sub2.config.on_failure = "fail"
-        sub2.depends_on = ["sub1"]
+        sub2 = ResolvedSubPipeline(
+            name="sub2",
+            tasks=[ResolvedTask(name="t2", task_type="command", command="echo ok")],
+            config=PipelineConfig(on_failure="fail"),
+            depends_on=["sub1"],
+        )
 
         pipeline = ResolvedPipeline(name="test", subpipelines=[sub1, sub2])
         pipeline.top_config = MagicMock()
@@ -1159,6 +1168,9 @@ class TestPipelineRunnerExitCodeCoverage:
             patch("taskpps.engine.runner.get_logs_dir"),
         ):
             await runner.run()
+
+        assert mock_executor.execute.call_count == 1
+        assert run_repo.update_run_status.call_args[0][1] == "failed"
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0271", domain="server/engine", priority="P2")
@@ -1201,7 +1213,9 @@ class TestPipelineRunnerExitCodeCoverage:
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0272", domain="server/engine", priority="P2")
     async def test_task_with_exit_code_neg1_in_subpipeline(self, mock_session_factory):
-        _run_repo, _task_repo = mock_session_factory
+        # v2 (2026-09 治理): 原用例失败路径只跑不验。重写为断言
+        # exit_code=-1 的任务确实执行且 run 终态为 failed。
+        run_repo, _task_repo = mock_session_factory
         sub = MagicMock()
         sub.name = "sub1"
         sub.tasks = [ResolvedTask(name="t1", task_type="command", command="kill -9 $$")]
@@ -1228,6 +1242,9 @@ class TestPipelineRunnerExitCodeCoverage:
             patch("taskpps.engine.runner.get_logs_dir"),
         ):
             await runner.run()
+
+        assert mock_executor.execute.call_count == 1
+        assert run_repo.update_run_status.call_args[0][1] == "failed"
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0273", domain="server/engine", priority="P1")

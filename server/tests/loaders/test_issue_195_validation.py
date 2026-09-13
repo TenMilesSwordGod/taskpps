@@ -10,7 +10,7 @@ from taskpps.loaders.pipeline_loader import PipelineLoader
 
 
 class TestLoadAllWithFilesAndErrors:
-    @pytest.mark.zentao("TC-S1001", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3278", domain="server/loaders", priority="P1")
     def test_invalid_yaml_syntax_error_to_invalid_list(self, tmp_path):
         """TC-S1001: 非法YAML语法错误 → 出现在 invalid_items 中，含 validation_error"""
         pipelines_dir = tmp_path / "pipelines"
@@ -29,7 +29,7 @@ class TestLoadAllWithFilesAndErrors:
         assert isinstance(bad_item["validation_error"]["message"], str)
         assert len(bad_item["validation_error"]["message"]) > 0
 
-    @pytest.mark.zentao("TC-S1001", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3279", domain="server/loaders", priority="P1")
     def test_empty_yaml_file_to_invalid_list(self, tmp_path):
         """空YAML文件 → 出现在 invalid_items 中，validation_error.line=1, column=1"""
         pipelines_dir = tmp_path / "pipelines"
@@ -44,7 +44,7 @@ class TestLoadAllWithFilesAndErrors:
         assert empty_item["validation_error"]["line"] == 1
         assert empty_item["validation_error"]["column"] == 1
 
-    @pytest.mark.zentao("TC-S1001", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3280", domain="server/loaders", priority="P1")
     def test_invalid_schema_to_invalid_list_with_path(self, tmp_path):
         """语法合法但缺必填字段（如缺name）→ invalid_items，validation_error 含 path"""
         pipelines_dir = tmp_path / "pipelines"
@@ -60,7 +60,7 @@ class TestLoadAllWithFilesAndErrors:
         # pydantic 校验应包含 path 字段
         assert invalid_no_name["validation_error"].get("path") is not None
 
-    @pytest.mark.zentao("TC-S1002", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3281", domain="server/loaders", priority="P1")
     def test_valid_yaml_to_valid_dict(self, tmp_path):
         """TC-S1002: 合法 YAML pipeline 出现在 valid dict 中"""
         pipelines_dir = tmp_path / "pipelines"
@@ -73,7 +73,7 @@ class TestLoadAllWithFilesAndErrors:
         assert valid_specs["my_pipe.yaml"].name == "my_pipe"
         assert len(invalid_items) == 0
 
-    @pytest.mark.zentao("TC-S1001", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3282", domain="server/loaders", priority="P2")
     def test_valid_and_invalid_mixed(self, tmp_path):
         """合法与非法YAML文件混合时，valid 只含合法，invalid 只含非法"""
         pipelines_dir = tmp_path / "pipelines"
@@ -93,7 +93,7 @@ class TestLoadAllWithFilesAndErrors:
         # 合法的不在 invalid 中
         assert "ok.yaml" not in bad_files
 
-    @pytest.mark.zentao("TC-S1001", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3283", domain="server/loaders", priority="P2")
     def test_bad_task_type_to_invalid_list(self, tmp_path):
         """tasks 字段类型错误（非数组）→ invalid_items"""
         pipelines_dir = tmp_path / "pipelines"
@@ -105,7 +105,7 @@ class TestLoadAllWithFilesAndErrors:
         assert "bad_tasks" not in valid_specs
         assert len(invalid_items) >= 1
 
-    @pytest.mark.zentao("TC-S1001", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3284", domain="server/loaders", priority="P2")
     def test_no_directory_returns_empty(self, tmp_path):
         """base_dir 不存在时返回空"""
         loader = PipelineLoader(tmp_path / "nonexistent")

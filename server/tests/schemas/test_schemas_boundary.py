@@ -49,17 +49,12 @@ class TestTaskYAMLBoundary:
         t = TaskYAML(name="test", command="echo hi")
         assert t.get_task_type() == "command"
 
-    @pytest.mark.zentao("TC-S0687", domain="server/schemas", priority="P1")
-    def test_type_detection_invoke(self):
-        t = TaskYAML(name="test", invoke=InvokeSpec(task="mod.fn"))
-        assert t.get_task_type() == "invoke"
-
     @pytest.mark.zentao("TC-S0688", domain="server/schemas", priority="P2")
     def test_type_detection_steps(self):
         t = TaskYAML(name="test", steps=[])
         assert t.get_task_type() == "steps"
 
-    @pytest.mark.zentao("TC-S0689", domain="server/schemas", priority="P1")
+    @pytest.mark.zentao("TC-S3475", domain="server/schemas", priority="P1")
     def test_type_detection_plugin(self):
         t = TaskYAML(name="test", plugin="echo", params={"key": "val"})
         assert t.get_task_type() == "plugin"

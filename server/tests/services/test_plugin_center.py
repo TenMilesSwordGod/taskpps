@@ -91,7 +91,7 @@ class TestPluginCenterDescribe:
         assert info.params_schema == {"remote": {"type": "string", "required": True}}
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1137", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3505", domain="server/plugin_center", priority="P1")
     async def test_describe_hook_plugin_parsed_correctly(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(stdout_data_list=[_describe_bytes("slack_notifier", "hook",
@@ -107,7 +107,7 @@ class TestPluginCenterDescribe:
         assert info.config_schema == {"webhook_url": {"type": "string", "required": True}}
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1137", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3506", domain="server/plugin_center", priority="P2")
     async def test_describe_empty_hooks_and_schema(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(stdout_data_list=[_describe_bytes("minimal", "executor")])
@@ -153,7 +153,7 @@ class TestPluginCenterUnknownType:
         assert any("unknown type" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1140", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3507", domain="server/plugin_center", priority="P2")
     async def test_type_none_skips_and_warns(self, tmp_project, caplog):
         pc = PluginCenter(tmp_project)
         raw = _describe_json("weird2", "executor")
@@ -183,7 +183,7 @@ class TestPluginCenterExecute:
         assert result.stdout == "clone ok"
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3508", domain="server/plugin_center", priority="P1")
     async def test_execute_failure(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(
@@ -201,14 +201,14 @@ class TestPluginCenterExecute:
         assert result.exit_code == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3509", domain="server/plugin_center", priority="P1")
     async def test_execute_nonexistent_plugin_raises(self, tmp_project):
         pc = PluginCenter(tmp_project)
         with pytest.raises(ValueError, match="not found"):
             await pc.execute("nonexistent", {})
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3510", domain="server/plugin_center", priority="P1")
     async def test_execute_crashed_plugin_raises(self, tmp_project):
         pc = PluginCenter(tmp_project)
         info = PluginInfo(name="crashed_plugin", type="executor", status="crashed")
@@ -217,7 +217,7 @@ class TestPluginCenterExecute:
             await pc.execute("crashed_plugin", {})
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3511", domain="server/plugin_center", priority="P2")
     async def test_execute_not_executor_type_raises(self, tmp_project):
         pc = PluginCenter(tmp_project)
         info = PluginInfo(name="hook_only", type="hook")
@@ -246,7 +246,7 @@ class TestPluginCenterHookDispatch:
         assert pc._hook_map.get("on_stage_complete") == ["notifier"]
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1142", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3512", domain="server/plugin_center", priority="P1")
     async def test_dispatch_sends_jsonrpc_to_plugin(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(
@@ -267,19 +267,49 @@ class TestPluginCenterHookDispatch:
         assert rpc["params"] == {"pipeline_id": "123"}
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1142", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3513", domain="server/plugin_center", priority="P2")
     async def test_dispatch_nonexistent_hook_noop(self, tmp_project):
+        # v2 (2026-09 治理): 原用例零断言。重写为加载 hook 插件后派发一个
+        # 未注册的 hook，断言不会向插件 stdin 写入任何 RPC。
         pc = PluginCenter(tmp_project)
+        mock_proc = _MockProcess(
+            stdout_data_list=[_describe_bytes("notifier", "hook", hooks=["on_pipeline_end"])],
+            returncode=None,
+        )
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/notifier"))
+        mock_proc.stdin.write.reset_mock()
+
         await pc.dispatch("nonexistent_hook", {})
 
+        mock_proc.stdin.write.assert_not_called()
+
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1142", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3514", domain="server/plugin_center", priority="P2")
     async def test_dispatch_skips_crashed_plugin(self, tmp_project):
+        # v2 (2026-09 治理): 原用例手工塞内部状态且零断言。重写为真实加载
+        # 插件后标记 crashed，断言 dispatch 不向崩溃插件写 RPC。
         pc = PluginCenter(tmp_project)
-        info = PluginInfo(name="crashed_hook", type="hook", hooks=["on_pipeline_end"], status="crashed")
-        pc._plugins["crashed_hook"] = info
-        pc._hook_map["on_pipeline_end"] = ["crashed_hook"]
+        mock_proc = _MockProcess(
+            stdout_data_list=[_describe_bytes("crashed_hook", "hook", hooks=["on_pipeline_end"])],
+            returncode=None,
+        )
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(pc, "_monitor_process", return_value=None),
+        ):
+            await pc._load_plugin(Path("/fake/crashed_hook"))
+
+        assert pc._hook_map.get("on_pipeline_end") == ["crashed_hook"]
+        pc._plugins["crashed_hook"].status = "crashed"
+        mock_proc.stdin.write.reset_mock()
+
         await pc.dispatch("on_pipeline_end", {})
+
+        mock_proc.stdin.write.assert_not_called()
 
 
 class TestPluginCenterMultiplePlugins:
@@ -317,7 +347,7 @@ class TestPluginCenterMultiplePlugins:
         assert "on_pipeline_end" in pc._hook_map
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1143", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3515", domain="server/plugin_center", priority="P2")
     async def test_one_plugin_failure_does_not_block_others(self, tmp_project, caplog):
         pc = PluginCenter(tmp_project)
 
@@ -361,7 +391,7 @@ class TestPluginCenterCrashRestart:
         assert pc._plugins["restartable"].status == "loaded"
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1144", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3516", domain="server/plugin_center", priority="P1")
     async def test_crash_exceeds_max_restarts_marks_crashed(self, tmp_project, caplog):
         pc = PluginCenter(tmp_project)
         info = PluginInfo(
@@ -420,7 +450,7 @@ class TestPluginCenterDualDirectory:
         assert "on_pipeline_end" in pc._hook_map
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1145", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3517", domain="server/plugin_center", priority="P2")
     async def test_plugins_dir_not_exists_degraded(self, tmp_project):
         official_dir = tmp_project / "official_plugins" / "rsync"
         official_dir.mkdir(parents=True)
@@ -438,7 +468,7 @@ class TestPluginCenterDualDirectory:
         assert "rsync_plugin" in pc._plugins
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1145", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3518", domain="server/plugin_center", priority="P2")
     async def test_empty_both_directories_no_plugins(self, tmp_project):
         pc = PluginCenter(tmp_project)
         await pc.discover_and_load()
@@ -461,14 +491,14 @@ class TestPluginCenterAPI:
         assert plugins[0].status == "loaded"
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1146", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3519", domain="server/plugin_center", priority="P1")
     async def test_list_plugins_empty(self, tmp_project):
         pc = PluginCenter(tmp_project)
         plugins = pc.list_plugins()
         assert plugins == []
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1146", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3520", domain="server/plugin_center", priority="P2")
     async def test_get_plugin_by_name(self, tmp_project):
         pc = PluginCenter(tmp_project)
         info = PluginInfo(name="my_plugin", type="hook", version="2.0.0", hooks=["on_pipeline_start"], status="loaded")
@@ -479,7 +509,7 @@ class TestPluginCenterAPI:
         assert found.hooks == ["on_pipeline_start"]
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1146", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3521", domain="server/plugin_center", priority="P2")
     async def test_get_plugin_nonexistent(self, tmp_project):
         pc = PluginCenter(tmp_project)
         assert pc.get_plugin("nonexistent") is None
@@ -514,7 +544,7 @@ class TestPluginCenterTimeout:
 
 class TestPluginCenterBoundary:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1137", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3522", domain="server/plugin_center", priority="P2")
     async def test_describe_response_eof_returns_none(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(stdout_data_list=[b""])
@@ -523,7 +553,7 @@ class TestPluginCenterBoundary:
         assert info is None
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1138", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3523", domain="server/plugin_center", priority="P2")
     async def test_oserror_during_spawn_logs_and_skips(self, tmp_project, caplog):
         pc = PluginCenter(tmp_project)
         with (
@@ -534,7 +564,7 @@ class TestPluginCenterBoundary:
         assert any("Failed to spawn" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1139", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3524", domain="server/plugin_center", priority="P2")
     async def test_invalid_rpc_structure_skips_and_logs(self, tmp_project, caplog):
         pc = PluginCenter(tmp_project)
         bad_rpc = b'{"jsonrpc":"2.0","result":{"name":"no_type"},"id":1}\n'
@@ -546,7 +576,7 @@ class TestPluginCenterBoundary:
 
 class TestPluginCenterShutdown:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1147", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3525", domain="server/plugin_center", priority="P2")
     async def test_shutdown_cleans_up_plugins(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(stdout_data_list=[_describe_bytes("plugin_x", "executor", version="1.0.0")])
@@ -565,7 +595,7 @@ class TestPluginCenterShutdown:
 
 class TestPluginCenterDescribeHang:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1137", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3526", domain="server/plugin_center", priority="P2")
     async def test_describe_timeout_hang_returns_none(self, tmp_project, caplog):
         from taskpps.services import plugin_center as pc_mod
 
@@ -588,7 +618,7 @@ class TestPluginCenterDescribeHang:
 
 class TestPluginCenterConcurrent:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3527", domain="server/plugin_center", priority="P2")
     async def test_concurrent_execute_independent_responses(self, tmp_project):
         pc = PluginCenter(tmp_project)
         desc = _describe_bytes("concurrent_plugin", "executor", version="1.0.0")
@@ -617,7 +647,7 @@ class TestPluginCenterConcurrent:
         assert stdout_values == {"result_a", "result_b"}
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3528", domain="server/plugin_center", priority="P2")
     async def test_concurrent_execute_multiple_requests(self, tmp_project):
         pc = PluginCenter(tmp_project)
         desc = _describe_bytes("multi_plugin", "executor", version="1.0.0")
@@ -639,7 +669,7 @@ class TestPluginCenterConcurrent:
         assert all(r.success for r in results)
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1142", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3529", domain="server/plugin_center", priority="P2")
     async def test_concurrent_dispatch_multiple_hooks(self, tmp_project):
         pc = PluginCenter(tmp_project)
         desc = _describe_bytes("multi_hook", "hook", hooks=["h1", "h2", "h3"], version="1.0.0")
@@ -662,7 +692,7 @@ class TestPluginCenterConcurrent:
 
 class TestPluginCenterShutdownRace:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1147", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3530", domain="server/plugin_center", priority="P2")
     async def test_shutdown_during_pending_execute(self, tmp_project):
         pc = PluginCenter(tmp_project)
         desc = _describe_bytes("slow_exec", "executor", version="1.0.0")
@@ -693,7 +723,7 @@ class TestPluginCenterShutdownRace:
         assert len(pc._processes) == 0
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1147", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3531", domain="server/plugin_center", priority="P2")
     async def test_shutdown_kills_unresponsive_process(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(
@@ -714,7 +744,7 @@ class TestPluginCenterShutdownRace:
 
 class TestPluginCenterStderr:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1137", domain="server/plugin_center", priority="P2")
+    @pytest.mark.zentao("TC-S3532", domain="server/plugin_center", priority="P2")
     async def test_stderr_is_available_in_process(self, tmp_project):
         pc = PluginCenter(tmp_project)
         mock_proc = _MockProcess(
@@ -739,7 +769,7 @@ class TestPluginCenterStderr:
 
 class TestPluginCenterRealBinary:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1141", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3533", domain="server/plugin_center", priority="P1")
     async def test_real_git_plugin_describe_and_execute(self, tmp_project):
         import sys
 
@@ -796,7 +826,7 @@ class TestPluginCenterRealBinary:
 
 class TestPluginCenterPythonHelpMsg:
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S1146", domain="server/plugin_center", priority="P1")
+    @pytest.mark.zentao("TC-S3534", domain="server/plugin_center", priority="P1")
     async def test_python_plugin_docstring_is_dedented(self, tmp_project):
         plugin_dir = tmp_project / "official_plugins" / "sample"
         plugin_dir.mkdir(parents=True)

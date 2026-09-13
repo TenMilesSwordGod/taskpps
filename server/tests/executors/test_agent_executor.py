@@ -19,9 +19,27 @@ def mock_manager():
     mgr.register_output_callback = MagicMock()
     mgr.acquire_agent = AsyncMock()
     mgr.release_agent = MagicMock()
+    # v2 (2026-09 治理): Issue #106 引入全局并发槽位 acquire_global/release_global，
+    # 旧 fixture 未补导致 AgentExecutor.execute 在 await MagicMock 时 TypeError。
+    mgr.acquire_global = AsyncMock()
+    mgr.release_global = MagicMock()
     mgr.promote_command_to_running = MagicMock()
     mgr.get_connection = MagicMock(return_value=None)
     return mgr
+
+
+@pytest.fixture(autouse=True)
+def fast_offline_timeout():
+    """v2 (2026-09 治理): 断连等待默认 300s，本文件 7 个用例各会真实 sleep 5 分钟，
+    使全量测试无法在 CI 时限内完成。统一置 0（与本文件语义一致：只验证
+    放行/自动引导分支，不验证等待时长），结束后恢复原值避免污染其他测试。"""
+    from taskpps.config import get_settings
+
+    settings = get_settings()
+    original = settings.executor.agent_offline_timeout
+    settings.executor.agent_offline_timeout = 0
+    yield
+    settings.executor.agent_offline_timeout = original
 
 
 @pytest.fixture
@@ -70,28 +88,6 @@ class TestAgentExecutorExecute:
 
         assert result.exit_code == -1
         assert "not connected" in result.stderr
-
-    @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0484", domain="server/executors", priority="P1")
-    async def test_execute_timeout(self, tmp_path, mock_manager, agent_data):
-        log_path = tmp_path / "agent_timeout.log"
-        fut = asyncio.get_event_loop().create_future()
-        mock_manager.create_pending.return_value = fut
-
-        executor = AgentExecutor("agent-1", mock_manager, agent_data)
-
-        async def _run():
-            return await executor.execute("echo hello", {}, log_path, timeout=1)
-
-        task = asyncio.ensure_future(_run())
-        await asyncio.sleep(0.5)
-        # Let the timeout trigger — wait_for(..., timeout=1+10)
-        # Actually, we need to mock the timeout behavior
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0485", domain="server/executors", priority="P1")

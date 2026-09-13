@@ -102,7 +102,7 @@ class TestBug152LastExecutionTimeMemoryLoss:
         assert conn.last_command_finished_at == 0
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S3001b", domain="server/agent", priority="P1")
+    @pytest.mark.zentao("TC-S3592", domain="server/agent", priority="P1")
     async def test_last_execution_time_preserved_on_reconnect(self):
         """
         Agent 重连时 last_command_finished_at 应从旧连接迁移到新连接。

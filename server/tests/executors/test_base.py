@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from taskpps.executors.base import BaseExecutor, ExecutorResult
 
 

@@ -204,6 +204,9 @@ class TestAgentWebSocket:
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S1014", domain="server/api", priority="P2")
     async def test_exec_result(self):
+        # v2 (2026-09 治理): 原用例零断言，exec_result 处理错误也照样绿。
+        # 重写为先在连接上注册 pending command，再投递 exec_result，
+        # 断言对应的 future 被 resolve 且 pending 表被清理。
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
@@ -216,16 +219,28 @@ class TestAgentWebSocket:
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
 
-        ws.receive_text = AsyncMock(
-            side_effect=[
-                json.dumps({"type": "exec_result", "data": {"command_id": "cmd-1", "exit_code": 0}}),
-                WebSocketDisconnect(),
-            ]
-        )
+        pending_future = None
+
+        async def _receive():
+            nonlocal pending_future
+            if pending_future is None:
+                conn = manager.get_connection("agent-1")
+                pending_future = conn.register_pending("cmd-1")
+                return json.dumps({"type": "exec_result", "data": {"command_id": "cmd-1", "exit_code": 0}})
+            raise WebSocketDisconnect()
+
+        ws.receive_text = AsyncMock(side_effect=_receive)
 
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
             await ws_agent.agent_websocket(ws)
+
+        assert pending_future is not None
+        assert pending_future.done()
+        assert pending_future.result()["exit_code"] == 0
+        conn = manager.get_connection("agent-1")
+        assert conn is not None
+        assert "cmd-1" not in conn._pending_commands
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S1015", domain="server/api", priority="P1")
@@ -282,6 +297,8 @@ class TestAgentWebSocket:
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S1017", domain="server/api", priority="P2")
     async def test_unknown_message_type(self):
+        # v2 (2026-09 治理): 原用例零断言。重写为断言未知类型消息不会触发
+        # 任何额外回帧（只应有握手响应），即消息被安全忽略。
         manager = AgentManager()
         ws = AsyncMock()
         ws.accept = AsyncMock()
@@ -304,4 +321,7 @@ class TestAgentWebSocket:
         with patch("taskpps.api.ws_agent.AgentManager") as mock_mgr_cls:
             mock_mgr_cls.instance.return_value = manager
             await ws_agent.agent_websocket(ws)
+
+        sent_types = [call.args[0]["type"] for call in ws.send_json.call_args_list]
+        assert sent_types == ["handshake_response"]
 

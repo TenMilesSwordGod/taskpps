@@ -1,0 +1,591 @@
+{
+  "description": "issue #223 测试治理删除的历史映射；Zentao 恢复后据此停用对应 testcase（禁止复用已停用编号）",
+  "total": 65,
+  "retired": [
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0251",
+      "zentao_id": 296,
+      "test_name": "test_on_failure_continue_only_affects_own_deps",
+      "file": "engine/test_runner.py",
+      "reason": "测试函数已删除（on_failure continue 语义迁至 test_bug_160 场景）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0484",
+      "zentao_id": 529,
+      "test_name": "test_execute_timeout",
+      "file": "executors/test_agent_executor.py",
+      "reason": "注水用例删除（#223：原用例 mock 超时行为且先 cancel 再断言）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0521",
+      "zentao_id": 566,
+      "test_name": "test_command_no_host",
+      "file": "executors/test_factory.py",
+      "reason": "重复用例删除（与 test_local 规范化函数体完全相同）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0524",
+      "zentao_id": 569,
+      "test_name": "test_invoke_type",
+      "file": "executors/test_factory.py",
+      "reason": "重复用例删除（与 test_invoke 规范化函数体完全相同）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0525",
+      "zentao_id": 570,
+      "test_name": "test_git_cancelled_error",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0526",
+      "zentao_id": 571,
+      "test_name": "test_git_timeout_expired",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0527",
+      "zentao_id": 572,
+      "test_name": "test_git_command_not_found",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0528",
+      "zentao_id": 573,
+      "test_name": "test_git_pull_fetch_failure",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0529",
+      "zentao_id": 574,
+      "test_name": "test_git_pull_checkout_failure",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0530",
+      "zentao_id": 575,
+      "test_name": "test_git_stderr_written_to_log",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0531",
+      "zentao_id": 576,
+      "test_name": "test_git_execute_cancel",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0532",
+      "zentao_id": 577,
+      "test_name": "test_clone",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0533",
+      "zentao_id": 578,
+      "test_name": "test_existing_dir_pull",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0534",
+      "zentao_id": 579,
+      "test_name": "test_cancel",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0535",
+      "zentao_id": 580,
+      "test_name": "test_submodules_flag",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0536",
+      "zentao_id": 581,
+      "test_name": "test_depth",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0537",
+      "zentao_id": 582,
+      "test_name": "test_apply_credential_no_credential",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0538",
+      "zentao_id": 583,
+      "test_name": "test_apply_credential_with_git_token",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0539",
+      "zentao_id": 584,
+      "test_name": "test_apply_credential_http_url",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0540",
+      "zentao_id": 585,
+      "test_name": "test_apply_credential_no_matching_env",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0541",
+      "zentao_id": 586,
+      "test_name": "test_run_subprocess_success",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0542",
+      "zentao_id": 587,
+      "test_name": "test_run_subprocess_failure",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0543",
+      "zentao_id": 588,
+      "test_name": "test_git_pull",
+      "file": "executors/test_git.py",
+      "reason": "测试文件已删除（executors/test_git.py 已移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0548",
+      "zentao_id": 593,
+      "test_name": "test_invoke_cancel_method",
+      "file": "executors/test_invoke.py",
+      "reason": "重复用例删除（与 test_cancel 重复且为自证式断言）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0687",
+      "zentao_id": 732,
+      "test_name": "test_type_detection_invoke",
+      "file": "schemas/test_schemas_boundary.py",
+      "reason": "重复用例删除（与 test_schemas.py::test_task_yaml_invoke 重复）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0689",
+      "zentao_id": 734,
+      "test_name": "test_type_detection_git",
+      "file": "schemas/test_schemas_boundary.py",
+      "reason": "测试函数已不存在（git executor 移除）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0892",
+      "zentao_id": 937,
+      "test_name": "test_get_settings_resets",
+      "file": "config/test_config_boundary.py",
+      "reason": "重复用例删除（与 test_config.py::test_get_settings_auto_load 重复）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S0997",
+      "zentao_id": 1042,
+      "test_name": "test_no_auth_header",
+      "file": "api/test_runs.py",
+      "reason": "重复用例删除（与 auth 中间件用例重复，且只断言 /api/health 200）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S1019",
+      "zentao_id": 1064,
+      "test_name": "test_auth_with_valid_token",
+      "file": "auth/test_auth.py",
+      "reason": "重复用例删除（与 test_no_auth_header 相同，未真正带 token 验证）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "server",
+      "tc_local_id": "TC-S1127",
+      "zentao_id": 1172,
+      "test_name": "test_none_defaults",
+      "file": "domain/test_domain.py",
+      "reason": "重复用例删除（与 domain/test_context_boundary.py::test_empty 重复）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0001",
+      "zentao_id": 1429,
+      "test_name": "TestNewExecutor_DefaultShell",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0002",
+      "zentao_id": 1430,
+      "test_name": "TestNewExecutor_CustomShell",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0003",
+      "zentao_id": 1431,
+      "test_name": "TestNewExecutor_NilCallbacks",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0005",
+      "zentao_id": 1433,
+      "test_name": "TestMergeEnv_Empty",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0006",
+      "zentao_id": 1434,
+      "test_name": "TestMergeEnv_AddNew",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0007",
+      "zentao_id": 1435,
+      "test_name": "TestMergeEnv_Overwrite",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0008",
+      "zentao_id": 1436,
+      "test_name": "TestMergeEnv_NilExtra",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0009",
+      "zentao_id": 1437,
+      "test_name": "TestMergeEnv_EmptyBase",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0010",
+      "zentao_id": 1438,
+      "test_name": "TestMergeEnv_MultipleKeys",
+      "file": "agent/executor_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0033",
+      "zentao_id": 1461,
+      "test_name": "TestMessage_Empty",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0034",
+      "zentao_id": 1462,
+      "test_name": "TestHandshakeRequest_Defaults",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0035",
+      "zentao_id": 1463,
+      "test_name": "TestHandshakeRequest_Full",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0036",
+      "zentao_id": 1464,
+      "test_name": "TestHandshakeResponse_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0037",
+      "zentao_id": 1465,
+      "test_name": "TestExecCommand_Defaults",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0038",
+      "zentao_id": 1466,
+      "test_name": "TestExecCommand_Full",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0039",
+      "zentao_id": 1467,
+      "test_name": "TestCancelCommand_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0040",
+      "zentao_id": 1468,
+      "test_name": "TestStdoutChunk_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0041",
+      "zentao_id": 1469,
+      "test_name": "TestStderrChunk_Fields",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0042",
+      "zentao_id": 1470,
+      "test_name": "TestExecResult_Success",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0043",
+      "zentao_id": 1471,
+      "test_name": "TestExecResult_Failure",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0044",
+      "zentao_id": 1472,
+      "test_name": "TestExecResult_Signaled",
+      "file": "agent/protocol_boundary_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0045",
+      "zentao_id": 1473,
+      "test_name": "TestMessageSerialization",
+      "file": "agent/protocol_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0047",
+      "zentao_id": 1475,
+      "test_name": "TestExecCommandSerialization",
+      "file": "agent/protocol_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0048",
+      "zentao_id": 1476,
+      "test_name": "TestExecResultSerialization",
+      "file": "agent/protocol_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0049",
+      "zentao_id": 1477,
+      "test_name": "TestExecResultSuccess",
+      "file": "agent/protocol_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0056",
+      "zentao_id": 1484,
+      "test_name": "TestDefaultConfig_ServerURL",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0057",
+      "zentao_id": 1485,
+      "test_name": "TestDefaultConfig_AgentID",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0058",
+      "zentao_id": 1486,
+      "test_name": "TestDefaultConfig_Shell",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0059",
+      "zentao_id": 1487,
+      "test_name": "TestDefaultConfig_PidFile",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0060",
+      "zentao_id": 1488,
+      "test_name": "TestDefaultConfig_LogFile",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0061",
+      "zentao_id": 1489,
+      "test_name": "TestDefaultConfig_Secret",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0062",
+      "zentao_id": 1490,
+      "test_name": "TestDefaultConfig_WorkDir",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0063",
+      "zentao_id": 1491,
+      "test_name": "TestDefaultConfig_Daemon",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0064",
+      "zentao_id": 1492,
+      "test_name": "TestConfig_ModifyFields",
+      "file": "config/config_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    },
+    {
+      "source": "execution_agent",
+      "tc_local_id": "TC-A0071",
+      "zentao_id": 1499,
+      "test_name": "TestGetLevel",
+      "file": "logger/logger_test.go",
+      "reason": "execution_agent 批次清理删除（回溯 commit ae60873）",
+      "date": "2026-09-13"
+    }
+  ]
+}

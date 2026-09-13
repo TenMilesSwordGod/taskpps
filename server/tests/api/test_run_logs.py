@@ -193,7 +193,7 @@ class TestRunLogs:
         assert "text/event-stream" in response.headers.get("content-type", "")
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0986", domain="server/api", priority="P1")
+    @pytest.mark.zentao("TC-S3105", domain="server/api", priority="P1")
     async def test_logs_follow_batch_push(self, client, db_engine, tmp_path):
         """follow 模式应批量推送：一个 log event 包含多行，减少 yield 次数。
 
@@ -235,7 +235,7 @@ class TestRunLogs:
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0987", domain="server/api", priority="P1")
+    @pytest.mark.zentao("TC-S3106", domain="server/api", priority="P1")
     async def test_logs_follow_large_logs_batch_push(self, client, db_engine, tmp_path):
         """follow 模式处理 5 万行日志：应批量推送，log event 数量是 task 级别而非行级别。
 

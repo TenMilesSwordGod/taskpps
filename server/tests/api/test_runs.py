@@ -100,7 +100,7 @@ async def test_get_run_not_found(app, setup_project, tmp_project, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0990", domain="server/api", priority="P1")
+@pytest.mark.zentao("TC-S3107", domain="server/api", priority="P1")
 async def test_run_records_operator_and_nickname(app, setup_project, tmp_project, db_engine):
     """触发运行应记录 operator(username)，且读接口解析出 nickname。"""
     import taskpps.config as cfg
@@ -335,7 +335,8 @@ async def test_clean_runs_older_than(app, setup_project, tmp_project, db_engine)
 
 @pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0993", domain="server/api", priority="P2")
-@pytest.mark.zcustom("TC-S0993", domain="server/api", priority="P1")
+# v2 (2026-09 治理): 删除重复的 @pytest.mark.zcustom 拼写错误行（未注册 marker 不生效，
+# 且与上方 zentao marker 优先级冲突）。
 # v2 (2026-07): Phase 2 CreateRunRequest 改用 definition_id，部分测试直接调列表API
 # resolve_def_id 内自动注册项目，确保列表API有注册项目可同步 pipeline_definitions
 # v2 (2026-07): Phase 2 快照只从 DB 读取，不存在则 404
@@ -421,21 +422,6 @@ async def test_delete_run_not_found(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.delete("/api/runs/nonexistent")
         assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0997", domain="server/api", priority="P2")
-async def test_no_auth_header(app, setup_project, tmp_project, db_engine):
-    import taskpps.config as cfg
-
-    cfg.set_project_root(tmp_project)
-    cfg._settings = None
-    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/api/health")
-        assert response.status_code == 200
 
 
 @pytest.mark.asyncio

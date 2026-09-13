@@ -228,11 +228,17 @@ class TestCompleteResultDispatch:
     @pytest.mark.asyncio
     async def test_handle_complete_result_unknown_id_ignored(self):
         """未注册的 request_id 应被忽略（agent 重启残留的消息）。"""
+        # v2 (2026-09 治理): 原用例只调用不校验。重写为断言已注册的 future
+        # 不受影响、future map 保持原样。
         from taskpps.services.agent_manager import AgentConnection
 
         conn = AgentConnection("dispatch-agent2", AsyncMock())
-        # 不应抛异常
+        registered = conn.register_complete("known-req")
+
         conn.handle_complete_result("unknown-req", {"prefix": "", "candidates": []})
+
+        assert not registered.done()
+        assert set(conn._complete_futures) == {"known-req"}
 
     @pytest.mark.asyncio
     async def test_disconnect_fails_pending_completes(self):

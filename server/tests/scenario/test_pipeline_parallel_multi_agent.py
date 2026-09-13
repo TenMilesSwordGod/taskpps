@@ -870,9 +870,12 @@ class TestParallelTaskExceptionSafety:
     """并行 task 中抛出异常不应导致 runner 崩溃"""
 
     @pytest.mark.asyncio
-    async def test_multiple_tasks_throw_exceptions(self, db_engine, clean_db):
+    async def test_multiple_tasks_throw_exceptions(self, db_engine, clean_db, run_probe):
         """多个并行 task 都抛异常,runner 应正常结束"""
+        # v2 (2026-09 治理): 原用例零断言（weak2 因嵌套 raise 漏报）。重写为
+        # 断言三个 task 都被调度且 run 终态为 failed。
         _setup_config()
+        run_id = await run_probe.create("p")
         tasks = [
             ResolvedTask(name="ok", task_type="command", command="echo ok"),
             ResolvedTask(name="boom1", task_type="command", command="exit 1"),
@@ -882,9 +885,12 @@ class TestParallelTaskExceptionSafety:
             name="sub", config=PipelineConfig(execution_strategy="parallel", on_failure="continue"), tasks=tasks,
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
-        runner = _make_runner("multi-exc", pipeline)
+        runner = _make_runner(run_id, pipeline)
+
+        executed: list[str] = []
 
         async def fake_execute(task, sub_name="", max_parallel=None):
+            executed.append(task.name)
             if task.name.startswith("boom"):
                 raise RuntimeError(f"{task.name} exploded")
             return ExecutorResult(exit_code=0)
@@ -896,10 +902,15 @@ class TestParallelTaskExceptionSafety:
         ):
             await runner.run()
 
+        assert set(executed) == {"ok", "boom1", "boom2"}
+        assert await run_probe.status(run_id) == "failed"
+
     @pytest.mark.asyncio
-    async def test_all_tasks_throw_exceptions(self, db_engine, clean_db):
+    async def test_all_tasks_throw_exceptions(self, db_engine, clean_db, run_probe):
         """所有 task 都抛异常,runner 应正常结束"""
+        # v2 (2026-09 治理): 补断言：两个 task 都被调度且 run 终态 failed。
         _setup_config()
+        run_id = await run_probe.create("p")
         tasks = [
             ResolvedTask(name="a", task_type="command", command="exit 1"),
             ResolvedTask(name="b", task_type="command", command="exit 1"),
@@ -908,9 +919,12 @@ class TestParallelTaskExceptionSafety:
             name="sub", config=PipelineConfig(execution_strategy="parallel"), tasks=tasks,
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
-        runner = _make_runner("all-exc", pipeline)
+        runner = _make_runner(run_id, pipeline)
+
+        executed: list[str] = []
 
         async def fake_execute(task, sub_name="", max_parallel=None):
+            executed.append(task.name)
             raise RuntimeError("boom")
 
         with (
@@ -919,6 +933,9 @@ class TestParallelTaskExceptionSafety:
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert set(executed) == {"a", "b"}
+        assert await run_probe.status(run_id) == "failed"
 
 
 # ===========================================================================
@@ -1085,9 +1102,12 @@ class TestDAGCycleDetection:
     """DAG 循环依赖检测"""
 
     @pytest.mark.asyncio
-    async def test_task_cycle_detected(self, db_engine, clean_db):
+    async def test_task_cycle_detected(self, db_engine, clean_db, run_probe):
         """task 间循环依赖应导致 subpipeline 失败"""
+        # v2 (2026-09 治理): 原用例零断言。重写为断言 run 终态 failed 且
+        # 错误信息非空（循环依赖被识别为失败而不是静默通过）。
         _setup_config()
+        run_id = await run_probe.create("p")
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a", depends_on=["b"]),
             ResolvedTask(name="b", task_type="command", command="echo b", depends_on=["a"]),
@@ -1096,7 +1116,7 @@ class TestDAGCycleDetection:
             name="sub", config=PipelineConfig(), tasks=tasks,
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
-        runner = _make_runner("cycle-task", pipeline)
+        runner = _make_runner(run_id, pipeline)
 
         with (
             patch("taskpps.engine.runner.get_logs_dir"),
@@ -1104,10 +1124,15 @@ class TestDAGCycleDetection:
         ):
             await runner.run()
 
+        assert runner._error_messages
+        assert await run_probe.status(run_id) == "failed"
+
     @pytest.mark.asyncio
-    async def test_subpipeline_cycle_detected(self, db_engine, clean_db):
+    async def test_subpipeline_cycle_detected(self, db_engine, clean_db, run_probe):
         """subpipeline 间循环依赖应被检测"""
+        # v2 (2026-09 治理): 原用例零断言。重写为断言 run 终态 failed。
         _setup_config()
+        run_id = await run_probe.create("p")
         sub_a = ResolvedSubPipeline(
             name="A", config=PipelineConfig(), depends_on=["B"],
             tasks=[ResolvedTask(name="a1", task_type="command", command="echo a1")],
@@ -1117,13 +1142,16 @@ class TestDAGCycleDetection:
             tasks=[ResolvedTask(name="b1", task_type="command", command="echo b1")],
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub_a, sub_b], top_config=PipelineConfig())
-        runner = _make_runner("cycle-sub", pipeline)
+        runner = _make_runner(run_id, pipeline)
 
         with (
             patch("taskpps.engine.runner.get_logs_dir"),
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert runner._error_messages
+        assert await run_probe.status(run_id) == "failed"
 
 
 # ===========================================================================
@@ -1231,21 +1259,25 @@ class TestEdgeCases:
     """边界情况"""
 
     @pytest.mark.asyncio
-    async def test_pipeline_with_only_empty_subpipelines(self, db_engine, clean_db):
+    async def test_pipeline_with_only_empty_subpipelines(self, db_engine, clean_db, run_probe):
         """所有 subpipeline 都是空的"""
+        # v2 (2026-09 治理): 原用例零断言。重写为断言 run 终态 success。
         _setup_config()
+        run_id = await run_probe.create("p")
         subs = [
             ResolvedSubPipeline(name=f"empty-{i}", config=PipelineConfig(), tasks=[])
             for i in range(3)
         ]
         pipeline = ResolvedPipeline(name="p", subpipelines=subs, top_config=PipelineConfig())
-        runner = _make_runner("all-empty", pipeline)
+        runner = _make_runner(run_id, pipeline)
 
         with (
             patch("taskpps.engine.runner.get_logs_dir"),
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert await run_probe.status(run_id) == "success"
 
     @pytest.mark.asyncio
     async def test_single_subpipeline_single_task(self, db_engine, clean_db):
@@ -1274,21 +1306,27 @@ class TestEdgeCases:
         assert executed == ["only"]
 
     @pytest.mark.asyncio
-    async def test_unknown_dependency_raises_error(self, db_engine, clean_db):
+    async def test_unknown_dependency_raises_error(self, db_engine, clean_db, run_probe):
         """depends_on 引用不存在的 task 应报错"""
+        # v2 (2026-09 治理): 原用例零断言。重写为断言 run 终态 failed 且
+        # 错误信息包含未知依赖名。
         _setup_config()
+        run_id = await run_probe.create("p")
         tasks = [
             ResolvedTask(name="a", task_type="command", command="echo a", depends_on=["nonexistent"]),
         ]
         sub = ResolvedSubPipeline(name="sub", config=PipelineConfig(), tasks=tasks)
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
-        runner = _make_runner("unknown-dep", pipeline)
+        runner = _make_runner(run_id, pipeline)
 
         with (
             patch("taskpps.engine.runner.get_logs_dir"),
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert any("nonexistent" in msg for msg in runner._error_messages)
+        assert await run_probe.status(run_id) == "failed"
 
 
 # ===========================================================================

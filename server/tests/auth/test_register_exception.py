@@ -59,7 +59,7 @@ async def test_register_wrong_field_type_422(app_fixture, setup_project, tmp_pro
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1155b", domain="server/auth", priority="P2")
+@pytest.mark.zentao("TC-S3590", domain="server/auth", priority="P2")
 async def test_register_username_too_short_422(app_fixture, setup_project, tmp_project, db_engine):
     """用户名 2 字符低于 min_length=3 应 422。"""
     transport = ASGITransport(app=app_fixture)

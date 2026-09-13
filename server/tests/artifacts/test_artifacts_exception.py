@@ -17,7 +17,7 @@ from taskpps.services.artifact_service import (
 
 
 class TestDownloadNonexistent:
-    @pytest.mark.zentao("TC-E0001", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3147", domain="server/artifacts", priority="P1")
     async def test_download_nonexistent_artifact(self, app, sample_run, artifacts_dir, default_artifacts, db_engine):
         """异常: 下载不存在的 artifact 路径返回 404。"""
         transport = ASGITransport(app=app)
@@ -27,7 +27,7 @@ class TestDownloadNonexistent:
             )
             assert resp.status_code == 404
 
-    @pytest.mark.zentao("TC-E0001", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3148", domain="server/artifacts", priority="P1")
     async def test_download_nonexistent_run(self, app, db_engine):
         """异常: 不存在的 run_id 返回 404。"""
         transport = ASGITransport(app=app)
@@ -37,7 +37,7 @@ class TestDownloadNonexistent:
 
 
 class TestCrossRunExpired:
-    @pytest.mark.zentao("TC-E0002", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3149", domain="server/artifacts", priority="P1")
     def test_cross_run_ref_expired_run(self, tmp_path):
         """异常: 跨 run 引用已过期/清理的 run → 返回 None。"""
         ref = parse_artifact_ref("${artifact:run_xxx/expired_run_999/build/package/app.jar}")
@@ -49,7 +49,7 @@ class TestCrossRunExpired:
 
 
 class TestPromoteErrors:
-    @pytest.mark.zentao("TC-E0003", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3150", domain="server/artifacts", priority="P1")
     async def test_promote_nonexistent_source(self, app, sample_run, artifacts_dir, default_artifacts, db_engine):
         """异常: promote 不存在的源文件 → 404。"""
         transport = ASGITransport(app=app)
@@ -64,7 +64,7 @@ class TestPromoteErrors:
             )
             assert resp.status_code == 404
 
-    @pytest.mark.zentao("TC-E0004", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3151", domain="server/artifacts", priority="P1")
     async def test_promote_conflict_existing_artifact(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine, tmp_path
     ):
@@ -88,25 +88,25 @@ class TestPromoteErrors:
 
 
 class TestInvalidArtifactSyntax:
-    @pytest.mark.zentao("TC-E0005", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3152", domain="server/artifacts", priority="P2")
     def test_parse_ref_single_part(self):
         """异常: ${artifact:taskonly} 缺少 path → 返回 None。"""
         ref = parse_artifact_ref("${artifact:taskonly}")
         assert ref is None
 
-    @pytest.mark.zentao("TC-E0005", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3153", domain="server/artifacts", priority="P2")
     def test_parse_ref_empty(self):
         """异常: ${artifact:} 空引用 → 返回 None。"""
         ref = parse_artifact_ref("${artifact:}")
         assert ref is None
 
-    @pytest.mark.zentao("TC-E0005", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3154", domain="server/artifacts", priority="P2")
     def test_parse_ref_no_braces(self):
         """异常: 非标准语法无花括号 → 返回 None。"""
         ref = parse_artifact_ref("artifact:build/dist/app.tar.gz")
         assert ref is None
 
-    @pytest.mark.zentao("TC-E0005", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3155", domain="server/artifacts", priority="P2")
     def test_parse_ref_malformed(self):
         """异常: 各种畸形语法 → 返回 None。"""
         for bad in [
@@ -122,7 +122,7 @@ class TestInvalidArtifactSyntax:
 
 
 class TestUploadErrors:
-    @pytest.mark.zentao("TC-E0006", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3156", domain="server/artifacts", priority="P1")
     async def test_upload_missing_task_name(self, app, sample_run, artifacts_dir, default_artifacts, db_engine):
         """异常: upload 缺少 task_name → 422。"""
         transport = ASGITransport(app=app)
@@ -134,7 +134,7 @@ class TestUploadErrors:
             )
             assert resp.status_code == 422
 
-    @pytest.mark.zentao("TC-E0007", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3157", domain="server/artifacts", priority="P1")
     async def test_upload_empty_files(self, app, sample_run, artifacts_dir, default_artifacts, db_engine):
         """异常: upload files 为空 → 422。"""
         transport = ASGITransport(app=app)
@@ -148,7 +148,7 @@ class TestUploadErrors:
             )
             assert resp.status_code == 422
 
-    @pytest.mark.zentao("TC-E0006", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3158", domain="server/artifacts", priority="P1")
     async def test_upload_paths_files_count_mismatch(self, app, sample_run, artifacts_dir, default_artifacts, db_engine):
         """异常: paths 数组长度与 files 不匹配 → 400。"""
         transport = ASGITransport(app=app)
@@ -163,7 +163,7 @@ class TestUploadErrors:
             )
             assert resp.status_code == 400
 
-    @pytest.mark.zentao("TC-E0006", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3159", domain="server/artifacts", priority="P1")
     async def test_upload_invalid_paths_json(self, app, sample_run, artifacts_dir, default_artifacts, db_engine):
         """异常: paths 不是合法 JSON → 400。"""
         transport = ASGITransport(app=app)
@@ -180,7 +180,7 @@ class TestUploadErrors:
 
 
 class TestCrossRunWithoutDependencies:
-    @pytest.mark.zentao("TC-E0008", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3160", domain="server/artifacts", priority="P2")
     def test_cross_run_ref_no_dependency_declaration(self):
         """异常: 跨 run 引用但未声明 dependencies → 引用解析仍尝试但可能失败。"""
         ref = parse_artifact_ref("${artifact:run_abc/run_123/build/package/app.jar}")
@@ -192,7 +192,7 @@ class TestCrossRunWithoutDependencies:
 
 
 class TestNonexistentSubpipeline:
-    @pytest.mark.zentao("TC-E0009", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3161", domain="server/artifacts", priority="P2")
     def test_ref_to_nonexistent_subpipeline(self):
         """异常: 引用不存在的 subpipeline 中的 artifact。"""
         ref = parse_artifact_ref("${artifact:fake-sub/task/deep/path.txt}")
@@ -204,7 +204,7 @@ class TestNonexistentSubpipeline:
 
 
 class TestPromoteToNonexistentRun:
-    @pytest.mark.zentao("TC-E0003", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3162", domain="server/artifacts", priority="P1")
     async def test_promote_to_nonexistent_run(self, app, db_engine, tmp_path):
         """异常: promote 到不存在的 run → 404。"""
         source = tmp_path / "file.txt"
@@ -220,7 +220,7 @@ class TestPromoteToNonexistentRun:
 
 
 class TestListArtifactsNonexistentRun:
-    @pytest.mark.zentao("TC-E0001", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3163", domain="server/artifacts", priority="P1")
     async def test_list_artifacts_nonexistent_run(self, app, db_engine):
         """异常: 列出不存在的 run 的 artifacts → 404。"""
         transport = ASGITransport(app=app)

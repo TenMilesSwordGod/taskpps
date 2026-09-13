@@ -6,7 +6,7 @@ from taskpps.loaders.pipeline_loader import PipelineLoader
 
 
 class TestParseDict:
-    @pytest.mark.zentao("TC-ISSUE189", domain="server/loaders", priority="P0")
+    @pytest.mark.zentao("TC-S3292", domain="server/loaders", priority="P0")
     def test_parse_dict_same_as_load(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -46,7 +46,7 @@ class TestParseDict:
 
         assert from_file.name == from_dict.name
 
-    @pytest.mark.zentao("TC-ISSUE189", domain="server/loaders", priority="P0")
+    @pytest.mark.zentao("TC-S3293", domain="server/loaders", priority="P0")
     def test_parse_dict_no_env(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -67,7 +67,7 @@ class TestParseDict:
         assert len(tasks) == 1
         assert tasks[0].command == "echo hello"
 
-    @pytest.mark.zentao("TC-ISSUE189", domain="server/loaders", priority="P0")
+    @pytest.mark.zentao("TC-S3294", domain="server/loaders", priority="P0")
     def test_parse_dict_with_config_env(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -83,7 +83,7 @@ class TestParseDict:
         tasks = result.tasks if result.tasks else result.pipelines[0].tasks
         assert tasks[0].command == "echo 10.0.0.1"
 
-    @pytest.mark.zentao("TC-ISSUE189", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3295", domain="server/loaders", priority="P1")
     def test_parse_dict_params_env_overrides_config_env(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -99,7 +99,7 @@ class TestParseDict:
         tasks = result.tasks if result.tasks else result.pipelines[0].tasks
         assert tasks[0].command == "echo param_val"
 
-    @pytest.mark.zentao("TC-ISSUE189", domain="server/loaders", priority="P1")
+    @pytest.mark.zentao("TC-S3296", domain="server/loaders", priority="P1")
     def test_parse_dict_subpipelines(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()
@@ -127,7 +127,7 @@ class TestParseDict:
         assert result.pipelines[0].name == "build"
         assert result.pipelines[1].name == "deploy"
 
-    @pytest.mark.zentao("TC-ISSUE189", domain="server/loaders", priority="P2")
+    @pytest.mark.zentao("TC-S3297", domain="server/loaders", priority="P2")
     def test_parse_dict_consistency_load_reload(self, tmp_path):
         pipelines_dir = tmp_path / "pipelines"
         pipelines_dir.mkdir()

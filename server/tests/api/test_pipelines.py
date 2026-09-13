@@ -90,7 +90,7 @@ async def test_list_pipelines_project_name_fallback_to_workdir(app, setup_projec
 # 验证非法 pipeline 不会被静默跳过，而是以 valid=false 出现在列表中
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1002", domain="server/api", priority="P1")
+@pytest.mark.zentao("TC-S3083", domain="server/api", priority="P1")
 async def test_list_pipelines_valid_pipelines_have_valid_true(app, setup_project, tmp_project, db_engine, clean_db):
     """TC-S1002: 合法 pipeline 返回 valid=true, validation_error=null"""
     transport = ASGITransport(app=app)
@@ -118,7 +118,7 @@ async def test_list_pipelines_valid_pipelines_have_valid_true(app, setup_project
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1001", domain="server/api", priority="P1")
+@pytest.mark.zentao("TC-S3084", domain="server/api", priority="P1")
 async def test_list_pipelines_includes_invalid_yaml(app, setup_project, tmp_project, db_engine, clean_db):
     """TC-S1001: 非法 YAML pipeline 出现于列表中，valid=false, validation_error 非空"""
 
@@ -157,7 +157,7 @@ async def test_list_pipelines_includes_invalid_yaml(app, setup_project, tmp_proj
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1001", domain="server/api", priority="P2")
+@pytest.mark.zentao("TC-S3085", domain="server/api", priority="P2")
 async def test_list_pipelines_invalid_empty_yaml(app, setup_project, tmp_project, db_engine, clean_db):
     """空 YAML 文件应出现在列表中，valid=false, validation_error.line=1"""
     pipelines_dir = tmp_project / "pipelines"
@@ -187,7 +187,7 @@ async def test_list_pipelines_invalid_empty_yaml(app, setup_project, tmp_project
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1001", domain="server/api", priority="P2")
+@pytest.mark.zentao("TC-S3086", domain="server/api", priority="P2")
 async def test_list_pipelines_invalid_missing_name(app, setup_project, tmp_project, db_engine, clean_db):
     """缺 name 字段的 YAML 应出现在列表中，valid=false, validation_error.path 非空"""
     pipelines_dir = tmp_project / "pipelines"
@@ -221,7 +221,7 @@ async def test_list_pipelines_invalid_missing_name(app, setup_project, tmp_proje
 # v2 (2026-07): issue #195 补充 — raw_content 字段和 /by-file API 测试
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1001", domain="server/api", priority="P2")
+@pytest.mark.zentao("TC-S3087", domain="server/api", priority="P2")
 async def test_list_invalid_pipeline_includes_raw_content(app, setup_project, tmp_project, db_engine, clean_db):
     """非法 YAML 列表项应包含 raw_content 字段，内容为原始文件文本"""
     pipelines_dir = tmp_project / "pipelines"
@@ -325,7 +325,7 @@ async def test_save_pipeline_by_file_yaml_syntax_error(app, setup_project, tmp_p
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1010", domain="server/api", priority="P1")
+@pytest.mark.zentao("TC-S3092", domain="server/api", priority="P1")
 async def test_list_pipelines_last_operator(app, setup_project, tmp_project, db_engine, clean_db):
     """列表应返回最近一次运行的触发人 username 与昵称（最后操作人）。"""
     import taskpps.config as cfg

@@ -13,7 +13,7 @@ from taskpps.services.artifact_service import (
 
 
 class TestBoundaryEmptyList:
-    @pytest.mark.zentao("TC-B0001", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3124", domain="server/artifacts", priority="P2")
     async def test_empty_artifacts_config(self, sample_run, artifacts_dir, db_engine, tmp_path):
         """边界: 空 artifacts 列表不产生任何产物。"""
         workdir = tmp_path / "workdir"
@@ -30,7 +30,7 @@ class TestBoundaryEmptyList:
 
 
 class TestBoundarySpecialChars:
-    @pytest.mark.zentao("TC-B0002", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3125", domain="server/artifacts", priority="P2")
     async def test_artifact_path_with_spaces(self, sample_run, artifacts_dir, db_engine, tmp_path):
         """边界: artifact 路径含空格。"""
         workdir = tmp_path / "workdir"
@@ -47,7 +47,7 @@ class TestBoundarySpecialChars:
         assert len(items) == 1
         assert (artifacts_dir / "spaced" / "my file.txt").exists()
 
-    @pytest.mark.zentao("TC-B0002", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3126", domain="server/artifacts", priority="P2")
     async def test_artifact_path_with_chinese_chars(self, sample_run, artifacts_dir, db_engine, tmp_path):
         """边界: artifact 路径含中文字符。"""
         workdir = tmp_path / "workdir"
@@ -64,7 +64,7 @@ class TestBoundarySpecialChars:
         assert len(items) == 1
         assert items[0].path == "报告.html"
 
-    @pytest.mark.zentao("TC-B0002", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3127", domain="server/artifacts", priority="P2")
     def test_parse_ref_with_special_chars(self):
         """边界: artifact 引用路径含特殊字符。"""
         ref = parse_artifact_ref("${artifact:build/dist/my-app_v2.0.tar.gz}")
@@ -74,7 +74,7 @@ class TestBoundarySpecialChars:
 
 
 class TestBoundaryLongPath:
-    @pytest.mark.zentao("TC-B0003", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3128", domain="server/artifacts", priority="P2")
     async def test_very_long_artifact_path(self, sample_run, artifacts_dir, db_engine, tmp_path):
         """边界: artifact 路径超长 (>255 字符)。"""
         workdir = tmp_path / "workdir"
@@ -94,7 +94,7 @@ class TestBoundaryLongPath:
 
 
 class TestBoundaryGlobNoMatch:
-    @pytest.mark.zentao("TC-B0004", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3129", domain="server/artifacts", priority="P2")
     async def test_glob_matching_no_files(self, sample_run, artifacts_dir, db_engine, tmp_path):
         """边界: glob 模式匹配零文件时不产生 artifact。"""
         workdir = tmp_path / "workdir"
@@ -111,7 +111,7 @@ class TestBoundaryGlobNoMatch:
 
 
 class TestBoundaryZeroByteFile:
-    @pytest.mark.zentao("TC-B0005", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3130", domain="server/artifacts", priority="P2")
     async def test_zero_byte_artifact(self, sample_run, artifacts_dir, db_engine, tmp_path):
         """边界: 零字节文件作为 artifact。"""
         workdir = tmp_path / "workdir"
@@ -131,7 +131,7 @@ class TestBoundaryZeroByteFile:
 
 
 class TestBoundarySingleCharFilename:
-    @pytest.mark.zentao("TC-B0006", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3131", domain="server/artifacts", priority="P2")
     async def test_single_char_filename(self, sample_run, artifacts_dir, db_engine, tmp_path):
         """边界: 单字符文件名 artifact。"""
         workdir = tmp_path / "workdir"
@@ -150,14 +150,14 @@ class TestBoundarySingleCharFilename:
 
 
 class TestBoundaryPathNormalization:
-    @pytest.mark.zentao("TC-B0007", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3132", domain="server/artifacts", priority="P2")
     def test_parse_ref_with_consecutive_slashes(self):
         """边界: artifact 路径含连续斜杠和点号。"""
         ref = parse_artifact_ref("${artifact:build/./dist/../dist/app.tar.gz}")
         assert ref is not None
         assert ref.task_name == "build"
 
-    @pytest.mark.zentao("TC-B0007", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3133", domain="server/artifacts", priority="P2")
     def test_parse_ref_with_trailing_slash(self):
         """边界: artifact 路径含尾部斜杠。"""
         ref = parse_artifact_ref("${artifact:build/dist/}")

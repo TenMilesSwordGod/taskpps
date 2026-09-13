@@ -25,7 +25,7 @@ from taskpps.services.artifact_service import (
 
 
 class TestDefaultArtifacts:
-    @pytest.mark.zentao("TC-A0001", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3164", domain="server/artifacts", priority="P1")
     async def test_default_artifacts_created_on_disk(
         self, sample_run, artifacts_dir
     ):
@@ -52,7 +52,7 @@ class TestDefaultArtifacts:
         assert "task1" in meta["tasks"]
         assert "task2" in meta["tasks"]
 
-    @pytest.mark.zentao("TC-A0001", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3165", domain="server/artifacts", priority="P1")
     async def test_default_artifacts_recorded_in_db(
         self, sample_run, artifacts_dir, db_engine
     ):
@@ -83,7 +83,7 @@ class TestDefaultArtifacts:
 
 
 class TestExplicitArtifactDeclaration:
-    @pytest.mark.zentao("TC-A0002", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3166", domain="server/artifacts", priority="P1")
     async def test_single_file_artifact_collected(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -107,7 +107,7 @@ class TestExplicitArtifactDeclaration:
         collected = artifacts_dir / "build" / "app.tar.gz"
         assert collected.exists()
 
-    @pytest.mark.zentao("TC-A0002", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3167", domain="server/artifacts", priority="P1")
     async def test_glob_pattern_artifacts_collected(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -137,7 +137,7 @@ class TestExplicitArtifactDeclaration:
 
 
 class TestSameSubpipelineRef:
-    @pytest.mark.zentao("TC-A0003", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3168", domain="server/artifacts", priority="P1")
     def test_parse_same_subpipeline_ref(self):
         """FR3: ${artifact:task/path} 解析为 task_name + path。"""
         ref = parse_artifact_ref("${artifact:compile/dist/app.tar.gz}")
@@ -147,7 +147,7 @@ class TestSameSubpipelineRef:
         assert ref.subpipeline is None
         assert ref.run_id is None
 
-    @pytest.mark.zentao("TC-A0003", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3169", domain="server/artifacts", priority="P1")
     def test_resolve_same_subpipeline_ref(self, sample_run, artifacts_dir, default_artifacts, build_artifacts):
         """FR3: 同 subpipeline 引用解析为真实路径。"""
         ref = parse_artifact_ref("${artifact:build/app.tar.gz}")
@@ -157,7 +157,7 @@ class TestSameSubpipelineRef:
         assert resolved.exists()
         assert resolved.name == "app.tar.gz"
 
-    @pytest.mark.zentao("TC-A0003", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3170", domain="server/artifacts", priority="P1")
     def test_substitute_same_subpipeline_refs(self, sample_run, artifacts_dir, build_artifacts):
         """FR3: 环境变量中的占位符被替换。"""
         env_text = "APP=${artifact:build/app.tar.gz}"
@@ -170,7 +170,7 @@ class TestSameSubpipelineRef:
 
 
 class TestCrossSubpipelineRef:
-    @pytest.mark.zentao("TC-A0004", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3171", domain="server/artifacts", priority="P1")
     def test_parse_cross_subpipeline_ref(self):
         """FR4: ${artifact:subpipeline/task/path} 解析。"""
         ref = parse_artifact_ref("${artifact:build-and-test/package/target/myapp.jar}")
@@ -179,7 +179,7 @@ class TestCrossSubpipelineRef:
         assert ref.task_name == "package"
         assert ref.path == "target/myapp.jar"
 
-    @pytest.mark.zentao("TC-A0004", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3172", domain="server/artifacts", priority="P1")
     def test_resolve_cross_subpipeline_ref(self, sample_run, artifacts_dir, db_engine):
         """FR4: 跨 subpipeline 引用解析为正确路径。"""
         import asyncio
@@ -213,7 +213,7 @@ class TestCrossSubpipelineRef:
 
 
 class TestCrossRunRef:
-    @pytest.mark.zentao("TC-A0005", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3173", domain="server/artifacts", priority="P1")
     def test_parse_cross_run_ref(self):
         """FR5: ${artifact:run_id/subpipeline/task/path} 解析。"""
         ref = parse_artifact_ref("${artifact:run_123/build-and-test/package/target/myapp.jar}")
@@ -223,7 +223,7 @@ class TestCrossRunRef:
         assert ref.task_name == "package"
         assert ref.path == "target/myapp.jar"
 
-    @pytest.mark.zentao("TC-A0005", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3174", domain="server/artifacts", priority="P1")
     def test_resolve_cross_run_ref_existing(self, sample_run, artifacts_dir, db_engine):
         """FR5: 跨 run 引用 - 目标 run 产物存在时解析成功。"""
         import asyncio
@@ -239,7 +239,7 @@ class TestCrossRunRef:
         assert resolved is not None
         assert resolved.exists()
 
-    @pytest.mark.zentao("TC-A0005", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3175", domain="server/artifacts", priority="P1")
     def test_resolve_cross_run_ref_missing(self):
         """FR5: 跨 run 引用 - 目标 run 不存在时返回 None。"""
         ref = parse_artifact_ref("${artifact:nonexistent_run/build/package/app.jar}")
@@ -252,7 +252,7 @@ class TestCrossRunRef:
 
 
 class TestSingleFileDownload:
-    @pytest.mark.zentao("TC-A0006", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3176", domain="server/artifacts", priority="P1")
     async def test_download_artifact(
         self, app, sample_run, artifacts_dir, default_artifacts, build_artifacts, db_engine
     ):
@@ -266,7 +266,7 @@ class TestSingleFileDownload:
             assert "content-disposition" in resp.headers
             assert "attachment" in resp.headers["content-disposition"]
 
-    @pytest.mark.zentao("TC-A0006", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3177", domain="server/artifacts", priority="P1")
     async def test_download_default_artifact(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine
     ):
@@ -283,7 +283,7 @@ class TestSingleFileDownload:
 
 
 class TestBatchZipDownload:
-    @pytest.mark.zentao("TC-A0007", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3178", domain="server/artifacts", priority="P1")
     async def test_zip_download_with_task_filter(
         self, app, sample_run, artifacts_dir, default_artifacts, build_artifacts, db_engine
     ):
@@ -302,7 +302,7 @@ class TestBatchZipDownload:
             names = zf.namelist()
             assert any("app.tar.gz" in n for n in names)
 
-    @pytest.mark.zentao("TC-A0007", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3179", domain="server/artifacts", priority="P1")
     async def test_zip_download_all(
         self, app, sample_run, artifacts_dir, default_artifacts, build_artifacts, db_engine
     ):
@@ -320,7 +320,7 @@ class TestBatchZipDownload:
 
 
 class TestDefaultArtifactAlwaysPresent:
-    @pytest.mark.zentao("TC-A0008", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3180", domain="server/artifacts", priority="P1")
     async def test_default_artifacts_without_yaml_declaration(
         self, sample_run, artifacts_dir
     ):
@@ -345,7 +345,7 @@ class TestDefaultArtifactAlwaysPresent:
 
 
 class TestDirectoryAutoZip:
-    @pytest.mark.zentao("TC-A0009", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3181", domain="server/artifacts", priority="P1")
     async def test_directory_artifact_zipped(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -385,7 +385,7 @@ class TestDirectoryAutoZip:
 
 
 class TestPromoteAPI:
-    @pytest.mark.zentao("TC-A0010", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3182", domain="server/artifacts", priority="P1")
     async def test_promote_copy(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine, tmp_path
     ):
@@ -409,7 +409,7 @@ class TestPromoteAPI:
             promoted = artifacts_dir / "build" / "coverage.html"
             assert promoted.exists()
 
-    @pytest.mark.zentao("TC-A0010", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3183", domain="server/artifacts", priority="P1")
     async def test_promote_move(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine, tmp_path
     ):
@@ -434,7 +434,7 @@ class TestPromoteAPI:
 
 
 class TestThreeLevelArtifacts:
-    @pytest.mark.zentao("TC-A0011", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3184", domain="server/artifacts", priority="P1")
     async def test_task_level_artifacts(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -453,7 +453,7 @@ class TestThreeLevelArtifacts:
         assert len(items) == 1
         assert (artifacts_dir / "compile" / "app.tar.gz").exists()
 
-    @pytest.mark.zentao("TC-A0011", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3185", domain="server/artifacts", priority="P1")
     async def test_multiple_levels_independent(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -497,7 +497,7 @@ class TestThreeLevelArtifacts:
 
 
 class TestRemoteAgentUpload:
-    @pytest.mark.zentao("TC-A0012", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3186", domain="server/artifacts", priority="P1")
     async def test_upload_artifacts(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine
     ):
@@ -524,7 +524,7 @@ class TestRemoteAgentUpload:
             assert (artifacts_dir / "build" / "dist" / "app.tar.gz").exists()
             assert (artifacts_dir / "build" / "dist" / "config.yaml").exists()
 
-    @pytest.mark.zentao("TC-A0012", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3187", domain="server/artifacts", priority="P1")
     async def test_upload_then_download(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine
     ):

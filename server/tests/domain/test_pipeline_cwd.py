@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from taskpps.domain.pipeline import ResolvedPipeline
 from taskpps.schemas.pipeline import PipelineYAML
 

@@ -582,7 +582,7 @@ class TestRetryRunner:
                 # 每个 start 后必须紧跟 end
                 assert events[i + 1] == f"end:{events[i].split(':')[1]}"
 
-    @pytest.mark.zentao("TC-S0413", domain="server/services", priority="P0")
+    @pytest.mark.zentao("TC-S3554", domain="server/services", priority="P0")
     async def test_retry_steps_task_executes_each_step(self):
         """v2 (2026-07): retry_runner 修复后，steps 任务应逐条送 step.run 到 executor，
         而非传 command="" 导致空跑。
@@ -629,7 +629,7 @@ class TestRetryRunner:
         calls = [call.kwargs["command"] for call in mock_executor.execute.call_args_list]
         assert calls == ["echo step1", "echo step2", "echo step3"]
 
-    @pytest.mark.zentao("TC-S0414", domain="server/services", priority="P0")
+    @pytest.mark.zentao("TC-S3555", domain="server/services", priority="P0")
     async def test_retry_commands_task_executes_each_command(self):
         """v2 (2026-07): retry_runner 修复后，commands 任务应逐条送 cmd 到 executor，
         而非 "\n".join 后仅送一条多行命令。
@@ -668,7 +668,7 @@ class TestRetryRunner:
         calls = [call.kwargs["command"] for call in mock_executor.execute.call_args_list]
         assert calls == ["echo cmd1", "echo cmd2"]
 
-    @pytest.mark.zentao("TC-S0415", domain="server/services", priority="P1")
+    @pytest.mark.zentao("TC-S3556", domain="server/services", priority="P1")
     async def test_retry_steps_task_with_per_step_cd_and_env(self):
         """v2 (2026-07): steps 任务重试时，每步的 cd 和 env 覆盖应正确传递到 executor。"""
         steps = [

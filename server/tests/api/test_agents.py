@@ -550,7 +550,7 @@ async def test_agent_all_counts_running_and_queued(app, setup_project, tmp_proje
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0918", domain="server/api", priority="P2")
+@pytest.mark.zentao("TC-S3004", domain="server/api", priority="P2")
 async def test_agent_all_includes_last_execution_time(app, setup_project, tmp_project):
     """/api/agents/all 返回的 AgentWithConfig 应包含 last_execution_time"""
     import taskpps.config as cfg
@@ -601,7 +601,7 @@ async def test_agent_all_includes_last_execution_time(app, setup_project, tmp_pr
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0919", domain="server/api", priority="P2")
+@pytest.mark.zentao("TC-S3005", domain="server/api", priority="P2")
 async def test_agent_all_last_execution_time_default_zero(app, setup_project, tmp_project):
     """/api/agents/all 未连接 agent 的 last_execution_time 应为 0"""
     import taskpps.config as cfg
@@ -635,7 +635,7 @@ async def test_agent_all_last_execution_time_default_zero(app, setup_project, tm
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0920", domain="server/api", priority="P1")
+@pytest.mark.zentao("TC-S3006", domain="server/api", priority="P1")
 async def test_agent_all_net_probe_non_blocking(app, tmp_project):
     """离线 agent 的 TCP 探测不应阻塞 /all 响应：首次返回 net_status=unknown，
     探测结果在后台异步刷新（验证接口不被 1.5s 超时拖慢）。"""

@@ -114,14 +114,6 @@ def env_func():
             assert result.success
             assert "test_value" in result.stdout
 
-    @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0548", domain="server/executors", priority="P1")
-    async def test_invoke_cancel_method(self, tmp_path):
-        executor = InvokeExecutor()
-        with patch.object(executor, "_cancelled", True):
-            await executor.cancel()
-            assert executor._cancelled is True
-
 
 class TestInvokeExecutor:
     @pytest.mark.asyncio
@@ -197,11 +189,15 @@ def slow_func():
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0554", domain="server/executors", priority="P1")
     async def test_cancel(self, tmp_path):
+        # v2 (2026-09 治理): 原用例先 patch._cancelled=True 再断言 True，
+        # 属自证式断言。重写为对全新 executor 调用 cancel()，断言 cancel
+        # 真正把标志从未取消置为已取消。
         executor = InvokeExecutor()
+        assert executor._cancelled is False
 
-        with patch.object(executor, "_cancelled", True):
-            await executor.cancel()
-            assert executor._cancelled is True
+        await executor.cancel()
+
+        assert executor._cancelled is True
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0555", domain="server/executors", priority="P1")

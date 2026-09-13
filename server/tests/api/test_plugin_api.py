@@ -7,7 +7,7 @@ from taskpps.models.plugin import Plugin
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0510", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3093", domain="server/api/plugins", priority="P1")
 async def test_list_plugins_empty(client, db_engine):
     """验证 GET /api/plugins/ 空列表返回。"""
     response = await client.get("/api/plugins/")
@@ -16,7 +16,7 @@ async def test_list_plugins_empty(client, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0511", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3094", domain="server/api/plugins", priority="P1")
 async def test_list_plugins_with_data(client, db_engine):
     """验证 GET /api/plugins/ 返回已注册插件。"""
     async with get_session_factory()() as session:
@@ -34,7 +34,7 @@ async def test_list_plugins_with_data(client, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0512", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3095", domain="server/api/plugins", priority="P1")
 async def test_list_plugins_filter_by_type(client, db_engine):
     """验证 GET /api/plugins/?type=TriggerPlugin 按类型筛选。"""
     async with get_session_factory()() as session:
@@ -51,7 +51,7 @@ async def test_list_plugins_filter_by_type(client, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0513", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3096", domain="server/api/plugins", priority="P1")
 async def test_get_plugin_by_name(client, db_engine):
     """验证 GET /api/plugins/{name} 返回单个插件详情。"""
     async with get_session_factory()() as session:
@@ -69,7 +69,7 @@ async def test_get_plugin_by_name(client, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0514", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3097", domain="server/api/plugins", priority="P1")
 async def test_get_plugin_not_found(client, db_engine):
     """验证 GET /api/plugins/{name} 插件不存在返回 404。"""
     response = await client.get("/api/plugins/nonexistent")
@@ -77,7 +77,7 @@ async def test_get_plugin_not_found(client, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0515", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3098", domain="server/api/plugins", priority="P1")
 async def test_toggle_plugin_enable(client, db_engine):
     """验证 PATCH /api/plugins/{name}/toggle 启用插件。"""
     async with get_session_factory()() as session:
@@ -92,7 +92,7 @@ async def test_toggle_plugin_enable(client, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0516", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3099", domain="server/api/plugins", priority="P1")
 async def test_toggle_plugin_disable(client, db_engine):
     """验证 PATCH /api/plugins/{name}/toggle 关闭插件。"""
     async with get_session_factory()() as session:
@@ -107,7 +107,7 @@ async def test_toggle_plugin_disable(client, db_engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0517", domain="server/api/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3100", domain="server/api/plugins", priority="P1")
 async def test_toggle_plugin_not_found(client, db_engine):
     """验证 PATCH /api/plugins/{name}/toggle 插件不存在返回 404。"""
     response = await client.patch("/api/plugins/nonexistent/toggle")

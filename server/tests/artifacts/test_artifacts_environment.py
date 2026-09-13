@@ -17,7 +17,7 @@ from taskpps.services.artifact_service import (
 
 
 class TestSymlinkPath:
-    @pytest.mark.zentao("TC-EN0001", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3138", domain="server/artifacts", priority="P2")
     async def test_artifact_path_through_symlink(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -46,7 +46,7 @@ class TestSymlinkPath:
 
 
 class TestPathTraversal:
-    @pytest.mark.zentao("TC-EN0002", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3139", domain="server/artifacts", priority="P1")
     async def test_path_traversal_rejected(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -69,7 +69,7 @@ class TestPathTraversal:
 
 
 class TestPermissionDenied:
-    @pytest.mark.zentao("TC-EN0003", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3140", domain="server/artifacts", priority="P2")
     async def test_readonly_artifacts_dir(self, sample_run, db_engine, tmp_path):
         """环境: artifacts 目录无写权限时的错误处理。"""
         workdir = tmp_path / "workdir"
@@ -92,7 +92,7 @@ class TestPermissionDenied:
 
 
 class TestLargeFileStreaming:
-    @pytest.mark.zentao("TC-EN0004", domain="server/artifacts", priority="P1")
+    @pytest.mark.zentao("TC-S3141", domain="server/artifacts", priority="P1")
     async def test_large_file_artifact(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -121,7 +121,7 @@ class TestLargeFileStreaming:
 
 
 class TestDiskFull:
-    @pytest.mark.zentao("TC-EN0005", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3142", domain="server/artifacts", priority="P2")
     async def test_disk_full_during_collection(
         self, sample_run, db_engine, tmp_path, monkeypatch
     ):
@@ -147,7 +147,7 @@ class TestDiskFull:
 
 
 class TestArtifactDirCreation:
-    @pytest.mark.zentao("TC-EN0001", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3143", domain="server/artifacts", priority="P2")
     def test_artifacts_dir_auto_created(self, sample_run, tmp_path, monkeypatch):
         """环境: artifacts 目录不存在时自动创建。"""
         monkeypatch.setattr(
@@ -161,7 +161,7 @@ class TestArtifactDirCreation:
 
 
 class TestNestedDirectoryStructure:
-    @pytest.mark.zentao("TC-EN0001", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3144", domain="server/artifacts", priority="P2")
     async def test_deeply_nested_artifact_path(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -184,7 +184,7 @@ class TestNestedDirectoryStructure:
 
 
 class TestDirectoryWithSubdirectories:
-    @pytest.mark.zentao("TC-EN0001", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3145", domain="server/artifacts", priority="P2")
     async def test_directory_with_subdirs_zipped(
         self, sample_run, artifacts_dir, db_engine, tmp_path
     ):
@@ -229,7 +229,7 @@ class TestDirectoryWithSubdirectories:
 
 
 class TestPromoteWithNestedSourcePath:
-    @pytest.mark.zentao("TC-EN0001", domain="server/artifacts", priority="P2")
+    @pytest.mark.zentao("TC-S3146", domain="server/artifacts", priority="P2")
     async def test_promote_from_nested_source(
         self, app, sample_run, artifacts_dir, default_artifacts, db_engine, tmp_path
     ):

@@ -28,21 +28,6 @@ async def test_no_auth_header(app, setup_project, tmp_project):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S1019", domain="server/auth", priority="P0")
-async def test_auth_with_valid_token(app, setup_project, tmp_project):
-    import taskpps.config as cfg
-
-    cfg.set_project_root(tmp_project)
-    cfg._settings = None
-    cfg.load_settings(str(tmp_project / "taskpps.yaml"))
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/api/health")
-        assert response.status_code == 200
-
-
-@pytest.mark.asyncio
 @pytest.mark.zentao("TC-S1020", domain="server/auth", priority="P2")
 async def test_auth_middleware_bypasses_health(app, setup_project, tmp_project):
     import taskpps.config as cfg

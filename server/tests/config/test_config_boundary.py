@@ -8,7 +8,6 @@ from taskpps.config import (
     compute_pipeline_version,
     get_project_workdir,
     get_server_home,
-    get_settings,
     load_settings,
     set_project_root,
 )
@@ -52,18 +51,6 @@ class TestConfigBoundary:
 
         with pytest.raises(yaml.YAMLError):
             load_settings(str(config_file))
-
-    @pytest.mark.zentao("TC-S0892", domain="server/config", priority="P2")
-    def test_get_settings_resets(self):
-        import taskpps.config as cfg
-
-        old = cfg._settings
-        cfg._settings = None
-        try:
-            s = get_settings()
-            assert isinstance(s, Settings)
-        finally:
-            cfg._settings = old
 
     @pytest.mark.zentao("TC-S0893", domain="server/config", priority="P2")
     def test_set_project_root_resets_globals(self, tmp_path):

@@ -350,17 +350,19 @@ class TestRealWorldPipelineScenarios:
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0127", domain="server/scenario", priority="P2")
-    async def test_empty_pipeline_runs_successfully(self, db_engine, clean_db):
+    async def test_empty_pipeline_runs_successfully(self, db_engine, clean_db, run_probe):
         """空 pipeline(无 task)应成功完成"""
+        # v2 (2026-09 治理): 原用例零断言。重写为断言 run 终态 success。
         _setup_config()
+        run_id = await run_probe.create("p")
         sub = ResolvedSubPipeline(
             name="empty",
             config=PipelineConfig(),
             tasks=[],
         )
         pipeline = ResolvedPipeline(name="p", subpipelines=[sub], top_config=PipelineConfig())
-        ctx = ExecutionContext(pipeline=pipeline, run_id="empty-1")
-        runner = PipelineRunner(run_id="empty-1", pipeline=pipeline, context=ctx)
+        ctx = ExecutionContext(pipeline=pipeline, run_id=run_id)
+        runner = PipelineRunner(run_id=run_id, pipeline=pipeline, context=ctx)
         runner._task_run_ids = {}
 
         with (
@@ -368,6 +370,8 @@ class TestRealWorldPipelineScenarios:
             patch("taskpps.engine.runner.get_event_bus"),
         ):
             await runner.run()
+
+        assert await run_probe.status(run_id) == "success"
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0128", domain="server/scenario", priority="P2")

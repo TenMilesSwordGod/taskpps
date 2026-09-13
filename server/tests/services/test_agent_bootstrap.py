@@ -707,7 +707,7 @@ class TestUpdateDeploy:
     """update_deploy 方法测试"""
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0324", domain="server/services", priority="P1")
+    @pytest.mark.zentao("TC-S3485", domain="server/services", priority="P1")
     async def test_success(self):
         """update_deploy 端到端成功：终止旧进程 → 上传 → 启动 → 握手。"""
         bootstrap = AgentBootstrap()
@@ -769,7 +769,7 @@ class TestUpdateDeploy:
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0325", domain="server/services", priority="P1")
+    @pytest.mark.zentao("TC-S3486", domain="server/services", priority="P1")
     async def test_timeout_raises(self):
         """update_deploy 握手超时 → 抛 AgentBootstrapError，附 log tail。"""
         bootstrap = AgentBootstrap()
@@ -811,7 +811,7 @@ class TestUpdateDeploy:
                 await bootstrap.update_deploy("remote-u2", agent_loader=loader)
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0320", domain="server/services", priority="P1")
+    @pytest.mark.zentao("TC-S3487", domain="server/services", priority="P1")
     async def test_local_agent_raises(self):
         """本地 agent 不支持更新部署。"""
         bootstrap = AgentBootstrap()
@@ -821,7 +821,7 @@ class TestUpdateDeploy:
             await bootstrap.update_deploy("local", agent_loader=loader)
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0321", domain="server/services", priority="P1")
+    @pytest.mark.zentao("TC-S3488", domain="server/services", priority="P1")
     async def test_no_auth_raises(self):
         """缺少认证方式应报错。"""
         bootstrap = AgentBootstrap()
@@ -837,7 +837,7 @@ class TestUpdateDeploy:
             await bootstrap.update_deploy("remote-noauth", agent_loader=loader)
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0322", domain="server/services", priority="P1")
+    @pytest.mark.zentao("TC-S3489", domain="server/services", priority="P1")
     async def test_agent_not_found_raises(self):
         """agent 不存在应报错。"""
         bootstrap = AgentBootstrap()
@@ -847,7 +847,7 @@ class TestUpdateDeploy:
             await bootstrap.update_deploy("ghost", agent_loader=loader)
 
     @pytest.mark.asyncio
-    @pytest.mark.zentao("TC-S0323", domain="server/services", priority="P2")
+    @pytest.mark.zentao("TC-S3490", domain="server/services", priority="P2")
     async def test_auto_bootstrap_disabled_raises(self):
         """auto_bootstrap 禁用应报错。"""
         bootstrap = AgentBootstrap()

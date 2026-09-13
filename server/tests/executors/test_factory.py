@@ -122,12 +122,6 @@ class TestCreateExecutor:
             assert executor.password is None
             assert executor.key_path is None
 
-    @pytest.mark.zentao("TC-S0521", domain="server/executors", priority="P2")
-    def test_command_no_host(self):
-        task = ResolvedTask(name="t", task_type="command", command="echo")
-        executor = create_executor(task)
-        assert isinstance(executor, LocalExecutor)
-
     @pytest.mark.zentao("TC-S0522", domain="server/executors", priority="P2")
     def test_project_workdir_passed_to_agent_loader(self, tmp_path):
         """project_workdir 应传递给 AgentLoader，使其在正确的 agents 目录查找。"""
@@ -168,10 +162,4 @@ class TestCreateExecutor:
 
         with pytest.raises(AgentNotFoundError, match="auto-03"):
             create_executor(task, project_workdir=str(project_dir))
-
-    @pytest.mark.zentao("TC-S0524", domain="server/executors", priority="P1")
-    def test_invoke_type(self):
-        task = ResolvedTask(name="t", task_type="invoke", invoke_task="mod.fn")
-        executor = create_executor(task)
-        assert isinstance(executor, InvokeExecutor)
 

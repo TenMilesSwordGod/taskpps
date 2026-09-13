@@ -255,6 +255,34 @@ async def clean_db(db_engine):
         await conn.execute(text("DELETE FROM projects"))
 
 
+@pytest_asyncio.fixture
+async def run_probe(db_engine):
+    """场景测试观测 runner 终态的真实 DB 探针（issue #223）。
+
+    设计考虑：移除注水测试时，需要在不断言 mock 调用的前提下验证 run 终态。
+    PipelineRunner.update_run_status 对不存在的 run 是静默 no-op，因此这里
+    先通过 RunRepository 真实建行，再让测试把 run.id 传给 PipelineRunner，
+    run() 结束后从 DB 读回状态，得到端到端可观测断言。
+    """
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository
+
+    class _RunProbe:
+        @staticmethod
+        async def create(pipeline_name: str = "test") -> str:
+            async with get_session_factory()() as session:
+                run = await RunRepository(session).create_run(pipeline_name=pipeline_name)
+                return run.id
+
+        @staticmethod
+        async def status(run_id: str) -> str | None:
+            async with get_session_factory()() as session:
+                run = await RunRepository(session).get_run(run_id)
+                return run.status.value if run else None
+
+    return _RunProbe
+
+
 # Phase 2 (2026-07): 辅助函数 — 通过文件名获取 definition_id
 # 所有 create_run 测试从 pipeline="xxx.yaml" 改为 definition_id=UUID
 # 若项目未注册则自动注册当前 workdir，确保列表API能同步 pipeline_definitions

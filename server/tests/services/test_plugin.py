@@ -26,10 +26,23 @@ class TestPluginManager:
 
     @pytest.mark.zentao("TC-S0380", domain="server/services", priority="P1")
     def test_start_stop_triggers(self, tmp_project):
+        # v2 (2026-09 治理): 原用例零断言。重写为按配置启动 cron 触发器并
+        # 断言已注册/运行，stop_all 后停止。
         _setup_config(tmp_project)
+        from taskpps.config import Settings, TriggerConfig
+
+        settings = Settings(triggers=[TriggerConfig(type="cron", schedule="0 * * * *", pipeline="deploy.yaml")])
+
         pm = PluginManager()
-        pm.start_triggers(callback=lambda x: None)
+        with patch("taskpps.services.plugin_manager.get_settings", return_value=settings):
+            pm.start_triggers(callback=lambda x: None)
+
+        trigger = pm.get("cron:0 * * * *:deploy.yaml")
+        assert trigger is not None
+        assert trigger._running is True
+
         pm.stop_all()
+        assert trigger._running is False
 
     @pytest.mark.zentao("TC-S0381", domain="server/services", priority="P2")
     def test_get_nonexistent(self):
@@ -37,7 +50,11 @@ class TestPluginManager:
         assert pm.get("nonexistent") is None
 
     @pytest.mark.zentao("TC-S0382", domain="server/services", priority="P1")
-    def test_stop_all_with_plugins(self):
+    def test_stop_all_with_plugins(self, caplog):
+        # v2 (2026-09 治理): 原用例 stop 抛异常但零断言。重写为断言异常被
+        # 捕获并写入 error 日志（单个插件 stop 失败不影响 stop_all）。
+        import logging
+
         pm = PluginManager()
         from taskpps.services.plugin_base import BasePlugin
 
@@ -61,10 +78,15 @@ class TestPluginManager:
                 raise Exception("stop fail")
 
         pm.register("test", TestPlugin())
-        pm.stop_all()
+        with caplog.at_level(logging.ERROR, logger="taskpps.services.plugin_manager"):
+            pm.stop_all()
+
+        assert any("stop fail" in r.message for r in caplog.records)
 
     @pytest.mark.zentao("TC-S0383", domain="server/services", priority="P2")
     def test_start_triggers_already_running(self):
+        # v2 (2026-09 治理): 原用例零断言。重写为断言已在运行的触发器不会
+        # 被重复 start()，且保持运行状态。
         pm = PluginManager()
         from taskpps.services.cron_trigger import CronTrigger
 
@@ -72,13 +94,19 @@ class TestPluginManager:
         trigger._running = True
         pm.register("cron:0 * * * *:deploy.yaml", trigger)
 
-        with patch("taskpps.services.plugin_manager.get_settings") as mock_settings:
+        with (
+            patch("taskpps.services.plugin_manager.get_settings") as mock_settings,
+            patch.object(trigger, "start") as mock_start,
+        ):
             mock_settings.return_value.triggers = []
             pm.start_triggers()
 
+        mock_start.assert_not_called()
+        assert trigger._running is True
+
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0494", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3500", domain="server/plugins", priority="P1")
 async def test_discover_registers_to_db(db_engine, tmp_project):
     """验证 discover_plugins 发现插件后自动写入 DB, 默认 enabled=false。"""
     _setup_config(tmp_project)
@@ -128,7 +156,7 @@ class DiscoverablePlugin(NotifierPlugin):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0495", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3501", domain="server/plugins", priority="P1")
 async def test_discover_upserts_existing(db_engine, tmp_project):
     """验证重复 discover 只更新已有记录, 不重复插入。"""
     _setup_config(tmp_project)
@@ -182,7 +210,7 @@ class UpsertablePlugin(NotifierPlugin):
         assert record.help_msg == "## New Help"
 
 
-@pytest.mark.zentao("TC-S0496", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3502", domain="server/plugins", priority="P1")
 async def test_start_triggers_only_enabled(db_engine, tmp_project):
     """验证 start_triggers 只启动 enabled=true 的插件 (禁用插件静默跳过)."""
 
@@ -219,7 +247,7 @@ async def test_start_triggers_only_enabled(db_engine, tmp_project):
     pm.stop_all()
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0497", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3503", domain="server/plugins", priority="P1")
 async def test_pipeline_not_exists_error(db_engine, tmp_project):
     """验证 pipeline 不存在时返回明确错误信息。"""
     _setup_config(tmp_project)
@@ -247,7 +275,7 @@ async def test_pipeline_not_exists_error(db_engine, tmp_project):
 
 
 @pytest.mark.asyncio
-@pytest.mark.zentao("TC-S0498", domain="server/plugins", priority="P1")
+@pytest.mark.zentao("TC-S3504", domain="server/plugins", priority="P1")
 async def test_plugin_disabled_is_skipped(db_engine, tmp_project):
     """验证插件未启用时 start_triggers 跳过该触发器的启动。"""
     _setup_config(tmp_project)

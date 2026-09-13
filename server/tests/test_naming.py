@@ -1,5 +1,7 @@
 """测试 naming 模块的 display_name 生成。"""
 
+import pytest
+
 from taskpps.naming import _ADJECTIVES, _NOUNS, generate_display_name
 
 
