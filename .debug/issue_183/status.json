@@ -6,7 +6,7 @@
   "complexity": "simple",
   "complexity_reason": "根因明确的单点问题，已由 #191 (e480b9f Phase 2 重构) 移除函数内局部 import 修复；无新 API、无 UI 设计、现有回归测试直接覆盖（5/5 维度满足）",
   "priority": "high",
-  "phase": "fast_dev_done",
+  "phase": "closed",
   "product": null,
   "product_name": null,
   "execution": null,
@@ -42,6 +42,16 @@
       "current_main_verified": "server/tests/services/test_create_run_by_definition.py 6 passed（不传 project_id 场景）",
       "prod_verified": "/opt/taskpps/server 代码与工作区 pipeline_service.py 完全相同，无局部 import，生产服务 2026-09-12 更新",
       "no_code_change_needed": true
+    },
+    "closed_at": "2026-09-13T16:29:30+08:00",
+    "close": {
+      "gitea_issue": "closed",
+      "labels": [
+        "Reviewed/Confirmed"
+      ],
+      "no_code_change": true,
+      "no_pr": true,
+      "zentao_skipped": "禅道 9000 端口 403，经用户确认跳过"
     }
   },
   "pm": null,
