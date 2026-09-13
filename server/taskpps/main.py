@@ -101,62 +101,85 @@ async def _recover_stale_runs() -> None:
         logger.info("已恢复 %d 个停滞运行", len(stale_runs))
 
 
+async def _sweep_stale_runs_once() -> int:
+    """执行一次停滞运行扫描，返回被标记为 FAILED 的 run 数量。
+
+    v2 (2026-09): issue #212 — 单独抽出便于测试直接触发一次扫描，
+    无需等待后台循环的 300s 间隔。
+
+    v2 (2026-09): 修复 issue #212 根因 — 本进程内存 _active_runs 中仍存在 runner
+    的 run 说明它正在正常执行，不能仅凭 created_at 超过阈值判为停滞：
+    合法长任务（如超过 2 小时的部署）会被误标 FAILED，而 runner 跑完后又会
+    用真实终态覆盖回来，用户看到的就是「先失败后又自动恢复」的假故障。
+    只有无活跃 runner 的残留 RUNNING 记录才交给这里兜底恢复。
+    """
+    from taskpps.config import get_settings
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository
+    from taskpps.engine.runner import _active_runs
+    from taskpps.models.run import RunStatus, TaskStatus
+
+    settings = get_settings()
+    stale_threshold = max(3600, settings.executor.default_timeout * 2)
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        stale_runs = await run_repo.list_runs_by_statuses([RunStatus.RUNNING])
+        now = datetime.now(timezone.utc)
+        recovered = 0
+        for run in stale_runs:
+            if run.created_at is None:
+                continue
+            # v2 (2026-09): 跳过本进程活跃运行的 run（判定与标记必须一致，
+            # 否则 sweeper 只改 DB 不取消 runner，必然出现状态打架）
+            if run.id in _active_runs:
+                continue
+            age = (now - run.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+            if age < stale_threshold:
+                continue
+            logger.warning(
+                "Sweeper: run %s stuck RUNNING for %.0fs, marking FAILED",
+                run.id,
+                age,
+            )
+            await run_repo.update_run_status(
+                run.id,
+                RunStatus.FAILED,
+                finished_at=now,
+                error=f"运行超时自动恢复：停滞 {int(age)} 秒后被后台检查标记为失败",
+            )
+            await run_repo.batch_update_stale_tasks(
+                run.id,
+                TaskStatus.FAILED,
+                [TaskStatus.RUNNING, TaskStatus.PENDING],
+                finished_at=now,
+                error="后台恢复：任务状态重置为 FAILED",
+            )
+            await run_repo.batch_update_stale_retries(
+                run.id,
+                TaskStatus.FAILED,
+                [TaskStatus.RUNNING, TaskStatus.PENDING],
+                finished_at=now,
+                error="后台恢复：重试记录状态重置为 FAILED",
+            )
+            recovered += 1
+        if recovered:
+            await session.commit()
+    return recovered
+
+
 async def _sweep_stale_runs_background() -> None:
     """后台循环任务：每隔 5 分钟扫描停滞的 RUNNING 运行并恢复为 FAILED。
 
     正常情况下 heartbeat 过期检测 + agent 端结果缓存已足够防止僵尸运行，
     但极端情况下（agent 进程崩溃、网络分区等）仍需此机制作为安全兜底。
+    注意：本进程 _active_runs 中活跃的 run 不参与超时判定（issue #212）。
     """
-    from taskpps.config import get_settings
-    from taskpps.db.engine import get_session_factory
-    from taskpps.db.repository import RunRepository
-    from taskpps.models.run import RunStatus, TaskStatus
-
     while True:
         await asyncio.sleep(300)
         try:
-            settings = get_settings()
-            stale_threshold = max(3600, settings.executor.default_timeout * 2)
-            async with get_session_factory()() as session:
-                run_repo = RunRepository(session)
-                stale_runs = await run_repo.list_runs_by_statuses([RunStatus.RUNNING])
-                now = datetime.now(timezone.utc)
-                recovered = 0
-                for run in stale_runs:
-                    if run.created_at is None:
-                        continue
-                    age = (now - run.created_at.replace(tzinfo=timezone.utc)).total_seconds()
-                    if age < stale_threshold:
-                        continue
-                    logger.warning(
-                        "Sweeper: run %s stuck RUNNING for %.0fs, marking FAILED",
-                        run.id,
-                        age,
-                    )
-                    await run_repo.update_run_status(
-                        run.id,
-                        RunStatus.FAILED,
-                        finished_at=now,
-                        error=f"运行超时自动恢复：停滞 {int(age)} 秒后被后台检查标记为失败",
-                    )
-                    await run_repo.batch_update_stale_tasks(
-                        run.id,
-                        TaskStatus.FAILED,
-                        [TaskStatus.RUNNING, TaskStatus.PENDING],
-                        finished_at=now,
-                        error="后台恢复：任务状态重置为 FAILED",
-                    )
-                    await run_repo.batch_update_stale_retries(
-                        run.id,
-                        TaskStatus.FAILED,
-                        [TaskStatus.RUNNING, TaskStatus.PENDING],
-                        finished_at=now,
-                        error="后台恢复：重试记录状态重置为 FAILED",
-                    )
-                    recovered += 1
-                if recovered:
-                    await session.commit()
-                    logger.info("Sweeper: recovered %d stale runs", recovered)
+            recovered = await _sweep_stale_runs_once()
+            if recovered:
+                logger.info("Sweeper: recovered %d stale runs", recovered)
         except Exception:
             logger.exception("Stale run sweeper failed")
 
