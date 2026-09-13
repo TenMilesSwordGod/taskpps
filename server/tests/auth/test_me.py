@@ -55,6 +55,8 @@ async def test_me_invalid_token_401(app_fixture, setup_project, tmp_project, db_
             headers={"Authorization": "Bearer not.a.real.token"},
         )
     assert resp.status_code == 401
+    # issue #223: 路由层 guest → t("Not logged in")，zh 下必须仍是原中文
+    assert resp.json()["detail"] == "未登录"
 
 
 @pytest.mark.asyncio

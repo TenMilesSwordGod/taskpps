@@ -97,6 +97,8 @@ async def test_get_run_not_found(app, setup_project, tmp_project, db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/runs/nonexistent")
         assert response.status_code == 404
+        # issue #223: 404 必须带用户可见文案，防止前端只能显示裸状态码
+        assert response.json()["detail"] == "运行记录未找到"
 
 
 @pytest.mark.asyncio
@@ -523,4 +525,125 @@ async def test_cancel_retry_run_api_no_active_retry(app, setup_project, tmp_proj
 
         response = await client.post(f"/api/runs/{run_id}/retry/cancel")
         assert response.status_code == 404
+
+
+# ----------------------------------------------------------------------------
+# GET /api/runs/{run_id}/result 结果页接口（issue #223）
+# 设计考虑：setup_project 是 autouse fixture，已把 config/logs 根指向 tmp_project，
+# 因此直接经真实 get_logs_dir() 落 result.json，不 mock 被测路由与加载逻辑。
+# ----------------------------------------------------------------------------
+
+
+async def _seed_run(pipeline_id: str = "pipe-result", pipeline_version: str = "1") -> str:
+    """预置一个带 pipeline_id/version 的 run 行，返回 run_id。"""
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository
+
+    async with get_session_factory()() as session:
+        run = await RunRepository(session).create_run(
+            pipeline_name="result-demo",
+            pipeline_id=pipeline_id,
+            pipeline_version=pipeline_version,
+        )
+        return run.id
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3600", domain="server/api", priority="P1")
+async def test_get_result_page_returns_saved_result(app, setup_project, tmp_project, db_engine):
+    """已有 result.json：返回完整结果页结构（run/pipeline/统计/HTML/MD）。"""
+    from taskpps.services.result_page import generate_result_page
+
+    run_id = await _seed_run()
+    generate_result_page(
+        run_id=run_id,
+        pipeline_name="result-demo",
+        pipeline_id="pipe-result",
+        pipeline_version="1",
+        status="success",
+        started_at="2026-09-01T00:00:00+00:00",
+        finished_at="2026-09-01T00:00:01.500000+00:00",
+        tasks=[{"status": "success"}, {"status": "failed"}],
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/api/runs/{run_id}/result")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["run_id"] == run_id
+    assert data["pipeline_name"] == "result-demo"
+    assert data["status"] == "success"
+    assert data["stats"]["total_count"] == 2
+    assert data["stats"]["pass_count"] == 1
+    assert data["stats"]["fail_count"] == 1
+    assert data["stats"]["duration"] == "1s"
+    assert "result-demo" in data["html_content"]
+    assert "# result-demo" in data["md_content"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3601", domain="server/api", priority="P1")
+async def test_get_result_page_run_not_found_404(app, setup_project, tmp_project, db_engine):
+    """run 不存在：404 + 用户可见中文文案。"""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/runs/not-exist/result")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "运行记录未找到"
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3602", domain="server/api", priority="P1")
+async def test_get_result_page_file_missing_404(app, setup_project, tmp_project, db_engine):
+    """run 存在但结果文件缺失：404 + 区分于 run 不存在的文案。"""
+    run_id = await _seed_run(pipeline_id="pipe-no-result", pipeline_version="1")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/api/runs/{run_id}/result")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Result page not found"
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3603", domain="server/api", priority="P1")
+async def test_get_result_page_legacy_excludes_unset_collector_fields(app, setup_project, tmp_project, db_engine):
+    """序列化契约：老 result.json 无 collector_* 时响应必须缺省（exclude_unset），
+    否则前端会把老数据误判成「原生插件渲染」而非整段 HTML 回退。"""
+    import json
+
+    from taskpps.services.result_page import get_result_page_path
+
+    run_id = await _seed_run(pipeline_id="pipe-legacy", pipeline_version="1")
+    result_path = get_result_page_path("pipe-legacy", "1", run_id)
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "pipeline_name": "legacy",
+                "status": "success",
+                "format": "html",
+                "stats": {"status": "success", "total_count": 0},
+                "html_content": "<html>legacy</html>",
+                "md_content": "# legacy",
+                "has_collector": False,
+                "generated_at": "2026-09-01T00:00:00+00:00",
+            }
+        )
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/api/runs/{run_id}/result")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "collector_html" not in data
+    assert "collector_md" not in data
+    assert data["html_content"] == "<html>legacy</html>"
 

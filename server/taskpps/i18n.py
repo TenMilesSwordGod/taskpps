@@ -10,6 +10,11 @@ _zh: dict[str, str] = {
     "Run not found or cannot be cancelled": "运行记录未找到或无法取消",
     "Trigger not found": "触发器未找到",
     "Invalid or missing API key": "API密钥无效或缺失",
+    # Auth
+    # 注意(2026-09): key 特意写成英文而非中文原文。en 场景 _en 为空会回退 key
+    # 原文，因此英文 key 本身就是 en 文案；zh 映射保持历史输出逐字不变（issue #223）。
+    "Not logged in": "未登录",
+    "Invalid username or password": "用户名或密码错误",
     # Executors
     "Command contains dangerous pattern": "命令包含危险模式",
     "Task exceeded timeout of {timeout}s": "任务超时({timeout}秒)",

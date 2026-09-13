@@ -83,3 +83,5 @@ async def test_login_missing_username_422(app_fixture, setup_project, tmp_projec
             json={"password": "pass123"},  # 缺 username
         )
     assert resp.status_code == 422
+    # issue #223: 422 不能只断状态码；main.py 统一把校验错误压成单句，须精确到字段
+    assert resp.json()["detail"] == "参数校验失败: username: Field required"

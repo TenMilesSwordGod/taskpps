@@ -29,7 +29,8 @@ async def test_register_duplicate_username_409(app_fixture, setup_project, tmp_p
         # 第二次冲突
         status2, body2 = await register_user_status(client, username="alice", nickname="Alice2", password="pass123")
     assert status2 == 409
-    assert "已被注册" in body2.get("detail", "")
+    # issue #223: 从子串断言收紧为逐字文案，任何文案漂移都会失败
+    assert body2.get("detail") == "该用户名已被注册"
 
 
 @pytest.mark.asyncio

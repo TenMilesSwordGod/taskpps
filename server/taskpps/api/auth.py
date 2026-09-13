@@ -28,6 +28,7 @@ from taskpps.auth.security import (
 )
 from taskpps.config import get_settings
 from taskpps.db.engine import get_session_factory
+from taskpps.i18n import t
 from taskpps.models.user import User, UserRole
 
 logger = logging.getLogger("taskpps.api.auth")
@@ -178,8 +179,9 @@ async def login(body: LoginRequest) -> LoginResponse:
             user = result.scalar_one_or_none()
 
             # 用户不存在或密码错误：统一 401（防枚举）
+            # v2 (2026-09): 改走 t()，zh 输出与硬编码中文逐字一致；en 下回退英文 key
             if user is None or not verify_password(body.password, user.password_hash):
-                raise HTTPException(status_code=401, detail="用户名或密码错误")
+                raise HTTPException(status_code=401, detail=t("Invalid username or password"))
 
             # 账号被禁用
             if not user.is_active:
@@ -224,7 +226,7 @@ async def get_current_user(request: Request) -> UserResponse:
     """
     username = _get_username_from_state(request)
     if username is None:
-        raise HTTPException(status_code=401, detail="未登录")
+        raise HTTPException(status_code=401, detail=t("Not logged in"))
 
     try:
         async with get_session_factory()() as session:
@@ -250,7 +252,7 @@ async def change_password(body: ChangePasswordRequest, request: Request) -> Mess
     """
     username = _get_username_from_state(request)
     if username is None:
-        raise HTTPException(status_code=401, detail="未登录")
+        raise HTTPException(status_code=401, detail=t("Not logged in"))
 
     if body.old_password == body.new_password:
         raise HTTPException(status_code=400, detail="新密码不能与旧密码相同")

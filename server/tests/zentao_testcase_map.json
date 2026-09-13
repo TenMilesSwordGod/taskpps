@@ -1,5 +1,5 @@
 {
-  "total": 1771,
+  "total": 1784,
   "mappings": {
     "test_agent_executor.py::test_sequential_task_waits_for_busy_agent": {
       "tc_local_id": "TC-S0001",
@@ -17710,6 +17710,136 @@
       "test_name": "test_result_page_response_exclude_unset_distinguishes_legacy_result_json",
       "file": "test_run_response_schema.py",
       "priority": "P2"
+    },
+    "api/test_agents.py::test_check_stream_returns_result_then_summary": {
+      "tc_local_id": "TC-S3593",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_check_stream_returns_result_then_summary",
+      "file": "api/test_agents.py",
+      "priority": "P1"
+    },
+    "api/test_agents.py::test_check_stream_unknown_agent_yields_empty_summary": {
+      "tc_local_id": "TC-S3594",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_check_stream_unknown_agent_yields_empty_summary",
+      "file": "api/test_agents.py",
+      "priority": "P2"
+    },
+    "api/test_agents.py::test_check_stream_unauthenticated_401": {
+      "tc_local_id": "TC-S3595",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_check_stream_unauthenticated_401",
+      "file": "api/test_agents.py",
+      "priority": "P0"
+    },
+    "api/test_agents.py::test_update_deploy_success_invokes_bootstrap": {
+      "tc_local_id": "TC-S3596",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_update_deploy_success_invokes_bootstrap",
+      "file": "api/test_agents.py",
+      "priority": "P1"
+    },
+    "api/test_agents.py::test_update_deploy_agent_not_found_404": {
+      "tc_local_id": "TC-S3597",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_update_deploy_agent_not_found_404",
+      "file": "api/test_agents.py",
+      "priority": "P1"
+    },
+    "api/test_agents.py::test_update_deploy_local_agent_returns_500_detail": {
+      "tc_local_id": "TC-S3598",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_update_deploy_local_agent_returns_500_detail",
+      "file": "api/test_agents.py",
+      "priority": "P1"
+    },
+    "api/test_agents.py::test_update_deploy_missing_agent_id_422": {
+      "tc_local_id": "TC-S3599",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_update_deploy_missing_agent_id_422",
+      "file": "api/test_agents.py",
+      "priority": "P2"
+    },
+    "api/test_runs.py::test_get_result_page_returns_saved_result": {
+      "tc_local_id": "TC-S3600",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_get_result_page_returns_saved_result",
+      "file": "api/test_runs.py",
+      "priority": "P1"
+    },
+    "api/test_runs.py::test_get_result_page_run_not_found_404": {
+      "tc_local_id": "TC-S3601",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_get_result_page_run_not_found_404",
+      "file": "api/test_runs.py",
+      "priority": "P1"
+    },
+    "api/test_runs.py::test_get_result_page_file_missing_404": {
+      "tc_local_id": "TC-S3602",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_get_result_page_file_missing_404",
+      "file": "api/test_runs.py",
+      "priority": "P1"
+    },
+    "api/test_runs.py::test_get_result_page_legacy_excludes_unset_collector_fields": {
+      "tc_local_id": "TC-S3603",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/api",
+      "source": "server",
+      "test_name": "test_get_result_page_legacy_excludes_unset_collector_fields",
+      "file": "api/test_runs.py",
+      "priority": "P1"
+    },
+    "i18n/test_i18n.py::test_auth_error_keys_keep_zh_output": {
+      "tc_local_id": "TC-S3604",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/i18n",
+      "source": "server",
+      "test_name": "test_auth_error_keys_keep_zh_output",
+      "file": "i18n/test_i18n.py",
+      "priority": "P1"
+    },
+    "i18n/test_i18n.py::test_auth_error_messages_follow_locale": {
+      "tc_local_id": "TC-S3605",
+      "zentao_id": null,
+      "sync_status": "pending",
+      "domain": "server/i18n",
+      "source": "server",
+      "test_name": "test_auth_error_messages_follow_locale",
+      "file": "i18n/test_i18n.py",
+      "priority": "P0"
     }
   }
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -670,4 +671,148 @@ async def test_agent_all_net_probe_non_blocking(app, tmp_project):
     assert len(data) == 1
     # 非阻塞：首次响应立即返回 unknown，不等待后台探测
     assert data[0]["net_status"] == "unknown"
+
+
+# ----------------------------------------------------------------------------
+# POST /api/agents/check-stream 与 POST /api/agents/update-deploy（issue #223）
+# 设计考虑：这两个 POST 路由受 JWT 中间件保护，成功路径必须先拿测试 token；
+# token 直接签发而不注册用户，避免把「用户体系」耦合进 Agent 路由测试。
+# ----------------------------------------------------------------------------
+
+
+def _auth_headers() -> dict[str, str]:
+    """签发测试 JWT（ASGITransport 不触发 lifespan seed，需显式 ensure secret）。"""
+    from taskpps.auth.security import create_access_token, ensure_jwt_secret
+
+    ensure_jwt_secret()
+    return {"Authorization": f"Bearer {create_access_token('tester', 'user')}"}
+
+
+def _sse_data_lines(text: str) -> list[str]:
+    """按流协议取 data: 行（每个事件一行，summary 行前缀为 data: summary:）。"""
+    return [line for line in text.splitlines() if line.startswith("data: ")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3593", domain="server/api", priority="P1")
+async def test_check_stream_returns_result_then_summary(client):
+    """成功流：先推送各 agent 检查结果，最后以 summary 汇总收尾。"""
+    resp = await client.post(
+        "/api/agents/check-stream",
+        json={"agent_id": "staging-server", "timeout": 5},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
+
+    lines = _sse_data_lines(resp.text)
+    # 协议契约：1 条 agent 结果 + 1 条 summary，顺序不可颠倒（前端逐条渲染依赖它）
+    assert len(lines) == 2
+
+    result = json.loads(lines[0][len("data: ") :])
+    assert result["agent_id"] == "staging-server"
+    assert result["status"] == "ready"  # 本地 host 无需网络即可判定就绪
+    assert result["error"] is None
+
+    summary = json.loads(lines[1][len("data: summary:") :])
+    assert summary == {"total": 1, "connected": 1, "failed": 0}
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3594", domain="server/api", priority="P2")
+async def test_check_stream_unknown_agent_yields_empty_summary(client):
+    """agent 不存在时的用户可见反馈：流不报错，只回一份 total=0 的 summary。"""
+    resp = await client.post(
+        "/api/agents/check-stream",
+        json={"agent_id": "no-such-agent", "timeout": 1},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+
+    lines = _sse_data_lines(resp.text)
+    assert len(lines) == 1
+    assert lines[0].startswith("data: summary:")
+
+    summary = json.loads(lines[0][len("data: summary:") :])
+    assert summary == {"total": 0, "connected": 0, "failed": 0}
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3595", domain="server/api", priority="P0")
+async def test_check_stream_unauthenticated_401(client):
+    """未带 JWT 的 POST 被中间件拦截：401 + 明确文案，且不返回 SSE 流。"""
+    resp = await client.post("/api/agents/check-stream", json={"agent_id": "staging-server"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "未登录或 token 无效"
+    assert "text/event-stream" not in resp.headers.get("content-type", "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3596", domain="server/api", priority="P1")
+async def test_update_deploy_success_invokes_bootstrap(client):
+    """成功路径：解析到 agent 后真实调用 update_deploy，并回传部署成功响应。"""
+    from taskpps.loaders.agent_loader import AgentLoader
+    from taskpps.services.agent_bootstrap import AgentBootstrap
+
+    with patch.object(AgentBootstrap, "update_deploy", new_callable=AsyncMock) as mock_update:
+        resp = await client.post(
+            "/api/agents/update-deploy",
+            json={"agent_id": "staging-server"},
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"success": True, "agent_id": "staging-server", "agent_pid": 0, "error": None}
+    mock_update.assert_awaited_once()
+    assert mock_update.await_args.args[0] == "staging-server"
+    # 路由必须把按项目解析出的 loader 透传给 bootstrap（否则多项目下会部署错文件）
+    assert isinstance(mock_update.await_args.kwargs["agent_loader"], AgentLoader)
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3597", domain="server/api", priority="P1")
+async def test_update_deploy_agent_not_found_404(client):
+    """agent 不存在：404 + 含 agent_id 的 detail，不应触发部署调用。"""
+    from taskpps.services.agent_bootstrap import AgentBootstrap
+
+    with patch.object(AgentBootstrap, "update_deploy", new_callable=AsyncMock) as mock_update:
+        resp = await client.post(
+            "/api/agents/update-deploy",
+            json={"agent_id": "missing-agent"},
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 404
+    # 路由把内部 HTTPException 统一重包装（type: str(exc)，str 含 status code 前缀）
+    assert resp.json()["detail"] == "HTTPException: 404: Agent not found: missing-agent"
+    mock_update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3598", domain="server/api", priority="P1")
+async def test_update_deploy_local_agent_returns_500_detail(client):
+    """部署失败的用户可见反馈：本地 agent 不支持强制更新，500 detail 带异常原因。"""
+    resp = await client.post(
+        "/api/agents/update-deploy",
+        json={"agent_id": "staging-server"},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 500
+    detail = resp.json()["detail"]
+    assert detail.startswith("AgentBootstrapError:")
+    assert "Update deploy is not supported for local agents" in detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.zentao("TC-S3599", domain="server/api", priority="P2")
+async def test_update_deploy_missing_agent_id_422(client):
+    """请求校验：缺 agent_id 必填字段 → 422，detail 精确指向 body.agent_id。"""
+    resp = await client.post(
+        "/api/agents/update-deploy",
+        json={"timeout": 5},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 422
+    # main.py 的 RequestValidationError handler 把 pydantic 错误压成单句，精确到字段
+    assert resp.json()["detail"] == "参数校验失败: agent_id: Field required"
 
