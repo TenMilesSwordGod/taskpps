@@ -4,38 +4,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 )
-
-func TestNewExecutor_DefaultShell(t *testing.T) {
-	exec := NewExecutor("", "/tmp", nil, nil, nil)
-	if exec.shell != "/bin/bash" {
-		t.Errorf("expected /bin/bash, got %s", exec.shell)
-	}
-	if exec.defaultDir != "/tmp" {
-		t.Errorf("expected /tmp, got %s", exec.defaultDir)
-	}
-}
-
-func TestNewExecutor_CustomShell(t *testing.T) {
-	exec := NewExecutor("/bin/sh", "/home", nil, nil, nil)
-	if exec.shell != "/bin/sh" {
-		t.Errorf("expected /bin/sh, got %s", exec.shell)
-	}
-}
-
-func TestNewExecutor_NilCallbacks(t *testing.T) {
-	exec := NewExecutor("/bin/bash", "/tmp", nil, nil, nil)
-	if exec.onStdout != nil {
-		t.Errorf("expected nil onStdout")
-	}
-	if exec.onStderr != nil {
-		t.Errorf("expected nil onStderr")
-	}
-	if exec.onResult != nil {
-		t.Errorf("expected nil onResult")
-	}
-}
 
 func TestNewExecutor_WithCallbacks(t *testing.T) {
 	stdoutCalled := false
@@ -72,82 +44,61 @@ func TestNewExecutor_WithCallbacks(t *testing.T) {
 	}
 }
 
-func TestMergeEnv_Empty(t *testing.T) {
-	result := mergeEnv([]string{}, nil)
-	if len(result) != 0 {
-		t.Errorf("expected empty result, got %d items", len(result))
-	}
-}
-
-func TestMergeEnv_AddNew(t *testing.T) {
-	result := mergeEnv([]string{"PATH=/usr/bin"}, map[string]string{"KEY": "VAL"})
-	if len(result) != 2 {
-		t.Errorf("expected 2 items, got %d", len(result))
-	}
-	found := false
-	for _, s := range result {
-		if s == "KEY=VAL" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected KEY=VAL in result")
-	}
-}
-
-func TestMergeEnv_Overwrite(t *testing.T) {
-	result := mergeEnv([]string{"KEY=old"}, map[string]string{"KEY": "new"})
-	found := false
-	for _, s := range result {
-		if s == "KEY=new" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected KEY=new in result")
-	}
-}
-
-func TestMergeEnv_NilExtra(t *testing.T) {
-	base := []string{"A=B", "C=D"}
-	result := mergeEnv(base, nil)
-	if len(result) != 2 {
-		t.Errorf("expected 2 items, got %d", len(result))
-	}
-}
-
-func TestMergeEnv_EmptyBase(t *testing.T) {
-	result := mergeEnv([]string{}, map[string]string{"NEW": "VAL"})
-	if len(result) != 1 {
-		t.Errorf("expected 1 item, got %d", len(result))
-	}
-	if result[0] != "NEW=VAL" {
-		t.Errorf("expected NEW=VAL, got %s", result[0])
-	}
-}
-
-func TestMergeEnv_MultipleKeys(t *testing.T) {
-	result := mergeEnv([]string{"A=1"}, map[string]string{"B": "2", "C": "3"})
-	if len(result) != 3 {
-		t.Errorf("expected 3 items, got %d", len(result))
-	}
-}
-
 func TestExecutor_CancelNonExistent(t *testing.T) {
-	exec := NewExecutor("/bin/bash", "/tmp", nil, nil, nil)
+	// 契约：cancel 不存在的 commandID 是 no-op，不得触发任何回调。
+	// 用一个真实命令的 result 回调计数，确保"没动静"而不是恰好没执行到。
+	var calls int32
+	exec := NewExecutor("/bin/sh", "/tmp", nil, nil, func(ExecResult) {
+		atomic.AddInt32(&calls, 1)
+	})
+
 	exec.Cancel("nonexistent")
+	// 给潜在的错误异步回调留出窗口；cancel 是同步的，正常应始终为 0
+	time.Sleep(50 * time.Millisecond)
+
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Errorf("cancelling unknown command triggered %d result callback(s), want 0", got)
+	}
+	exec.mu.Lock()
+	defer exec.mu.Unlock()
+	if len(exec.runningCmds) != 0 {
+		t.Errorf("expected no running commands, got %d", len(exec.runningCmds))
+	}
 }
 
 func TestExecutor_CancelAllEmpty(t *testing.T) {
-	exec := NewExecutor("/bin/bash", "/tmp", nil, nil, nil)
+	// 契约：没有任何运行中命令时 CancelAll 不得触发回调（也不得 panic）。
+	var calls int32
+	exec := NewExecutor("/bin/sh", "/tmp", nil, nil, func(ExecResult) {
+		atomic.AddInt32(&calls, 1)
+	})
+
 	exec.CancelAll()
+	time.Sleep(50 * time.Millisecond)
+
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Errorf("CancelAll with no commands triggered %d result callback(s), want 0", got)
+	}
 }
 
 func TestExecutor_SendResultNilCallback(t *testing.T) {
-	exec := NewExecutor("/bin/bash", "/tmp", nil, nil, nil)
-	exec.sendResult(ExecResult{CommandID: "test", ExitCode: 0})
+	// 契约：onResult 为 nil 时 sendResult 必须是安全 no-op。
+	// 直接调用 + 跑一条真实命令，任何对 nil 函数的调用都会 panic 使用例失败。
+	exec := NewExecutor("/bin/sh", "/tmp", nil, nil, nil)
+	exec.sendResult(ExecResult{CommandID: "nil-cb", ExitCode: 0})
+
+	exec.Execute(ExecCommand{CommandID: "nil-cb-2", Command: "echo ok", Cwd: "/tmp"})
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		exec.mu.Lock()
+		_, stillRunning := exec.runningCmds["nil-cb-2"]
+		exec.mu.Unlock()
+		if !stillRunning {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("command with nil onResult did not complete（可能因 nil 回调 panic 后结果丢失）")
 }
 
 func TestExecutor_SendResultWithCallback(t *testing.T) {

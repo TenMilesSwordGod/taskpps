@@ -2,8 +2,12 @@ package logger
 
 import (
 	"bytes"
+	"fmt"
 	"log"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -115,13 +119,6 @@ func TestSetLevelByName(t *testing.T) {
 	}
 }
 
-func TestGetLevel(t *testing.T) {
-	SetLevel(3)
-	if got := GetLevel(); got != LevelInfo {
-		t.Errorf("GetLevel() = %v, want %v", got, LevelInfo)
-	}
-}
-
 func TestLogLevelString(t *testing.T) {
 	testCases := []struct {
 		level    LogLevel
@@ -209,12 +206,29 @@ func TestLogLevelFiltering(t *testing.T) {
 	}
 }
 
+// TestDefaultLevelIsInfo 验证包初始化时 level 的默认值。
+//
+// 为什么用子进程：同包其他用例（TestSetLevel/TestSetLevelByName/TestLogLevelFiltering）
+// 会修改包级 level，顺序执行时无法在测试进程内观察真正的 init 默认值；
+// 原实现先 SetLevel(3) 再断言 ==3，属自证循环。子进程只运行本用例，
+// 不经过任何 Set*，读到的就是初始化值。
 func TestDefaultLevelIsInfo(t *testing.T) {
-	SetLevel(3)
-	defer SetLevel(3)
+	if os.Getenv("TASKPPS_LOGGER_DEFAULT_LEVEL_CHILD") == "1" {
+		if got := GetLevel(); got != LevelInfo {
+			t.Fatalf("default level = %v, want LevelInfo", got)
+		}
+		fmt.Println("default-level-check-ok")
+		return
+	}
 
-	if GetLevel() != LevelInfo {
-		t.Errorf("Expected default level to be LevelInfo, got %v", GetLevel())
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultLevelIsInfo$", "-test.v")
+	cmd.Env = append(os.Environ(), "TASKPPS_LOGGER_DEFAULT_LEVEL_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("子进程默认级别校验失败: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "default-level-check-ok") {
+		t.Fatalf("子进程未执行默认级别分支，输出:\n%s", out)
 	}
 }
 
@@ -228,10 +242,14 @@ func TestLogFormat(t *testing.T) {
 	Info("test message %d", 42)
 
 	output := buf.String()
-	if !strings.Contains(output, "[INFO]") {
-		t.Errorf("Expected log to contain [INFO], got: %s", output)
+	// 断言完整格式 [时间戳] [级别] 消息，而不是只查 [INFO] 子串：
+	// 时间戳缺失、级别位置漂移、换行/前缀丢失都必须能被捕获。
+	pattern := `^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)\] \[INFO\] test message 42\n$`
+	matched, err := regexp.MatchString(pattern, output)
+	if err != nil {
+		t.Fatalf("invalid pattern: %v", err)
 	}
-	if !strings.Contains(output, "test message 42") {
-		t.Errorf("Expected log to contain 'test message 42', got: %s", output)
+	if !matched {
+		t.Errorf("log line %q does not match full format %s", output, pattern)
 	}
 }

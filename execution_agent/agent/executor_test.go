@@ -2,8 +2,10 @@ package agent
 
 import (
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -237,14 +239,58 @@ func TestExecutorEnv(t *testing.T) {
 }
 
 func TestExecutorCommands(t *testing.T) {
-	executor := NewExecutor("/bin/sh", "/tmp", nil, nil, nil)
+	// 原用例只调用不变量；重写为验证可观测行为：
+	// 短任务必须回调 stdout 与 exit_code=0，CancelAll 必须终止长任务并回调负退出码。
+	var stdoutMu sync.Mutex
+	var stdout string
+	results := make(chan ExecResult, 4)
 
-	executor.Execute(ExecCommand{CommandID: "a", Command: "sleep 10"})
-	executor.Execute(ExecCommand{CommandID: "b", Command: "echo done"})
+	executor := NewExecutor("/bin/sh", "/tmp",
+		func(cid, data string) {
+			stdoutMu.Lock()
+			stdout += data
+			stdoutMu.Unlock()
+		},
+		func(cid, data string) {},
+		func(result ExecResult) { results <- result },
+	)
 
-	time.Sleep(100 * time.Millisecond)
+	executor.Execute(ExecCommand{CommandID: "a", Command: "sleep 30", Cwd: "/tmp"})
+	executor.Execute(ExecCommand{CommandID: "b", Command: "echo done", Cwd: "/tmp"})
+
+	resultB := waitResult(t, results, "b", 5*time.Second)
+	if resultB.ExitCode != 0 {
+		t.Errorf("expected b exit_code=0, got %d (err=%q)", resultB.ExitCode, resultB.Error)
+	}
+	stdoutMu.Lock()
+	gotStdout := stdout
+	stdoutMu.Unlock()
+	if !strings.Contains(gotStdout, "done") {
+		t.Errorf("expected stdout to contain 'done', got %q", gotStdout)
+	}
 
 	executor.CancelAll()
+	resultA := waitResult(t, results, "a", 10*time.Second)
+	if resultA.ExitCode >= 0 {
+		t.Errorf("expected negative exit_code for cancelled command a, got %d", resultA.ExitCode)
+	}
+}
+
+// waitResult 等待指定 CommandID 的结果回调，超时则 fail。
+// 为什么需要按 ID 过滤：两条命令的完成顺序取决于调度，直接取第一个结果会偶发失败。
+func waitResult(t *testing.T, results <-chan ExecResult, commandID string, timeout time.Duration) ExecResult {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		select {
+		case r := <-results:
+			if r.CommandID == commandID {
+				return r
+			}
+		case <-deadline:
+			t.Fatalf("timeout waiting for result of command %s", commandID)
+		}
+	}
 }
 
 func contains(s, substr string) bool {
@@ -391,17 +437,86 @@ func TestSignalToString(t *testing.T) {
 	}
 }
 
+// TestMergeEnv 合并了原 TestMergeEnv + 5 个 TestMergeEnv_* 用例，
+// 用表驱动断言 key/value 与覆盖语义，而不是只断言元素个数。
 func TestMergeEnv(t *testing.T) {
-	merged := mergeEnv([]string{"A=1", "B=2"}, map[string]string{"C": "3"})
-	if len(merged) != 3 {
-		t.Errorf("expected 3 env vars, got %d", len(merged))
+	tests := []struct {
+		name  string
+		base  []string
+		extra map[string]string
+		want  map[string]string // 期望有效值：同名 key 以 extra 为准
+	}{
+		{"empty base and extra", []string{}, nil, map[string]string{}},
+		{"only base", []string{"PATH=/usr/bin", "HOME=/root"}, nil, map[string]string{"PATH": "/usr/bin", "HOME": "/root"}},
+		{"add new key", []string{"PATH=/usr/bin"}, map[string]string{"KEY": "VAL"}, map[string]string{"PATH": "/usr/bin", "KEY": "VAL"}},
+		{"overwrite existing key", []string{"KEY=old", "A=1"}, map[string]string{"KEY": "new"}, map[string]string{"KEY": "new", "A": "1"}},
+		{"empty base with extra", []string{}, map[string]string{"NEW": "VAL"}, map[string]string{"NEW": "VAL"}},
+		{"multiple extras", []string{"A=1"}, map[string]string{"B": "2", "C": "3"}, map[string]string{"A": "1", "B": "2", "C": "3"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseCopy := append([]string(nil), tt.base...)
+			merged := mergeEnv(tt.base, tt.extra)
+			if len(merged) != len(baseCopy)+len(tt.extra) {
+				t.Errorf("len(merged)=%d, want %d", len(merged), len(baseCopy)+len(tt.extra))
+			}
+			for key, want := range tt.want {
+				if got := envLastValue(merged, key); got != want {
+					t.Errorf("env %s=%q, want %q (merged=%v)", key, got, want, merged)
+				}
+			}
+			// mergeEnv 必须复制 base，不能原地修改调用方的切片
+			for i := range baseCopy {
+				if tt.base[i] != baseCopy[i] {
+					t.Errorf("base mutated at %d: %q -> %q", i, baseCopy[i], tt.base[i])
+				}
+			}
+		})
 	}
 }
 
+// envLastValue 返回 env 中某个 key 的有效值（最后一个同名项）。
+// os/exec 文档规定重复环境变量取切片中最后一个，与子进程实际读取一致；
+// 因此覆盖语义按"最后一项"断言，而不是要求 mergeEnv 先做去重。
+func envLastValue(env []string, key string) string {
+	value := ""
+	for _, item := range env {
+		k, v, ok := strings.Cut(item, "=")
+		if ok && k == key {
+			value = v
+		}
+	}
+	return value
+}
+
 func TestProcessCheck(t *testing.T) {
-	pid := os.Getpid()
-	desc := collectDescendants(pid)
-	_ = desc
+	// 原用例丢弃 collectDescendants 结果；重写为用真实子进程验证 /proc 父子解析。
+	child := exec.Command("sleep", "30")
+	if err := child.Start(); err != nil {
+		t.Fatalf("启动子进程失败: %v", err)
+	}
+	childPID := child.Process.Pid
+	t.Cleanup(func() {
+		_ = child.Process.Kill()
+		_, _ = child.Process.Wait()
+	})
+
+	desc := collectDescendants(os.Getpid())
+	found := false
+	for _, pid := range desc {
+		if pid == childPID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected child %d in descendants %v", childPID, desc)
+	}
+
+	if got := readPPID(childPID); got != os.Getpid() {
+		t.Errorf("readPPID(%d) = %d, want %d", childPID, got, os.Getpid())
+	}
 }
 
 func TestIsDigit(t *testing.T) {

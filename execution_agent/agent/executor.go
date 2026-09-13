@@ -74,6 +74,11 @@ type runningCmd struct {
 	// Cancel() selects on this instead of calling Wait() a second time
 	// (which would return immediately with "Wait was already called").
 	Exited chan struct{}
+	// streams 用于等待 stdout/stderr 读取 goroutine 结束。
+	// 为什么需要：Cmd.Wait() 只保证进程退出，不保证 StdoutPipe/StderrPipe 中
+	// 已缓冲的输出都被回调消费；若直接发送 exec_result，服务端可能先收到结果
+	// 再收到输出（顺序错乱），测试中的 stdout 读取也存在数据竞争。
+	streams sync.WaitGroup
 }
 
 type Executor struct {
@@ -154,8 +159,15 @@ func (e *Executor) Execute(req ExecCommand) {
 	e.runningCmds[req.CommandID] = rc
 	e.mu.Unlock()
 
-	go e.streamOutput(req.CommandID, stdoutPipe, e.onStdout)
-	go e.streamOutput(req.CommandID, stderrPipe, e.onStderr)
+	rc.streams.Add(2)
+	go func() {
+		defer rc.streams.Done()
+		e.streamOutput(req.CommandID, stdoutPipe, e.onStdout)
+	}()
+	go func() {
+		defer rc.streams.Done()
+		e.streamOutput(req.CommandID, stderrPipe, e.onStderr)
+	}()
 
 	go e.waitForCompletion(rc)
 }
@@ -221,6 +233,9 @@ func (e *Executor) CancelAll() {
 func (e *Executor) waitForCompletion(rc *runningCmd) {
 	err := rc.Cmd.Wait()
 	close(rc.Exited)
+	// 等输出 goroutine 消费完管道中剩余数据后再发送 exec_result，
+	// 保证协议消息顺序为 stdout/stderr 在前、result 在后。
+	rc.streams.Wait()
 	duration := time.Since(rc.StartTime).Milliseconds()
 
 	result := ExecResult{CommandID: rc.CommandID, DurationMs: duration}

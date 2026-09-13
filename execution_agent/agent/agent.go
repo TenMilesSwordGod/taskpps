@@ -15,6 +15,9 @@ type Agent struct {
 	wsClient *WsClient
 	executor *Executor
 	stopCh   chan struct{}
+	// sleep 是连接重试退避的注入点：默认 time.Sleep，
+	// 测试替换后可断言重试节奏而不产生真实等待。
+	sleep func(time.Duration)
 }
 
 type AgentConfig struct {
@@ -29,6 +32,7 @@ func NewAgent(config *AgentConfig) *Agent {
 	a := &Agent{
 		config: config,
 		stopCh: make(chan struct{}),
+		sleep:  time.Sleep,
 	}
 
 	hostname, _ := os.Hostname()
@@ -64,7 +68,7 @@ func (a *Agent) Start() error {
 	for i, d := range backoffs {
 		if i > 0 {
 			logger.Info("Retrying WebSocket connection in %v (attempt %d/%d)...", d, i+1, len(backoffs))
-			time.Sleep(d * time.Second)
+			a.sleep(d * time.Second)
 		}
 		if err := a.wsClient.Connect(); err != nil {
 			lastErr = err

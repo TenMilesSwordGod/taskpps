@@ -12,7 +12,7 @@ import (
 type LogLevel int
 
 const (
-	LevelNone  LogLevel = iota
+	LevelNone LogLevel = iota
 	LevelError
 	LevelWarn
 	LevelInfo

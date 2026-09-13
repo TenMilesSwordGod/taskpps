@@ -27,7 +27,19 @@ type WsClient struct {
 	OnComplete     func(CompleteRequest)
 	reconnect      bool
 	pendingResults []ExecResult
+	// 以下字段是测试注入点（seam）：默认值与生产行为一致，
+	// 测试中替换后可不依赖真实网络等待即可验证重连/超时/心跳逻辑。
+	dialer         *websocket.Dialer   // 建立连接的方式
+	sleep          func(time.Duration) // 退避等待，测试中替换为瞬时记录
+	heartbeatEvery time.Duration       // 心跳发送间隔
+	readTimeout    time.Duration       // 单次读取的 deadline，用于检测半开连接
 }
+
+// 默认时序参数集中在 NewWsClient 中设置，生产路径无感知。
+const (
+	defaultHeartbeatInterval = 15 * time.Second
+	defaultReadTimeout       = 90 * time.Second
+)
 
 func NewWsClient(url, agentID, secret, hostname string, agentPID int, osName, archName string) *WsClient {
 	return &WsClient{
@@ -40,6 +52,11 @@ func NewWsClient(url, agentID, secret, hostname string, agentPID int, osName, ar
 		archName:  archName,
 		done:      make(chan struct{}),
 		reconnect: true,
+		// HandshakeTimeout 保持原值 10s；sleep 默认 time.Sleep
+		dialer:         &websocket.Dialer{HandshakeTimeout: 10 * time.Second},
+		sleep:          time.Sleep,
+		heartbeatEvery: defaultHeartbeatInterval,
+		readTimeout:    defaultReadTimeout,
 	}
 }
 
@@ -51,10 +68,7 @@ func (c *WsClient) Connect() error {
 		return nil
 	}
 
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
-	}
-	conn, _, err := dialer.Dial(c.url, nil)
+	conn, _, err := c.dialer.Dial(c.url, nil)
 	if err != nil {
 		return fmt.Errorf("websocket dial %s: %w", c.url, err)
 	}
@@ -110,7 +124,7 @@ func (c *WsClient) Run() {
 }
 
 func (c *WsClient) heartbeatLoop() {
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(c.heartbeatEvery)
 	defer ticker.Stop()
 
 	for {
@@ -161,7 +175,7 @@ func (c *WsClient) readLoop() {
 
 		var msg Message
 		// 设置读超时，快速检测连接断开（2 倍心跳间隔 + 缓冲）
-		conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 		if err := conn.ReadJSON(&msg); err != nil {
 			logger.Warn("WebSocket read error: %v", err)
 			c.handleDisconnect()
@@ -292,7 +306,7 @@ func (c *WsClient) tryReconnect() {
 		}
 		d := backoffs[idx]
 		logger.Info("Reconnecting in %v...", d)
-		time.Sleep(d * time.Second)
+		c.sleep(d * time.Second)
 		err := c.Connect()
 		if err == nil {
 			logger.Info("Reconnected successfully")
