@@ -96,7 +96,9 @@ export default function LogViewer({
   const phaseFilter = useMemo(() => {
     if (!effectiveFilter || !effectiveFilter.startsWith('__phase__')) return null;
     const parts = effectiveFilter.split('__');
-    if (parts.length >= 4) return `__phase__${parts[2]}`;
+    // v2 (2026-09): 任务树 phase 节点 key 格式为 __phase__<scope>__<name>__<phase>，
+    // 名称在 parts[3]；旧实现取 parts[2]（scope）导致点选 phase 节点永远"无匹配日志"。
+    if (parts.length >= 4) return `__phase__${parts[3]}`;
     return effectiveFilter;
   }, [effectiveFilter]);
 
@@ -366,6 +368,12 @@ export default function LogViewer({
         {connected && (
           <span style={{ color: '#34d399', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             ● 已连接
+          </span>
+        )}
+        {/* v2 (2026-09, issue #220): 断开时给出明确反馈，避免用户误以为日志已跑完 */}
+        {!connected && (
+          <span style={{ color: '#fca5a5', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            ● 连接已断开，重连中…
           </span>
         )}
       </div>

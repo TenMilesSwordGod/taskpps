@@ -63,12 +63,29 @@ vi.mock('@/api/pipelines', () => ({
 // 编辑模式才渲染的重组件：mock 为简单容器，避免 ReactFlow/jsdom 测量问题。
 // 关键：bug 在于 PipelineDetailPage 自身未初始化 editNodes，与 WorkflowEditor
 // 内部渲染无关，因此 mock 后只依赖页面层初始化逻辑（即疑似修复点）。
-vi.mock('@/features/pipelines/workflow/WorkflowEditor', () => ({
-  default: (props: { pipeline?: PipelineDetail }) => (
-    <div data-testid="workflow-editor">{props.pipeline?.name}</div>
-  ),
-  WorkflowEditorRef: null,
-}))
+// v3 (2026-07): 适配新契约 —— 页面保存按钮由 onDirtyChange 驱动 disabled，
+// mock 需在挂载后标记 dirty 并实现 ref 方法（markClean/updateNode）。
+vi.mock('@/features/pipelines/workflow/WorkflowEditor', async () => {
+  const React = await import('react');
+  const Mock = React.forwardRef(
+    (
+      props: { pipeline?: PipelineDetail; onDirtyChange?: (dirty: boolean) => void },
+      ref: React.Ref<unknown>,
+    ) => {
+      React.useEffect(() => {
+        props.onDirtyChange?.(true);
+      }, [props.onDirtyChange]);
+      React.useImperativeHandle(ref, () => ({
+        deleteNode: () => {},
+        updateNode: () => {},
+        markClean: () => {},
+        isDirty: true,
+      }));
+      return React.createElement('div', { 'data-testid': 'workflow-editor' }, props.pipeline?.name);
+    },
+  );
+  return { default: Mock, WorkflowEditorRef: null };
+})
 
 vi.mock('@/features/pipelines/NodePalette', () => ({
   default: () => <div data-testid="node-palette" />,
@@ -78,10 +95,8 @@ vi.mock('@/features/pipelines/PropertyPanel', () => ({
   default: () => <div data-testid="property-panel" />,
 }))
 
-// 初始（查看模式）渲染的组件，避免重渲染/portal 干扰
-vi.mock('@/features/pipelines/PipelineGraph', () => ({
-  default: () => <div data-testid="pipeline-graph" />,
-}))
+// 初始（查看模式）与编辑模式统一为 WorkflowEditor（上方已 mock 为简单容器），
+// v2 (2026-07): 旧只读 PipelineGraph 已删除，不再需要单独 mock。
 vi.mock('@/features/pipelines/YamlEditor', () => ({
   default: () => <div data-testid="yaml-editor" />,
 }))

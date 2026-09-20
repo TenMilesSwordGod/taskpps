@@ -39,10 +39,19 @@ vi.mock('@/api/client', () => ({
     get: (...args: unknown[]) => mockGet(...args),
     put: (...args: unknown[]) => mockPut(...args),
   },
+  // useIsAdmin → @/api/auth 会引用这些命名导出
+  getToken: () => 'test-token',
+  setToken: vi.fn(),
+  clearToken: vi.fn(),
+  TOKEN_KEY: 'taskpps_token',
 }))
 
+// 变量悬浮数据源与权限判断不属于保存链路，用空数据隔离
+vi.mock('@/hooks/useIsAdmin', () => ({ useIsAdmin: () => false }))
+vi.mock('@/api/agents', () => ({ useAgentsWithConfig: () => ({ data: [] }) }))
+vi.mock('@/api/credentials', () => ({ useCredentials: () => ({ data: [] }) }))
+
 // 只 mock 重渲染成本高的展示型子组件，保留真实 YamlEditor 与真实 API hooks
-vi.mock('@/features/pipelines/PipelineGraph', () => ({ default: () => <div data-testid="pipeline-graph" /> }))
 vi.mock('@/features/pipelines/workflow/WorkflowEditor', () => ({
   default: forwardRef((_props: Record<string, unknown>, ref) => {
     useImperativeHandle(ref, () => ({ deleteNode: () => {}, isDirty: false }))

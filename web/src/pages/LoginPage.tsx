@@ -83,6 +83,10 @@ export default function LoginPage() {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         message.error('用户名或密码错误');
+      } else if (!(err as { response?: unknown })?.response) {
+        // v2 (2026-09, issue #222): 无 response 说明请求未到后端（断网/DNS/超时），
+        // 直接透出 "Network Error" 对用户无意义
+        message.error('网络连接失败，请检查网络后重试');
       } else {
         const msg = (err as Error)?.message || '登录失败';
         message.error(msg);

@@ -4,6 +4,7 @@ import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
   CloudUpload, Loader2, Info, ExternalLink, Clock, Timer, Terminal, RefreshCw,
+  Pencil, Trash2,
 } from 'lucide-react';
 import { useDeployAgent, useUpdateDeployAgent, usePendingCommands, useAgentStatus } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +16,10 @@ interface ServerCardProps {
   detectedArch?: string;
   onShowDetail?: (agent: AgentWithConfig) => void;
   onShowRepl?: (agent: AgentWithConfig) => void;
+  /** 仅管理员可见编辑/删除入口（权限判断在页面层，卡片保持展示型） */
+  isAdmin?: boolean;
+  onEdit?: (agent: AgentWithConfig) => void;
+  onDelete?: (agent: AgentWithConfig) => void;
 }
 
 function getOsIcon(system: string): string {
@@ -311,6 +316,7 @@ function IconBtn({
     <Tooltip title={title}>
       <span
         role="button"
+        aria-label={title}
         tabIndex={disabled ? -1 : 0}
         onClick={(e) => { e.stopPropagation(); if (disabled) return; onClick?.(e); }}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (!disabled) onClick?.(e as unknown as React.MouseEvent); } }}
@@ -379,7 +385,7 @@ function StatusDot({ state }: { state: DotState }) {
   );
 }
 
-function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowRepl }: ServerCardProps) {
+function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowRepl, isAdmin, onEdit, onDelete }: ServerCardProps) {
   // 每卡独立拉取实时状态：谁先回来谁先点亮，不再等整批都好才一起显示
   const liveQuery = useAgentStatus(agent.agent_id);
   const live = liveQuery.data;
@@ -591,6 +597,29 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
             title="主机详情"
             onClick={() => onShowDetail?.(agent)}
           />
+          {isAdmin && (
+            <>
+              <IconBtn
+                icon={<Pencil size={15} />}
+                title="编辑服务器配置"
+                onClick={() => onEdit?.(agent)}
+              />
+              <Popconfirm
+                title={`删除服务器 "${agent.agent_id}"？`}
+                description="将从 agents/ 配置中移除；若仍被流水线引用会被拒绝。"
+                okText="删除"
+                okButtonProps={{ danger: true }}
+                cancelText="取消"
+                onConfirm={(e) => { e?.stopPropagation(); onDelete?.(agent); }}
+                onCancel={(e) => e?.stopPropagation()}
+              >
+                <IconBtn
+                  icon={<Trash2 size={15} />}
+                  title="删除服务器配置"
+                />
+              </Popconfirm>
+            </>
+          )}
           {online && isSshAgent && (
             <Popconfirm
               title={`更新部署 Agent "${agent.agent_id}"？`}
@@ -644,6 +673,9 @@ export default memo(ServerCard, (prev, next) => {
     prev.detectedSystem === next.detectedSystem &&
     prev.detectedArch === next.detectedArch &&
     prev.onShowDetail === next.onShowDetail &&
-    prev.onShowRepl === next.onShowRepl
+    prev.onShowRepl === next.onShowRepl &&
+    prev.isAdmin === next.isAdmin &&
+    prev.onEdit === next.onEdit &&
+    prev.onDelete === next.onDelete
   );
 });

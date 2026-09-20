@@ -259,6 +259,10 @@ Systemd 服务配置包含以下安全措施：
 
 ```yaml
 locale: zh
+
+# 默认项目目录（部署路径）：server 启动时自动注册为项目
+workdir: /opt/taskpps
+
 server:
   host: 0.0.0.0
   port: 26521
@@ -272,6 +276,22 @@ plugins:
 triggers: []
 env: {}
 ```
+
+### 默认项目
+
+Server 启动时会自动把默认项目目录注册为项目，网页端流水线列表开箱即可看到并运行该目录下的流水线。路径取值优先级：
+
+1. 服务端配置的 `workdir`（新安装由 deploy.sh 写入 `/opt/taskpps`，可改为独立项目目录实现分离模式）
+2. 服务端配置的 `server_home`
+3. 环境变量 `TASKPPS_SERVER_HOME`（systemd 部署自动注入，覆盖升级的存量安装）
+
+都未配置时跳过自动注册（本地开发裸跑不会误注册代码目录）。
+
+行为说明：
+
+- 注册是幂等的；目录下缺少 `pipelines/` 时会自动创建
+- 在网页端注销默认项目后，**服务重启时会自动恢复**
+- 其他项目仍通过 `ppsctl init --register-current-folder` 或网页「新建 → 注册项目目录」注册
 
 ### 项目配置 (`<workdir>/.taskpps/taskpps.yaml`)
 

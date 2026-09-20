@@ -107,7 +107,7 @@ pipelines:
     expect(task?.post?.on_success).toHaveLength(1);
   });
 
-  it('处理只有 tasks 没有 pipelines 的情况', () => {
+  it('只有 tasks 没有 pipelines：规范化为同名 SubPipeline（对齐后端 _normalize）', () => {
     const yaml = `
 name: flat
 tasks:
@@ -116,8 +116,103 @@ tasks:
 `;
     const result = parseYamlToPipeline(yaml);
     expect(result.success).toBe(true);
-    expect(result.pipeline?.tasks).toHaveLength(1);
-    expect(result.pipeline?.pipelines).toBeUndefined();
+    // v2 (2026-07): 与后端 schema PipelineYAML._normalize 对齐 —— 顶层 tasks 包装为
+    // 以流水线名命名的 SubPipeline。否则统一渲染的画布看不到这些任务（被误判数据丢失），
+    // 而保存后后端又会自动规范化，造成"预览 ≠ 保存后视图"。
+    expect(result.pipeline?.pipelines).toHaveLength(1);
+    expect(result.pipeline?.pipelines?.[0].name).toBe('flat');
+    expect(result.pipeline?.pipelines?.[0].tasks).toHaveLength(1);
+    expect(result.pipeline?.pipelines?.[0].tasks[0].name).toBe('run');
+    expect(result.pipeline?.tasks).toBeNull();
+  });
+
+  it('同时存在 pipelines 与 tasks：顶层 tasks 会被执行器忽略，校验必须失败', () => {
+    const yaml = `
+name: mixed
+pipelines:
+  - name: build
+    tasks:
+      - name: compile
+        command: make
+tasks:
+  - name: legacy
+    command: echo
+`;
+    const result = parseYamlToPipeline(yaml);
+    // v7 (2026-08): ResolvedPipeline 只消费 pipelines，顶层 tasks 被静默忽略；
+    // 与后端 PipelineYAML 新增的互斥校验保持一致，解析阶段直接拒绝
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('不能同时使用');
+  });
+
+  // v1 (2026-09): issue #211 — 同一 pipeline 内 task name 必须唯一。
+  // 后端执行器按 task name 索引（只取首个匹配），同名时第二个 task 会静默复用第一个的
+  // 日志/结果；前端校验需与后端 pydantic 校验对齐，在编辑/保存前直接拒绝。
+  it('顶层 tasks 同名：校验失败', () => {
+    const yaml = `
+name: dup
+tasks:
+  - name: build
+    command: echo first
+  - name: build
+    command: echo second
+`;
+    const result = parseYamlToPipeline(yaml);
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('build');
+  });
+
+  it('同一 subpipeline 内 tasks 同名：校验失败', () => {
+    const yaml = `
+name: dup
+pipelines:
+  - name: stage
+    tasks:
+      - name: build
+        command: echo first
+      - name: build
+        command: echo second
+`;
+    const result = parseYamlToPipeline(yaml);
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('build');
+  });
+
+  it('不同 subpipeline 中同名 task：允许（作用域互不影响）', () => {
+    const yaml = `
+name: multi
+pipelines:
+  - name: stage-a
+    tasks:
+      - name: build
+        command: echo a
+  - name: stage-b
+    tasks:
+      - name: build
+        command: echo b
+`;
+    const result = parseYamlToPipeline(yaml);
+    expect(result.success).toBe(true);
+    expect(result.pipeline?.pipelines).toHaveLength(2);
+  });
+
+  it('同时存在 pipelines 与 tasks：顶层 tasks 同名仍校验失败', () => {
+    const yaml = `
+name: mixed
+pipelines:
+  - name: stage
+    tasks:
+      - name: compile
+        command: make
+tasks:
+  - name: legacy
+    command: echo 1
+  - name: legacy
+    command: echo 2
+`;
+    const result = parseYamlToPipeline(yaml);
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('legacy');
   });
 });
 

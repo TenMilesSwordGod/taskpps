@@ -25,6 +25,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SERVICE_NAME="taskpps"
 SERVER_HOME="/opt/taskpps"
 VENV_DIR="$SERVER_HOME/server/.venv"
+PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -105,8 +106,8 @@ update_deps() {
     su -s /bin/bash taskpps -c "
         export HOME=/var/lib/taskpps
         source ${VENV_DIR}/bin/activate
-        pip install --upgrade pip setuptools wheel
-        pip install -e '.[dev]'
+        pip install -i ${PIP_MIRROR} --trusted-host pypi.tuna.tsinghua.edu.cn --upgrade pip setuptools wheel
+        pip install -i ${PIP_MIRROR} --trusted-host pypi.tuna.tsinghua.edu.cn -e '.[dev]'
     "
     log_info "Dependencies updated"
 }

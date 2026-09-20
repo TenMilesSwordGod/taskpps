@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from taskpps.main import app as _app
+from tests.auth._helpers import register_and_auth_headers
 
 
 @pytest.fixture
@@ -17,9 +18,11 @@ def app():
 async def test_list_pipelines_sync_creates_definitions(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -53,9 +56,11 @@ async def test_list_pipelines_sync_creates_definitions(app, setup_project, tmp_p
 async def test_list_pipelines_sync_no_duplicate_on_second_call(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -77,9 +82,11 @@ async def test_list_pipelines_sync_no_duplicate_on_second_call(app, setup_projec
 async def test_list_pipelines_sync_removed_file_deactivated(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -117,9 +124,11 @@ async def test_list_pipelines_sync_removed_file_deactivated(app, setup_project, 
 async def test_list_pipelines_sync_restored_file_new_uuid(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -153,9 +162,11 @@ async def test_list_pipelines_sync_restored_file_new_uuid(app, setup_project, tm
 async def test_list_pipelines_sync_same_file_same_hash_same_id(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -173,9 +184,11 @@ async def test_list_pipelines_sync_same_file_same_hash_same_id(app, setup_projec
 async def test_list_pipelines_sync_changed_content_different_hash_same_id(app, setup_project, tmp_project, db_engine, clean_db):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]

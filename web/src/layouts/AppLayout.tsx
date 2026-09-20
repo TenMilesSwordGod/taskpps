@@ -1,19 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ProLayout } from '@ant-design/pro-layout';
-import {
-  DashboardOutlined,
-  PartitionOutlined,
-  HistoryOutlined,
-  CloudServerOutlined,
-  ApiOutlined,
-  LogoutOutlined,
-  DownOutlined,
-} from '@ant-design/icons';
+import { LogOut, ChevronDown } from 'lucide-react';
 import { Avatar, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ReactNode } from 'react';
 import TaskPpsLogo from '@/components/TaskPpsLogo';
+import { DashboardIcon, PipelineIcon, RunHistoryIcon, ServerIcon, PluginIcon } from '@/components/icons';
 import { useMe, useLogout } from '@/api/auth';
 import type { AuthUser } from '@/api/auth';
 
@@ -42,38 +35,40 @@ function CurrentTime() {
   return (
     <div style={{ fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace', lineHeight: 1.3, fontSize: 12 }}>
       <div style={{ color: '#94A3B8' }}>{date}</div>
-      <div style={{ fontWeight: 500, color: '#262626' }}>{time}</div>
+      <div style={{ fontWeight: 500, color: '#0F172A' }}>{time}</div>
     </div>
   );
 }
 
 /** 菜单项定义 */
 // v1 (2026-07, issue #204): 首项 path 由 '/' 改为 '/dashboard'，与路由迁移对齐（spec 4.2）
+// v2 (2026-09): 导航图标由 AntD 默认图标替换为品牌图标库（工程蓝图风格），
+//   流水线/服务器/插件使用项目领域语义图形，避免与通用图标混淆。
 const menuRoutes = [
   {
     path: '/dashboard',
     name: '仪表盘',
-    icon: <DashboardOutlined />,
+    icon: <DashboardIcon />,
   },
   {
     path: '/pipelines',
     name: '流水线',
-    icon: <PartitionOutlined />,
+    icon: <PipelineIcon />,
   },
   {
     path: '/runs',
     name: '运行历史',
-    icon: <HistoryOutlined />,
+    icon: <RunHistoryIcon />,
   },
   {
     path: '/servers',
     name: '服务器',
-    icon: <CloudServerOutlined />,
+    icon: <ServerIcon />,
   },
   {
     path: '/plugins',
     name: '插件',
-    icon: <ApiOutlined />,
+    icon: <PluginIcon />,
   },
 ];
 
@@ -113,10 +108,10 @@ function UserMenuFooter({
       disabled: true,
       label: (
         <div style={{ padding: '4px 0' }}>
-          <div style={{ fontWeight: 500, color: '#262626' }}>{displayName}</div>
+          <div style={{ fontWeight: 500, color: '#121620' }}>{displayName}</div>
           <div
             style={{
-              color: '#8C8C8C',
+              color: '#7C7F88',
               fontSize: 12,
               fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace',
             }}
@@ -130,7 +125,7 @@ function UserMenuFooter({
     {
       key: 'logout',
       label: '退出登录',
-      icon: <LogoutOutlined />,
+      icon: <LogOut size={16} />,
       danger: true,
     },
   ];
@@ -148,14 +143,14 @@ function UserMenuFooter({
           gap: 10,
           padding: collapsed ? '8px 0' : '10px 12px',
           justifyContent: collapsed ? 'center' : 'flex-start',
-          borderTop: '1px solid #E0E0E0',
+          borderTop: '1px solid #E3E4E8',
           cursor: 'pointer',
         }}
       >
         <Avatar
           src={user.avatar}
           size={36}
-          style={{ backgroundColor: '#1F1F1F', color: '#FFFFFF', flexShrink: 0 }}
+          style={{ backgroundColor: '#3D5BFF', color: '#FFFFFF', flexShrink: 0 }}
         >
           {avatarChar}
         </Avatar>
@@ -164,7 +159,7 @@ function UserMenuFooter({
             <div style={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>
               <div
                 style={{
-                  color: '#262626',
+                  color: '#121620',
                   fontWeight: 500,
                   fontSize: 13,
                   overflow: 'hidden',
@@ -176,7 +171,7 @@ function UserMenuFooter({
               </div>
               <div
                 style={{
-                  color: '#8C8C8C',
+                  color: '#7C7F88',
                   fontSize: 12,
                   fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace',
                   overflow: 'hidden',
@@ -187,7 +182,7 @@ function UserMenuFooter({
                 {user.username ?? ''}
               </div>
             </div>
-            <DownOutlined style={{ color: '#8C8C8C', fontSize: 10 }} />
+            <ChevronDown size={12} style={{ color: '#7C7F88' }} />
           </>
         )}
       </div>

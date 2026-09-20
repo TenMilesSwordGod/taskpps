@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 
 import yaml
@@ -15,6 +16,86 @@ from taskpps.db.repository import PipelineDefinitionRepository, RunRepository
 from taskpps.loaders.pipeline_loader import PipelineLoader, load_yaml_strict
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
+
+
+def _get_project_pipelines_dir(project_id: str) -> Path:
+    """解析项目 pipelines 根目录；项目未注册统一抛 404，避免各端点重复判断。"""
+    project_workdir = get_project_workdir_by_id(project_id)
+    if not project_workdir:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return get_pipelines_dir(project_workdir)
+
+
+def _resolve_under(base_dir: Path, rel_path: str, label: str) -> Path:
+    """把用户输入的相对路径安全解析到 base_dir 下（允许目标尚不存在）。
+
+    为什么这么写：新建场景目标不存在，无法用 exists() 校验；先 resolve 再判断
+    base_dir 是否为父级，可同时拦截绝对路径、`..` 穿越以及符号链接逃逸。
+    """
+    raw = (rel_path or "").strip().replace("\\", "/")
+    if not raw:
+        raise HTTPException(status_code=400, detail=f"{label} 不能为空")
+    if Path(raw).is_absolute():
+        raise HTTPException(status_code=400, detail=f"{label} 必须是相对路径")
+    base_resolved = base_dir.resolve()
+    resolved = (base_dir / raw).resolve()
+    if base_resolved not in resolved.parents:
+        raise HTTPException(status_code=400, detail=f"Invalid {label} path")
+    return resolved
+
+
+def _relative_path_str(base_dir: Path, resolved: Path) -> str:
+    """返回相对 pipelines 目录的路径字符串，与 _sync_pipeline_definitions 的存储格式一致。"""
+    return str(resolved.relative_to(base_dir.resolve()))
+
+
+def _validate_yaml_suffix(path: Path) -> None:
+    if path.suffix.lower() not in (".yaml", ".yml"):
+        raise HTTPException(status_code=400, detail="流水线文件必须以 .yaml 或 .yml 结尾")
+
+
+async def _write_pipeline_content(
+    project_id: str, pipelines_dir: Path, file_path: Path, rel_path: str, content: str
+) -> str | None:
+    """写流水线 YAML 到磁盘并尽力同步 DB，返回 definition_id（结构非法时为 None）。
+
+    为什么结构非法也允许写盘：沿用 by-file 保存的既有设计——用户可先保存半成品，
+    待 YAML 结构修好后再次保存自动入库；仅语法错误（无法解析）才拒绝。
+    """
+    try:
+        # v7 (2026-08): 严格解析（拒绝重复 key），与前端 js-yaml 行为对齐
+        data = load_yaml_strict(content)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML syntax: {e}") from e
+
+    # v7 (2026-08): 空/仅注释内容会把文件清空并造成磁盘/DB 分叉，直接拒绝
+    if data is None:
+        raise HTTPException(status_code=400, detail="Invalid pipeline: empty content")
+
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
+
+    file_hash_val = hashlib.sha256(content.encode()).hexdigest()[:8]
+
+    definition_id: str | None = None
+    try:
+        loader = PipelineLoader(base_dir=pipelines_dir)
+        # v7 (2026-08): substitute=False —— content 供 GET /by-id 展示并被前端编辑器
+        # 回写，必须保留 ${credential:...} 占位符，禁止明文凭据入库
+        spec = loader.parse_dict(data, substitute=False)
+        content_json = json.dumps(spec.model_dump(), ensure_ascii=False)
+        name = data.get("name", file_path.stem) if isinstance(data, dict) else file_path.stem
+        async with get_session_factory()() as session:
+            repo = PipelineDefinitionRepository(session)
+            definition, _ = await repo.upsert(
+                project_id=project_id, file_path=rel_path,
+                name=name, content=content_json, raw_content=content, file_hash=file_hash_val,
+            )
+        definition_id = definition.id
+    except Exception:
+        # pydantic 校验失败：只写磁盘，不同步 DB；下次合法保存时自动同步
+        pass
+    return definition_id
 
 
 async def _sync_pipeline_definitions(
@@ -104,6 +185,8 @@ async def list_pipelines(project_id: str | None = Query(None)):
             project_dirs.append((None, None))
 
     items = []
+    # v3 (2026-09): 新增 folders — 空文件夹无法从 YAML 文件路径推导，需扫描真实目录
+    folders: list[dict] = []
     async with get_session_factory()() as session:
         run_repo = RunRepository(session)
         for pid, pdir in project_dirs:
@@ -113,6 +196,22 @@ async def list_pipelines(project_id: str | None = Query(None)):
             definitions: dict[str, str] = {}
             if pid is not None and pdir is not None:
                 definitions = await _sync_pipeline_definitions(pid, pdir, loader)
+
+                # 扫描真实子目录（跳过隐藏目录），让刚创建但尚无 YAML 的文件夹也能展示
+                if pdir.is_dir():
+                    for root, dirs, _files in os.walk(pdir):
+                        dirs[:] = [d for d in dirs if not d.startswith(".")]
+                        rel_root = Path(root).relative_to(pdir)
+                        if rel_root == Path("."):
+                            continue
+                        folders.append(
+                            {
+                                "project_id": pid,
+                                "folder": rel_root.as_posix(),
+                                # 空文件夹所在项目可能没有任何流水线，前端需要项目名做分组标题
+                                "project_name": project_name_map.get(pid),
+                            }
+                        )
 
             for file, spec in all_pipelines.items():
                 task_count = 0
@@ -207,7 +306,7 @@ async def list_pipelines(project_id: str | None = Query(None)):
         op = it.get("last_operator")
         it["last_operator_nickname"] = operator_nickname_map.get(op) if op else None
 
-    return {"items": items}
+    return {"items": items, "folders": folders}
 
 
 @router.get("/by-id/{definition_id}")
@@ -221,31 +320,15 @@ async def get_pipeline_by_id(definition_id: str, project_id: str | None = Query(
         if project_id and d.project_id != project_id:
             raise HTTPException(status_code=404, detail="Definition not found in project")
         data = json.loads(d.content)
-        # v7 (2026-08): 附带原始 YAML 文本，供前端编辑器保留注释/格式。
-        # content 是解析后的结构（占位符未替换），重新序列化会丢注释与字段顺序。
-        if isinstance(data, dict):
-            data["raw_content"] = d.raw_content
+        # v3 (2026-09): 附带文件原文 —— Web「YAML 编辑器」若仅由模型反序列化，
+        # Pydantic schema 未声明的字段（如裸 `task:` 列表）会静默丢失，编辑器内容 ≠ 真实文件。
+        # raw_content 由 _sync_pipeline_definitions 在文件 hash 变化时同步，保证与磁盘一致。
+        data["raw_content"] = d.raw_content or ""
         return data
 
 
 class SavePipelineByIdRequest(BaseModel):
     content: str
-
-
-def _resolve_pipeline_path(pipelines_dir: Path, rel_path: str) -> Path:
-    """把用户传入的相对路径解析到 pipelines 目录内，越界直接 400。
-
-    为什么不用 str(path).startswith(str(base))：
-    前缀比较会把「兄弟目录」误判为目录内（例如 base=/p/pipelines，
-    /p/pipelines_evil/x.yaml 也以 /p/pipelines 开头），导致路径穿越。
-    v7 (2026-08): 改用 Path.relative_to 做真正的目录归属判断。
-    """
-    file_path = (pipelines_dir / rel_path).resolve()
-    try:
-        file_path.relative_to(pipelines_dir.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid file path") from None
-    return file_path
 
 
 @router.put("/by-id/{definition_id}")
@@ -261,7 +344,7 @@ async def save_pipeline_by_id(definition_id: str, body: SavePipelineByIdRequest)
     if not project_workdir:
         raise HTTPException(status_code=404, detail=f"Project not found: {d.project_id}")
     pipelines_dir = get_pipelines_dir(project_workdir)
-    file_path = _resolve_pipeline_path(pipelines_dir, d.file_path)
+    file_path = _resolve_under(pipelines_dir, d.file_path, "file_path")
 
     import yaml as _yaml
     try:
@@ -315,11 +398,8 @@ class SavePipelineByFileRequest(BaseModel):
 @router.get("/by-file/{project_id}", response_model=PipelineByFileResponse)
 async def get_pipeline_by_file(project_id: str, file: str = Query(..., description="相对 pipelines 目录的文件路径")):
     """通过文件路径读取原始 YAML 内容，用于非法 pipeline 的编辑器加载"""
-    project_workdir = get_project_workdir_by_id(project_id)
-    if not project_workdir:
-        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    pipelines_dir = get_pipelines_dir(project_workdir)
-    file_path = _resolve_pipeline_path(pipelines_dir, file)
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    file_path = _resolve_under(pipelines_dir, file, "file")
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {file}")
@@ -338,51 +418,168 @@ async def get_pipeline_by_file(project_id: str, file: str = Query(..., descripti
 
 @router.put("/by-file/{project_id}")
 async def save_pipeline_by_file(project_id: str, body: SavePipelineByFileRequest):
-    """通过文件路径保存 pipeline YAML：写磁盘 + 同步 DB"""
-    import yaml as _yaml
-
-    project_workdir = get_project_workdir_by_id(project_id)
-    if not project_workdir:
-        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    pipelines_dir = get_pipelines_dir(project_workdir)
-    file_path = _resolve_pipeline_path(pipelines_dir, body.file)
-
-    # 保存时做 YAML 语法校验（不阻止 pydantic 结构非法，让用户能保存后继续修改）
-    try:
-        data = load_yaml_strict(body.content)
-    except _yaml.YAMLError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid YAML syntax: {e}") from e
-
-    # v7 (2026-08): 空/仅注释内容会把文件清空并造成磁盘/DB 分叉，直接拒绝
-    if data is None:
-        raise HTTPException(status_code=400, detail="Invalid pipeline: empty content")
-
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(body.content, encoding="utf-8")
-
-    file_hash_val = hashlib.sha256(body.content.encode()).hexdigest()[:8]
-
-    # 尝试同步到 DB：如果 YAML 结构合法则写入 DB，非法则只写磁盘
-    definition_id = None
-    try:
-        loader = PipelineLoader(base_dir=pipelines_dir)
-        # v7 (2026-08): substitute=False，content 保留占位符，避免明文凭据入库
-        spec = loader.parse_dict(data, substitute=False)
-        content_json = json.dumps(spec.model_dump(), ensure_ascii=False)
-        name = data.get("name", file_path.stem) if isinstance(data, dict) else file_path.stem
-        async with get_session_factory()() as session:
-            repo = PipelineDefinitionRepository(session)
-            definition_id = await repo.upsert(
-                project_id=project_id, file_path=body.file,
-                name=name, content=content_json, raw_content=body.content, file_hash=file_hash_val,
-            )
-    except Exception:
-        # pydantic 校验失败：只写磁盘，不同步 DB
-        # 等用户修复 YAML 再次保存时，会自动同步
-        pass
+    """通过文件路径保存 pipeline YAML（已存在则覆盖）：写磁盘 + 同步 DB"""
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    file_path = _resolve_under(pipelines_dir, body.file, "file")
+    _validate_yaml_suffix(file_path)
+    rel_path = _relative_path_str(pipelines_dir, file_path)
+    definition_id = await _write_pipeline_content(
+        project_id, pipelines_dir, file_path, rel_path, body.content
+    )
 
     return {
         "status": "ok",
-        "file": body.file,
+        "file": rel_path,
         "definition_id": definition_id,
     }
+
+
+# v3 (2026-09): 网页端新建/重命名/删除流水线与文件夹
+# 设计决策：与 PUT /by-file 同路径，POST=新建（409 防覆盖）、PATCH=重命名、DELETE=删除；
+# 删除定义用软删除保留运行历史；文件夹操作用独立 /folders 子资源。
+
+class RenamePipelineRequest(BaseModel):
+    file: str
+    new_file: str
+
+
+@router.post("/by-file/{project_id}", status_code=201)
+async def create_pipeline_by_file(project_id: str, body: SavePipelineByFileRequest):
+    """新建流水线 YAML；文件已存在返回 409，避免网页端误覆盖已有流水线。"""
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    file_path = _resolve_under(pipelines_dir, body.file, "file")
+    _validate_yaml_suffix(file_path)
+    if file_path.exists():
+        raise HTTPException(status_code=409, detail=f"流水线文件已存在: {body.file}")
+    rel_path = _relative_path_str(pipelines_dir, file_path)
+    definition_id = await _write_pipeline_content(
+        project_id, pipelines_dir, file_path, rel_path, body.content
+    )
+    return {"status": "ok", "file": rel_path, "definition_id": definition_id}
+
+
+@router.patch("/by-file/{project_id}")
+async def rename_pipeline_by_file(project_id: str, body: RenamePipelineRequest):
+    """重命名/移动流水线文件，并原地更新 DB 定义路径（保留 definition_id 与运行历史）。"""
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    old_path = _resolve_under(pipelines_dir, body.file, "file")
+    _validate_yaml_suffix(old_path)
+    if not old_path.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {body.file}")
+    new_path = _resolve_under(pipelines_dir, body.new_file, "new_file")
+    _validate_yaml_suffix(new_path)
+    if new_path == old_path:
+        raise HTTPException(status_code=400, detail="新文件名与原文件名相同")
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail=f"流水线文件已存在: {body.new_file}")
+
+    old_rel = _relative_path_str(pipelines_dir, old_path)
+    new_rel = _relative_path_str(pipelines_dir, new_path)
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    os.rename(old_path, new_path)
+
+    async with get_session_factory()() as session:
+        repo = PipelineDefinitionRepository(session)
+        updated = await repo.rename_file_path(project_id, old_rel, new_rel)
+    return {"status": "ok", "file": new_rel, "definition_id_updated": updated}
+
+
+@router.delete("/by-file/{project_id}")
+async def delete_pipeline_by_file(
+    project_id: str, file: str = Query(..., description="相对 pipelines 目录的文件路径")
+):
+    """删除流水线文件，并软删除 DB 定义（保留历史运行记录）。"""
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    file_path = _resolve_under(pipelines_dir, file, "file")
+    _validate_yaml_suffix(file_path)
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {file}")
+
+    rel_path = _relative_path_str(pipelines_dir, file_path)
+    file_path.unlink()
+    async with get_session_factory()() as session:
+        repo = PipelineDefinitionRepository(session)
+        await repo.deactivate_file(project_id, rel_path)
+    return {"status": "deleted", "file": rel_path}
+
+
+class CreateFolderRequest(BaseModel):
+    folder: str
+
+
+class RenameFolderRequest(BaseModel):
+    folder: str
+    new_folder: str
+
+
+def _resolve_folder_path(pipelines_dir: Path, folder: str, label: str = "folder") -> Path:
+    """文件夹路径解析：必须严格位于 pipelines 目录之下（不能是根目录本身）。"""
+    resolved = _resolve_under(pipelines_dir, folder, label)
+    if resolved == pipelines_dir.resolve():
+        raise HTTPException(status_code=400, detail=f"{label} 不能是 pipelines 根目录")
+    return resolved
+
+
+@router.post("/folders/{project_id}", status_code=201)
+async def create_pipeline_folder(project_id: str, body: CreateFolderRequest):
+    """新建流水线文件夹（支持多级路径，自动创建父目录）；已存在返回 409。"""
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    folder_path = _resolve_folder_path(pipelines_dir, body.folder)
+    if folder_path.exists():
+        raise HTTPException(status_code=409, detail=f"文件夹已存在: {body.folder}")
+    folder_path.mkdir(parents=True, exist_ok=True)
+    return {"status": "ok", "folder": _relative_path_str(pipelines_dir, folder_path)}
+
+
+@router.patch("/folders/{project_id}")
+async def rename_pipeline_folder(project_id: str, body: RenameFolderRequest):
+    """重命名/移动文件夹，并批量原地更新 DB 定义路径前缀（保留运行历史关联）。"""
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    old_path = _resolve_folder_path(pipelines_dir, body.folder)
+    if not old_path.is_dir():
+        raise HTTPException(status_code=404, detail=f"Folder not found: {body.folder}")
+    new_path = _resolve_folder_path(pipelines_dir, body.new_folder, label="new_folder")
+    if new_path == old_path:
+        raise HTTPException(status_code=400, detail="新文件夹名与原文件夹名相同")
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail=f"文件夹已存在: {body.new_folder}")
+    # 禁止移动到自身子目录，否则 os.rename 会失败或产生不可预期结果
+    if old_path in new_path.parents:
+        raise HTTPException(status_code=400, detail="不能把文件夹移动到其自身子目录下")
+
+    old_rel = _relative_path_str(pipelines_dir, old_path)
+    new_rel = _relative_path_str(pipelines_dir, new_path)
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    os.rename(old_path, new_path)
+
+    async with get_session_factory()() as session:
+        repo = PipelineDefinitionRepository(session)
+        updated = await repo.rename_prefix(project_id, old_rel + os.sep, new_rel + os.sep)
+    return {"status": "ok", "folder": new_rel, "definition_id_updated": updated}
+
+
+@router.delete("/folders/{project_id}")
+async def delete_pipeline_folder(
+    project_id: str,
+    folder: str = Query(..., description="相对 pipelines 目录的文件夹路径"),
+    recursive: bool = Query(False, description="非空文件夹需显式 recursive=true 才允许删除"),
+):
+    """删除流水线文件夹；非空时必须 recursive=true，避免网页端误删整棵目录树。"""
+    pipelines_dir = _get_project_pipelines_dir(project_id)
+    folder_path = _resolve_folder_path(pipelines_dir, folder)
+    if not folder_path.is_dir():
+        raise HTTPException(status_code=404, detail=f"Folder not found: {folder}")
+
+    file_count = sum(1 for p in folder_path.rglob("*") if p.is_file())
+    if file_count > 0 and not recursive:
+        raise HTTPException(
+            status_code=409,
+            detail=f"文件夹非空（含 {file_count} 个文件），请先清空或使用 recursive=true 递归删除",
+        )
+
+    rel_path = _relative_path_str(pipelines_dir, folder_path)
+    shutil.rmtree(folder_path)
+    async with get_session_factory()() as session:
+        repo = PipelineDefinitionRepository(session)
+        await repo.deactivate_prefix(project_id, rel_path + os.sep)
+    return {"status": "deleted", "folder": rel_path, "file_count": file_count}

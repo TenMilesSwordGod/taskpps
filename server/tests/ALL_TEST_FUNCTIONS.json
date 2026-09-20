@@ -1063,8 +1063,8 @@
   },
   {
     "file": "scenario/test_pipeline_comprehensive.py",
-    "function": "test_empty_commands_list_returns_success",
-    "description": "test empty commands list returns success",
+    "function": "test_empty_commands_list_fails",
+    "description": "test empty commands list fails",
     "domain": "scenario"
   },
   {
@@ -1471,8 +1471,8 @@
   },
   {
     "file": "engine/test_runner.py",
-    "function": "test_empty_command_succeeds",
-    "description": "test empty command succeeds",
+    "function": "test_empty_command_fails",
+    "description": "test empty command fails",
     "domain": "engine"
   },
   {

@@ -63,3 +63,20 @@ async def login_and_get_token(
 def auth_headers(token: str | None) -> dict[str, str]:
     """构造 Authorization: Bearer <token> 头；token 为 None 返回空 dict。"""
     return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+async def register_and_auth_headers(
+    client: AsyncClient,
+    username: str = "alice",
+    nickname: str = "Alice",
+    password: str = "pass123",
+) -> dict[str, str]:
+    """注册并登录测试用户，返回可直接复用的 Authorization 头。
+
+    为什么需要：JWT 中间件对 POST/PUT/DELETE 强制认证（#204），
+    而部分 api 测试仍按匿名写法调用；用本函数一行完成注册+登录，避免样板代码散落。
+    """
+    await register_user(client, username=username, nickname=nickname, password=password)
+    status, token, _ = await login_and_get_token(client, username=username, password=password)
+    assert status == 200 and token, f"测试用户登录失败: status={status}"
+    return auth_headers(token)

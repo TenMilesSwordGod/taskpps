@@ -39,15 +39,24 @@ class AgentService:
             projects = []
 
         if not projects:
-            return self._loader.load_all()
+            # 单文件形态的 YAML 不含 id（文件名即 id），必须注入，否则 check/try-connect
+            # 结果里的 agent_id 会退化成 "unknown"，前端探测匹配也会失效。
+            items = self._loader.load_all()
+            for agent_id, cfg in items.items():
+                cfg.setdefault("id", agent_id)
+            return items
 
         result: dict[str, dict] = {}
         for project in projects:
             project_workdir = Path(project.workdir)
             loader = AgentLoader(base_dir=get_agents_dir(project_workdir))
             for agent_id, cfg in loader.load_all().items():
+                cfg.setdefault("id", agent_id)
                 cfg["_project_id"] = project.id
                 cfg["_project_name"] = project.name or project.id
+                # 记录项目 workdir：_check_ssh_auth 需要用它构造项目级 CredentialLoader，
+                # 否则非默认项目的 agent 在 check 时找不到同项目 credentials/ 下的凭据。
+                cfg["_project_workdir"] = str(project_workdir)
                 result[agent_id] = cfg
         return result
 
@@ -59,8 +68,11 @@ class AgentService:
             asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(self._load_all_from_projects_async())
-        # 在 event loop 中：退回到默认 loader（无法 await）
-        return self._loader.load_all()
+        # 在 event loop 中：退回到默认 loader（无法 await）；同样补齐 id 字段
+        items = self._loader.load_all()
+        for agent_id, cfg in items.items():
+            cfg.setdefault("id", agent_id)
+        return items
 
     def _query_projects_safe(self) -> list:
         """保留以兼容旧调用方。"""
@@ -72,6 +84,19 @@ class AgentService:
         if agent_data is None:
             raise ValueError(t("Agent not found: {id}", id=agent_id))
         return self._check_one(agent_data, timeout)
+
+    async def try_connect_async(self, agent_id: str, timeout: int = 5) -> AgentCheckResult:
+        """异步版 try-connect：在 event loop 内也能按项目加载 agent 与凭据。
+
+        为什么需要：同步版在已有 event loop 中会回退到默认 workdir 的 loader，
+        导致注册在非默认项目下的服务器报 "Agent not found"；网页「测试连接」按钮
+        走的正是这条链路，必须与 /check 一致地按项目解析。
+        """
+        all_agents = await self._load_all_from_projects_async()
+        agent_data = all_agents.get(agent_id)
+        if agent_data is None:
+            raise ValueError(t("Agent not found: {id}", id=agent_id))
+        return await asyncio.to_thread(self._check_one, agent_data, timeout)
 
     def _select_targets(self, all_agents: dict[str, dict], request: AgentCheckRequest) -> list[dict]:
         """按 agent_id / file_filter 过滤出需要检查的 agent 配置。"""
@@ -299,7 +324,18 @@ class AgentService:
         source_file = agent_data.get("_source_file", "")
         credential_id = agent_data.get("credential_id", "")
 
-        cred_data = self._loader.resolve_credential(agent_data)
+        # 项目级凭据解析：self._loader 固定指向默认 workdir，多项目场景会解析失败。
+        # 这里按 agent 所属项目重建 AgentLoader，resolve_credential 会自动找同项目 credentials/。
+        project_workdir = agent_data.get("_project_workdir")
+        if project_workdir:
+            from pathlib import Path
+
+            from taskpps.config import get_agents_dir
+
+            loader = AgentLoader(base_dir=get_agents_dir(Path(project_workdir)))
+        else:
+            loader = self._loader
+        cred_data = loader.resolve_credential(agent_data)
         if cred_data is None:
             return AgentCheckResult(
                 agent_id=agent_id,

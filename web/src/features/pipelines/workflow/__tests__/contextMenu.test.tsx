@@ -126,7 +126,7 @@ describe('右键菜单 — 画布空白右键', () => {
 });
 
 describe('右键菜单 — 节点右键', () => {
-  it('右击 SubPipeline 节点 → 菜单弹出 → 包含"删除""属性"且无"折叠"', async () => {
+  it('右击 SubPipeline 节点 → 菜单弹出 → 包含"折叠""删除""属性"', async () => {
     const { container, unmount } = render(
       <WorkflowEditor
         pipeline={makeSubPipelineData()}
@@ -144,11 +144,10 @@ describe('右键菜单 — 节点右键', () => {
     fireEvent.contextMenu(subNode!, { clientX: 350, clientY: 250 });
 
     await waitFor(() => {
-      // v7 (2026-08): 折叠功能随视觉统一移除，菜单只含 属性/删除（及容器添加项）
       const foldItem = findMenuItem(container, '折叠');
       const delItem = findMenuItem(container, '删除');
       const propItem = findMenuItem(container, '属性');
-      expect(foldItem).toBeNull();
+      expect(foldItem).not.toBeNull();
       expect(delItem).not.toBeNull();
       expect(propItem).not.toBeNull();
     });
@@ -203,7 +202,6 @@ describe('右键菜单 — 节点右键', () => {
     // 产生 unhandled error 污染整个测试进程。fireEvent.click 只派发 click 事件，
     // 不经 d3-drag（节点选择由 React onClick 处理），既触发 onNodeSelect 又无副作用
     fireEvent.click(subNode!);
-
 
     await waitFor(() => {
       expect(onNodeSelect).toHaveBeenCalled();

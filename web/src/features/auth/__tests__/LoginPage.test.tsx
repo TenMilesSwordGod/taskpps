@@ -146,7 +146,7 @@ describe('LoginPage (issue #204)', () => {
   })
 
   it('TC-W171: Tab 切换登录/注册', async () => {
-    const { container } = await renderLogin()
+    await renderLogin()
     // 初始是登录 tab，显示密码字段但无昵称字段
     expect(screen.getByPlaceholderText('请输入密码')).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('显示给他人的名字')).not.toBeInTheDocument()
@@ -237,7 +237,8 @@ describe('LoginPage (issue #204)', () => {
 
   it('TC-Wxxx: 登录表单存在「30天内免登录」复选框', async () => {
     const { container } = await renderLogin()
-    // 复选框应存在于登录表单中
+    // 复选框应存在于登录表单中（注意(2026-09)：产品文案为「30天内免登录」，
+    // 旧断言写成「30天不用免登录」导致长期失败，属测试自身文案过期）
     const checkbox = screen.getByText('30天内免登录')
     expect(checkbox).toBeInTheDocument()
     // 获取实际的 checkbox input（前一个兄弟元素或父元素内的 input[type="checkbox"]）

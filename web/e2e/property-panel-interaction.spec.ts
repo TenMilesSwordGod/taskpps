@@ -36,7 +36,7 @@ test.describe('属性面板交互场景', () => {
     await page.waitForTimeout(800);
 
     // 验证属性面板出现（有"节点属性"标题或编辑字段）
-    const panelTitle = page.locator('text=节点属性');
+    const panelTitle = page.locator('text=属性编辑');
     const panelVisible = await panelTitle.isVisible().catch(() => false);
     expect(panelVisible).toBeTruthy();
   });
@@ -57,15 +57,17 @@ test.describe('属性面板交互场景', () => {
     await page.waitForTimeout(800);
 
     // 找到输入框，修改名称
-    const nameInput = page.locator('input, textarea').first();
+    // v2 (2026-07): 页面首个小 input 是 NodePalette 搜索框，必须限定在属性面板（Drawer）内
+    const nameInput = page.locator('.ant-drawer-body input').first();
     const inputVisible = await nameInput.isVisible().catch(() => false);
 
     if (inputVisible) {
       await nameInput.fill('e2e-test-renamed');
       await page.waitForTimeout(300);
 
-      // 点击"确认"或"保存"按钮
-      const saveBtn = page.locator('button').filter({ hasText: /保存|确认|确定/ }).first();
+      // 点击"确认"按钮（限定在属性面板内）
+      // v2 (2026-07): antd 会在双字按钮文案中插入空格（"确 认"），用 primary 类定位更稳
+      const saveBtn = page.locator('.ant-drawer-body button.ant-btn-primary').first();
       const saveVisible = await saveBtn.isVisible().catch(() => false);
 
       if (saveVisible) {

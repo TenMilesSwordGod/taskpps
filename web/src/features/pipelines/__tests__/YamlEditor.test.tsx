@@ -96,25 +96,4 @@ describe('YamlEditor', () => {
     // 点击不应报错
     act(() => { button!.click(); });
   });
-
-  // v5 (2026-08): n8n 风格统一 —— YAML 编辑器从 oneDark 深色改为浅色主题，
-  // 与 DAG 画布并排时不再割裂（用户反馈"样式保持统一"）
-  describe('浅色主题（与画布风格统一）', () => {
-    it('工具栏为白底浅色，不再是深色 #252526', () => {
-      const { container } = render(<YamlEditor value="" onChange={() => {}} />);
-      const toolbar = container.querySelector('.flex.items-center.justify-between') as HTMLElement;
-      expect(toolbar).toBeTruthy();
-      expect(toolbar.className).not.toContain('bg-[#252526]');
-      expect(toolbar.className).toContain('bg-white');
-    });
-
-    it('编辑器主题为浅色（白色背景、无暗色面板 class）', () => {
-      const { container } = render(<YamlEditor value="name: test" onChange={() => {}} />);
-      const editor = container.querySelector('.cm-editor') as HTMLElement;
-      expect(editor).toBeTruthy();
-      // 浅色主题下 cm-editor 不应有深色背景 inline 样式
-      const bg = editor.style.backgroundColor;
-      expect(bg === '' || bg === 'rgb(255, 255, 255)').toBe(true);
-    });
-  });
 });

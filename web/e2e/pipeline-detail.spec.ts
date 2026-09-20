@@ -33,7 +33,7 @@ async function waitForCanvas(page: import('@playwright/test').Page) {
 // A. 编辑/查看模式切换（3 tests）
 // ============================================================
 test.describe('A. 编辑/查看模式切换', () => {
-  test('A1. 默认查看模式 → 显示"编辑模式"按钮 + PipelineGraph DAG 画布', async ({ page }) => {
+  test('A1. 默认查看模式 → 显示"编辑模式"按钮 + WorkflowEditor DAG 画布', async ({ page }) => {
     await page.goto(TEST_URL);
     await waitForPage(page);
 
@@ -44,7 +44,7 @@ test.describe('A. 编辑/查看模式切换', () => {
     const editModeBtn = page.getByRole('button', { name: '编辑模式' });
     await expect(editModeBtn).toBeVisible();
 
-    // 查看模式下应渲染 PipelineGraph（react-flow 画布）
+    // 查看模式下渲染 WorkflowEditor（readOnly，react-flow 画布）
     await waitForCanvas(page);
     await expect(page.locator('.react-flow__node').first()).toBeVisible();
   });
@@ -77,7 +77,7 @@ test.describe('A. 编辑/查看模式切换', () => {
     await expect(page.getByRole('button', { name: 'YAML 编辑器' })).not.toBeVisible();
   });
 
-  test('A3. 点击"查看模式" → 回到查看模式 → WorkflowEditor 消失', async ({ page }) => {
+  test('A3. 点击"查看模式" → 回到查看模式 → 编辑模式特有元素消失', async ({ page }) => {
     await page.goto(TEST_URL);
     await waitForPage(page);
 
@@ -149,11 +149,12 @@ test.describe('B. 编辑器中拖放 + 保存', () => {
     await waitForCanvas(page);
 
     // 拖放 Task 节点到画布
+    // v2 (2026-07): 拖到左上空白 —— 落入已有 Task 容器内会被 R7 拒绝导致 dirty 未触发
     const taskCard = page.locator('[draggable="true"]', { hasText: 'Task' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await taskCard.dragTo(canvas, {
       sourcePosition: { x: 20, y: 20 },
-      targetPosition: { x: 500, y: 350 },
+      targetPosition: { x: 80, y: 140 },
     });
     await page.waitForTimeout(500);
 
@@ -180,9 +181,10 @@ test.describe('B. 编辑器中拖放 + 保存', () => {
     await page.getByRole('button', { name: '编辑模式' }).click();
     await waitForCanvas(page);
 
-    // 展开"原子行为"折叠面板
-    const atomicHeader = page.locator('.ant-collapse-header', { hasText: '原子行为' });
-    const atomicPanel = page.locator('.ant-collapse-item').filter({ hasText: '原子行为' });
+    // 展开"基础任务"折叠面板
+    // 注意(2026-07): 面板标题已从"原子行为"改名为"基础任务"，同步定位器
+    const atomicHeader = page.locator('.ant-collapse-header', { hasText: '基础任务' });
+    const atomicPanel = page.locator('.ant-collapse-item').filter({ hasText: '基础任务' });
     const isExpanded = await atomicPanel.locator('.ant-collapse-content-active').count();
     if (isExpanded === 0) {
       await atomicHeader.click();

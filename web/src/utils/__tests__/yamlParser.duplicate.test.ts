@@ -23,8 +23,8 @@ describe('YAML 重复定义校验', () => {
 
     const result = parseYamlToPipeline(yaml)
     expect(result.success).toBe(false)
-    expect(result.error?.message).toContain('名称重复')
-    expect(result.error?.path).toBe('pipelines[0].tasks[1].name')
+    expect(result.error?.message).toContain('compile')
+    expect(result.error?.path).toBe('pipelines[0].tasks')
   })
 
   it('[P1] 重复 subpipeline name 必须校验失败', () => {
@@ -77,7 +77,8 @@ describe('YAML 重复定义校验', () => {
 
     const result = parseYamlToPipeline(yaml)
     expect(result.success).toBe(false)
-    expect(result.error?.path).toBe('tasks[1].name')
+    expect(result.error?.message).toContain('step')
+    expect(result.error?.path).toBe('tasks')
   })
 
   it('[P2] 重复 mapping key（重复 env 变量）由 js-yaml 直接报错', () => {

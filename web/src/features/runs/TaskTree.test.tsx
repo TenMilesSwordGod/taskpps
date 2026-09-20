@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TaskTree from './TaskTree';
 import type { PipelineDetail, TaskYAML, SubPipeline } from '@/types';
@@ -219,5 +219,29 @@ describe('<TaskTree /> Issue #72 - 右键重试 + 重试版本徽标', () => {
     // 任务名文字不应使用失败红色
     const taskName = screen.getByText('taskA');
     expect(taskName).not.toHaveStyle({ color: '#b91c1c' });
+  });
+
+  // v3 (2026-09): 任务树开关从页面头部移入树面板头部 — 控制项靠近被控对象
+  it('提供 onCollapse 时在面板头部渲染收起按钮，点击触发回调', () => {
+    const onCollapse = vi.fn();
+    render(
+      <Wrapper>
+        <TaskTree pipeline={makePipeline()} onSelect={vi.fn()} onCollapse={onCollapse} />
+      </Wrapper>,
+    );
+
+    const btn = screen.getByRole('button', { name: '隐藏任务树' });
+    fireEvent.click(btn);
+    expect(onCollapse).toHaveBeenCalledTimes(1);
+  });
+
+  it('未提供 onCollapse 时不渲染收起按钮', () => {
+    render(
+      <Wrapper>
+        <TaskTree pipeline={makePipeline()} onSelect={vi.fn()} />
+      </Wrapper>,
+    );
+
+    expect(screen.queryByRole('button', { name: '隐藏任务树' })).not.toBeInTheDocument();
   });
 });

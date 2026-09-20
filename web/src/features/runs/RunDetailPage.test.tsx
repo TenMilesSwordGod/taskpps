@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { App as AntdApp } from 'antd'
@@ -38,7 +38,14 @@ const mockTaskTreeProps = vi.fn()
 vi.mock('./TaskTree', () => ({
   default: (props: Record<string, unknown>) => {
     mockTaskTreeProps(props)
-    return <div data-testid="task-tree" data-pipeline-id={(props.pipeline as { id?: string } | undefined)?.id ?? ''} />
+    return (
+      <div data-testid="task-tree" data-pipeline-id={(props.pipeline as { id?: string } | undefined)?.id ?? ''}>
+        {/* 模拟真实 TaskTree 头部的收起按钮，验证页面把 onCollapse 接到了"收起"动作 */}
+        {typeof props.onCollapse === 'function' && (
+          <button data-testid="tree-collapse" aria-label="隐藏任务树" onClick={props.onCollapse as () => void} />
+        )}
+      </div>
+    )
   },
 }))
 
@@ -177,7 +184,59 @@ describe('<RunDetailPage /> Issue #57 - 历史运行必须用快照', () => {
     expect(mockUsePipeline).not.toHaveBeenCalled()
   })
 
-  it('Issue #113: 右侧展示执行节点面板，并传入快照和任务运行记录', async () => {
+  // v2 (2026-09): 头部重排 — 标题优先、操作右置，锁定信息层级与开关可访问性
+  it('头部以运行名为标题、面包屑展示所属流水线，操作区位于标题之后', async () => {
+    mockUseRun.mockReturnValue({ data: makeRun({ display_name: 'keen_bear', pipeline_name: 'test-pipeline' }), isLoading: false })
+    mockUsePipelineSnapshot.mockReturnValue({ data: makePipeline(), isLoading: false, error: null })
+
+    render(<Wrapper id="run-abc" />)
+
+    const heading = await screen.findByRole('heading', { level: 1 })
+    expect(heading).toHaveTextContent('keen_bear')
+    expect(screen.getByText('test-pipeline')).toBeInTheDocument()
+
+    // 操作按钮在标题之后（DOM 顺序），避免用户先看到操作再看到页面主体
+    const refreshBtn = screen.getByRole('button', { name: /刷新/ })
+    const position = heading.compareDocumentPosition(refreshBtn)
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('任务树收起入口位于树面板内，收起后在原位置提供展开入口', async () => {
+    mockUseRun.mockReturnValue({ data: makeRun(), isLoading: false })
+    mockUsePipelineSnapshot.mockReturnValue({ data: makePipeline(), isLoading: false, error: null })
+
+    render(<Wrapper id="run-abc" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('task-tree')).toBeInTheDocument()
+    })
+    // TaskTree 收到"收起"回调，按钮渲染在树面板内部（由 TaskTree 负责）
+    expect(mockTaskTreeProps.mock.calls.at(-1)![0].onCollapse).toBeTypeOf('function')
+
+    fireEvent.click(screen.getByTestId('tree-collapse'))
+
+    // 收起后树卸载，原位置（左侧）保留展开按钮
+    expect(screen.queryByTestId('task-tree')).not.toBeInTheDocument()
+    const expandBtn = screen.getByRole('button', { name: '显示任务树' })
+    fireEvent.click(expandBtn)
+    expect(screen.getByTestId('task-tree')).toBeInTheDocument()
+  })
+
+  it('Debug 切换按钮文案稳定，aria-pressed 反映状态', async () => {
+    mockUseRun.mockReturnValue({ data: makeRun(), isLoading: false })
+    mockUsePipelineSnapshot.mockReturnValue({ data: makePipeline(), isLoading: false, error: null })
+
+    render(<Wrapper id="run-abc" />)
+
+    const btn = await screen.findByRole('button', { name: 'Debug' })
+    expect(btn).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(btn)
+
+    expect(screen.getByRole('button', { name: 'Debug' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('Issue #113 / v3: 进度徽标悬浮展示执行节点面板，并传入快照和任务运行记录', async () => {
     const run = makeRun({
       tasks: [
         {
@@ -210,6 +269,12 @@ describe('<RunDetailPage /> Issue #57 - 历史运行必须用快照', () => {
     mockUsePipelineSnapshot.mockReturnValue({ data: snapshot, isLoading: false, error: null })
 
     render(<Wrapper id="run-abc" />)
+
+    const badge = await screen.findByTestId('progress-badge')
+    // 悬浮前不渲染节点面板，避免头部常驻占位
+    expect(screen.queryByTestId('run-stage-panel')).not.toBeInTheDocument()
+
+    fireEvent.mouseEnter(badge)
 
     await waitFor(() => {
       expect(screen.getByTestId('run-stage-panel')).toBeInTheDocument()

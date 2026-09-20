@@ -70,9 +70,12 @@ export function findDropParentContext(
   let bestDepth = -1;
 
   for (const node of nodes) {
-    const w = node.width;
-    const h = node.height;
-    // 节点未完成测量（首次渲染），跳过
+    // v4 (2026-07): 新拖入的节点可能尚未被 React Flow 测量（node.width 为空），
+    // 此时回退到显式 style 宽高，否则嵌套校验会漏判（拖进容器却被当成根级）。
+    const styleSize = node.style as { width?: number; height?: number } | undefined;
+    const w = node.width ?? (typeof styleSize?.width === 'number' ? styleSize.width : undefined);
+    const h = node.height ?? (typeof styleSize?.height === 'number' ? styleSize.height : undefined);
+    // 节点未完成测量且无显式尺寸，跳过
     if (!w || !h) continue;
 
     // 注意(2026-07): 嵌套子节点 position 是相对父容器的，必须先换算为绝对画布坐标，

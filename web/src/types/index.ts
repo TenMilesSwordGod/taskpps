@@ -132,9 +132,19 @@ export interface PipelineSummary {
   raw_content?: string;
 }
 
+/** 流水线文件夹（v3 2026-09: 支持展示暂无 YAML 的空文件夹） */
+export interface PipelineFolder {
+  project_id: string | null;
+  folder: string;
+  /** 所属项目名称（空文件夹所在项目可能没有流水线，需靠它渲染分组标题） */
+  project_name?: string | null;
+}
+
 /** 流水线列表响应 */
 export interface PipelineListResponse {
   items: PipelineSummary[];
+  /** 真实存在的文件夹列表（含空文件夹），由后端目录扫描返回 */
+  folders?: PipelineFolder[];
 }
 
 /** Invoke 规格 */
@@ -188,7 +198,8 @@ export interface PipelineConfig {
   retry: number;
   on_failure: string;
   execution_strategy: string;
-  max_parallel?: number | null;
+  // 注意(2026-09): 删除旧字段 max_parallel —— 后端 Issue #106 已更名 max_concurrent_runs，
+  // 接口 model_dump 不会再返回旧名，保留只会让读取方永远取到空值
   max_concurrent_runs?: number | null;
   max_concurrent_tasks?: number | null;
   cwd?: string | null;
@@ -252,10 +263,11 @@ export interface PipelineDetail {
   pipelines?: SubPipeline[] | null;
   artifacts?: ArtifactDeclaration[];
   /**
-   * v7 (2026-08): 后端 by-id 附带磁盘原始 YAML 文本。
-   * 编辑器优先展示它，避免重新序列化丢失注释/空行/字段顺序。
+   * v3 (2026-09): 文件原文，仅 /by-id 接口返回（旧数据可能为空）。
+   * YAML 编辑器优先展示它——已解析模型会丢失 schema 未声明字段（如裸 task:），
+   * 直接用模型反序列化会让编辑器内容 ≠ 真实文件。
    */
-  raw_content?: string;
+  raw_content?: string | null;
 }
 
 /** 健康检查响应 */
@@ -324,6 +336,8 @@ export interface AgentHostInfo {
 export interface AgentWithConfig {
   agent_id: string;
   name: string;
+  /** 配置描述（后端 yaml，用于展示/编辑回填） */
+  description?: string;
   type: string;
   host: string;
   port: number;
@@ -333,6 +347,16 @@ export interface AgentWithConfig {
   project_id: string;
   /** 所属项目名称 */
   project_name: string;
+  /** 登录用户名（编辑回填用；密码永不回传） */
+  username?: string;
+  /** 绑定的凭据 ID（编辑回填用） */
+  credential_id?: string;
+  /** agent 回连服务端的地址（编辑回填用）；留空表示服务端自动探测 */
+  server_ws_host?: string;
+  /** 是否优先走 WebSocket execution-agent */
+  execution_agent?: boolean;
+  /** 是否允许自动部署 agent */
+  agent_auto_bootstrap?: boolean;
   hostname: string;
   platform: string;
   system: string;
@@ -349,6 +373,20 @@ export interface AgentWithConfig {
   net_status: 'unknown' | 'reachable' | 'unreachable';
   /** 最近一次命令执行完成时间（Unix 时间戳，秒） */
   last_execution_time: number;
+}
+
+/** 凭据元数据（后端永不回传密码/口令明文） */
+export interface CredentialView {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  username: string;
+  key_path: string;
+  has_password: boolean;
+  has_passphrase: boolean;
+  source_file: string;
+  project_id: string;
 }
 
 /** Agent 正在执行或等待执行的命令 */
@@ -397,11 +435,23 @@ export interface AgentCheckResponse {
 export interface ParamFieldDef {
   key: string;
   path: string;
+  /**
+   * YAML 中的真实字段名，与展示用 label 解耦
+   * 注意(2026-09): 之前读写都用 label，导致 strategy（真实 key execution_strategy）、
+   * max_parallel（真实 key max_concurrent_runs）永远取不到值，故显式区分
+   */
+  dataKey: string;
   label: string;
   type: 'number' | 'string' | 'select' | 'json' | 'host' | 'env';
   options?: { label: string; value: string }[];
   placeholder?: string;
   hint?: string;
+  /**
+   * pipeline 级有效默认值，仅用于表单回填展示
+   * 注意(2026-09): 与 server/taskpps/schemas/pipeline.py 的 PipelineConfig 默认值保持一致；
+   * 未定义的字段（如 timeout/host）默认 None，表示未设置，表单保持空
+   */
+  default?: unknown;
 }
 
 /** 项目信息 */
@@ -499,12 +549,18 @@ export interface ResultPageResponse {
     total_count: number;
     started_at: string | null;
     finished_at: string | null;
+    /** v2 (2026-09): 服务端预格式化的可读时间（兼容保留，前端优先本地格式化） */
+    started_display?: string | null;
+    finished_display?: string | null;
     duration: string;
   };
   html_content: string;
   md_content: string;
   collector_mode: string | null;
   has_collector: boolean;
+  /** v2 (2026-09): 插件原始产物；老 result.json 无该字段（undefined） */
+  collector_html?: string | null;
+  collector_md?: string | null;
   generated_at: string | null;
 }
 

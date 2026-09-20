@@ -405,48 +405,42 @@ describe('数据层补充: 性能测试', () => {
 });
 
 describe('数据层补充: 节点视觉验证', () => {
-  // v11 (2026-08): 安静容器 —— 半透浅底 rgba(255,255,255,0.55) + 发丝实线 + 圆角 14
-  it('SubPipeline 容器使用半透白实底 + 实线边框（无虚线）', () => {
+  it('SubPipeline 节点使用蓝色虚线边框（层级模型颜色）', () => {
     const { container, unmount } = renderWithProvider(
       <EditorSubPipelineNode data={{ label: 'build' }} />,
     );
     const root = container.firstChild as HTMLElement;
     const style = root.getAttribute('style') || '';
-    expect(style).toContain('border: 1px solid');
-    expect(style).not.toContain('dashed');
-    // 半透浅底（与查看模式 SubpipelineGroupNode 一致）
-    expect(style).toContain('rgba(255, 255, 255, 0.55)');
-    expect(style).toContain('border-radius: 14px');
+    expect(style).toContain('dashed');
+    // #3b82f6 → rgb(59, 130, 246)
+    expect(style).toContain('59, 130, 246');
     unmount();
   });
 
-  // v11 (2026-08): 任务卡边框走 CSS 变量 + 近白浅底微染（编辑态）
-  it('Task 节点为实线浅底卡片（编辑态）', () => {
+  it('Task 节点使用绿色虚线边框', () => {
     const { container, unmount } = renderWithProvider(
       <EditorTaskNode data={{ task: { name: 'test', env: {}, retry: 0, depends_on: [] } }} />,
     );
     const root = container.firstChild as HTMLElement;
     const style = root.getAttribute('style') || '';
-    expect(style).toContain('border: 1.5px solid var(--wf-card-border, #DBDFE7)');
-    expect(style).toContain('rgb(251, 252, 254)');
+    expect(style).toContain('dashed');
+    // #22c55e → rgb(34, 197, 94)
+    expect(style).toContain('34, 197, 94');
     unmount();
   });
 
-  // v9 (2026-08): Post 父容器软红实线（#FCA5A5 red-300，替代刺眼 #ef4444 大面积描边）
-  it('Post 父容器节点使用软红实线边框', () => {
+  it('Post 父容器节点使用红色虚线边框', () => {
     const { container, unmount } = renderWithProvider(
       <EditorPostParentNode data={{ label: 'Post' }} />,
     );
     const root = container.firstChild as HTMLElement;
     const style = root.getAttribute('style') || '';
-    // #FCA5A5 → rgb(252, 165, 165)
-    expect(style).toContain('252, 165, 165');
-    expect(style).not.toContain('dashed');
+    // #ef4444 → rgb(239, 68, 68)
+    expect(style).toContain('239, 68, 68');
     unmount();
   });
 
-  // v9 (2026-08): Post 子卡白卡化 —— 变体语义收敛到 chip + 圆点，边框统一发丝灰
-  it('Post 子容器 on_fail：白卡发丝边框 + 红色圆点/徽章', () => {
+  it('Post 子容器 on_fail 使用红色强调条', () => {
     const { container, unmount } = renderWithProvider(
       <EditorPostChildNode
         data={{ task: { name: 'alert', env: {}, retry: 0, depends_on: [] }, postVariant: 'on_fail' }}
@@ -454,16 +448,13 @@ describe('数据层补充: 节点视觉验证', () => {
     );
     const root = container.firstChild as HTMLElement;
     const style = root.getAttribute('style') || '';
-    // 统一发丝灰边框（白卡语言）
-    expect(style).toContain('border: 1px solid rgb(226, 232, 240)');
-    expect(style).toContain('rgb(255, 255, 255)');
-    // 变体色圆点存在
-    const dot = root.querySelector('span[aria-hidden]') as HTMLElement;
-    expect(dot?.getAttribute('style')).toContain('rgb(239, 68, 68)');
+    expect(style).toContain('3px');
+    // #ef4444 → rgb(239, 68, 68)
+    expect(style).toContain('239, 68, 68');
     unmount();
   });
 
-  it('Post 子容器 on_success：白卡发丝边框 + 绿色圆点', () => {
+  it('Post 子容器 on_success 使用绿色强调条', () => {
     const { container, unmount } = renderWithProvider(
       <EditorPostChildNode
         data={{ task: { name: 'tag', env: {}, retry: 0, depends_on: [] }, postVariant: 'on_success' }}
@@ -471,9 +462,9 @@ describe('数据层补充: 节点视觉验证', () => {
     );
     const root = container.firstChild as HTMLElement;
     const style = root.getAttribute('style') || '';
-    expect(style).toContain('border: 1px solid rgb(226, 232, 240)');
-    const dot = root.querySelector('span[aria-hidden]') as HTMLElement;
-    expect(dot?.getAttribute('style')).toContain('rgb(34, 197, 94)');
+    expect(style).toContain('3px');
+    // #22c55e → rgb(34, 197, 94)
+    expect(style).toContain('34, 197, 94');
     unmount();
   });
 
@@ -499,28 +490,23 @@ describe('SVG 图标验证', () => {
   /** emoji 中常用作图标替代的 unicode 范围 */
   const EMOJI_CHARS = /[⚠⬡⚙⌨⏳✓✗▶◀▲▼●○◆◇▲▼☐☑☒⭐♻⬆⬇⬅➡🔄💾📁📂🔍🔧]+/u;
 
-  // v7 (2026-08): 图标体系从 SVG 改为类型色文字代码块（与查看模式 TaskNode 一致）
-  it('SubPipeline 容器 header 含组名与策略徽章（替代 SVG 图标）', () => {
+  it('SubPipeline 节点渲染包含 SVG 元素（SubPipelineIcon）', () => {
     const { container, unmount } = renderWithProvider(
-      <EditorSubPipelineNode data={{ label: 'build', executionStrategy: 'sequential' }} />,
+      <EditorSubPipelineNode data={{ label: 'build' }} />,
     );
-    expect(container.textContent).toContain('build');
-    expect(container.textContent).toContain('SEQ');
+    // SubPipelineIcon 渲染为 <svg> 标签
+    expect(container.querySelector('svg')).not.toBeNull();
     unmount();
   });
 
-  // v11 (2026-08): 类型图标块从文字码（CMD）迁移为白色 glyph 图标（n8n 语汇）
-  it('Task 节点渲染类型图标块（glyph SVG）与命令摘要', () => {
+  it('Task 节点渲染包含 SVG 元素（CmdIcon/StepIcon 等）', () => {
     const { container, unmount } = renderWithProvider(
       <EditorTaskNode
         data={{ task: { name: 'compile', command: 'make', env: {}, retry: 0, depends_on: [] }, taskType: 'command' }}
       />,
     );
-    // 图标块内为 SVG 图标（非文字码）
+    // CmdIcon 渲染为 <svg> 标签
     expect(container.querySelector('svg')).not.toBeNull();
-    // 文字码（CMD/GIT 等大写缩写）退役
-    expect(container.textContent).not.toContain('CMD');
-    expect(container.textContent).toContain('make');
     unmount();
   });
 

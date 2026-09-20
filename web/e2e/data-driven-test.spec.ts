@@ -74,7 +74,7 @@ async function setup(page: P, pipeline: any) {
   });
   await page.goto('/');
   await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 't');
-  await page.goto('/pipelines/p/d', { waitUntil:'networkidle', timeout:15000 });
+  await page.goto('/pipelines/p/d', { waitUntil: 'domcontentloaded', timeout:15000 });
   await page.waitForSelector('.react-flow', { timeout:10000 });
   await page.waitForTimeout(1000);
 }
@@ -107,7 +107,9 @@ for (const s of SCENARIOS) {
       if (await sub.isVisible().catch(() => false)) {
         await sub.dispatchEvent('contextmenu');
         await page.waitForTimeout(800);
-        const items = await page.locator('[style*="position:fixed"][style*="z-index"] > div').allTextContents();
+        // v2 (2026-07): React 内联样式的 DOM 序列化为 "position: fixed"（带空格），
+        // 原选择器 "position:fixed" 永远匹配不到，导致菜单断言假失败
+        const items = await page.locator('div[style*="position: fixed"] > div').allTextContents();
         expect(items.some(t => t.includes('添加') || t.includes('折叠') || t.includes('属性') || t.includes('删除'))).toBeTruthy();
       }
     });
@@ -120,7 +122,9 @@ for (const s of SCENARIOS) {
       if (await task.isVisible().catch(() => false)) {
         await task.dispatchEvent('contextmenu');
         await page.waitForTimeout(800);
-        const items = await page.locator('[style*="position:fixed"][style*="z-index"] > div').allTextContents();
+        // v2 (2026-07): React 内联样式的 DOM 序列化为 "position: fixed"（带空格），
+        // 原选择器 "position:fixed" 永远匹配不到，导致菜单断言假失败
+        const items = await page.locator('div[style*="position: fixed"] > div').allTextContents();
         expect(items.some(t => t.includes('属性') || t.includes('删除'))).toBeTruthy();
       }
     });
@@ -133,11 +137,12 @@ for (const s of SCENARIOS) {
       if (await task.isVisible().catch(() => false)) {
         await task.click({ force: true });
         await page.waitForTimeout(1500);
-        const panel = page.locator('.ant-drawer-body, [class*="panel"]').first();
-        if (await panel.isVisible().catch(() => false)) {
-          const text = await panel.textContent();
-          expect(text?.length).toBeGreaterThan(0);
-        }
+        // v2 (2026-07): 原选择器 [class*="panel"] 会命中 NodePalette 中的空元素导致假失败；
+        // PropertyPanel 是 antd Drawer，直接用 .ant-drawer-body 并断言可见
+        const panel = page.locator('.ant-drawer-body').first();
+        await expect(panel).toBeVisible({ timeout: 5000 });
+        const text = await panel.textContent();
+        expect(text?.length).toBeGreaterThan(0);
       }
     });
 
@@ -152,12 +157,21 @@ for (const s of SCENARIOS) {
       });
       await page.goto('/');
       await page.evaluate((t) => localStorage.setItem('taskpps_token', t), 't');
-      await page.goto('/pipelines/p/d', { waitUntil:'networkidle', timeout:15000 });
+      await page.goto('/pipelines/p/d', { waitUntil: 'domcontentloaded', timeout:15000 });
       await page.waitForSelector('.react-flow', { timeout:10000 });
       await page.waitForTimeout(1000);
 
       await page.getByRole('button', { name: '编辑模式' }).click();
       await page.waitForTimeout(1000);
+      // v2 (2026-07): 保存按钮由 dirty 驱动 disabled（未编辑为 disabled），
+      // 先做一次内容编辑（拖 CMD 到左上空白）再保存
+      const card = page.locator('[draggable="true"]', { hasText: 'CMD' }).first();
+      const canvas = page.locator('.react-flow__pane').first();
+      await card.dragTo(canvas, {
+        sourcePosition: { x: 10, y: 10 },
+        targetPosition: { x: 80, y: 140 },
+      });
+      await page.waitForTimeout(600);
       await page.locator('button').filter({ hasText:'保存' }).first().click();
       await page.waitForTimeout(1000);
 

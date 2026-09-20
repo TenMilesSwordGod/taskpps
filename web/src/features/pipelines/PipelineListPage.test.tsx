@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { App as AntdApp } from 'antd'
@@ -22,9 +23,28 @@ function makePipeline(overrides: Partial<PipelineSummary> = {}): PipelineSummary
 }
 
 const mockUsePipelines = vi.fn()
+const mockDeletePipelineAsync = vi.fn()
+const mockDeleteFolderAsync = vi.fn()
 
 vi.mock('@/api/pipelines', () => ({
   usePipelines: () => mockUsePipelines(),
+  useDeletePipeline: () => ({ mutateAsync: mockDeletePipelineAsync, isPending: false }),
+  useDeleteFolder: () => ({ mutateAsync: mockDeleteFolderAsync, isPending: false }),
+}))
+
+// v3 (2026-09): 新建/重命名/注册弹窗在列表页仅验证「能否打开」，组件行为由各自单测覆盖
+vi.mock('./components/CreatePipelineModal', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div data-testid="create-pipeline-modal" /> : null),
+}))
+vi.mock('./components/CreateFolderModal', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div data-testid="create-folder-modal" /> : null),
+}))
+vi.mock('./components/RegisterProjectModal', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div data-testid="register-project-modal" /> : null),
+}))
+vi.mock('./components/RenameModal', () => ({
+  default: ({ open, kind }: { open: boolean; kind: string }) =>
+    open ? <div data-testid={`rename-modal-${kind}`} /> : null,
 }))
 
 vi.mock('@/components/StatusTag', () => ({
@@ -349,5 +369,118 @@ describe('<PipelineListPage /> 多项目展开/折叠 bug — 重复 file 导致
       expect(screen.getByText('p1')).toBeInTheDocument()
     })
     expect(screen.getByText('p2')).toBeInTheDocument()
+  })
+})
+
+// v3 (2026-09): 网页端新建流水线/文件夹/注册项目 + 重命名/删除入口
+describe('<PipelineListPage /> v3 - 新建与行操作入口', () => {
+  beforeEach(() => {
+    mockUsePipelines.mockReset()
+    mockDeletePipelineAsync.mockReset()
+    mockDeleteFolderAsync.mockReset()
+  })
+
+  it('工具栏「新建」下拉包含新建流水线/文件夹/注册项目', async () => {
+    mockUsePipelines.mockReturnValue({ data: { items: [], folders: [] }, isLoading: false })
+    const user = userEvent.setup()
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // 注意(2026-09, issue #218): 空态现在也有「新建流水线」CTA，
+    // 因此工具栏按钮用精确名「新建」，下拉项在菜单容器内断言，避免歧义
+    await user.click(screen.getByRole('button', { name: '新建' }))
+    const menu = await waitFor(() => {
+      const el = document.querySelector('.ant-dropdown-menu')
+      if (!el) throw new Error('下拉菜单未打开')
+      return el as HTMLElement
+    })
+    expect(within(menu).getByText('新建流水线')).toBeInTheDocument()
+    expect(within(menu).getByText('新建文件夹')).toBeInTheDocument()
+    expect(within(menu).getByText('注册项目目录')).toBeInTheDocument()
+  })
+
+  it('点击「新建流水线」打开新建弹窗', async () => {
+    mockUsePipelines.mockReturnValue({ data: { items: [], folders: [] }, isLoading: false })
+    const user = userEvent.setup()
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    await user.click(screen.getByRole('button', { name: '新建' }))
+    const menu = await waitFor(() => {
+      const el = document.querySelector('.ant-dropdown-menu')
+      if (!el) throw new Error('下拉菜单未打开')
+      return el as HTMLElement
+    })
+    await user.click(within(menu).getByText('新建流水线'))
+    expect(await screen.findByTestId('create-pipeline-modal')).toBeInTheDocument()
+  })
+
+  it('后端返回的空文件夹渲染为 folder 行（可独立展开）', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [],
+        folders: [{ project_id: 'proj1', folder: 'debug', project_name: 'Proj1' }],
+      },
+      isLoading: false,
+    })
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('debug/')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Proj1')).toBeInTheDocument()
+  })
+
+  it('folder 行「更多操作」提供重命名/删除', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [],
+        folders: [{ project_id: 'proj1', folder: 'debug', project_name: 'Proj1' }],
+      },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    const moreBtn = await screen.findByLabelText('更多操作')
+    await user.click(moreBtn)
+    expect(await screen.findByText('重命名')).toBeInTheDocument()
+    expect(screen.getByText('删除')).toBeInTheDocument()
+  })
+
+  it('点击 folder 行「重命名」打开重命名弹窗', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [],
+        folders: [{ project_id: 'proj1', folder: 'debug', project_name: 'Proj1' }],
+      },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    await user.click(await screen.findByLabelText('更多操作'))
+    await user.click(await screen.findByText('重命名'))
+    expect(await screen.findByTestId('rename-modal-folder')).toBeInTheDocument()
+  })
+
+  it('确认删除流水线后调用删除接口', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [makePipeline({ id: 'pipe-1', name: 'demo', file: 'demo.yaml', project_id: 'proj1', project_name: 'Proj1' })],
+        folders: [],
+      },
+      isLoading: false,
+    })
+    mockDeletePipelineAsync.mockResolvedValue({ status: 'deleted' })
+    const user = userEvent.setup()
+    render(<PipelineListPage />, { wrapper: Wrapper })
+
+    await user.click(await screen.findByLabelText('更多操作'))
+    await user.click(await screen.findByText('删除'))
+    // 确认弹窗的确定按钮（antd 会在两个中文字符间插入空格，用正则匹配）
+    await user.click(await screen.findByRole('button', { name: /删\s*除/ }))
+
+    await waitFor(() => {
+      expect(mockDeletePipelineAsync).toHaveBeenCalledWith({ projectId: 'proj1', file: 'demo.yaml' })
+    })
   })
 })

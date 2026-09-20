@@ -113,7 +113,9 @@ test.describe('D2. 右键菜单 — 扩展场景', () => {
     await page.waitForTimeout(500);
 
     // 点击空白关闭
-    await page.locator('.react-flow').first().click({ position: { x: 10, y: 10 } });
+    // v2 (2026-07): 菜单打开时有全屏遮罩层拦截指针事件，force 让点击命中遮罩
+    // 触发其 onClick 关闭菜单（与真实用户点击行为一致）
+    await page.locator('.react-flow').first().click({ position: { x: 10, y: 10 }, force: true });
     await page.waitForTimeout(500);
 
     // 菜单应消失（检查 fixed overlay 是否还在）

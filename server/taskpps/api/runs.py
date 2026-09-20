@@ -285,9 +285,19 @@ async def get_run_logs(
                         prev_statuses[task_name] = status_str
 
                 for task_name, log_path in log_paths.items():
-                    if not log_path.exists():  # pragma: no cover
-                        active = True  # pragma: no cover
-                        continue  # pragma: no cover
+                    if not log_path.exists():
+                        # v2 (2026-09): 终态任务可能永远不会生成日志文件（空命令失败、
+                        # when 跳过、依赖失败跳过都不调用 executor）。只有非终态任务才
+                        # 需要继续等待文件出现，否则 SSE 永不发送 done，"已连接"常驻。
+                        task_status = statuses.get(task_name)
+                        if task_status and task_status not in (
+                            TS.SUCCESS,
+                            TS.FAILED,
+                            TS.CANCELLED,
+                            TS.SKIPPED,
+                        ):
+                            active = True
+                        continue
 
                     had_output = False
                     lines, new_pos = _read_log_lines(log_path, positions[task_name])
@@ -622,8 +632,11 @@ async def select_retry_report(run_id: str, retry_id: str, body: SelectReportRequ
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("/{run_id}/result", response_model=ResultPageResponse)
+@router.get("/{run_id}/result", response_model=ResultPageResponse, response_model_exclude_unset=True)
 async def get_result_page(run_id: str):
+    # v2 (2026-09): exclude_unset 让老 result.json 缺失的 collector_html/collector_md
+    # 字段不出现在响应里（而非被 Pydantic 默认值填成 null），前端据此区分
+    # 「老数据走整段 HTML 回退」与「新数据原生渲染」
     async with get_session_factory()() as session:
         run_repo = RunRepository(session)
         run = await run_repo.get_run(run_id)

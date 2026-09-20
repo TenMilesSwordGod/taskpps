@@ -1,6 +1,6 @@
 """Issue #79: 验证 task_summary 字段通过 API 正确返回"""
 import pytest
-from taskpps.schemas.run import RunResponse, RunListResponse
+from taskpps.schemas.run import ResultPageResponse, RunListResponse, RunResponse
 
 
 @pytest.mark.zentao("TC-S0029", domain="server/root", priority="P2")
@@ -93,4 +93,32 @@ def test_from_orm_without_task_summary_defaults_empty():
     obj = FakeORM()
     resp = RunResponse.from_orm_with_parsed_params(obj)
     assert resp.task_summary == {}
+
+
+def test_result_page_response_exclude_unset_distinguishes_legacy_result_json():
+    """v2: 老 result.json 无 collector_* 字段 → exclude_unset 序列化时省略；
+    新数据显式写入 null → 保留。前端据此区分「老数据整段回退」与「原生渲染」。"""
+    base = {
+        "run_id": "run-1",
+        "pipeline_name": "p1",
+        "status": "success",
+        "stats": {},
+        "html_content": "<html></html>",
+        "md_content": "# ok",
+    }
+
+    dumped_legacy = ResultPageResponse(**base).model_dump(exclude_unset=True)
+    assert "collector_html" not in dumped_legacy
+    assert "collector_md" not in dumped_legacy
+
+    new_data = {
+        **base,
+        "has_collector": True,
+        "collector_mode": "append",
+        "collector_html": None,
+        "collector_md": None,
+    }
+    dumped_new = ResultPageResponse(**new_data).model_dump(exclude_unset=True)
+    assert "collector_html" in dumped_new
+    assert dumped_new["collector_html"] is None
 

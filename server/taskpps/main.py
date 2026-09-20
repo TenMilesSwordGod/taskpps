@@ -1,17 +1,31 @@
 import asyncio
 import contextlib
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from taskpps.api import agents, artifacts, auth, health, pipelines, plugins, projects, runs, triggers, ws_agent
+from taskpps.api import (
+    agents,
+    artifacts,
+    auth,
+    credentials,
+    health,
+    pipelines,
+    plugins,
+    projects,
+    runs,
+    triggers,
+    ws_agent,
+)
 from taskpps.config import get_project_workdir, get_server_home, get_settings, load_settings
 from taskpps.db.engine import close_db, init_db
 from taskpps.i18n import set_locale
@@ -87,62 +101,85 @@ async def _recover_stale_runs() -> None:
         logger.info("已恢复 %d 个停滞运行", len(stale_runs))
 
 
+async def _sweep_stale_runs_once() -> int:
+    """执行一次停滞运行扫描，返回被标记为 FAILED 的 run 数量。
+
+    v2 (2026-09): issue #212 — 单独抽出便于测试直接触发一次扫描，
+    无需等待后台循环的 300s 间隔。
+
+    v2 (2026-09): 修复 issue #212 根因 — 本进程内存 _active_runs 中仍存在 runner
+    的 run 说明它正在正常执行，不能仅凭 created_at 超过阈值判为停滞：
+    合法长任务（如超过 2 小时的部署）会被误标 FAILED，而 runner 跑完后又会
+    用真实终态覆盖回来，用户看到的就是「先失败后又自动恢复」的假故障。
+    只有无活跃 runner 的残留 RUNNING 记录才交给这里兜底恢复。
+    """
+    from taskpps.config import get_settings
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import RunRepository
+    from taskpps.engine.runner import _active_runs
+    from taskpps.models.run import RunStatus, TaskStatus
+
+    settings = get_settings()
+    stale_threshold = max(3600, settings.executor.default_timeout * 2)
+    async with get_session_factory()() as session:
+        run_repo = RunRepository(session)
+        stale_runs = await run_repo.list_runs_by_statuses([RunStatus.RUNNING])
+        now = datetime.now(timezone.utc)
+        recovered = 0
+        for run in stale_runs:
+            if run.created_at is None:
+                continue
+            # v2 (2026-09): 跳过本进程活跃运行的 run（判定与标记必须一致，
+            # 否则 sweeper 只改 DB 不取消 runner，必然出现状态打架）
+            if run.id in _active_runs:
+                continue
+            age = (now - run.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+            if age < stale_threshold:
+                continue
+            logger.warning(
+                "Sweeper: run %s stuck RUNNING for %.0fs, marking FAILED",
+                run.id,
+                age,
+            )
+            await run_repo.update_run_status(
+                run.id,
+                RunStatus.FAILED,
+                finished_at=now,
+                error=f"运行超时自动恢复：停滞 {int(age)} 秒后被后台检查标记为失败",
+            )
+            await run_repo.batch_update_stale_tasks(
+                run.id,
+                TaskStatus.FAILED,
+                [TaskStatus.RUNNING, TaskStatus.PENDING],
+                finished_at=now,
+                error="后台恢复：任务状态重置为 FAILED",
+            )
+            await run_repo.batch_update_stale_retries(
+                run.id,
+                TaskStatus.FAILED,
+                [TaskStatus.RUNNING, TaskStatus.PENDING],
+                finished_at=now,
+                error="后台恢复：重试记录状态重置为 FAILED",
+            )
+            recovered += 1
+        if recovered:
+            await session.commit()
+    return recovered
+
+
 async def _sweep_stale_runs_background() -> None:
     """后台循环任务：每隔 5 分钟扫描停滞的 RUNNING 运行并恢复为 FAILED。
 
     正常情况下 heartbeat 过期检测 + agent 端结果缓存已足够防止僵尸运行，
     但极端情况下（agent 进程崩溃、网络分区等）仍需此机制作为安全兜底。
+    注意：本进程 _active_runs 中活跃的 run 不参与超时判定（issue #212）。
     """
-    from taskpps.config import get_settings
-    from taskpps.db.engine import get_session_factory
-    from taskpps.db.repository import RunRepository
-    from taskpps.models.run import RunStatus, TaskStatus
-
     while True:
         await asyncio.sleep(300)
         try:
-            settings = get_settings()
-            stale_threshold = max(3600, settings.executor.default_timeout * 2)
-            async with get_session_factory()() as session:
-                run_repo = RunRepository(session)
-                stale_runs = await run_repo.list_runs_by_statuses([RunStatus.RUNNING])
-                now = datetime.now(timezone.utc)
-                recovered = 0
-                for run in stale_runs:
-                    if run.created_at is None:
-                        continue
-                    age = (now - run.created_at.replace(tzinfo=timezone.utc)).total_seconds()
-                    if age < stale_threshold:
-                        continue
-                    logger.warning(
-                        "Sweeper: run %s stuck RUNNING for %.0fs, marking FAILED",
-                        run.id,
-                        age,
-                    )
-                    await run_repo.update_run_status(
-                        run.id,
-                        RunStatus.FAILED,
-                        finished_at=now,
-                        error=f"运行超时自动恢复：停滞 {int(age)} 秒后被后台检查标记为失败",
-                    )
-                    await run_repo.batch_update_stale_tasks(
-                        run.id,
-                        TaskStatus.FAILED,
-                        [TaskStatus.RUNNING, TaskStatus.PENDING],
-                        finished_at=now,
-                        error="后台恢复：任务状态重置为 FAILED",
-                    )
-                    await run_repo.batch_update_stale_retries(
-                        run.id,
-                        TaskStatus.FAILED,
-                        [TaskStatus.RUNNING, TaskStatus.PENDING],
-                        finished_at=now,
-                        error="后台恢复：重试记录状态重置为 FAILED",
-                    )
-                    recovered += 1
-                if recovered:
-                    await session.commit()
-                    logger.info("Sweeper: recovered %d stale runs", recovered)
+            recovered = await _sweep_stale_runs_once()
+            if recovered:
+                logger.info("Sweeper: recovered %d stale runs", recovered)
         except Exception:
             logger.exception("Stale run sweeper failed")
 
@@ -187,6 +224,50 @@ async def _seed_admin_account() -> None:
         logger.info("已 seed admin 账号: username=%s（请尽快修改默认密码）", admin_username)
 
 
+async def _ensure_default_project() -> None:
+    """启动时把默认项目目录注册为 project，让网页端开箱即可看到并运行流水线。
+
+    解析优先级：
+    1. settings.workdir（显式配置，支持 ~，必须绝对路径）
+    2. settings.server_home（显式配置）
+    3. 环境变量 TASKPPS_SERVER_HOME（systemd 部署注入部署路径，覆盖存量安装）
+    都没有则跳过 —— 避免 dev 裸跑时把 server/ 或仓库根误注册为项目。
+
+    为什么每次启动都确保存在：默认项目的语义是「部署路径始终可见」，
+    即使用户在网页注销，重启后也会恢复；实现为幂等的先查后建，不重复创建。
+    """
+    settings = get_settings()
+    configured = settings.workdir or settings.server_home or os.environ.get("TASKPPS_SERVER_HOME")
+    if not configured:
+        return
+
+    workdir = Path(configured).expanduser()
+    if not workdir.is_absolute():
+        logger.warning("默认项目路径必须是绝对路径，已跳过自动注册: %s", configured)
+        return
+    workdir = workdir.resolve()
+    if not workdir.is_dir():
+        logger.warning("默认项目目录不存在，已跳过自动注册: %s", workdir)
+        return
+
+    from taskpps.db.engine import get_session_factory
+    from taskpps.db.repository import ProjectRepository
+
+    # 保证 pipelines/ 存在：注册后网页端即可新建/列出流水线
+    (workdir / "pipelines").mkdir(parents=True, exist_ok=True)
+
+    async with get_session_factory()() as session:
+        repo = ProjectRepository(session)
+        existing = await repo.get_project_by_workdir(str(workdir))
+        if existing is not None:
+            if not existing.active:
+                await repo.update_project(existing.id, active=True)
+                logger.info("默认项目已重新激活: id=%s workdir=%s", existing.id, workdir)
+            return
+        project = await repo.create_project(workdir=str(workdir), name=workdir.name)
+    logger.info("默认项目已注册: id=%s workdir=%s", project.id, workdir)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _plugin_manager
@@ -212,6 +293,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _recover_stale_runs()
     await _seed_admin_account()
+    # v3 (2026-09): 把部署路径/配置的 workdir 自动注册为默认项目
+    await _ensure_default_project()
 
     # Issue #106: 初始化全局并发信号量
     from taskpps.services.agent_manager import AgentManager
@@ -277,6 +360,20 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error", "path": request.url.path})
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """把 pydantic 校验错误压成一句可读中文。
+
+    设计决策：FastAPI 默认 422 返回 detail 为对象数组，前端 axios 拦截器只处理字符串，
+    会退化成 "Request failed with status code 422" 无法定位；统一格式化后表单能直接展示。
+    """
+    messages = []
+    for err in exc.errors():
+        field = ".".join(str(part) for part in err.get("loc", ()) if part not in ("body", "query", "path"))
+        messages.append(f"{field}: {err.get('msg', '')}" if field else str(err.get("msg", "")))
+    return JSONResponse(status_code=422, content={"detail": "参数校验失败: " + "; ".join(messages)})
+
+
 app.include_router(health.router, prefix="/api")
 # Issue #204: 认证路由（/api/v1/auth/*）
 app.include_router(auth.router, prefix="/api")
@@ -286,6 +383,7 @@ app.include_router(triggers.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(ws_agent.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
+app.include_router(credentials.router, prefix="/api")
 app.include_router(artifacts.router, prefix="/api")
 app.include_router(plugins.router, prefix="/api")
 

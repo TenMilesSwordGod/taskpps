@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Table, Tag, Button, Switch, Input, Empty, Space, Tooltip, Segmented } from 'antd';
+import { Table, Tag, Button, Switch, Input, Empty, Space, Tooltip, Segmented, Alert, App } from 'antd';
 import {
   PlugZap,
   Search,
@@ -32,16 +32,34 @@ export default function PluginListPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [detailPlugin, setDetailPlugin] = useState<PluginResponse | null>(null);
+  // v2 (2026-09, issue #214): 记录正在切换的插件名，用于 loading/disabled 防重复提交
+  const [togglingName, setTogglingName] = useState<string | null>(null);
 
-  const { data: plugins, isLoading, isFetching, refetch } = usePlugins(typeFilter || undefined);
+  const { data: plugins, isLoading, isFetching, error, refetch } = usePlugins(typeFilter || undefined);
   const queryClient = useQueryClient();
+  const { message } = App.useApp();
 
+  /**
+   * 切换插件启用状态（issue #214）。
+   *
+   * 设计决策（为什么这么写）：
+   * - 成功/失败都给 message 反馈：旧实现失败仅 console.error，用户无感知；
+   * - togglingName 驱动 Switch loading+disabled：慢请求期间禁止重复点击发出多个 PATCH；
+   * - 失败后 invalidateQueries 让开关回到服务端真实状态（受控 checked=record.enabled）。
+   */
   const handleToggle = async (plugin: PluginResponse) => {
+    if (togglingName) return;
+    setTogglingName(plugin.name);
     try {
       await apiClient.patch(`/api/plugins/${plugin.name}/toggle`);
       queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      message.success(`插件「${plugin.name}」已${plugin.enabled ? '停用' : '启用'}`);
     } catch (err) {
-      console.error('Toggle plugin failed:', err);
+      const msg = err instanceof Error ? err.message : '未知错误';
+      message.error(`切换插件状态失败: ${msg}`);
+      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+    } finally {
+      setTogglingName(null);
     }
   };
 
@@ -97,6 +115,8 @@ export default function PluginListPage() {
         <Switch
           size="small"
           checked={record.enabled}
+          loading={togglingName === record.name}
+          disabled={togglingName === record.name}
           onChange={() => handleToggle(record)}
         />
       ),
@@ -127,6 +147,7 @@ export default function PluginListPage() {
               type="text"
               size="small"
               icon={<Eye size={14} />}
+              aria-label="查看详情"
               onClick={() => setDetailPlugin(record)}
             />
           </Tooltip>
@@ -182,6 +203,21 @@ export default function PluginListPage() {
               loading
               rowKey="id"
               pagination={false}
+            />
+          </div>
+        ) : error && !plugins ? (
+          // v2 (2026-09, issue #214): 请求失败必须显式报错，不能伪装成「暂无已注册插件」
+          <div className="p-4">
+            <Alert
+              type="error"
+              showIcon
+              message="插件列表加载失败"
+              description={error instanceof Error ? error.message : '请稍后重试'}
+              action={
+                <Button size="small" onClick={() => refetch()}>
+                  重试
+                </Button>
+              }
             />
           </div>
         ) : filtered.length === 0 ? (

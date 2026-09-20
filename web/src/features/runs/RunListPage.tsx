@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, TreeSelect, Popconfirm } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, TreeSelect, Popconfirm, Alert, Empty } from 'antd';
+import { useNavigate, Link } from 'react-router-dom';
 import { Eye, Play, Trash2, RefreshCw, History, CircleDot, Search } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
@@ -58,7 +58,7 @@ export default function RunListPage() {
   const cleanRuns = useCleanRuns();
   const deleteRun = useDeleteRun();
 
-  const { data, isLoading, refetch, isFetching } = useRuns();
+  const { data, isLoading, error, refetch, isFetching } = useRuns();
   const { data: statsData } = useRunStats();
 
   // 动态计算表格滚动高度，避免页面出现滚动条
@@ -180,6 +180,61 @@ export default function RunListPage() {
     }
   }, [deleteRun, message]);
 
+  /** 清除全部筛选条件（issue #218：筛选无结果时给用户一条出路） */
+  const handleClearFilters = useCallback(() => {
+    setStatusFilter('all');
+    setGlobalSearch('');
+    setTreeSelectValue(undefined);
+    setDateRange(null);
+  }, []);
+
+  /**
+   * 表格空态/错误态渲染（issue #215 / #218）。
+   *
+   * 设计决策（为什么这么写）：
+   * - 接口失败必须显式报警 + 重试，不能落成空表；
+   * - 无任何运行记录 → 提供「触发运行」引导；
+   * - 有记录但筛选无命中 → 区分文案并给出「清除筛选」，避免用户以为数据丢了。
+   */
+  const renderEmptyState = () => {
+    if (error && !data) {
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message="运行历史加载失败"
+          description={error instanceof Error ? error.message : '请稍后重试'}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              重试
+            </Button>
+          }
+          style={{ margin: '24px auto', maxWidth: 520, textAlign: 'left' }}
+        />
+      );
+    }
+    if (allItems.length === 0) {
+      return (
+        <Empty description={<span style={{ color: '#7C7F88' }}>还没有运行记录</span>} className="my-10">
+          <Button type="primary" size="small" onClick={() => setTriggerOpen(true)}>
+            触发运行
+          </Button>
+        </Empty>
+      );
+    }
+    const hasActiveFilter = statusFilter !== 'all' || !!globalSearch || !!treeSelectValue || !!dateRange;
+    if (hasActiveFilter) {
+      return (
+        <Empty description={<span style={{ color: '#7C7F88' }}>无匹配运行</span>} className="my-10">
+          <Button size="small" onClick={handleClearFilters}>
+            清除筛选
+          </Button>
+        </Empty>
+      );
+    }
+    return null;
+  };
+
   const columns = useMemo(() => [
     {
       title: '运行名',
@@ -188,9 +243,10 @@ export default function RunListPage() {
       width: 140,
       render: (_: string, record: RunResponse) => (
         <PipelineProgressPopover runId={record.id} tasks={record.tasks} taskSummary={record.task_summary}>
-          <a onClick={() => handleOpenDetail(record.id)} style={{ color: '#1F1F1F', fontWeight: 500 }}>
+          {/* v2 (2026-09, issue #219): 用真实链接替代 <a onClick>，使运行名可 Tab 聚焦/回车打开 */}
+          <Link to={`/runs/${record.id}`} style={{ color: '#3D5BFF', fontWeight: 500 }}>
             {record.display_name || record.id.slice(0, 8)}
-          </a>
+          </Link>
         </PipelineProgressPopover>
       ),
     },
@@ -206,7 +262,7 @@ export default function RunListPage() {
       key: 'pipeline_file',
       width: 180,
       render: (_file: string, record: RunResponse) => (
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8C8C8C' }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#7C7F88' }}>
           {record.definition_id || _file}
         </span>
       ),
@@ -217,7 +273,7 @@ export default function RunListPage() {
       key: 'project_id',
       width: 110,
       render: (_: string | null, record: RunResponse) =>
-        record.project_name ? <Tag style={{ borderRadius: 3 }}>{record.project_name}</Tag> : record.project_id ? <Tag style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, borderRadius: 3 }}>{record.project_id}</Tag> : <span style={{ color: '#8C8C8C' }}>默认</span>,
+        record.project_name ? <Tag style={{ borderRadius: 3 }}>{record.project_name}</Tag> : record.project_id ? <Tag style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, borderRadius: 3 }}>{record.project_id}</Tag> : <span style={{ color: '#7C7F88' }}>默认</span>,
     },
     {
       title: '状态',
@@ -237,7 +293,7 @@ export default function RunListPage() {
       render: (_: string | null, record: RunResponse) =>
         record.operator
           ? (record.operator_nickname || record.operator)
-          : <span style={{ color: '#8C8C8C' }}>系统</span>,
+          : <span style={{ color: '#7C7F88' }}>系统</span>,
     },
     {
       title: '开始时间',
@@ -279,28 +335,28 @@ export default function RunListPage() {
   ], [handleOpenDetail, handleDeleteConfirm]);
 
   return (
-    <div className="flex flex-col h-full p-6 gap-3 overflow-hidden" style={{ background: '#F5F5F5' }}>
+    <div className="flex flex-col h-full p-6 gap-3 overflow-hidden" style={{ background: '#F6F6F8' }}>
       {/* 顶部工具栏 */}
-      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E0E0E0', boxShadow: 'rgba(30, 25, 20, 0.05) 0px 0px 0px 1px' }}>
+      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <History size={18} color="#8C8C8C" />
-            <span className="text-base font-semibold" style={{ color: '#262626' }}>运行历史</span>
+            <History size={18} color="#7C7F88" />
+            <span className="text-base font-semibold" style={{ color: '#121620' }}>运行历史</span>
           </div>
           {/* 统计胶囊 */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F5F5F5', color: '#8C8C8C' }}>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
               总计 {stats.total}
             </span>
             {stats.pending > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F5F5F5', color: '#8C8C8C' }}>
-                <CircleDot size={10} color="#8C8C8C" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+                <CircleDot size={10} color="#7C7F88" />
                 等待中 {stats.pending}
               </span>
             )}
             {stats.running > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(126, 173, 255, 0.12)', color: '#1F1F1F' }}>
-                <CircleDot size={10} color="#FFB7A8" className="animate-pulse" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(126, 173, 255, 0.12)', color: '#3D5BFF' }}>
+                <CircleDot size={10} color="#7EADFF" className="animate-pulse" />
                 运行中 {stats.running}
               </span>
             )}
@@ -323,8 +379,8 @@ export default function RunListPage() {
               </span>
             )}
             {stats.partial > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(126, 173, 255, 0.08)', color: '#FFB7A8' }}>
-                <CircleDot size={10} color="#FFB7A8" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(126, 173, 255, 0.08)', color: '#7EADFF' }}>
+                <CircleDot size={10} color="#7EADFF" />
                 部分完成 {stats.partial}
               </span>
             )}
@@ -351,14 +407,14 @@ export default function RunListPage() {
       </div>
 
       {/* 过滤栏 */}
-      <div className="shrink-0 px-5 py-2.5 flex items-center gap-2 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E0E0E0' }}>
+      <div className="shrink-0 px-5 py-2.5 flex items-center gap-2 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8' }}>
         <Segmented
           size="small"
           options={STATUS_OPTIONS}
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as RunStatus | 'all')}
         />
-        <span style={{ color: '#E0E0E0' }}>|</span>
+        <span style={{ color: '#E3E4E8' }}>|</span>
         <TreeSelect
           allowClear
           showSearch
@@ -379,7 +435,7 @@ export default function RunListPage() {
         <div className="flex-1" />
         <Input
           allowClear
-          prefix={<Search size={14} color="#8C8C8C" />}
+          prefix={<Search size={14} color="#7C7F88" />}
           placeholder="搜索运行名称 / UUID / 项目 / 流水线"
           value={globalSearch}
           onChange={(e) => setGlobalSearch(e.target.value)}
@@ -394,6 +450,7 @@ export default function RunListPage() {
           columns={columns}
           dataSource={filtered}
           loading={isLoading}
+          locale={{ emptyText: isLoading ? undefined : renderEmptyState() }}
           pagination={{ pageSize, showSizeChanger: true, pageSizeOptions: [12, 20, 50, 100], showTotal: (t) => `共 ${t} 条`, size: 'small', onChange: (_page, _pageSize) => setPageSize(_pageSize), onShowSizeChange: (_current, _size) => setPageSize(_size) }}
           size="small"
           scroll={tableScrollY ? { y: tableScrollY } : undefined}
@@ -464,7 +521,7 @@ export default function RunListPage() {
             }}
           </Form.Item>
 
-          <div style={{ color: '#8C8C8C', fontSize: 12 }}>
+          <div style={{ color: '#7C7F88', fontSize: 12 }}>
             注意：删除操作会同时清理对应的任务日志文件，且不可恢复。
           </div>
         </Form>

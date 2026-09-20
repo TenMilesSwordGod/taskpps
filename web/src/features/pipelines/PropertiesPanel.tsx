@@ -11,13 +11,15 @@ import {
   MinusOutlined,
   ExpandOutlined,
   CompressOutlined,
-  InfoCircleOutlined,
-  CodeOutlined,
-  EnvironmentOutlined,
-  BranchesOutlined,
-  SettingOutlined,
-  PartitionOutlined,
 } from '@ant-design/icons';
+import {
+  InfoIcon,
+  CodeIcon,
+  EnvironmentIcon,
+  DependencyIcon,
+  SettingsIcon,
+  SubPipelineIcon,
+} from '@/components/icons';
 import type { PipelineDetail, TaskYAML, TaskType, SubPipeline } from '@/types';
 import { useAppStore } from '@/stores/appStore';
 
@@ -399,10 +401,11 @@ function SubpipelinePanel({ sub }: { sub: SubPipeline }) {
               <Input value={String(config.retry)} readOnly size="small" />
             </div>
           )}
-          {config.max_parallel != null && (
+          {/* 注意(2026-09): 后端 Issue #106 已将 max_parallel 更名为 max_concurrent_runs */}
+          {config.max_concurrent_runs != null && (
             <div>
               <label className="text-xs text-gray-500 mb-1 block">最大并行数</label>
-              <Input value={String(config.max_parallel)} readOnly size="small" />
+              <Input value={String(config.max_concurrent_runs)} readOnly size="small" />
             </div>
           )}
           {config.cwd && (
@@ -416,7 +419,7 @@ function SubpipelinePanel({ sub }: { sub: SubPipeline }) {
       {envEntries.length > 0 && (
         <div className="border-t border-gray-100 pt-2 mt-1">
           <label className="text-xs text-gray-500 mb-2 block">
-            <EnvironmentOutlined /> 环境变量
+                  <EnvironmentIcon /> 环境变量
           </label>
           <Descriptions column={1} size="small" bordered>
             {envEntries.map(([key, value]) => (
@@ -513,7 +516,7 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
       >
         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
           <span className="text-sm font-medium text-gray-800 truncate">
-            <PartitionOutlined className="mr-1" />{foundSub.name}
+            <SubPipelineIcon className="mr-1" />{foundSub.name}
           </span>
           <div className="flex gap-1 shrink-0">
             <Tooltip title="最小化">
@@ -582,7 +585,7 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
               key: 'basic',
               label: (
                 <span>
-                  <InfoCircleOutlined /> 基本
+                  <InfoIcon /> 基本
                 </span>
               ),
               children: <BasicTab task={task} subName={subName} />,
@@ -591,7 +594,7 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
               key: 'source',
               label: (
                 <span>
-                  <CodeOutlined /> 源码
+                  <CodeIcon /> 源码
                 </span>
               ),
               children: <SourceTab task={task} />,
@@ -600,7 +603,7 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
               key: 'env',
               label: (
                 <span>
-                  <EnvironmentOutlined /> 环境变量
+            <EnvironmentIcon /> 环境变量
                 </span>
               ),
               children: <EnvTab task={task} />,
@@ -609,7 +612,7 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
               key: 'deps',
               label: (
                 <span>
-                  <BranchesOutlined /> 依赖
+                  <DependencyIcon /> 依赖
                 </span>
               ),
               children: <DepsTab task={task} />,
@@ -618,7 +621,7 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
               key: 'advanced',
               label: (
                 <span>
-                  <SettingOutlined /> 高级
+                  <SettingsIcon /> 高级
                 </span>
               ),
               children: <AdvancedTab task={task} />,

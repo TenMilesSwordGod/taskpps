@@ -55,14 +55,14 @@ describe('SubPipeline 容器节点', () => {
     unmount();
   });
 
-  // v6/v7 (2026-08): 选中态统一为品牌橙 accent（#FF6D5A → rgb(255, 109, 90)）
-  it('选中状态时显示品牌橙高亮光环', () => {
+  it('选中状态时显示蓝色高亮边框和阴影', () => {
     const { container, unmount } = renderWithProvider(
       <EditorSubPipelineNode data={{ label: 'build' }} selected={true} />,
     );
     const root = container.firstChild as HTMLElement;
     const style = root.getAttribute('style') || '';
-    expect(style).toContain('255, 109, 90');
+    // React 将 inline style 颜色标准化为 rgb() 格式，对应 #1d4ed8
+    expect(style).toContain('29, 78, 216');
     expect(style).toContain('box-shadow');
     unmount();
   });
@@ -90,12 +90,11 @@ describe('Task 容器节点', () => {
     unmount();
   });
 
-  // v7 (2026-08): when 徽章带 "when: " 前缀并截断至 22 字符
-  it('when 条件存在时显示条件徽章（when: 前缀）', () => {
+  it('when 条件存在时显示条件标签', () => {
     const { unmount } = renderWithProvider(
       <EditorTaskNode data={{ task: { ...makeTask('conditional'), when: '${BRANCH} == main' }, taskType: 'command' }} />,
     );
-    expect(screen.getByText(/when: \$\{BRANCH\}/)).toBeInTheDocument();
+    expect(screen.getByText('${BRANCH} == main')).toBeInTheDocument();
     unmount();
   });
 });
@@ -163,12 +162,11 @@ describe('Post 子容器节点', () => {
 });
 
 describe('Start/End 哨兵节点', () => {
-  // v7 (2026-08): 哨兵圆形节点不再渲染 START/END 文本（图标语义 ▶/■），
-  // handle id 契约不变（out/in），方位从右/左改为下/上
-  it('Start 节点仅有 out 端口（底部）', () => {
+  it('Start 节点仅有 out 端口', () => {
     const { container, unmount } = renderWithProvider(
       <EditorStartEndNode data={{ variant: 'start' }} />,
     );
+    expect(screen.getByText('START')).toBeInTheDocument();
     const handles = container.querySelectorAll('[data-handleid]');
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
     expect(handleIds).toContain('out');
@@ -176,10 +174,11 @@ describe('Start/End 哨兵节点', () => {
     unmount();
   });
 
-  it('End 节点仅有 in 端口（顶部）', () => {
+  it('End 节点仅有 in 端口', () => {
     const { container, unmount } = renderWithProvider(
       <EditorStartEndNode data={{ variant: 'end' }} />,
     );
+    expect(screen.getByText('END')).toBeInTheDocument();
     const handles = container.querySelectorAll('[data-handleid]');
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
     expect(handleIds).toContain('in');

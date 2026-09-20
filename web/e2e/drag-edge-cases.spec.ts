@@ -30,7 +30,7 @@ test.describe('B2. 拖拽 — 补全未覆盖的节点类型', () => {
     await waitForCanvas(page);
     const before = await getNodeCount(page);
 
-    const card = page.locator('[draggable="true"]', { hasText: 'on_fail 子容器' }).first();
+    const card = page.locator('[draggable="true"]', { hasText: '失败后' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 350, y: 350 } });
     await page.waitForTimeout(800);
@@ -43,7 +43,7 @@ test.describe('B2. 拖拽 — 补全未覆盖的节点类型', () => {
     await waitForCanvas(page);
     const before = await getNodeCount(page);
 
-    const card = page.locator('[draggable="true"]', { hasText: 'on_success 子容器' }).first();
+    const card = page.locator('[draggable="true"]', { hasText: '成功后' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 380, y: 380 } });
     await page.waitForTimeout(800);
@@ -56,7 +56,7 @@ test.describe('B2. 拖拽 — 补全未覆盖的节点类型', () => {
     await waitForCanvas(page);
     const before = await getNodeCount(page);
 
-    const card = page.locator('[draggable="true"]', { hasText: 'always 子容器' }).first();
+    const card = page.locator('[draggable="true"]', { hasText: '始终' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 400, y: 400 } });
     await page.waitForTimeout(800);
@@ -84,36 +84,39 @@ test.describe('B2. 拖拽 — 补全未覆盖的节点类型', () => {
 
     const card = page.locator('[draggable="true"]', { hasText: 'PLUGIN' }).first();
     const canvas = page.locator('.react-flow__pane').first();
-    await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 440, y: 440 } });
+    // v2 (2026-07): 拖到画布左上角空白 —— 原子节点落入 SubPipeline 内会被 R5 拒绝
+    await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 80, y: 140 } });
     await page.waitForTimeout(800);
 
     expect(await getNodeCount(page)).toBeGreaterThan(before);
   });
 
-  test('拖 Start 节点到画布 → 节点出现', async ({ page }) => {
+  test('拖 Start 节点到画布 → 已有哨兵时被拒绝（节点数不变）', async ({ page }) => {
     await page.goto(TEST_URL);
     await waitForCanvas(page);
     const before = await getNodeCount(page);
 
+    // v2 (2026-07): mock pipeline 已含 START/END，validateDrop R6 拒绝重复添加哨兵
     const card = page.locator('[draggable="true"]', { hasText: 'Start' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 460, y: 460 } });
     await page.waitForTimeout(800);
 
-    expect(await getNodeCount(page)).toBeGreaterThan(before);
+    expect(await getNodeCount(page)).toBe(before);
   });
 
-  test('拖 End 节点到画布 → 节点出现', async ({ page }) => {
+  test('拖 End 节点到画布 → 已有哨兵时被拒绝（节点数不变）', async ({ page }) => {
     await page.goto(TEST_URL);
     await waitForCanvas(page);
     const before = await getNodeCount(page);
 
+    // v2 (2026-07): 同 Start，已有 END 时重复添加被拒绝
     const card = page.locator('[draggable="true"]', { hasText: 'End' }).first();
     const canvas = page.locator('.react-flow__pane').first();
     await card.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 480, y: 480 } });
     await page.waitForTimeout(800);
 
-    expect(await getNodeCount(page)).toBeGreaterThan(before);
+    expect(await getNodeCount(page)).toBe(before);
   });
 });
 
@@ -123,16 +126,18 @@ test.describe('B3. 拖拽 — 容器嵌套拒绝规则（e2e 层验证）', () =
     await waitForCanvas(page);
     const before = await getNodeCount(page);
 
-    // 先拖一个 SubPipeline 到画布
+    // 先拖一个 SubPipeline 到画布左上角空白（避开已有 build 容器，避免被 R1 拒绝）
     const subCard = page.locator('[draggable="true"]', { hasText: 'SubPipeline' }).first();
     const canvas = page.locator('.react-flow__pane').first();
-    await subCard.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 300, y: 200 } });
+    await subCard.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 80, y: 120 } });
     await page.waitForTimeout(800);
     expect(await getNodeCount(page)).toBe(before + 1);
 
-    // 再拖第二个 SubPipeline 到 SubPipeline 内部 → 应拒绝（节点数不变）
+    // 再拖第二个 SubPipeline 到第一个内部 → 应拒绝（节点数不变）
+    // v2 (2026-07): 直接用拖入节点的 DOM 作为目标，避免依赖画布 zoom/pan 换算坐标
+    const newSub = page.locator('.react-flow__node-editorSubPipeline').last();
     const subCard2 = page.locator('[draggable="true"]', { hasText: 'SubPipeline' }).last();
-    await subCard2.dragTo(canvas, { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 310, y: 210 } });
+    await subCard2.dragTo(newSub, { targetPosition: { x: 60, y: 60 } });
     await page.waitForTimeout(800);
 
     expect(await getNodeCount(page)).toBe(before + 1);
@@ -162,11 +167,20 @@ test.describe('B3. 拖拽 — 容器嵌套拒绝规则（e2e 层验证）', () =
     const before = await getNodeCount(page);
 
     // 用空 DataTransfer 模拟无效拖放
-    const canvas = page.locator('.react-flow__pane').first();
-    await canvas.dispatchEvent('drop', {
-      dataTransfer: new DataTransfer(),
-      clientX: 300,
-      clientY: 300,
+    // v2 (2026-07): Playwright 测试进程没有 DataTransfer 构造器，
+    // 必须在浏览器上下文内构造并 dispatch
+    await page.evaluate(() => {
+      const pane = document.querySelector('.react-flow__pane');
+      const dt = new DataTransfer();
+      pane?.dispatchEvent(
+        new DragEvent('drop', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 300,
+          clientY: 300,
+          dataTransfer: dt,
+        }),
+      );
     });
     await page.waitForTimeout(500);
 

@@ -7,6 +7,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from taskpps.main import app as _app
+from tests.auth._helpers import register_and_auth_headers
 
 
 @pytest.fixture
@@ -22,9 +23,11 @@ async def test_concurrent_list_api_no_duplicate_definitions(app, setup_project, 
     """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         create_resp = await client.post(
             "/api/projects/",
             json={"workdir": str(tmp_project), "name": "my-project"},
+            headers=headers,
         )
         assert create_resp.status_code == 201
         project_id = create_resp.json()["id"]
@@ -58,9 +61,11 @@ async def test_sequential_add_files_no_duplicate(app, setup_project, tmp_project
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await register_and_auth_headers(client)
             create_resp = await client.post(
                 "/api/projects/",
                 json={"workdir": str(tmp_project), "name": "my-project"},
+                headers=headers,
             )
             assert create_resp.status_code == 201
             project_id = create_resp.json()["id"]
@@ -98,9 +103,11 @@ async def test_sequential_put_save_idempotent(app, setup_project, tmp_project, d
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await register_and_auth_headers(client)
             create_resp = await client.post(
                 "/api/projects/",
                 json={"workdir": str(tmp_project), "name": "my-project"},
+                headers=headers,
             )
             assert create_resp.status_code == 201
             project_id = create_resp.json()["id"]
@@ -116,10 +123,11 @@ async def test_sequential_put_save_idempotent(app, setup_project, tmp_project, d
 
             put_path = Path(tmp_project) / "pipelines" / "seq_put.yaml"
             for _ in range(3):
+                # v3 (2026-09): 旧 PUT /api/pipelines/{file} 路由已不存在，改用 by-file 保存端点
                 resp = await client.put(
-                    "/api/pipelines/seq_put.yaml",
-                    json={"content": yaml_content},
-                    params={"project_id": project_id},
+                    f"/api/pipelines/by-file/{project_id}",
+                    json={"file": "seq_put.yaml", "content": yaml_content},
+                    headers=headers,
                 )
                 assert resp.status_code == 200
 

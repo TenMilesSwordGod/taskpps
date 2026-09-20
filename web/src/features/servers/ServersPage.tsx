@@ -1,16 +1,20 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Input, Empty, Tag, Tooltip, Alert, Button, Segmented } from 'antd';
+import { Input, Empty, Tag, Tooltip, Alert, Button, Segmented, App } from 'antd';
 import {
   Search, Server, RefreshCw, AlertCircle, Radar,
-  ChevronRight, FolderOpen, Clock,
+  ChevronRight, FolderOpen, Clock, Plus, KeyRound,
 } from 'lucide-react';
-import { useAgentsWithConfig } from '@/api/agents';
+import { useAgentsWithConfig, useDeleteAgent } from '@/api/agents';
+import { useProjects } from '@/api/projects';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import ServerCard from './ServerCard';
 import HostInfoModal from './HostInfoModal';
 import ReplModal from './ReplModal';
+import AgentFormModal from './AgentFormModal';
+import CredentialsModal from './CredentialsModal';
 import apiClient from '@/api/client';
 import { RelativeTime } from '@/components/RelativeTime';
-import type { AgentCheckResult, AgentWithConfig } from '@/types';
+import type { AgentCheckResult, AgentWithConfig, ProjectResponse } from '@/types';
 
 type StatusFilter = 'all' | 'online' | 'offline';
 
@@ -34,6 +38,9 @@ const STATUS_OPTIONS: { label: React.ReactNode; value: StatusFilter }[] = [
 /** Servers 列表页 */
 export default function ServersPage() {
   const { data: agents, isLoading, refetch, isFetching, error, dataUpdatedAt } = useAgentsWithConfig();
+  const { message } = App.useApp();
+  // 仅管理员可见写入口（后端对所有写接口同样做 admin 校验，前端隐藏只是减少误操作）
+  const isAdmin = useIsAdmin();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   // 折叠的项目 ID 集合（默认全部展开，点击折叠后加入集合）
@@ -41,6 +48,13 @@ export default function ServersPage() {
   // 探测结果（agent_id → { system, arch }），用于按需覆盖 yaml 兜底
   const [detected, setDetected] = useState<Record<string, { system: string; arch: string }>>({});
   const [probing, setProbing] = useState(false);
+  // 服务器新增/编辑弹窗状态（editingAgent 为 null 表示新增）
+  const [agentFormOpen, setAgentFormOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentWithConfig | null>(null);
+  // 凭据管理弹窗；从空态/工具栏打开
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
+  const [credentialsProjectId, setCredentialsProjectId] = useState<string | undefined>(undefined);
+  const deleteAgent = useDeleteAgent();
 
   const runProbe = async () => {
     if (!agents || agents.length === 0) return;
@@ -83,33 +97,6 @@ export default function ServersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agents]);
 
-  // 调试用：直接 raw fetch 一次，识别是"404 未重启"还是"[] 但确实没配"
-  const [debugInfo, setDebugInfo] = useState<{ url: string; status: number; type: string; preview: string } | null>(null);
-  const checkDebug = async () => {
-    const baseURL = (import.meta.env.VITE_API_BASE_URL as string) ?? '';
-    const url = `${baseURL}/api/agents/all`;
-    try {
-      const apiKey = (import.meta.env.VITE_API_KEY as string) ?? '';
-      const headers: Record<string, string> = {};
-      if (apiKey) headers['X-API-Key'] = apiKey;
-      const res = await fetch(url, { headers });
-      const text = await res.text();
-      let type = 'unknown';
-      let preview = text.slice(0, 200);
-      try {
-        const j = JSON.parse(text);
-        type = Array.isArray(j) ? `array(${j.length})` : typeof j;
-        if (j && typeof j === 'object' && 'detail' in j) preview = `detail: ${j.detail}`;
-      } catch {
-        type = 'text';
-        preview = text.slice(0, 120);
-      }
-      setDebugInfo({ url, status: res.status, type, preview });
-    } catch (e) {
-      setDebugInfo({ url, status: -1, type: 'error', preview: String(e) });
-    }
-  };
-
   // 搜索 + 状态过滤
   const filtered = useMemo(() => {
     const list = agents ?? [];
@@ -137,6 +124,13 @@ export default function ServersPage() {
   const onlineCount = (agents ?? []).filter((a) => a.connected).length;
   const totalCount = (agents ?? []).length;
   const offlineCount = totalCount - onlineCount;
+
+  // 空配置引导：仅当接口正常且无任何 agent 时，拉取项目列表以展示确切的 agents/ 目录。
+  // 设计决策（为什么这么写）：区分"接口正常但确实没配"与"请求失败"两种空态，
+  // 避免页面正常返回空数组时展示猜测性故障原因；有数据时不发这次请求。
+  // 管理员还需要项目列表来填充"新增服务器"弹窗，因此 admin 始终加载。
+  const showConfigGuide = !isLoading && !error && totalCount === 0;
+  const { data: projects, isLoading: projectsLoading, isError: projectsError } = useProjects(showConfigGuide || isAdmin);
 
   // 按项目分组（保持 yaml 内定义顺序）
   const grouped = useMemo<ProjectGroup[]>(() => {
@@ -179,8 +173,39 @@ export default function ServersPage() {
   }, []);
   const handleCloseRepl = useCallback(() => setReplAgent(null), []);
 
+  // 新增服务器（可带入默认项目，例如从空态引导直接进入）
+  const [defaultProjectId, setDefaultProjectId] = useState<string | undefined>(undefined);
+  const handleCreateAgent = useCallback((presetProjectId?: string) => {
+    setEditingAgent(null);
+    setDefaultProjectId(presetProjectId);
+    setAgentFormOpen(true);
+  }, []);
+  const handleEditAgent = useCallback((agent: AgentWithConfig) => {
+    setEditingAgent(agent);
+    setDefaultProjectId(undefined);
+    setAgentFormOpen(true);
+  }, []);
+  const handleDeleteAgent = useCallback(
+    (agent: AgentWithConfig) => {
+      if (!agent.project_id) return;
+      deleteAgent.mutate(
+        { projectId: agent.project_id, agentId: agent.agent_id },
+        {
+          onSuccess: () => message.success(`服务器 ${agent.agent_id} 已删除`),
+          // 被流水线引用时后端返回 409，直接把原因展示出来（含引用文件清单）
+          onError: (e: unknown) => message.error(e instanceof Error ? e.message : '删除服务器失败'),
+        },
+      );
+    },
+    [deleteAgent, message],
+  );
+  const handleManageCredentials = useCallback((projectId?: string) => {
+    setCredentialsProjectId(projectId);
+    setCredentialsOpen(true);
+  }, []);
+
   return (
-    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F5F5F5' }}>
+    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F6F6F8' }}>
       <style>{`
         @keyframes pageSyncPulse {
           0% { transform: scale(1); opacity: 0.35; }
@@ -192,15 +217,15 @@ export default function ServersPage() {
         }
       `}</style>
       {/* 顶部工具栏 */}
-      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E0E0E0', boxShadow: 'rgba(30, 25, 20, 0.05) 0px 0px 0px 1px' }}>
+      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <Server size={18} color="#8C8C8C" />
-            <span className="text-base font-semibold" style={{ color: '#262626' }}>服务器列表</span>
+            <Server size={18} color="#7C7F88" />
+            <span className="text-base font-semibold" style={{ color: '#121620' }}>服务器列表</span>
           </div>
           {/* 统计胶囊 */}
           <div className="flex items-center gap-1.5 text-xs">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#8C8C8C' }}>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
               总计 {totalCount}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
@@ -208,7 +233,7 @@ export default function ServersPage() {
               在线 {onlineCount}
             </span>
             {offlineCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#8C8C8C' }}>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9CBD3', flexShrink: 0 }} />
                 离线 {offlineCount}
               </span>
@@ -217,7 +242,7 @@ export default function ServersPage() {
             {dataUpdatedAt > 0 && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-                style={{ background: '#F5F5F5', color: '#8C8C8C' }}
+                style={{ background: '#F6F6F8', color: '#7C7F88' }}
                 title={new Date(dataUpdatedAt).toLocaleString('zh-CN')}
               >
                 <span
@@ -244,7 +269,7 @@ export default function ServersPage() {
           />
           <Input
             allowClear
-            prefix={<Search size={14} color="#8C8C8C" />}
+            prefix={<Search size={14} color="#7C7F88" />}
             placeholder="搜索 ID / 名称 / IP / 系统 / 架构 / 类型"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -270,6 +295,37 @@ export default function ServersPage() {
               {probing ? '探测中…' : '探测 system/arch'}
             </Button>
           </Tooltip>
+          {isAdmin && (
+            <Tooltip title="管理服务器登录凭据（密码加密存储，保存后不可查看明文）">
+              <Button
+                size="small"
+                icon={<KeyRound size={14} />}
+                onClick={() => handleManageCredentials(undefined)}
+              >
+                凭据管理
+              </Button>
+            </Tooltip>
+          )}
+          {isAdmin && (
+            <Tooltip
+              title={
+                (projects ?? []).length === 0
+                  ? '请先注册项目目录，服务器配置需要写入项目的 agents/ 目录'
+                  : ''
+              }
+            >
+              {/* 无项目时禁用并提供原因，避免打开空表单无法提交的挫败感 */}
+              <Button
+                size="small"
+                type="primary"
+                icon={<Plus size={14} />}
+                disabled={(projects ?? []).length === 0}
+                onClick={() => handleCreateAgent()}
+              >
+                新增服务器
+              </Button>
+            </Tooltip>
+          )}
         </div>
       </div>
 
@@ -279,54 +335,41 @@ export default function ServersPage() {
           <div className="p-1 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
             {[1, 2, 3, 4].map((i) => <ServerCardSkeleton key={i} />)}
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-4 space-y-3">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <span style={{ color: '#8C8C8C' }}>
-                  {totalCount === 0 ? '暂无 agent 配置' : '无匹配的服务器'}
-                </span>
-              }
-            />
+        ) : error && totalCount === 0 ? (
+          /* 请求失败：展示真实错误与重试入口，不做原因猜测 */
+          <div className="p-4">
             <Alert
-              type="warning"
+              type="error"
               showIcon
               icon={<AlertCircle size={16} />}
-              message="诊断信息"
+              message="无法获取服务器列表"
               description={
                 <div className="space-y-1 text-xs">
                   <div>API: <code>GET /api/agents/all</code></div>
-                  <div>
-                    当前状态：{error ? `前端请求失败（${String(error)}）` : '后端返回空数组'}
-                  </div>
-                  {debugInfo && (
-                    <div className="font-mono text-xs p-2 rounded mt-1" style={{ background: '#F5F5F5', border: '1px solid #E0E0E0' }}>
-                      <div>URL: {debugInfo.url}</div>
-                      <div>HTTP {debugInfo.status} · type: {debugInfo.type}</div>
-                      <div>preview: {debugInfo.preview}</div>
-                    </div>
-                  )}
-                  <div style={{ color: '#8C8C8C' }} className="mt-2">
-                    可能原因：
-                    <ul className="list-disc pl-5 mt-1">
-                      <li>后端 Python 进程未重启，<code>/api/agents/all</code> 路由未注册（HTTP 404）</li>
-                      <li>dev 模式 workdir 指向错误目录，读不到 agents/*.yaml</li>
-                      <li>agents 目录确实为空</li>
-                    </ul>
-                  </div>
+                  <div>错误：{error instanceof Error ? error.message : String(error)}</div>
                 </div>
               }
-              action={
-                <button
-                  onClick={checkDebug}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{ border: '1px solid #E0E0E0', background: '#FFFFFF' }}
-                >
-                  检测 API 响应
-                </button>
-              }
+              action={<Button size="small" onClick={() => refetch()}>重试</Button>}
             />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-4">
+            {totalCount === 0 ? (
+              <EmptyAgentsGuide
+                projects={projects}
+                projectsLoading={projectsLoading}
+                projectsError={projectsError}
+                refreshing={isFetching}
+                onRefresh={() => refetch()}
+                isAdmin={isAdmin}
+                onAddServer={() => handleCreateAgent(projects?.[0]?.id)}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={<span style={{ color: '#7C7F88' }}>无匹配的服务器</span>}
+              />
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-4 p-1">
@@ -344,21 +387,21 @@ export default function ServersPage() {
                     className="group sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 transition-colors cursor-pointer"
                     style={{
                       background: '#FFFFFF',
-                      border: '1px solid #E0E0E0',
+                      border: '1px solid #E3E4E8',
                       borderRadius: 8,
                       transitionTimingFunction: 'cubic-bezier(0.76, 0, 0.24, 1)',
                       transitionDuration: '220ms',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F5F5'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F6F6F8'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; }}
                   >
                     <ChevronRight
                       size={14}
-                      style={{ color: '#8C8C8C', transition: 'transform 200ms cubic-bezier(0.76, 0, 0.24, 1)' }}
+                      style={{ color: '#7C7F88', transition: 'transform 200ms cubic-bezier(0.76, 0, 0.24, 1)' }}
                       className={isCollapsed ? '' : 'rotate-90'}
                     />
-                    <FolderOpen size={14} color={isDefault ? '#8C8C8C' : '#1F1F1F'} />
-                    <span className="text-sm font-semibold" style={{ color: isDefault ? '#8C8C8C' : '#262626' }}>
+                    <FolderOpen size={14} color={isDefault ? '#7C7F88' : '#3D5BFF'} />
+                    <span className="text-sm font-semibold" style={{ color: isDefault ? '#7C7F88' : '#121620' }}>
                       {group.projectName}
                     </span>
                     <Tag className="!m-0 !text-xs" color="default" style={{ borderRadius: 3 }}>
@@ -391,6 +434,9 @@ export default function ServersPage() {
                             detectedArch={det?.arch}
                             onShowDetail={handleShowDetail}
                             onShowRepl={handleShowRepl}
+                            isAdmin={isAdmin}
+                            onEdit={handleEditAgent}
+                            onDelete={handleDeleteAgent}
                           />
                         );
                       })}
@@ -408,6 +454,120 @@ export default function ServersPage() {
 
       {/* Web REPL modal */}
       <ReplModal open={!!replAgent} agent={replAgent} onClose={handleCloseRepl} />
+
+      {/* 新增/编辑服务器（仅管理员入口可达，后端同样校验） */}
+      <AgentFormModal
+        open={agentFormOpen}
+        agent={editingAgent}
+        projects={projects ?? []}
+        defaultProjectId={defaultProjectId}
+        onClose={() => setAgentFormOpen(false)}
+      />
+
+      {/* 凭据管理（仅管理员入口可达） */}
+      <CredentialsModal
+        open={credentialsOpen}
+        initialProjectId={credentialsProjectId}
+        onClose={() => setCredentialsOpen(false)}
+      />
+    </div>
+  );
+}
+
+/**
+ * 无 agent 配置时的引导面板。
+ *
+ * 设计决策（为什么这么写）：
+ * - 仅在后端成功返回空数组时展示，用确定性信息说明"配置放哪里"，
+ *   取代原先罗列"可能原因"（404/目录错误等）的诊断面板——那属于无依据猜测。
+ * - 已注册项目时直接列出各项目 workdir 下的 agents/ 目录，运维可直接照路径创建；
+ *   未注册项目时说明后端会回退读取默认工作目录的 agents/ 目录，不编造具体路径。
+ * - 项目列表自身获取失败时明确提示失败，不谎称"未注册任何项目"。
+ */
+function EmptyAgentsGuide({
+  projects,
+  projectsLoading,
+  projectsError,
+  refreshing,
+  onRefresh,
+  isAdmin,
+  onAddServer,
+}: {
+  projects?: ProjectResponse[];
+  projectsLoading: boolean;
+  projectsError: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+  isAdmin: boolean;
+  onAddServer: () => void;
+}) {
+  const projectList = projects ?? [];
+  return (
+    <div
+      style={{
+        maxWidth: 560,
+        margin: '48px auto 0',
+        padding: '24px 28px',
+        background: '#FFFFFF',
+        border: '1px solid #E3E4E8',
+        borderRadius: 8,
+        textAlign: 'center',
+        boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+      }}
+    >
+      <Server size={28} color="#C9CBD3" style={{ marginBottom: 12 }} />
+      <div className="text-sm font-semibold" style={{ color: '#121620', marginBottom: 8 }}>
+        暂无 agent 配置
+      </div>
+      {projectsLoading ? (
+        <div className="text-xs" style={{ color: '#7C7F88' }}>正在检查已注册项目的 agent 配置…</div>
+      ) : projectsError ? (
+        <div className="text-xs" style={{ color: '#7C7F88' }}>
+          后端会从项目工作目录的 <code>agents/*.yaml</code> 读取配置；
+          项目列表获取失败，请确认配置文件路径后点击刷新。
+        </div>
+      ) : projectList.length > 0 ? (
+        <div className="text-xs" style={{ color: '#7C7F88', textAlign: 'left' }}>
+          <div style={{ marginBottom: 6 }}>
+            后端会从各项目的 <code>agents/*.yaml</code> 读取配置，以下项目下暂未找到 agent 配置：
+          </div>
+          <ul className="list-disc pl-5 space-y-1">
+            {projectList.map((p) => (
+              <li key={p.id}>
+                <span style={{ color: '#121620' }}>{p.name || p.id}</span>
+                <span style={{ color: '#7C7F88' }}>：</span>
+                <code>{p.workdir}/agents</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="text-xs" style={{ color: '#7C7F88' }}>
+          后端会从项目工作目录的 <code>agents/*.yaml</code> 读取配置。当前未注册项目，
+          请先在服务端默认工作目录的 <code>agents/</code> 目录下创建配置文件。
+        </div>
+      )}
+      {isAdmin && (
+        <Button
+          type="primary"
+          size="small"
+          icon={<Plus size={14} />}
+          onClick={onAddServer}
+          disabled={projectsLoading || (projects ?? []).length === 0}
+          style={{ marginTop: 16, marginRight: 8 }}
+        >
+          新增服务器
+        </Button>
+      )}
+      <Button
+        size="small"
+        icon={<RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />}
+        onClick={onRefresh}
+        disabled={refreshing}
+        style={{ marginTop: 16 }}
+      >
+        刷新
+      </Button>
     </div>
   );
 }
@@ -418,7 +578,7 @@ function ServerCardSkeleton() {
     <div
       style={{
         background: '#FFFFFF',
-        border: '1px solid #E0E0E0',
+        border: '1px solid #E3E4E8',
         borderRadius: 8,
         padding: 16,
         height: 158,
@@ -432,7 +592,7 @@ function ServerCardSkeleton() {
           100% { background-position: 200% 0; }
         }
         .server-card-skeleton-line {
-          background: linear-gradient(90deg, #F5F5F5 0%, #E0E0E0 50%, #F5F5F5 100%);
+          background: linear-gradient(90deg, #F6F6F8 0%, #E3E4E8 50%, #F6F6F8 100%);
           background-size: 200% 100%;
           animation: serverCardShimmer 1.4s linear infinite;
           border-radius: 3px;

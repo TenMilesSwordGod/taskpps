@@ -122,4 +122,31 @@ describe('Bug#45: 节点连接问题 — RED 测试', () => {
     });
     expect(subToTask).toBe(true);
   });
+
+  // ── 测试6 (v5/2026-07): START→END 直连应拒绝 ────────────────────
+  it('isValidConnection 应拒绝 START→END 直连（无法映射到 YAML）', async () => {
+    const workflowModule = await import('../WorkflowEditor');
+    const isValidConnection = (workflowModule as any).isValidConnection as
+      | ((conn: { source: string; target: string; sourceHandle: string | null; targetHandle: string | null }) => boolean)
+      | undefined;
+
+    if (typeof isValidConnection !== 'function') {
+      expect(isValidConnection).toBeDefined();
+      return;
+    }
+
+    expect(isValidConnection({
+      source: '__start__',
+      target: '__end__',
+      sourceHandle: 'out',
+      targetHandle: 'in',
+    })).toBe(false);
+    // 正常 START→Pipeline 仍允许
+    expect(isValidConnection({
+      source: '__start__',
+      target: '__pipeline__',
+      sourceHandle: 'out',
+      targetHandle: 'in',
+    })).toBe(true);
+  });
 });

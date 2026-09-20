@@ -165,7 +165,7 @@ my-project/
 └── plugins/              # 用户插件
 ```
 
-用 `ppsctl init --register-current-folder` 把项目目录注册到 server，server 端通过 `project_id` 路由。
+用 `ppsctl init --register-current-folder` 把项目目录注册到 server，server 端通过 `project_id` 路由。通过 `scripts/deploy.sh` 部署时，部署路径（默认 `/opt/taskpps`）会作为**默认项目**在启动时自动注册，无需手动初始化即可在网页端看到并运行流水线。
 
 ## 许可证
 

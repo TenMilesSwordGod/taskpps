@@ -86,6 +86,21 @@ class OptionsYAML(PipelineConfig):
     pass
 
 
+def _find_duplicate_task_name(task_names: list[str]) -> str | None:
+    """返回首个重复的 task 名，无重复返回 None。
+
+    v1 (2026-09): issue #211 — 执行器按 task name 索引任务
+    （ResolvedSubPipeline.get_task_by_name 只返回首个匹配），同名会导致第二个任务被静默
+    复用第一个的日志/结果；故在 schema 层拒绝，错误定位到具体重名。
+    """
+    seen: set[str] = set()
+    for name in task_names:
+        if name in seen:
+            return name
+        seen.add(name)
+    return None
+
+
 class SubPipeline(BaseModel):
     name: str
     config: PipelineConfig | None = None
@@ -96,13 +111,9 @@ class SubPipeline(BaseModel):
 
     @model_validator(mode="after")
     def _validate_unique_task_names(self) -> SubPipeline:
-        # v7 (2026-08): DAG 用 {name: task} 建图，重复 task name 会静默覆盖第一个
-        # 定义，随后报「循环依赖」或漏跑任务；保存阶段直接拒绝
-        seen: set[str] = set()
-        for task in self.tasks:
-            if task.name in seen:
-                raise ValueError(f"duplicate task name in subpipeline '{self.name}': {task.name}")
-            seen.add(task.name)
+        dup = _find_duplicate_task_name([t.name for t in self.tasks])
+        if dup is not None:
+            raise ValueError(f"任务名重复: '{dup}'（同一 pipeline 内 task name 必须唯一）")
         return self
 
 
@@ -120,6 +131,16 @@ class PipelineYAML(BaseModel):
     tasks: list[TaskYAML] | None = None
     pipelines: list[SubPipeline] | None = None
     artifacts: list[ArtifactDeclaration] = Field(default_factory=list)
+
+    # 注意(2026-09): 本校验必须定义在 _normalize 之前 —— _normalize 会把顶层 tasks
+    # 包装进 SubPipeline 并清空 self.tasks，先校验才能让单 pipeline 场景报错定位到 tasks
+    @model_validator(mode="after")
+    def _validate_unique_task_names(self) -> PipelineYAML:
+        if self.tasks:
+            dup = _find_duplicate_task_name([t.name for t in self.tasks])
+            if dup is not None:
+                raise ValueError(f"任务名重复: '{dup}'（同一 pipeline 内 task name 必须唯一）")
+        return self
 
     @model_validator(mode="after")
     def _normalize(self) -> PipelineYAML:

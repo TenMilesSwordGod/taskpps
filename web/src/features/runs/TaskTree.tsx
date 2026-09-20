@@ -1,10 +1,12 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Tree, Tooltip, Dropdown } from 'antd';
+import { Tree, Tooltip, Dropdown, Button } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import { PartitionOutlined, AppstoreOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
-import { Loader2, RotateCcw, History } from 'lucide-react';
+import { Loader2, RotateCcw, History, AlertCircle, PanelLeftClose } from 'lucide-react';
+import { PipelineIcon, SubPipelineIcon, ResultIcon } from '@/components/icons';
 
 import { useRunConsole } from '@/api/runs';
+// v2 (2026-09): phase 解析与 RunDetailPage 共用同一套 console.log 解析器，避免两处逻辑漂移
+import { tokenizeConsoleLog } from './consoleLog';
 import type { PipelineDetail, TaskStatus, SubPipeline, TaskYAML } from '@/types';
 import { STATUS_COLOR, STATUS_SOFT_BG } from '@/features/pipelines/nodes/nodeTokens';
 
@@ -53,6 +55,8 @@ interface TaskTreeProps {
   onSelectResult?: () => void;
   /** Issue #154: 是否选中结果页 */
   resultSelected?: boolean;
+  /** v3 (2026-09): 收起任务树回调 — 开关放进树自己的头部，控制项靠近被控对象 */
+  onCollapse?: () => void;
 }
 
 /** 推断任务类型 */
@@ -108,33 +112,25 @@ interface PhaseGroup {
 
 function parsePhaseGroups(content: string): PhaseGroup[] {
   const groups: PhaseGroup[] = [];
-  const lines = content.split('\n');
-
-  const phasePattern = /^\[(PIPELINE:SETUP|PIPELINE:TEARDOWN|SUB:([^:]+):SETUP|SUB:([^:]+):TEARDOWN|TASK:([^:]+):SETUP|TASK:([^:]+):TEARDOWN)\]/;
-
+  // v2 (2026-09): 同一 (scope, name, phase) 可能被后端重复声明
+  // （任务结束后会补发 SUB:SETUP 作用域标签），按首次出现位置合并，
+  // 避免树中出现多个同名 SETUP 分组。
+  const byKey = new Map<string, PhaseGroup>();
   let currentGroup: PhaseGroup | null = null;
 
-  for (const line of lines) {
-    const match = line.match(phasePattern);
-    if (match) {
-      const tag = match[1];
-      if (tag === 'PIPELINE:SETUP') {
-        currentGroup = { scope: 'pipeline', name: 'pipeline', phase: 'setup', lines: [] };
-      } else if (tag === 'PIPELINE:TEARDOWN') {
-        currentGroup = { scope: 'pipeline', name: 'pipeline', phase: 'teardown', lines: [] };
-      } else if (tag.startsWith('SUB:')) {
-        const parts = tag.split(':');
-        currentGroup = { scope: 'sub', name: parts[1], phase: parts[2].toLowerCase() as 'setup' | 'teardown', lines: [] };
-      } else if (tag.startsWith('TASK:')) {
-        const rest = tag.slice(5);
-        const lastColon = rest.lastIndexOf(':');
-        const name = rest.slice(0, lastColon);
-        const phase = rest.slice(lastColon + 1).toLowerCase() as 'setup' | 'teardown';
-        currentGroup = { scope: 'task', name, phase, lines: [] };
+  for (const token of tokenizeConsoleLog(content)) {
+    if (token.kind === 'tag') {
+      const { scope, name, phase } = token.tag;
+      const key = `${scope}:${name}:${phase}`;
+      let group = byKey.get(key);
+      if (!group) {
+        group = { scope, name, phase, lines: [] };
+        byKey.set(key, group);
+        groups.push(group);
       }
-      if (currentGroup) groups.push(currentGroup);
+      currentGroup = group;
     } else if (currentGroup) {
-      currentGroup.lines.push(line);
+      currentGroup.lines.push(token.content);
     }
   }
 
@@ -149,7 +145,7 @@ const PHASE_BADGE: Record<'setup' | 'teardown', { bg: string; color: string; lab
 /** 紧凑层级任务树 + 可选 system debug log */
 const RESULT_PAGE_KEY = '__result_page__';
 
-export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap, onRetry, onShowVersions, retryCounts, onSelectResult, resultSelected }: TaskTreeProps) {
+export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect, debugVisible, runId, isLive, taskStatusMap, onRetry, onShowVersions, retryCounts, onSelectResult, resultSelected, onCollapse }: TaskTreeProps) {
   // SSE 状态更新：合并到 taskRuns 中
   // Issue #61: 防止陈旧的 SSE 状态覆盖服务端更新的终态状态
   // （SSE 断连重连期间 taskStatusMap 可能停留在旧的 running，而服务端已 failed）
@@ -336,7 +332,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
             )}
             {run?.error && (
               <Tooltip title={run.error} placement="topRight" styles={{ root: { maxWidth: 420 } }}>
-                <ExclamationCircleOutlined style={{ color: '#ef4444', fontSize: 12, flexShrink: 0 }} />
+                <AlertCircle size={12} color="#ef4444" style={{ flexShrink: 0 }} />
               </Tooltip>
             )}
             <span style={{ flex: 1, minWidth: 4 }} />
@@ -387,7 +383,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
             }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', whiteSpace: 'nowrap', cursor: 'pointer', minWidth: 0 }}
           >
-            <PartitionOutlined style={{ color: '#8b5cf6', flexShrink: 0 }} />
+            <SubPipelineIcon style={{ color: '#8b5cf6', flexShrink: 0 }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{sub.name}</span>
             <span style={{ flex: 1, minWidth: 4 }} />
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 20, height: 20, fontSize: 11, fontWeight: 600, borderRadius: 6, padding: '0 6px', background: '#8b5cf6' + '14', color: '#8b5cf6', flexShrink: 0 }}>
@@ -410,7 +406,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', whiteSpace: 'nowrap', cursor: 'pointer', minWidth: 0 }}
         >
-          <FileTextOutlined style={{ color: '#3b82f6', flexShrink: 0 }} />
+          <ResultIcon style={{ color: '#3b82f6', flexShrink: 0 }} />
           <span style={{ fontSize: 13, fontWeight: resultSelected ? 600 : 400, color: resultSelected ? '#1d4ed8' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>结果页</span>
         </div>
       ),
@@ -424,11 +420,22 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
   return (
     <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#F8F8F7', borderRight: '1px solid #E0E0E0' }}>
       <style>{`.task-tree .ant-tree-switcher{width:0!important;padding:0!important;min-width:0!important;overflow:hidden!important}`}</style>
-      <div className="px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <AppstoreOutlined style={{ color: '#3b82f6', flexShrink: 0 }} />
-          <span className="text-sm font-medium truncate">{pipeline.name}</span>
-        </div>
+      <div className="px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10 flex items-center gap-2">
+        <PipelineIcon style={{ color: '#3b82f6', flexShrink: 0 }} />
+        <span className="text-sm font-medium truncate">{pipeline.name}</span>
+        <span style={{ flex: 1 }} />
+        {/* v3 (2026-09): 收起按钮放在树面板头部右侧，紧邻被收起的对象 */}
+        {onCollapse && (
+          <Tooltip title="隐藏任务树">
+            <Button
+              type="text"
+              size="small"
+              aria-label="隐藏任务树"
+              icon={<PanelLeftClose size={15} />}
+              onClick={onCollapse}
+            />
+          </Tooltip>
+        )}
       </div>
       <Tree
         className="task-tree"

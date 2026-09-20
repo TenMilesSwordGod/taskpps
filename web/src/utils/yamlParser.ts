@@ -1,5 +1,6 @@
 import { load, dump, YAMLException } from 'js-yaml';
 import type { PipelineDetail, ValidationError } from '@/types';
+import { normalizeTopLevelTasks } from './normalizePipeline';
 
 export interface YamlParseResult {
   success: boolean;
@@ -48,14 +49,6 @@ function validatePipelineStructure(doc: Record<string, unknown>): ValidationErro
     return { message: 'artifacts 应为数组', path: 'artifacts' };
   }
 
-  // tasks 与 pipelines 互斥：
-  // v7 (2026-08): 后端 PipelineYAML 仅在 pipelines 为 None 时把 tasks 归一化；
-  // tasks 非空且 pipelines 存在时，ResolvedPipeline 只用 pipelines，顶层 tasks
-  // 被静默忽略（保存成功但运行漏跑）。空数组组合无数据可丢，保持兼容。
-  if (Array.isArray(doc.tasks) && doc.tasks.length > 0 && doc.pipelines !== undefined && doc.pipelines !== null) {
-    return { message: 'tasks 与 pipelines 不能同时使用', path: 'tasks' };
-  }
-
   // 校验 subpipelines 结构
   if (Array.isArray(doc.pipelines)) {
     const subNames = new Set<string>();
@@ -80,37 +73,47 @@ function validatePipelineStructure(doc: Record<string, unknown>): ValidationErro
         return { message: `pipelines[${i}].depends_on 应为数组`, path: `pipelines[${i}].depends_on` };
       }
       // 校验每个 task
-      const taskNames = new Set<string>();
       for (let j = 0; j < (sub.tasks as unknown[]).length; j++) {
         const task = (sub.tasks as unknown[])[j] as Record<string, unknown> | null;
         const taskPath = `pipelines[${i}].tasks[${j}]`;
         const taskErr = validateTaskStructure(task, taskPath);
         if (taskErr) return taskErr;
-        // v7 (2026-08): 重复 task name 会被后端 DAG 静默覆盖/报循环依赖
-        const taskName = (task as Record<string, unknown>).name as string;
-        if (taskNames.has(taskName)) {
-          return { message: `${taskPath} 名称重复: ${taskName}`, path: `${taskPath}.name` };
-        }
-        taskNames.add(taskName);
+      }
+      // v1 (2026-09): issue #211 — 同一 subpipeline 内禁止同名 task
+      const subDup = findDuplicateTaskName(sub.tasks as unknown[]);
+      if (subDup) {
+        return {
+          message: `任务名重复: "${subDup}"（同一 pipeline 内 task name 必须唯一）`,
+          path: `pipelines[${i}].tasks`,
+        };
       }
     }
   }
 
   // 校验顶层 tasks 结构
   if (Array.isArray(doc.tasks)) {
-    const taskNames = new Set<string>();
     for (let i = 0; i < (doc.tasks as unknown[]).length; i++) {
       const task = (doc.tasks as unknown[])[i] as Record<string, unknown> | null;
-      const taskPath = `tasks[${i}]`;
-      const taskErr = validateTaskStructure(task, taskPath);
+      const taskErr = validateTaskStructure(task, `tasks[${i}]`);
       if (taskErr) return taskErr;
-      // v7 (2026-08): 重复 task name 会被后端 DAG 静默覆盖/报循环依赖
-      const taskName = (task as Record<string, unknown>).name as string;
-      if (taskNames.has(taskName)) {
-        return { message: `${taskPath} 名称重复: ${taskName}`, path: `${taskPath}.name` };
-      }
-      taskNames.add(taskName);
     }
+    // v1 (2026-09): issue #211 — 顶层 tasks 规范化后属于同一 pipeline，同样禁止同名
+    const dup = findDuplicateTaskName(doc.tasks as unknown[]);
+    if (dup) {
+      return {
+        message: `任务名重复: "${dup}"（同一 pipeline 内 task name 必须唯一）`,
+        path: 'tasks',
+      };
+    }
+  }
+
+  // tasks 与 pipelines 互斥：
+  // v7 (2026-08): 后端 PipelineYAML 仅在 pipelines 为 None 时把 tasks 归一化；
+  // tasks 非空且 pipelines 存在时，ResolvedPipeline 只用 pipelines，顶层 tasks
+  // 被静默忽略（保存成功但运行漏跑）。放在重名校验之后，保证重名错误优先暴露。
+  // 空数组组合无数据可丢，保持兼容。
+  if (Array.isArray(doc.tasks) && doc.tasks.length > 0 && doc.pipelines !== undefined && doc.pipelines !== null) {
+    return { message: 'tasks 与 pipelines 不能同时使用', path: 'tasks' };
   }
 
   return null;
@@ -138,6 +141,23 @@ function validateTaskStructure(task: Record<string, unknown> | null, path: strin
   }
   if (task.post !== undefined && task.post !== null && (typeof task.post !== 'object' || Array.isArray(task.post))) {
     return { message: `${path}.post 应为对象`, path: `${path}.post` };
+  }
+  return null;
+}
+
+/**
+ * v1 (2026-09): issue #211 — 返回 tasks 列表中首个重复的 name，无重复返回 null。
+ * 后端执行器按 task name 索引任务（只取首个匹配），同名时第二个 task 会静默复用第一个的
+ * 日志/结果；本校验与后端 pydantic SubPipeline/PipelineYAML 校验保持一致，在解析阶段拒绝。
+ */
+function findDuplicateTaskName(tasks: unknown[]): string | null {
+  const seen = new Set<string>();
+  for (const t of tasks) {
+    if (!t || typeof t !== 'object') continue;
+    const name = (t as Record<string, unknown>).name;
+    if (typeof name !== 'string') continue;
+    if (seen.has(name)) return name;
+    seen.add(name);
   }
   return null;
 }
@@ -187,7 +207,9 @@ export function parseYamlToPipeline(yamlText: string): YamlParseResult {
       pipeline.pipelines = obj.pipelines as PipelineDetail['pipelines'];
     }
 
-    return { success: true, pipeline };
+    // v2 (2026-07): 顶层 tasks 规范化为同名 SubPipeline（与后端 _normalize 对齐），
+    // 保证实时预览与保存后视图一致，见 normalizePipeline.ts
+    return { success: true, pipeline: normalizeTopLevelTasks(pipeline) };
   } catch (err) {
     if (err instanceof YAMLException) {
       return {

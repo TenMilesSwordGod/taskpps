@@ -115,7 +115,7 @@ describe('Bug #43 — SubPipeline 存在时 Task 节点右键菜单', () => {
     unmount();
   });
 
-  it('右键 Task 节点 → 菜单不再包含"折叠"（v7 移除折叠功能）', async () => {
+  it('右键 Task 节点 → 菜单也包含"折叠"（因 Task 是容器类型）', async () => {
     const { container, unmount } = render(
       <WorkflowEditor
         pipeline={makePipelineWithSubPipelineAndTask()}
@@ -133,9 +133,10 @@ describe('Bug #43 — SubPipeline 存在时 Task 节点右键菜单', () => {
     fireEvent.contextMenu(taskNode!, { clientX: 350, clientY: 250 });
 
     await waitFor(() => {
-      // v7 (2026-08): 折叠功能已移除（视觉统一），Task 菜单不再出现"折叠"
+      // 注意(2026-07): 当前 isContainer 包括 editorTask，所以 Task 节点会显示"折叠"
+      // 即使"折叠"对 Task 不实用，仍作为上下文的一部分验证
       const foldItem = findMenuItem(container, '折叠');
-      expect(foldItem, '菜单不应包含"折叠"（v7 已移除折叠功能）').toBeNull();
+      expect(foldItem, '菜单应包含"折叠"（isContainer 包括 editorTask）').not.toBeNull();
     });
 
     unmount();
