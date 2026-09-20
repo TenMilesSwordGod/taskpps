@@ -85,6 +85,8 @@ class TaskRetryRecord(SQLModel, table=True):
     status: TaskStatus = TaskStatus.PENDING
     command: str = ""
     original_command: str = ""
+    # 本次重跑使用的工作目录（用户在重试弹窗可改）；空串表示沿用任务默认/执行器默认
+    cwd: str = ""
     log_path: str = ""
     exit_code: int | None = None
     error: str | None = Field(default=None)

@@ -138,6 +138,9 @@ _MIGRATIONS = {
         ("error", "TEXT"),
         ("selected_retry_id", "TEXT"),
     ],
+    "task_retry_records": [
+        ("cwd", "TEXT NOT NULL DEFAULT ''"),
+    ],
     "triggers": [
         ("project_id", "TEXT"),
     ],

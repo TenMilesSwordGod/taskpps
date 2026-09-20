@@ -538,3 +538,30 @@ async def test_cancel_retry_run_api_no_active_retry(app, setup_project, tmp_proj
         response = await client.post(f"/api/runs/{run_id}/retry/cancel")
         assert response.status_code == 404
 
+
+def test_resolve_snapshot_vars_resolves_params_and_task_env():
+    """重试弹窗展示的命令应为实际执行命令：运行参数 env 与 task.env 都要替换。
+
+    为什么单独测这个 helper：/pipeline-snapshot 是重试弹窗命令的唯一来源，
+    曾经把原始 params 当 env 传入导致 ${env.X} 无法解析（显示占位符）。
+    """
+    from types import SimpleNamespace
+
+    from taskpps.api.runs import _resolve_snapshot_vars
+
+    run = SimpleNamespace(
+        params='{"config.env": {"A": "1"}, "tasks[\\"t1\\"].env": {"B": "2"}}',
+        project_workdir=None,
+    )
+    data = {
+        "name": "p",
+        "tasks": [
+            {"name": "t1", "command": "echo ${env.A}-${env.B}", "env": {"B": "task"}},
+        ],
+    }
+
+    result = _resolve_snapshot_vars(data, run)
+
+    # 运行参数（tasks["t1"].env）优先于 YAML 里的 task.env
+    assert result["tasks"][0]["command"] == "echo 1-2"
+

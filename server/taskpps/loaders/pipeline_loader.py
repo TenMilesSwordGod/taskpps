@@ -158,6 +158,43 @@ def substitute_env_vars(value: Any, env: dict[str, str], project_workdir: Path |
     return value
 
 
+def resolve_task_env_vars(
+    data: Any, params_env: dict[str, str] | None = None, project_workdir: Path | None = None
+) -> Any:
+    """对快照中的每个任务再做一次变量替换，把任务级 env 也纳入。
+
+    为什么这么写：全局 substitute_env_vars 只使用 pipeline 顶层 config.env + 运行参数 env，
+    而执行时 ExecutionContext.get_task_env 还会叠加 subpipeline config.env 与 task.env。
+    为了让前端「重试」弹窗/版本展示的命令与实际执行一致（所见即所跑），这里按任务再替换一次。
+    仅处理命令字段（command/commands/steps）与 cwd；env 值本身不递归替换，与执行时 build_env 一致。
+    """
+    if not isinstance(data, dict):
+        return data
+
+    params_env = params_env or {}
+    top_env = (data.get("config") or {}).get("env") or {}
+
+    # 兼容两种快照结构：pipelines[].tasks（多子流水线）与顶层 tasks
+    task_groups: list[tuple[dict, list]] = []
+    for sub in data.get("pipelines") or []:
+        if isinstance(sub, dict):
+            task_groups.append(((sub.get("config") or {}).get("env") or {}, sub.get("tasks") or []))
+    if isinstance(data.get("tasks"), list):
+        task_groups.append(({}, data["tasks"]))
+
+    for sub_env, tasks in task_groups:
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            # 优先级与 ExecutionContext.get_task_env 一致：顶层 config.env < sub config.env < task.env < 运行参数
+            task_env = {**top_env, **sub_env, **(task.get("env") or {}), **params_env}
+            # cwd 与命令一样做模板替换，保证弹窗预填值与重试记录一致
+            for field in ("command", "commands", "steps", "cwd"):
+                if field in task:
+                    task[field] = substitute_env_vars(task[field], task_env, project_workdir)
+    return data
+
+
 class PipelineLoader:
     def __init__(self, base_dir: Path | None = None):
         self._base_dir = base_dir

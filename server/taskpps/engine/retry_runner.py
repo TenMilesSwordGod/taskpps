@@ -144,7 +144,8 @@ class RetryRunner:
         await self._update_record(record_id, TaskStatus.RUNNING, started_at=datetime.now(timezone.utc))
 
         timeout = task.timeout or 3600
-        effective_cwd = task.cwd or self.context.get_workspace()
+        # 优先使用重试记录中的 cwd（用户在弹窗中修改过），否则回退任务原 cwd / 上下文默认目录
+        effective_cwd = tp.get("cwd") or task.cwd or self.context.get_workspace()
 
         try:
             executor = create_executor(task, self.context.project_workdir)
@@ -152,7 +153,16 @@ class RetryRunner:
             if isinstance(executor, AgentExecutor):
                 executor.run_id = self.run_id
                 executor.task_name = task_name
-            last_result = await self._dispatch_execution(executor, task, command, env, log_path, timeout, effective_cwd)
+            last_result = await self._dispatch_execution(
+                executor,
+                task,
+                command,
+                env,
+                log_path,
+                timeout,
+                effective_cwd,
+                command_override=tp.get("command_override", False),
+            )
         except Exception as e:
             logger.exception("Retry task '%s' unexpected error", task_name)
             try:
@@ -198,6 +208,7 @@ class RetryRunner:
         log_path: Path,
         timeout: int,
         effective_cwd: str | None,
+        command_override: bool = False,
     ) -> ExecutorResult:
         if isinstance(executor, InvokeExecutor):
             return await executor.execute(
@@ -211,6 +222,16 @@ class RetryRunner:
             )
         elif isinstance(executor, PluginExecutor):
             return await executor.execute(command="", env=env, log_path=log_path, timeout=timeout)
+        elif command_override:
+            # 用户在重试弹窗修改了命令：编辑后的整段文本作为一条命令执行，
+            # 不再按原 steps/commands 分段，保证“所见即所跑”
+            return await executor.execute(
+                command=command,
+                env=env,
+                log_path=log_path,
+                timeout=timeout,
+                cwd=effective_cwd,
+            )
         elif task.task_type == "steps" and task.steps:
             # v2 (2026-07): 修复 steps 任务重试时 command="" 导致空跑的问题（原 dispatcher 只处理单 command 任务）
             # 改为逐条送 step.run 到 executor，与 PipelineRunner._execute_steps 行为一致

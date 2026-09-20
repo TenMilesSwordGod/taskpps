@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Modal, Spin, Switch, Tag, App, Empty, Radio } from 'antd';
-import { RotateCcw, ArrowDown, GitBranch, Terminal } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Modal, Spin, Switch, Tag, App, Empty, Radio, Input } from 'antd';
+import { RotateCcw, ArrowDown, GitBranch, Terminal, Folder } from 'lucide-react';
 import { useDependencyTree, useRetryRun } from '@/api/runs';
 import StatusTag from '@/components/StatusTag';
 import type { TaskStatus, RetryExecutionStrategy } from '@/types';
@@ -11,19 +11,31 @@ interface RetryModalProps {
   taskName: string;
   taskStatus?: TaskStatus;
   taskCommand?: string;
+  taskCwd?: string;
   onClose: () => void;
 }
 
 /**
  * Issue #72: 重试任务弹窗
- * - 展示原始命令（只读，不可编辑）
+ * - 展示原始命令与工作目录（可编辑，仅修改过的值作为 override 提交）
  * - 展示依赖树，可选择是否包含上游依赖
  * - 确认后调用 useRetryRun 触发重试
  */
-export default function RetryModal({ open, runId, taskName, taskStatus, taskCommand, onClose }: RetryModalProps) {
+export default function RetryModal({ open, runId, taskName, taskStatus, taskCommand, taskCwd, onClose }: RetryModalProps) {
   const { message } = App.useApp();
   const [includeUpstream, setIncludeUpstream] = useState(false);
   const [executionStrategy, setExecutionStrategy] = useState<RetryExecutionStrategy>('parallel');
+  // 命令/cwd 预填原始值，用户可修改；与原值不同才作为 override 提交，未修改则保持后端默认解析
+  const [command, setCommand] = useState(taskCommand ?? '');
+  const [cwd, setCwd] = useState(taskCwd ?? '');
+
+  // 每次打开弹窗（或切换目标任务）时重置为原始命令/目录，避免沿用上次编辑
+  useEffect(() => {
+    if (open) {
+      setCommand(taskCommand ?? '');
+      setCwd(taskCwd ?? '');
+    }
+  }, [open, taskCommand, taskCwd]);
 
   const { data: depTree, isLoading: depLoading } = useDependencyTree(
     open ? runId : undefined,
@@ -46,11 +58,16 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
   }, [taskName, includeUpstream, upstreamTasks]);
 
   const handleConfirm = async () => {
+    // 仅提交用户修改过的值：未修改时不发 override，避免覆盖后端对模板/默认目录的解析
+    const commandOverrides = taskCommand !== undefined && command !== taskCommand ? { [taskName]: command } : undefined;
+    const cwdOverrides = cwd !== (taskCwd ?? '') ? { [taskName]: cwd } : undefined;
     try {
       await retryRun.mutateAsync({
         runId,
         tasks: tasksToRerun,
         include_upstream: includeUpstream,
+        command_overrides: commandOverrides,
+        cwd_overrides: cwdOverrides,
         retry_execution_strategy: executionStrategy,
       });
       message.success(`已触发重试（${tasksToRerun.length} 个任务）`);
@@ -64,6 +81,8 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
   const handleClose = () => {
     setIncludeUpstream(false);
     setExecutionStrategy('parallel');
+    setCommand(taskCommand ?? '');
+    setCwd(taskCwd ?? '');
     onClose();
   };
 
@@ -93,16 +112,37 @@ export default function RetryModal({ open, runId, taskName, taskStatus, taskComm
           {taskStatus && <StatusTag status={taskStatus} />}
         </div>
 
-        {/* 原始命令（只读） */}
-        {taskCommand && (
+        {/* 命令（可编辑，仅提交修改过的值） */}
+        {taskCommand !== undefined && (
           <div>
             <div className="flex items-center gap-1.5 mb-1 text-xs text-gray-500">
               <Terminal size={12} />
-              <span>原始命令（只读，按原样重跑）</span>
+              <span>命令（可修改，按修改后的命令重跑）</span>
             </div>
-            <pre className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-xs font-mono text-gray-700 overflow-x-auto whitespace-pre-wrap break-all">
-              {taskCommand}
-            </pre>
+            <Input.TextArea
+              aria-label="命令"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              autoSize={{ minRows: 2, maxRows: 6 }}
+              className="font-mono text-xs"
+            />
+          </div>
+        )}
+
+        {/* 工作目录（可编辑，仅提交修改过的值） */}
+        {taskCommand !== undefined && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-1 text-xs text-gray-500">
+              <Folder size={12} />
+              <span>工作目录（留空表示按任务默认）</span>
+            </div>
+            <Input
+              aria-label="工作目录"
+              value={cwd}
+              onChange={(e) => setCwd(e.target.value)}
+              placeholder="默认工作目录"
+              className="font-mono text-xs"
+            />
           </div>
         )}
 
