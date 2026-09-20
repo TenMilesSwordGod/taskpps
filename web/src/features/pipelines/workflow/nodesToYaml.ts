@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/react';
-import type { PipelineDetail, TaskYAML, SubPipeline, PostConfig } from '@/types';
+import type { PipelineDetail, PipelineConfig, TaskYAML, SubPipeline, PostConfig, ArtifactDeclaration } from '@/types';
 import type { EditorNodeData, EditorEdgeData } from './yamlToNodes';
 
 /**
@@ -176,12 +176,22 @@ export function nodesToYaml(
       tasks,
     };
 
+    // v7 (2026-08): 回填画布不可编辑的 subpipeline.artifacts（yamlToNodes 暂存）
+    const subArtifacts = subNode.data?.artifacts as ArtifactDeclaration[] | undefined;
+    if (subArtifacts?.length) {
+      subPipeline.artifacts = subArtifacts;
+    }
+
     // 填充 config
+    // v7 (2026-08): 以 yamlToNodes 暂存的原始 config 为基底做 merge ——
+    // 旧实现从零重建，会把 env 变量/timeout/retry/on_failure 等非画布字段清空
+    const baseSubConfig = (subNode.data?.config as PipelineConfig | null | undefined) ?? null;
     if (subNode.data?.executionStrategy) {
       subPipeline.config = {
-        env: {},
-        retry: 0,
-        on_failure: 'stop',
+        ...(baseSubConfig ?? {}),
+        env: baseSubConfig?.env ?? {},
+        retry: baseSubConfig?.retry ?? 0,
+        on_failure: baseSubConfig?.on_failure ?? 'stop',
         execution_strategy: subNode.data.executionStrategy as string,
         ...(subNode.data?.maxConcurrentTasks != null ? { max_concurrent_tasks: subNode.data.maxConcurrentTasks as number } : {}),
       };
@@ -227,11 +237,14 @@ export function nodesToYaml(
   }
 
   // === Pipeline 顶层 options ===
+  // v7 (2026-08): 以暂存的原始 config 为基底 merge，避免清空 env/timeout 等字段
+  const baseTopConfig = (pipelineNode?.data?.config as PipelineConfig | null | undefined) ?? null;
   const topOptions = pipelineNode?.data?.executionStrategy
     ? {
-        env: {},
-        retry: 0,
-        on_failure: 'stop',
+        ...(baseTopConfig ?? {}),
+        env: baseTopConfig?.env ?? {},
+        retry: baseTopConfig?.retry ?? 0,
+        on_failure: baseTopConfig?.on_failure ?? 'stop',
         execution_strategy: pipelineNode.data.executionStrategy as string,
         ...(pipelineNode.data?.maxConcurrentTasks != null
           ? { max_concurrent_tasks: pipelineNode.data.maxConcurrentTasks as number }
@@ -265,8 +278,28 @@ export function nodesToYaml(
     pipelines: subpipelines,
   };
 
+  // v7 (2026-08): 回填顶层 post / artifacts（画布不可编辑，yamlToNodes 暂存）
+  const topPost = pipelineNode?.data?.post as PostConfig | null | undefined;
+  if (topPost) {
+    pipeline.post = topPost;
+  }
+  const topArtifacts = pipelineNode?.data?.artifacts as ArtifactDeclaration[] | undefined;
+  if (topArtifacts?.length) {
+    pipeline.artifacts = topArtifacts;
+  }
+
   if (topOptions) {
-    pipeline.options = topOptions as PipelineDetail['options'];
+    // v7 (2026-08): 写回原始字段（config 或 options），避免无谓的字段搬家；
+    // config 优先时，原始 options 若存在需原样保留，不能被画布保存抹掉
+    if (pipelineNode?.data?.configField === 'config') {
+      pipeline.config = topOptions as PipelineDetail['config'];
+      const rawOptions = pipelineNode?.data?.options as PipelineConfig | null | undefined;
+      if (rawOptions) {
+        pipeline.options = rawOptions;
+      }
+    } else {
+      pipeline.options = topOptions as PipelineDetail['options'];
+    }
   }
 
   return { pipeline: errors.length > 0 ? null : pipeline, errors };

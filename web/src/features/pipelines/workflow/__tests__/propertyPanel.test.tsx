@@ -275,4 +275,66 @@ describe('PropertyPanel', () => {
       expect(container.querySelector('.ant-drawer-open')).toBeNull();
     });
   });
+
+  /**
+   * v7 (2026-08): 属性面板保存语义 —— 运行期 on_failure 只识别 fail/continue
+   * （runner: `on_failure != "continue"` 即按 fail 处理），文档见 wiki/Pipeline-Configuration.md。
+   * 旧面板提供 stop/ignore/retry 三个运行期不存在的选项，且未设置时默认写 'stop'，
+   * 「选择忽略」实际会停止下游 —— UI 语义与执行语义相反。
+   */
+  describe('失败策略语义（与运行期 on_failure 契约对齐）', () => {
+    async function renderAndSave(node: Node<EditorNodeData>) {
+      let savedNode: Node<EditorNodeData> | null = null;
+      render(
+        <PropertyPanel
+          selectedNode={node}
+          visible={true}
+          onClose={() => {}}
+          onSave={(n) => { savedNode = n; }}
+          onDelete={() => {}}
+        />,
+      );
+      act(() => { vi.advanceTimersByTime(300); });
+      // antd 会在两个中文字符之间插入空格（"确 认"），用正则匹配可访问名
+      const confirmBtn = screen.getByRole('button', { name: /确\s*认/ });
+      await userEvent.click(confirmBtn);
+      return savedNode as Node<EditorNodeData> | null;
+    }
+
+    it('[P1] 未设置 on_failure 的 task 保存后保持未设置（不注入 stop）', async () => {
+      const saved = await renderAndSave(makeTaskNode());
+      expect(saved?.data?.task?.on_failure).toBeUndefined();
+    });
+
+    it('[P1] 旧值 ignore/retry/stop 保存时归一为 fail（运行期实际按 fail 处理）', async () => {
+      const saved = await renderAndSave(
+        makeTaskNode({ data: { ...makeTaskNode().data, task: { ...makeTaskNode().data.task!, on_failure: 'ignore' } } }),
+      );
+      expect(saved?.data?.task?.on_failure).toBe('fail');
+    });
+
+    it('[happy] continue 原样保留', async () => {
+      const saved = await renderAndSave(
+        makeTaskNode({ data: { ...makeTaskNode().data, task: { ...makeTaskNode().data.task!, on_failure: 'continue' } } }),
+      );
+      expect(saved?.data?.task?.on_failure).toBe('continue');
+    });
+
+    it('[P2] 未设置 timeout 的 task 保存后保持未设置（不注入 300）', async () => {
+      const base = makeTaskNode();
+      const saved = await renderAndSave(
+        makeTaskNode({ data: { ...base.data, task: { ...base.data.task!, timeout: undefined } } }),
+      );
+      expect(saved?.data?.task?.timeout).toBeUndefined();
+    });
+
+    it('[P2] 未设置 max_concurrent_tasks 的容器保存后保持未设置（不注入 5）', async () => {
+      const node = makeSubPipelineNode();
+      const saved = await renderAndSave({
+        ...node,
+        data: { ...node.data, maxConcurrentTasks: undefined },
+      });
+      expect(saved?.data?.maxConcurrentTasks).toBeUndefined();
+    });
+  });
 });
