@@ -118,6 +118,8 @@ class RetryRequest(BaseModel):
     subpipeline: str | None = None
     include_upstream: bool = False
     command_overrides: dict[str, str] | None = None
+    # 本次重跑可修改目标任务的 cwd（与 command_overrides 相同，key 为限定任务名）
+    cwd_overrides: dict[str, str] | None = None
     retry_execution_strategy: str = "parallel"
 
 
@@ -131,6 +133,7 @@ class RetryRecordResponse(BaseModel):
     status: TaskStatus
     command: str = ""
     original_command: str = ""
+    cwd: str = ""
     log_path: str = ""
     exit_code: int | None = None
     error: str | None = None

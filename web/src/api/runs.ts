@@ -190,6 +190,7 @@ export function useRetryRun() {
       subpipeline?: string;
       include_upstream?: boolean;
       command_overrides?: Record<string, string>;
+      cwd_overrides?: Record<string, string>;
       retry_execution_strategy?: RetryExecutionStrategy;
     }) => {
       const res = await apiClient.post<RetryRunResponse>(
@@ -199,6 +200,7 @@ export function useRetryRun() {
           subpipeline: params.subpipeline,
           include_upstream: params.include_upstream ?? false,
           command_overrides: params.command_overrides,
+          cwd_overrides: params.cwd_overrides,
           retry_execution_strategy: params.retry_execution_strategy ?? 'parallel',
         },
       );

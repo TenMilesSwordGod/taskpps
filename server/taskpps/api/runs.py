@@ -18,7 +18,7 @@ from taskpps.events.bus import (
     get_event_bus,
 )
 from taskpps.i18n import t
-from taskpps.loaders.pipeline_loader import substitute_env_vars
+from taskpps.loaders.pipeline_loader import resolve_task_env_vars, substitute_env_vars
 from taskpps.schemas.pipeline import PipelineYAML
 from taskpps.schemas.run import (
     BatchSelectReportRequest,
@@ -35,12 +35,31 @@ from taskpps.schemas.run import (
     SelectReportRequest,
     UpdateRetryCommandRequest,
 )
-from taskpps.services.pipeline_service import PipelineService
+from taskpps.services.pipeline_service import PipelineService, _extract_env_overrides
 from taskpps.services.result_page import load_result_page
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 _pipeline_service = PipelineService()
+
+
+def _resolve_snapshot_vars(data: dict, run) -> dict:
+    """解析快照中的变量，使返回的“执行时版本”与真实执行命令一致。
+
+    为什么这么写：此前直接把原始 params 当作 env 传给 substitute_env_vars，导致
+    params['config.env'] / tasks["x"].env 这类运行参数 env 无法解析；任务级 env 也
+    没有参与替换。重试弹窗展示/编辑命令时需要看到实际执行的命令（而非 ${env.X}
+    占位符），因此这里按与执行路径相同的优先级做两遍替换：
+    1) 全局：顶层 config.env + 运行参数 env；
+    2) 按任务：再叠加 subpipeline config.env 与 task.env。
+    """
+    params = json.loads(run.params) if isinstance(run.params, str) else (run.params or {})
+    env_overrides = _extract_env_overrides(params)
+    project_workdir = getattr(run, "project_workdir", None)
+    workdir = Path(project_workdir) if project_workdir else None
+    config_env = (data.get("config") or {}).get("env") or {}
+    data = substitute_env_vars(data, {**config_env, **env_overrides}, workdir)
+    return resolve_task_env_vars(data, env_overrides, workdir)
 
 
 def _yield_complete_lines(new_content: str):
@@ -446,6 +465,7 @@ async def retry_run(run_id: str, body: RetryRequest):
             subpipeline=body.subpipeline,
             include_upstream=body.include_upstream,
             command_overrides=body.command_overrides,
+            cwd_overrides=body.cwd_overrides,
             retry_execution_strategy=body.retry_execution_strategy,
         )
         return result
@@ -641,8 +661,6 @@ async def get_pipeline_snapshot(run_id: str):
     Phase 2 (2026-07): 快照主存储从磁盘文件迁移到 DB (runs.snapshot_content)。
     优先读 DB，DB 为空时回退读旧磁盘文件，兼容 Phase 1 及之前生产环境的历史 runs。
     """
-    import json as _json
-
     async with get_session_factory()() as session:
         run_repo = RunRepository(session)
         run = await run_repo.get_run(run_id)
@@ -654,9 +672,7 @@ async def get_pipeline_snapshot(run_id: str):
             data = yaml.safe_load(run.snapshot_content)
             if data is None:
                 raise HTTPException(status_code=404, detail=t("Pipeline snapshot is empty"))
-            params = _json.loads(run.params) if run.params else {}
-            project_workdir = getattr(run, "project_workdir", None)
-            data = substitute_env_vars(data, params, Path(project_workdir) if project_workdir else None)
+            data = _resolve_snapshot_vars(data, run)
             spec = PipelineYAML(**data)
             return spec.model_dump()
 
@@ -678,9 +694,7 @@ async def get_pipeline_snapshot(run_id: str):
         if data is None:
             raise HTTPException(status_code=404, detail=t("Pipeline snapshot is empty"))
 
-        params = _json.loads(run.params) if run.params else {}
-        project_workdir = getattr(run, "project_workdir", None)
-        data = substitute_env_vars(data, params, Path(project_workdir) if project_workdir else None)
+        data = _resolve_snapshot_vars(data, run)
 
         spec = PipelineYAML(**data)
         return spec.model_dump()

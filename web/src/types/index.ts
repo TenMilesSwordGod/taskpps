@@ -473,6 +473,8 @@ export interface RetryRecordResponse {
   status: TaskStatus;
   command: string;
   original_command: string;
+  /** 本次执行的工作目录；空串表示由执行器决定默认目录 */
+  cwd: string;
   log_path: string;
   exit_code: number | null;
   error: string | null;
@@ -569,6 +571,7 @@ export interface RetryRunResponse {
     retry_version: number;
     status: TaskStatus;
     command: string;
+    cwd: string;
     log_path: string;
   }[];
 }

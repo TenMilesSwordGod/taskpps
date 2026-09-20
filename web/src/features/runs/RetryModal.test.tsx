@@ -65,6 +65,7 @@ function makeRetryRecord(overrides: Partial<RetryRecordResponse> = {}): RetryRec
     status: 'success',
     command: 'echo hello',
     original_command: 'echo hello',
+    cwd: '/tmp/build',
     log_path: '/logs/retry-1.log',
     exit_code: 0,
     error: null,
@@ -94,7 +95,7 @@ describe('<RetryModal /> Issue #72 - 重试弹窗', () => {
     mockUseRetryRun.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   });
 
-  it('展示任务名、状态和原始命令（只读）', () => {
+  it('展示任务名、状态和可编辑的命令/cwd', () => {
     mockUseDependencyTree.mockReturnValue({ data: makeDepTree(), isLoading: false });
 
     render(
@@ -105,6 +106,7 @@ describe('<RetryModal /> Issue #72 - 重试弹窗', () => {
           taskName="sub.taskA"
           taskStatus="failed"
           taskCommand="echo hello"
+          taskCwd="/original"
           onClose={vi.fn()}
         />
       </Wrapper>,
@@ -112,8 +114,9 @@ describe('<RetryModal /> Issue #72 - 重试弹窗', () => {
 
     // 任务名出现在任务信息区和依赖树中
     expect(screen.getAllByText('sub.taskA').length).toBeGreaterThan(0);
-    expect(screen.getByText(/echo hello/)).toBeInTheDocument();
-    expect(screen.getByText(/只读/)).toBeInTheDocument();
+    // 命令与 cwd 以可编辑输入框呈现，并预填原值
+    expect(screen.getByLabelText('命令')).toHaveValue('echo hello');
+    expect(screen.getByLabelText('工作目录')).toHaveValue('/original');
   });
 
   it('展示依赖树并标记目标任务', () => {
@@ -218,6 +221,73 @@ describe('<RetryModal /> Issue #72 - 重试弹窗', () => {
     });
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('修改命令和 cwd 后确认重试，提交对应 overrides', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    mockUseRetryRun.mockReturnValue({ mutateAsync, isPending: false });
+    mockUseDependencyTree.mockReturnValue({ data: makeDepTree(), isLoading: false });
+
+    render(
+      <Wrapper>
+        <RetryModal
+          open={true}
+          runId="run-1"
+          taskName="sub.taskA"
+          taskStatus="failed"
+          taskCommand="echo hello"
+          taskCwd="/original"
+          onClose={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    fireEvent.change(screen.getByLabelText('命令'), { target: { value: 'echo edited' } });
+    fireEvent.change(screen.getByLabelText('工作目录'), { target: { value: '/tmp/edited' } });
+    await fireEvent.click(screen.getByText('确认重试'));
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        runId: 'run-1',
+        tasks: ['sub.taskA'],
+        include_upstream: false,
+        command_overrides: { 'sub.taskA': 'echo edited' },
+        cwd_overrides: { 'sub.taskA': '/tmp/edited' },
+        retry_execution_strategy: 'parallel',
+      });
+    });
+  });
+
+  it('任务无 cwd 时输入新目录，仍提交 cwd override', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    mockUseRetryRun.mockReturnValue({ mutateAsync, isPending: false });
+    mockUseDependencyTree.mockReturnValue({ data: makeDepTree(), isLoading: false });
+
+    render(
+      <Wrapper>
+        <RetryModal
+          open={true}
+          runId="run-1"
+          taskName="sub.taskA"
+          taskStatus="failed"
+          taskCommand="echo hello"
+          onClose={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    fireEvent.change(screen.getByLabelText('工作目录'), { target: { value: '/tmp/new' } });
+    await fireEvent.click(screen.getByText('确认重试'));
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        runId: 'run-1',
+        tasks: ['sub.taskA'],
+        include_upstream: false,
+        cwd_overrides: { 'sub.taskA': '/tmp/new' },
+        retry_execution_strategy: 'parallel',
+      });
+    });
+  });
 });
 
 describe('<RetryVersionsDrawer /> Issue #72 - 版本管理', () => {
@@ -238,6 +308,7 @@ describe('<RetryVersionsDrawer /> Issue #72 - 版本管理', () => {
       status: 'failed',
       command: '',
       original_command: '',
+      cwd: '',
       log_path: '/logs/tr-1.log',
       exit_code: 1,
       error: null,
@@ -271,6 +342,44 @@ describe('<RetryVersionsDrawer /> Issue #72 - 版本管理', () => {
     expect(screen.getByText('首次执行')).toBeInTheDocument();
     // v2 是选中的最终版本
     expect(screen.getByText('当前版本')).toBeInTheDocument();
+  });
+
+  it('每个版本完整展示命令和 cwd（含 v0）', () => {
+    const v0 = makeRetryRecord({
+      id: 'tr-1',
+      retry_version: 0,
+      status: 'failed',
+      command: 'echo original',
+      original_command: 'echo original',
+      cwd: '/orig',
+    });
+    const v1 = makeRetryRecord({
+      id: 'r1',
+      retry_version: 1,
+      status: 'success',
+      command: 'echo retry',
+      cwd: '/tmp/retry',
+    });
+    mockUseRetryVersions.mockReturnValue({
+      data: makeVersionsResponse('sub.taskA', [v0, v1], 'r1'),
+    });
+
+    render(
+      <Wrapper>
+        <RetryVersionsDrawer
+          open={true}
+          runId="run-1"
+          taskName="sub.taskA"
+          onClose={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    // v0 与重试版本的命令、cwd 都应完整可见
+    expect(screen.getByText('echo original')).toBeInTheDocument();
+    expect(screen.getByText('echo retry')).toBeInTheDocument();
+    expect(screen.getByText('/orig')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/retry')).toBeInTheDocument();
   });
 
   it('无版本数据时显示空状态', () => {

@@ -178,6 +178,32 @@ class TestRetryRecordRepository:
             records = await repo.list_retries_by_run(run.id)
             assert len(records) == 0
 
+    async def test_create_retry_record_with_cwd(self, db_engine, clean_db):
+        """重试记录应持久化 cwd，供版本抽屉展示每次重跑的工作目录。"""
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            run = await run_repo.create_run(pipeline_name="test")
+
+            task_repo = TaskRunRepository(session)
+            task_run = await task_repo.create_task_run(run_id=run.id, task_name="sub.t1")
+
+            repo = RetryRecordRepository(session)
+            record = await repo.create_retry_record(
+                run_id=run.id,
+                task_run_id=task_run.id,
+                task_name="sub.t1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="echo ok",
+                original_command="echo ok",
+                log_path="/tmp/test.log",
+                cwd="/tmp/build",
+            )
+
+            fetched = await repo.get_retry_record(record.id)
+            assert fetched is not None
+            assert fetched.cwd == "/tmp/build"
+
 
 @pytest.mark.asyncio
 class TestRetryRunner:
@@ -703,6 +729,76 @@ class TestRetryRunner:
         assert calls[1].kwargs["cwd"] == "/var"
         assert calls[1].kwargs["env"].get("B") == "2"
 
+    async def test_retry_task_uses_cwd_override_from_plan(self):
+        """task_plan 中的 cwd（用户弹窗修改）应覆盖任务原始 cwd。"""
+        tasks = [ResolvedTask(name="t1", task_type="command", command="pwd", cwd="/original")]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cwd_override")
+
+        runner = RetryRunner(run_id="r_cwd", pipeline=pipeline, context=ctx)
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="/tmp/edited")
+
+        task_plan = [
+            {
+                "name": "sub.t1",
+                "command": "pwd",
+                "cwd": "/tmp/edited",
+                "retry_record_id": "rec_cwd",
+                "log_path": "/tmp/cwd.log",
+            }
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            results = await runner.retry_tasks(task_plan)
+
+        assert results["sub.t1"].success
+        assert mock_executor.execute.call_args[1]["cwd"] == "/tmp/edited"
+
+    async def test_retry_command_override_replaces_steps(self):
+        """用户在弹窗中修改命令后，steps 任务执行编辑后的整段命令而非原 steps。
+
+        设计决策：编辑命令代表用户接管该任务的执行内容，因此忽略原 steps 分段，
+        整段交给 executor 执行一次，保证“所见即所跑”。
+        """
+        steps = [ResolvedStep(run="echo step1"), ResolvedStep(run="echo step2")]
+        tasks = [ResolvedTask(name="t1", task_type="steps", steps=steps)]
+        pipeline = self._make_pipeline(tasks)
+        ctx = ExecutionContext(pipeline=pipeline, run_id="test_cmd_override")
+
+        runner = RetryRunner(run_id="r_override", pipeline=pipeline, context=ctx)
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = ExecutorResult(exit_code=0, stdout="ok")
+
+        task_plan = [
+            {
+                "name": "sub.t1",
+                "command": "echo edited",
+                "command_override": True,
+                "retry_record_id": "rec_override",
+                "log_path": "/tmp/override.log",
+            }
+        ]
+
+        runner._update_record = AsyncMock()
+
+        with (
+            patch("taskpps.engine.retry_runner.create_executor", return_value=mock_executor),
+            patch("taskpps.engine.retry_runner.get_event_bus"),
+        ):
+            results = await runner.retry_tasks(task_plan)
+
+        assert results["sub.t1"].success
+        assert mock_executor.execute.call_count == 1
+        assert mock_executor.execute.call_args[1]["command"] == "echo edited"
+
 
 @pytest.mark.asyncio
 class TestPipelineServiceRetry:
@@ -1071,6 +1167,261 @@ class TestPipelineServiceRetry:
         path = build_retry_log_path("p1", "v1", "run1", "sub.t1", 1)
         assert "retries" in str(path)
         assert "sub.t1.retry-1.log" in str(path)
+
+    def _resolved_pipeline_with_task(self, task: ResolvedTask) -> MagicMock:
+        """构造仅含 sub.step1 的 mock resolved pipeline，供重试/版本解析测试复用。"""
+        from taskpps.domain.pipeline import ResolvedSubPipeline
+        from taskpps.schemas.pipeline import PipelineConfig
+
+        mock_pipeline = MagicMock()
+        mock_sub = ResolvedSubPipeline(name="sub", tasks=[task], config=PipelineConfig())
+        mock_pipeline.subpipelines = [mock_sub]
+        mock_pipeline.top_config = PipelineConfig()
+        mock_pipeline.get_task_by_name.side_effect = lambda n: {task.name: task}.get(n)
+        return mock_pipeline
+
+    def _init_settings(self) -> None:
+        import taskpps.config as cfg
+
+        cfg._settings = None
+        cfg.load_settings(str(cfg.find_project_root() / "taskpps.yaml"))
+
+    async def _create_run_with_task(self, params: dict | None = None) -> str:
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run(
+                pipeline_name="deploy",
+                pipeline_file="deploy.yaml",
+                params=params,
+            )
+            await task_repo.create_task_run(
+                run_id=run.id,
+                task_name="sub.step1",
+                task_type="command",
+                subpipeline_name="sub",
+            )
+            return run.id
+
+    async def test_retry_run_applies_command_and_cwd_overrides(self, db_engine, clean_db):
+        """重试弹窗修改的命令/cwd 应写入记录并传给 RetryRunner 执行。"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        run_id = await self._create_run_with_task(params={"env": {"GLOBAL_VAR": "global_value"}})
+        self._init_settings()
+
+        service = PipelineService()
+        task = ResolvedTask(name="step1", task_type="command", command="echo ${env.GLOBAL_VAR}", cwd="/original")
+        pipeline = self._resolved_pipeline_with_task(task)
+
+        with (
+            patch.object(service, "_load_resolved_pipeline", return_value=pipeline),
+            patch("taskpps.services.pipeline_service.RetryRunner") as mock_runner_cls,
+        ):
+            mock_runner = AsyncMock()
+            mock_runner_cls.return_value = mock_runner
+            result = await service.retry_run(
+                run_id=run_id,
+                tasks=["sub.step1"],
+                command_overrides={"sub.step1": "echo edited"},
+                cwd_overrides={"sub.step1": "/tmp/edited"},
+            )
+            await asyncio.sleep(0)
+
+        record = result["retry_records"][0]
+        assert record["command"] == "echo edited"
+        assert record["cwd"] == "/tmp/edited"
+
+        task_plan = mock_runner.retry_tasks.call_args[0][0]
+        assert task_plan[0]["command"] == "echo edited"
+        assert task_plan[0]["cwd"] == "/tmp/edited"
+        assert task_plan[0]["command_override"] is True
+
+        async with get_session_factory()() as session:
+            stored = await RetryRecordRepository(session).get_retry_record(record["id"])
+        assert stored is not None
+        assert stored.cwd == "/tmp/edited"
+        # original_command 保留未编辑前的默认值（模板已解析）
+        assert stored.original_command == "echo global_value"
+
+    async def test_retry_run_uses_task_command_and_cwd_by_default(self, db_engine, clean_db):
+        """未传 overrides 时，记录应保留任务原始命令/cwd，且不标记命令覆盖。"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        run_id = await self._create_run_with_task(params={"env": {"GLOBAL_VAR": "global_value"}})
+        self._init_settings()
+
+        service = PipelineService()
+        task = ResolvedTask(name="step1", task_type="command", command="echo ${env.GLOBAL_VAR}", cwd="/original")
+        pipeline = self._resolved_pipeline_with_task(task)
+
+        with (
+            patch.object(service, "_load_resolved_pipeline", return_value=pipeline),
+            patch("taskpps.services.pipeline_service.RetryRunner") as mock_runner_cls,
+        ):
+            mock_runner = AsyncMock()
+            mock_runner_cls.return_value = mock_runner
+            result = await service.retry_run(run_id=run_id, tasks=["sub.step1"])
+            await asyncio.sleep(0)
+
+        record = result["retry_records"][0]
+        assert record["command"] == "echo global_value"
+        assert record["cwd"] == "/original"
+
+        task_plan = mock_runner.retry_tasks.call_args[0][0]
+        assert task_plan[0]["command_override"] is False
+
+    async def test_retry_run_rejects_command_override_for_invoke_task(self, db_engine, clean_db):
+        """invoke 任务没有可编辑的 shell 命令，传 command override 应快速失败而非静默忽略。"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        run_id = await self._create_run_with_task()
+        self._init_settings()
+
+        service = PipelineService()
+        task = ResolvedTask(name="step1", task_type="invoke", invoke_task="other")
+        pipeline = self._resolved_pipeline_with_task(task)
+
+        with (
+            patch.object(service, "_load_resolved_pipeline", return_value=pipeline),
+            pytest.raises(ValueError, match="不支持"),
+        ):
+            await service.retry_run(
+                run_id=run_id,
+                tasks=["sub.step1"],
+                command_overrides={"sub.step1": "echo edited"},
+            )
+
+    async def test_retry_run_rejects_override_for_non_target(self, db_engine, clean_db):
+        """overrides 只允许作用于本次重试的目标任务，其他 key 应报错。"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        run_id = await self._create_run_with_task()
+        self._init_settings()
+
+        service = PipelineService()
+        task = ResolvedTask(name="step1", task_type="command", command="echo hello")
+        pipeline = self._resolved_pipeline_with_task(task)
+
+        with (
+            patch.object(service, "_load_resolved_pipeline", return_value=pipeline),
+            pytest.raises(ValueError, match="不在重试目标"),
+        ):
+            await service.retry_run(
+                run_id=run_id,
+                tasks=["sub.step1"],
+                cwd_overrides={"sub.other": "/tmp"},
+            )
+
+    async def test_task_display_command_formats(self):
+        """command/commands/steps 三类任务应统一成可读的命令文本（与前端展示格式一致）。"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        steps_task = ResolvedTask(
+            name="t1",
+            task_type="steps",
+            steps=[ResolvedStep(run="echo ${env.X}", cd="/tmp"), ResolvedStep(run="ls")],
+        )
+        assert (
+            PipelineService._task_display_command(steps_task, {"X": "hi"})
+            == "cd /tmp && echo hi\nls"
+        )
+
+        commands_task = ResolvedTask(name="t2", task_type="command", commands=["a", "b"])
+        assert PipelineService._task_display_command(commands_task, {}) == "a\nb"
+
+    async def test_retry_versions_resolves_v0_command_and_cwd(self, db_engine, clean_db):
+        """v0 原始版本也展示命令/cwd，需从运行时快照解析；重试版本展示自身记录值。"""
+        from taskpps.services.pipeline_service import PipelineService
+
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            retry_repo = RetryRecordRepository(session)
+            run = await run_repo.create_run(
+                pipeline_name="deploy",
+                pipeline_file="deploy.yaml",
+                params={"env": {"GLOBAL_VAR": "global_value"}},
+            )
+            tr = await task_repo.create_task_run(
+                run_id=run.id, task_name="sub.step1", subpipeline_name="sub"
+            )
+            record = await retry_repo.create_retry_record(
+                run_id=run.id,
+                task_run_id=tr.id,
+                task_name="sub.step1",
+                subpipeline_name="sub",
+                retry_version=1,
+                command="echo v1",
+                original_command="echo v1",
+                log_path="/tmp/v1.log",
+                cwd="/tmp/v1",
+            )
+
+        self._init_settings()
+
+        service = PipelineService()
+        task = ResolvedTask(name="step1", task_type="command", command="echo ${env.GLOBAL_VAR}", cwd="/original")
+        pipeline = self._resolved_pipeline_with_task(task)
+
+        with patch.object(service, "_load_resolved_pipeline", return_value=pipeline):
+            result = await service.get_retry_versions(run.id)
+
+        versions = result["task_retries"]["sub.step1"]
+        v0 = next(v for v in versions if v["retry_version"] == 0)
+        assert v0["command"] == "echo global_value"
+        assert v0["cwd"] == "/original"
+
+        v1 = next(v for v in versions if v["retry_version"] == 1)
+        assert v1["cwd"] == "/tmp/v1"
+
+        fetched = await service.get_retry_record(record.id)
+        assert fetched is not None
+        assert fetched["cwd"] == "/tmp/v1"
+
+    async def test_retry_versions_v0_from_real_snapshot(self, db_engine, clean_db):
+        """不 mock 快照解析：真实 snapshot_content 也能解析出 v0 的命令与 cwd。"""
+        import yaml as _yaml
+
+        from taskpps.services.pipeline_service import PipelineService
+
+        snapshot = {
+            "name": "deploy",
+            "pipelines": [
+                {
+                    "name": "sub",
+                    "tasks": [
+                        {"name": "step1", "command": "echo ${env.GLOBAL_VAR}", "cwd": "/orig"},
+                        {"name": "step2", "steps": [{"run": "ls", "cd": "/tmp"}]},
+                    ],
+                }
+            ],
+        }
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run(
+                pipeline_name="deploy",
+                pipeline_file="deploy.yaml",
+                params={"env": {"GLOBAL_VAR": "global_value"}},
+            )
+            run.snapshot_content = _yaml.safe_dump(snapshot)
+            session.add(run)
+            await session.commit()
+            await task_repo.create_task_run(run_id=run.id, task_name="sub.step1", subpipeline_name="sub")
+            await task_repo.create_task_run(run_id=run.id, task_name="sub.step2", subpipeline_name="sub")
+
+        self._init_settings()
+
+        result = await PipelineService().get_retry_versions(run.id)
+
+        v0_step1 = result["task_retries"]["sub.step1"][0]
+        assert v0_step1["command"] == "echo global_value"
+        assert v0_step1["cwd"] == "/orig"
+
+        v0_step2 = result["task_retries"]["sub.step2"][0]
+        assert v0_step2["command"] == "cd /tmp && ls"
+        assert v0_step2["cwd"] == ""
 
 
 @pytest.mark.asyncio
