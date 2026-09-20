@@ -238,6 +238,8 @@ export interface SubPipeline {
   depends_on: string[];
   tasks: TaskYAML[];
   post?: PostConfig | null;
+  /** v7 (2026-08): 后端 SubPipeline.artifacts 支持子流水线级产物声明，补类型避免序列化丢失 */
+  artifacts?: ArtifactDeclaration[];
 }
 
 /** 流水线详情 */
@@ -249,6 +251,11 @@ export interface PipelineDetail {
   tasks?: TaskYAML[] | null;
   pipelines?: SubPipeline[] | null;
   artifacts?: ArtifactDeclaration[];
+  /**
+   * v7 (2026-08): 后端 by-id 附带磁盘原始 YAML 文本。
+   * 编辑器优先展示它，避免重新序列化丢失注释/空行/字段顺序。
+   */
+  raw_content?: string;
 }
 
 /** 健康检查响应 */

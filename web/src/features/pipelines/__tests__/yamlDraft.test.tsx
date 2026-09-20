@@ -71,7 +71,8 @@ vi.mock('@/features/pipelines/YamlEditor', () => ({
           simulate-edit
         </button>
         {props.onSave && (
-          <button data-testid="yaml-simulate-save" onClick={props.onSave}>
+          // v7 (2026-08): onSave 签名改为可选内容参数，避免把 click 事件当内容传入
+          <button data-testid="yaml-simulate-save" onClick={() => props.onSave?.()}>
             simulate-save
           </button>
         )}

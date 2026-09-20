@@ -51,8 +51,8 @@ export interface YamlEditorProps {
   readOnly?: boolean;
   /** 光标所在行包含 task name 时回调 */
   onCursorTaskChange?: (taskId: string | null) => void;
-  /** 保存回调 */
-  onSave?: () => void;
+  /** 保存回调；参数为编辑器当前完整内容（避免父组件读取 debounce 未落定的旧值） */
+  onSave?: (content?: string) => void;
   /** 是否正在保存 */
   saving?: boolean;
 }
@@ -98,6 +98,20 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
     }, 300);
   }, []);
 
+  // v7 (2026-08): 保存前必须先冲刷 debounce。
+  // 旧实现 onChange 有 300ms debounce，而 onSave 立即触发父组件的 handleSave，
+  // 父组件读到的 yamlText 还是旧值 —— 「快速输入后马上 Ctrl+S/点保存」会静默
+  // 丢掉最后一段输入。这里同步把当前文档交给父组件，并把内容作为参数传给 onSave。
+  const saveRef = useRef<() => void>(() => {});
+  saveRef.current = () => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    const current = view.state.doc.toString();
+    onChangeRef.current(current);
+    onSaveRef.current?.(current);
+  };
+
   useEffect(() => {
     if (!editorRef.current) return;
 
@@ -140,7 +154,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
           ...closeBracketsKeymap,
           ...searchKeymap,
           indentWithTab,
-          { key: 'Mod-s', run: () => { onSaveRef.current?.(); return true; } },
+          { key: 'Mod-s', run: () => { saveRef.current(); return true; } },
         ]),
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         updateListener,
@@ -162,6 +176,8 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
     viewRef.current = view;
 
     return () => {
+      // v7 (2026-08): 卸载时清掉未触发的 debounce，避免组件关闭后回调仍触发父组件 setState
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       view.destroy();
       viewRef.current = null;
     };
@@ -190,7 +206,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
         <Space size="small">
           {onSave && (
             <Tooltip title="保存 (Ctrl+S)">
-              <Button type="primary" size="small" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
+              <Button type="primary" size="small" icon={<SaveOutlined />} onClick={() => saveRef.current()} loading={saving}>
                 保存
               </Button>
             </Tooltip>

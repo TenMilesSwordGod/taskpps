@@ -40,8 +40,25 @@ function validatePipelineStructure(doc: Record<string, unknown>): ValidationErro
     return { message: 'config 应为对象', path: 'config' };
   }
 
+  // v7 (2026-08): post / artifacts 与后端 ArtifactDeclaration/PostConfig 对齐
+  if (doc.post !== undefined && doc.post !== null && (typeof doc.post !== 'object' || Array.isArray(doc.post))) {
+    return { message: 'post 应为对象', path: 'post' };
+  }
+  if (doc.artifacts !== undefined && doc.artifacts !== null && !Array.isArray(doc.artifacts)) {
+    return { message: 'artifacts 应为数组', path: 'artifacts' };
+  }
+
+  // tasks 与 pipelines 互斥：
+  // v7 (2026-08): 后端 PipelineYAML 仅在 pipelines 为 None 时把 tasks 归一化；
+  // tasks 非空且 pipelines 存在时，ResolvedPipeline 只用 pipelines，顶层 tasks
+  // 被静默忽略（保存成功但运行漏跑）。空数组组合无数据可丢，保持兼容。
+  if (Array.isArray(doc.tasks) && doc.tasks.length > 0 && doc.pipelines !== undefined && doc.pipelines !== null) {
+    return { message: 'tasks 与 pipelines 不能同时使用', path: 'tasks' };
+  }
+
   // 校验 subpipelines 结构
   if (Array.isArray(doc.pipelines)) {
+    const subNames = new Set<string>();
     for (let i = 0; i < (doc.pipelines as unknown[]).length; i++) {
       const sub = (doc.pipelines as unknown[])[i] as Record<string, unknown> | null;
       if (!sub || typeof sub !== 'object') {
@@ -50,6 +67,11 @@ function validatePipelineStructure(doc: Record<string, unknown>): ValidationErro
       if (typeof sub.name !== 'string' || !sub.name.trim()) {
         return { message: `pipelines[${i}] 缺少必填字段 name`, path: `pipelines[${i}].name` };
       }
+      // v7 (2026-08): 重复 subpipeline 名称会让后端只执行第一个（静默漏跑）
+      if (subNames.has(sub.name)) {
+        return { message: `pipelines[${i}] 名称重复: ${sub.name}`, path: `pipelines[${i}].name` };
+      }
+      subNames.add(sub.name);
       if (!Array.isArray(sub.tasks)) {
         return { message: `pipelines[${i}].tasks 应为数组`, path: `pipelines[${i}].tasks` };
       }
@@ -58,20 +80,36 @@ function validatePipelineStructure(doc: Record<string, unknown>): ValidationErro
         return { message: `pipelines[${i}].depends_on 应为数组`, path: `pipelines[${i}].depends_on` };
       }
       // 校验每个 task
+      const taskNames = new Set<string>();
       for (let j = 0; j < (sub.tasks as unknown[]).length; j++) {
         const task = (sub.tasks as unknown[])[j] as Record<string, unknown> | null;
-        const taskErr = validateTaskStructure(task, `pipelines[${i}].tasks[${j}]`);
+        const taskPath = `pipelines[${i}].tasks[${j}]`;
+        const taskErr = validateTaskStructure(task, taskPath);
         if (taskErr) return taskErr;
+        // v7 (2026-08): 重复 task name 会被后端 DAG 静默覆盖/报循环依赖
+        const taskName = (task as Record<string, unknown>).name as string;
+        if (taskNames.has(taskName)) {
+          return { message: `${taskPath} 名称重复: ${taskName}`, path: `${taskPath}.name` };
+        }
+        taskNames.add(taskName);
       }
     }
   }
 
   // 校验顶层 tasks 结构
   if (Array.isArray(doc.tasks)) {
+    const taskNames = new Set<string>();
     for (let i = 0; i < (doc.tasks as unknown[]).length; i++) {
       const task = (doc.tasks as unknown[])[i] as Record<string, unknown> | null;
-      const taskErr = validateTaskStructure(task, `tasks[${i}]`);
+      const taskPath = `tasks[${i}]`;
+      const taskErr = validateTaskStructure(task, taskPath);
       if (taskErr) return taskErr;
+      // v7 (2026-08): 重复 task name 会被后端 DAG 静默覆盖/报循环依赖
+      const taskName = (task as Record<string, unknown>).name as string;
+      if (taskNames.has(taskName)) {
+        return { message: `${taskPath} 名称重复: ${taskName}`, path: `${taskPath}.name` };
+      }
+      taskNames.add(taskName);
     }
   }
 
@@ -135,6 +173,13 @@ export function parseYamlToPipeline(yamlText: string): YamlParseResult {
     if (obj.config && typeof obj.config === 'object') {
       pipeline.config = obj.config as PipelineDetail['config'];
     }
+    // v7 (2026-08): 顶层 post / artifacts 必须保留，否则编辑器打开即丢失这两个功能
+    if (obj.post && typeof obj.post === 'object') {
+      pipeline.post = obj.post as PipelineDetail['post'];
+    }
+    if (Array.isArray(obj.artifacts)) {
+      pipeline.artifacts = obj.artifacts as PipelineDetail['artifacts'];
+    }
     if (Array.isArray(obj.tasks)) {
       pipeline.tasks = obj.tasks as PipelineDetail['tasks'];
     }
@@ -185,6 +230,9 @@ export function pipelineToYaml(pipeline: PipelineDetail): string {
   const obj: Record<string, unknown> = { name: pipeline.name };
   if (pipeline.options) obj.options = pipeline.options;
   if (pipeline.config) obj.config = pipeline.config;
+  // v7 (2026-08): 顶层 post / artifacts 必须输出，否则保存时静默删除
+  if (pipeline.post) obj.post = pipeline.post;
+  if (pipeline.artifacts?.length) obj.artifacts = pipeline.artifacts;
   // pipelines 存在时只输出 pipelines（tasks 已被归入 pipelines），避免重复
   if (pipeline.pipelines?.length) {
     obj.pipelines = pipeline.pipelines;

@@ -76,10 +76,46 @@ export default function PipelineDetailPage() {
   // 草稿静默蒸发，且与编辑模式（有确认+beforeunload）双标。现在跟踪 dirty：
   // 有未保存修改时关闭需确认、重开恢复草稿、保存成功后自动清零。
   const [yamlDirty, setYamlDirty] = useState(false);
-  // v6 (2026-08): 记录当前 yamlText 基于哪份 pipeline 生成 ——
-  // 仅当「非 dirty 且数据源已变化」（如保存后 refetch / 切换流水线返回）才允许重新生成，
-  // 否则一律保留编辑器现有文本（草稿或已保存的用户格式不被规范化覆盖）
-  const yamlSourceRef = useRef<PipelineDetail | null>(null);
+  // v6 (2026-08): 记录当前 yamlText 基于哪个数据源生成 ——
+  // 仅当「非 dirty 且数据源已变化」才允许重新生成，否则保留编辑器现有文本。
+  // v7 (2026-08): 从 pipeline 对象引用改为「数据源 key」（definitionId / 文件路径）。
+  //   保存后 invalidate → refetch 在结构变化时会换对象引用，旧逻辑误判为换流水线
+  //   并重新序列化，把用户注释/格式吞掉；key 只随路由参数变化。
+  const yamlSourceKey = isFileMode ? `file:${actualFilePath ?? ''}` : `id:${definitionId ?? ''}`;
+  const yamlSourceRef = useRef<string | null>(null);
+
+  // v7 (2026-08): 编辑器初始文本优先用磁盘原文（保留注释/空行/字段顺序），
+  // 仅当后端未返回 raw_content（旧数据）时回退到结构化序列化
+  const pipelineEditorText = useCallback(
+    (p: PipelineDetail) => p.raw_content ?? pipelineToYaml(p),
+    [],
+  );
+
+  // v7 (2026-08): P1 跨流水线串稿修复 —— 切换流水线/文件时组件不会重新挂载，
+  // 必须清掉上一份 YAML 草稿，否则保存会把 A 的内容写入 B。
+  // 用 ref 记录上一个 key，避免首次挂载/普通 re-render 触发清空。
+  const prevYamlSourceKeyRef = useRef(yamlSourceKey);
+  useEffect(() => {
+    if (prevYamlSourceKeyRef.current === yamlSourceKey) return;
+    prevYamlSourceKeyRef.current = yamlSourceKey;
+    setYamlText('');
+    setYamlError(null);
+    setEditedPipeline(null);
+    setYamlDirty(false);
+    yamlSourceRef.current = null;
+  }, [yamlSourceKey]);
+
+  // v7 (2026-08): 换源后编辑器仍开着时，等新 pipeline 到达自动填充
+  //（文件模式由下方 fileData 的 effect 负责）
+  useEffect(() => {
+    if (!isFileMode && yamlEditorOpen && pipeline && yamlSourceRef.current === null) {
+      const yaml = pipelineEditorText(pipeline);
+      setYamlText(yaml);
+      yamlSourceRef.current = yamlSourceKey;
+      setEditedPipeline(null);
+      setYamlError(null);
+    }
+  }, [isFileMode, yamlEditorOpen, pipeline, yamlSourceKey, pipelineEditorText]);
 
   // v1 (2026-07): issue #206 — 可视化编辑器模式
   const [editMode, setEditMode] = useState(false);
@@ -96,10 +132,20 @@ export default function PipelineDetailPage() {
   const saveByIdMutation = useSavePipelineById(!isFileMode ? definitionId : undefined);
   const saveByFileMutation = useSavePipelineByFile(isFileMode ? projectId : undefined);
 
-  const handleSave = useCallback(() => {
-    if (!yamlText) return;
+  const saving = isFileMode ? saveByFileMutation.isPending : saveByIdMutation.isPending;
+
+  const handleSave = useCallback((contentOverride?: string) => {
+    // v7 (2026-08): 优先使用编辑器冲刷出的最新内容，避免 debounce 窗口内保存丢输入
+    const content = contentOverride ?? yamlText;
+    if (!content.trim()) {
+      // 旧实现直接 return，点击保存毫无反馈；空内容无法构成流水线，明确报错
+      message.error('YAML 内容为空，无法保存');
+      return;
+    }
+    // v7 (2026-08): 请求进行中忽略重复触发（Ctrl+S 不受按钮 loading 限制）
+    if (saving) return;
     if (isFileMode && actualFilePath) {
-      saveByFileMutation.mutate({ file: actualFilePath, content: yamlText }, {
+      saveByFileMutation.mutate({ file: actualFilePath, content }, {
         onSuccess: () => {
           message.success('已保存');
           // v6 (2026-08): 保存成功即草稿落盘，dirty 清零（此后关闭不再弹确认）
@@ -108,7 +154,7 @@ export default function PipelineDetailPage() {
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     } else if (definitionId) {
-      saveByIdMutation.mutate(yamlText, {
+      saveByIdMutation.mutate(content, {
         onSuccess: () => {
           message.success('已保存');
           setYamlDirty(false);
@@ -116,12 +162,12 @@ export default function PipelineDetailPage() {
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     }
-  }, [yamlText, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
-
-  const saving = isFileMode ? saveByFileMutation.isPending : saveByIdMutation.isPending;
+  }, [yamlText, saving, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
 
   // v1 (2026-07): issue #206 — 编辑器中保存：nodes/edges → YAML → 写回
   const handleSaveFromEditor = useCallback(() => {
+    // v7 (2026-08): 与 YAML 保存一致，请求进行中忽略重复触发
+    if (saving) return;
     const { pipeline: editedPipeline, errors } = nodesToYaml(editNodes, editEdges);
     if (!editedPipeline) {
       message.error(`保存失败: ${errors.join(', ')}`);
@@ -139,7 +185,7 @@ export default function PipelineDetailPage() {
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     }
-  }, [editNodes, editEdges, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
+  }, [editNodes, editEdges, saving, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
 
   // v2 (2026-07): 未保存修改的离开守卫
   // 在编辑模式下注册 beforeunload 事件，关闭/刷新页面时提示用户
@@ -211,13 +257,26 @@ export default function PipelineDetailPage() {
   useEffect(() => {
     if (isFileMode && fileData && !yamlText) {
       setYamlText(fileData.raw_content);
+      yamlSourceRef.current = yamlSourceKey;
       // 对原始 YAML 做一次解析，生成 yamlError（但不阻止编辑器显示）
       const result = parseYamlToPipeline(fileData.raw_content);
       if (!result.success) {
         setYamlError(result.error!);
       }
     }
-  }, [isFileMode, fileData, yamlText]);
+  }, [isFileMode, fileData, yamlText, yamlSourceKey]);
+
+  // v7 (2026-08): YAML 草稿的 beforeunload 守卫（与编辑模式对齐）。
+  // 旧实现只在 editMode 注册，view 模式下有未保存 YAML 时刷新/关标签页静默丢稿。
+  useEffect(() => {
+    if (!yamlEditorOpen || !yamlDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [yamlEditorOpen, yamlDirty]);
 
   // 打开/关闭 YAML 编辑器
   // v6 (2026-08): critique P1 — 草稿保护重写切换逻辑：
@@ -236,11 +295,19 @@ export default function PipelineDetailPage() {
             // v6 (2026-08): e2e 实测发现仅关面板不清草稿，「放弃」名不副实。
             // 放弃 = 回到最后一次已保存状态：重新生成 YAML、清除草稿标记
             if (pipeline) {
-              const yaml = pipelineToYaml(pipeline);
+              const yaml = pipelineEditorText(pipeline);
               setYamlText(yaml);
-              yamlSourceRef.current = pipeline;
+              yamlSourceRef.current = yamlSourceKey;
               setEditedPipeline(null);
               setYamlError(null);
+            } else if (isFileMode && fileData) {
+              // v7 (2026-08): 文件模式 pipeline 为 undefined，旧实现跳过还原，
+              // 「放弃并关闭」后草稿仍残留；这里显式回到磁盘原文
+              setYamlText(fileData.raw_content);
+              const result = parseYamlToPipeline(fileData.raw_content);
+              setYamlError(result.success ? null : result.error!);
+              setEditedPipeline(null);
+              yamlSourceRef.current = yamlSourceKey;
             }
             setYamlDirty(false);
             setYamlEditorOpen(false);
@@ -253,16 +320,16 @@ export default function PipelineDetailPage() {
     }
     // 打开：草稿优先 —— 仅在「无任何文本」或「非 dirty 且数据源已变化」时重新生成；
     // 其余情况保留编辑器现有文本（用户草稿 / 已保存的用户格式）
-    if (pipeline && (!yamlText || (!yamlDirty && yamlSourceRef.current !== pipeline))) {
-      const yaml = pipelineToYaml(pipeline);
+    if (pipeline && (!yamlText || (!yamlDirty && yamlSourceRef.current !== yamlSourceKey))) {
+      const yaml = pipelineEditorText(pipeline);
       setYamlText(yaml);
-      yamlSourceRef.current = pipeline;
+      yamlSourceRef.current = yamlSourceKey;
       setEditedPipeline(null);
       setYamlError(null);
       setYamlDirty(false);
     }
     setYamlEditorOpen(true);
-  }, [yamlEditorOpen, pipeline, yamlDirty, yamlText]);
+  }, [yamlEditorOpen, pipeline, yamlDirty, yamlText, yamlSourceKey, isFileMode, fileData, pipelineEditorText]);
 
   // YAML 内容变化时解析并更新流程图
   const handleYamlChange = useCallback((text: string) => {
