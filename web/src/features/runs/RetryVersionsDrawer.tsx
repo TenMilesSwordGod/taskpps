@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Drawer, Spin, Tag, Button, Empty, Modal, App, Tooltip } from 'antd';
-import { History, Clock, Eye, Star, FileText, XCircle } from 'lucide-react';
+import { History, Clock, Eye, Star, FileText, XCircle, Folder } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useRetryVersions, useSelectRetryReport, useRetryLogs, useCancelRetryRun } from '@/api/runs';
 import { useRetrySSELogs } from './hooks/useRetrySSELogs';
@@ -199,10 +199,20 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
                       )}
                     </div>
 
-                    {/* 命令预览 */}
+                    {/* 命令（完整展示，便于核对每次重跑实际执行内容；长命令可滚动） */}
                     {retry.command && (
-                      <div className="bg-gray-50 border border-gray-100 rounded px-2 py-1 mb-2 text-xs font-mono text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
+                      <pre className="bg-gray-50 border border-gray-100 rounded px-2 py-1 mb-2 text-xs font-mono text-gray-500 overflow-auto whitespace-pre-wrap break-all max-h-32">
                         {retry.command}
+                      </pre>
+                    )}
+
+                    {/* 工作目录（空串表示由执行器决定默认目录，不展示） */}
+                    {retry.cwd && (
+                      <div className="flex items-center gap-1 text-xs text-gray-400 mb-2">
+                        <Folder size={11} className="shrink-0" />
+                        <span className="font-mono break-all" title={retry.cwd}>
+                          {retry.cwd}
+                        </span>
                       </div>
                     )}
 

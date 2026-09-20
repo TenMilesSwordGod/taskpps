@@ -627,8 +627,11 @@ class PipelineService:
         subpipeline: str | None = None,
         include_upstream: bool = False,
         command_overrides: dict[str, str] | None = None,
+        cwd_overrides: dict[str, str] | None = None,
         retry_execution_strategy: str = "parallel",
     ) -> dict:
+        command_overrides = command_overrides or {}
+        cwd_overrides = cwd_overrides or {}
         async with get_session_factory()() as session:
             run_repo = RunRepository(session)
             task_repo = TaskRunRepository(session)
@@ -682,6 +685,16 @@ class PipelineService:
                 task_levels = dag.get_execution_levels()
                 task_targets.sort(key=lambda n: next((i for i, lev in enumerate(task_levels) if n in lev), 999))
 
+            # 校验 overrides 只作用于本次重试的目标任务（fail fast，避免改错任务被静默忽略）
+            unknown_override_tasks = (set(command_overrides) | set(cwd_overrides)) - set(task_targets)
+            if unknown_override_tasks:
+                raise ValueError(
+                    t(
+                        "Override task(s) not among retry targets: {tasks}",
+                        tasks=", ".join(sorted(unknown_override_tasks)),
+                    )
+                )
+
             all_task_runs = await task_repo.list_task_runs(run_id)
             task_run_map = {tr.task_name: tr for tr in all_task_runs}
 
@@ -697,6 +710,24 @@ class PipelineService:
                 pending = [r for r in existing if r.status == TaskStatus.PENDING or r.status == TaskStatus.RUNNING]
                 if pending:
                     raise ValueError(t("Task has a retry already in progress"))
+
+                # invoke/plugin 任务没有可编辑的 shell 命令，override 不支持时快速失败
+                task_obj = resolved.get_task_by_name(t_name.split(".", 1)[1])
+                if task_obj is not None:
+                    if t_name in command_overrides and task_obj.task_type in ("invoke", "plugin"):
+                        raise ValueError(
+                            t(
+                                "Command override is not supported for task type '{type}'",
+                                type=task_obj.task_type,
+                            )
+                        )
+                    if t_name in cwd_overrides and task_obj.task_type == "invoke":
+                        raise ValueError(
+                            t(
+                                "Working directory override is not supported for task type '{type}'",
+                                type=task_obj.task_type,
+                            )
+                        )
 
             context = ExecutionContext(
                 pipeline=resolved,
@@ -714,11 +745,13 @@ class PipelineService:
                 tr = task_run_map[t_name]
                 task_obj = resolved.get_task_by_name(t_name.split(".", 1)[1])
 
-                original_raw = getattr(task_obj, "command", "") or ""
+                # 记录展示/执行用的默认命令与 cwd（command/commands/steps 统一成可读文本），
+                # 再应用用户在重试弹窗中的覆盖值；original_command 保留未编辑前的默认值
                 env_dict = context.get_task_env(task_obj) if task_obj else {}
-                resolved_cmd = self._resolve_template(original_raw, env_dict)
-                if command_overrides and t_name in command_overrides:
-                    resolved_cmd = command_overrides[t_name]
+                default_cmd = self._task_display_command(task_obj, env_dict) if task_obj else ""
+                resolved_cmd = command_overrides.get(t_name, default_cmd)
+                default_cwd = self._task_cwd(task_obj, context, env_dict) if task_obj else ""
+                task_cwd = cwd_overrides.get(t_name, default_cwd)
 
                 retry_version = await retry_repo.get_next_retry_version(run_id, t_name)
                 log_path = build_retry_log_path(
@@ -736,7 +769,8 @@ class PipelineService:
                     subpipeline_name=tr.subpipeline_name,
                     retry_version=retry_version,
                     command=resolved_cmd,
-                    original_command=resolved_cmd,
+                    original_command=default_cmd,
+                    cwd=task_cwd,
                     log_path=str(log_path),
                 )
                 retry_records.append(record)
@@ -754,6 +788,10 @@ class PipelineService:
             {
                 "name": r.task_name,
                 "command": r.command,
+                "cwd": r.cwd,
+                # 标记命令是否来自用户编辑：是则 RetryRunner 把整段文本作为一条命令执行，
+                # 不再按原 commands/steps 分段（保证“所见即所跑”）
+                "command_override": r.task_name in command_overrides,
                 "retry_record_id": r.id,
                 "log_path": r.log_path,
             }
@@ -781,6 +819,7 @@ class PipelineService:
                     "retry_version": r.retry_version,
                     "status": r.status.value if hasattr(r.status, "value") else r.status,
                     "command": r.command,
+                    "cwd": r.cwd,
                     "log_path": r.log_path,
                 }
                 for r in retry_records
@@ -864,69 +903,77 @@ class PipelineService:
 
     async def get_retry_versions(self, run_id: str) -> dict:
         async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
             retry_repo = RetryRecordRepository(session)
             task_repo = TaskRunRepository(session)
 
             records = await retry_repo.list_retries_by_run(run_id)
             task_runs = await task_repo.list_task_runs(run_id)
+            run = await run_repo.get_run(run_id)
 
-            # 构建原始 TaskRun 的 v0 条目
-            task_run_map: dict[str, TaskRun] = {tr.task_name: tr for tr in task_runs}
+        # v0（首次执行）的 command/cwd 不在 task_runs 表内，从运行时快照解析
+        v0_meta = self._resolve_v0_task_meta(run) if run else {}
 
-            grouped: dict[str, list[dict]] = {}
-            for task_name, tr in task_run_map.items():
-                if task_name not in grouped:
-                    grouped[task_name] = []
-                # 原始执行作为 v0
-                grouped[task_name].append(
-                    {
-                        "id": tr.id,
-                        "run_id": tr.run_id,
-                        "task_run_id": tr.id,
-                        "task_name": tr.task_name,
-                        "subpipeline_name": tr.subpipeline_name,
-                        "retry_version": 0,
-                        "status": tr.status.value if hasattr(tr.status, "value") else tr.status,
-                        "command": "",
-                        "original_command": "",
-                        "log_path": tr.log_path,
-                        "exit_code": tr.exit_code,
-                        "error": tr.error,
-                        "started_at": _ensure_utc(tr.started_at),
-                        "finished_at": _ensure_utc(tr.finished_at),
-                        "created_at": _ensure_utc(tr.created_at),
-                    }
-                )
+        # 构建原始 TaskRun 的 v0 条目
+        task_run_map: dict[str, TaskRun] = {tr.task_name: tr for tr in task_runs}
 
-            for r in records:
-                task_name = r.task_name
-                if task_name not in grouped:
-                    grouped[task_name] = []
-                grouped[task_name].append(
-                    {
-                        "id": r.id,
-                        "run_id": r.run_id,
-                        "task_run_id": r.task_run_id,
-                        "task_name": r.task_name,
-                        "subpipeline_name": r.subpipeline_name,
-                        "retry_version": r.retry_version,
-                        "status": r.status.value if hasattr(r.status, "value") else r.status,
-                        "command": r.command,
-                        "original_command": r.original_command,
-                        "log_path": r.log_path,
-                        "exit_code": r.exit_code,
-                        "error": r.error,
-                        "started_at": _ensure_utc(r.started_at),
-                        "finished_at": _ensure_utc(r.finished_at),
-                        "created_at": _ensure_utc(r.created_at),
-                    }
-                )
+        grouped: dict[str, list[dict]] = {}
+        for task_name, tr in task_run_map.items():
+            if task_name not in grouped:
+                grouped[task_name] = []
+            # 原始执行作为 v0
+            v0_command, v0_cwd = v0_meta.get(task_name, ("", ""))
+            grouped[task_name].append(
+                {
+                    "id": tr.id,
+                    "run_id": tr.run_id,
+                    "task_run_id": tr.id,
+                    "task_name": tr.task_name,
+                    "subpipeline_name": tr.subpipeline_name,
+                    "retry_version": 0,
+                    "status": tr.status.value if hasattr(tr.status, "value") else tr.status,
+                    "command": v0_command,
+                    "original_command": v0_command,
+                    "cwd": v0_cwd,
+                    "log_path": tr.log_path,
+                    "exit_code": tr.exit_code,
+                    "error": tr.error,
+                    "started_at": _ensure_utc(tr.started_at),
+                    "finished_at": _ensure_utc(tr.finished_at),
+                    "created_at": _ensure_utc(tr.created_at),
+                }
+            )
 
-            selected: dict[str, str | None] = {}
-            for tr in task_runs:
-                selected[tr.task_name] = tr.selected_retry_id
+        for r in records:
+            task_name = r.task_name
+            if task_name not in grouped:
+                grouped[task_name] = []
+            grouped[task_name].append(
+                {
+                    "id": r.id,
+                    "run_id": r.run_id,
+                    "task_run_id": r.task_run_id,
+                    "task_name": r.task_name,
+                    "subpipeline_name": r.subpipeline_name,
+                    "retry_version": r.retry_version,
+                    "status": r.status.value if hasattr(r.status, "value") else r.status,
+                    "command": r.command,
+                    "original_command": r.original_command,
+                    "cwd": r.cwd,
+                    "log_path": r.log_path,
+                    "exit_code": r.exit_code,
+                    "error": r.error,
+                    "started_at": _ensure_utc(r.started_at),
+                    "finished_at": _ensure_utc(r.finished_at),
+                    "created_at": _ensure_utc(r.created_at),
+                }
+            )
 
-            return {"task_retries": grouped, "selected": selected}
+        selected: dict[str, str | None] = {}
+        for tr in task_runs:
+            selected[tr.task_name] = tr.selected_retry_id
+
+        return {"task_retries": grouped, "selected": selected}
 
     async def get_retry_record(self, retry_id: str) -> dict | None:
         async with get_session_factory()() as session:
@@ -944,6 +991,7 @@ class PipelineService:
                 "status": r.status.value if hasattr(r.status, "value") else r.status,
                 "command": r.command,
                 "original_command": r.original_command,
+                "cwd": r.cwd,
                 "log_path": r.log_path,
                 "exit_code": r.exit_code,
                 "error": r.error,
@@ -1069,6 +1117,76 @@ class PipelineService:
 
             logger.error("Failed to parse pipeline snapshot for run %s: %s", run.id, traceback.format_exc())
             return None
+
+    def _resolve_v0_task_meta(self, run) -> dict[str, tuple[str, str]]:
+        """解析 v0（首次执行）各任务的展示命令与 cwd，格式：{限定任务名: (command, cwd)}。
+
+        设计决策：task_runs 表不存 command/cwd，v0 的这两个值只能从运行时快照解析，
+        以便版本抽屉对 v0 和重试版本用同一口径展示。快照缺失（历史 run 被清理）时
+        返回空 dict，调用方按空值展示，不阻断整个版本列表。
+        """
+        run_params = json.loads(run.params) if isinstance(run.params, str) else (run.params or {})
+        env = _extract_env_overrides(run_params)
+        project_workdir = getattr(run, "project_workdir", None)
+        resolved = self._load_resolved_pipeline(
+            run,
+            env=env,
+            project_workdir=Path(project_workdir) if project_workdir else None,
+        )
+        if resolved is None:
+            return {}
+
+        context = ExecutionContext(
+            pipeline=resolved,
+            run_id=run.id,
+            env=env,
+            project_workdir=project_workdir,
+        )
+        meta: dict[str, tuple[str, str]] = {}
+        for sub in resolved.subpipelines:
+            for task in sub.tasks:
+                env_dict = context.get_task_env(task)
+                meta[f"{sub.name}.{task.name}"] = (
+                    self._task_display_command(task, env_dict),
+                    self._task_cwd(task, context, env_dict),
+                )
+        return meta
+
+    @staticmethod
+    def _task_display_command(task: ResolvedTask, env: dict[str, str]) -> str:
+        """提取任务用于展示/记录的统一命令文本（与前端弹窗展示格式一致）。
+
+        为什么这么写：command/commands/steps 三类任务形态不同，重试记录需要统一文本；
+        该文本不影响执行——steps/commands 仍走 run_steps/run_commands，仅当用户显式
+        修改命令（command_override）时才由 RetryRunner 作为整体执行。
+        """
+        resolver = PipelineService._resolve_template
+        if task.command:
+            return resolver(task.command, env)
+        if task.commands:
+            return "\n".join(resolver(cmd, env) for cmd in task.commands)
+        if task.steps:
+            # 注意：这里刻意不用 "[step N]" 前缀，而是输出可直接执行的 shell 文本
+            # （cd X && run），因为用户编辑后 RetryRunner 会把整段文本当一条命令执行，
+            # 非 shell 语法会导致编辑过的 steps 重跑失败。
+            parts = []
+            for step in task.steps:
+                run_cmd = resolver(step.run, env)
+                if step.cd:
+                    parts.append(f"cd {resolver(step.cd, env)} && {run_cmd}")
+                else:
+                    parts.append(run_cmd)
+            return "\n".join(parts)
+        return ""
+
+    @staticmethod
+    def _task_cwd(task: ResolvedTask, context: ExecutionContext, env: dict[str, str]) -> str:
+        """解析任务本次重跑的默认工作目录（显式 cwd 优先，否则留给执行器默认）。
+
+        空串表示“由执行器/上下文决定”；显式 cwd 中的 ${env.X} 与命令一样做模板替换。
+        """
+        raw = task.cwd or context.get_workspace() or ""
+        return PipelineService._resolve_template(raw, env) if raw else ""
 
     @staticmethod
     def _build_qualified_tasks_with_subpipeline_deps(resolved: ResolvedPipeline) -> list[ResolvedTask]:

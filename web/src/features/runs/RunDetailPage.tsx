@@ -423,10 +423,11 @@ export default function RunDetailPage() {
             findTaskDef(retryTaskName)?.command ??
             findTaskDef(retryTaskName)?.commands?.join('\n') ??
             findTaskDef(retryTaskName)?.steps?.map(
-              (s, i) => `[step ${i + 1}]${s.cd ? ` cd ${s.cd} &&` : ''} ${s.run}`,
+              (s) => `${s.cd ? `cd ${s.cd} && ` : ''}${s.run}`,
             ).join('\n') ??
             undefined
           }
+          taskCwd={findTaskDef(retryTaskName)?.cwd ?? undefined}
           onClose={() => setRetryTaskName(null)}
         />
       )}

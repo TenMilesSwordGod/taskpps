@@ -4,7 +4,7 @@ import pytest
 
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
-from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
+from taskpps.loaders.pipeline_loader import PipelineLoader, resolve_task_env_vars, substitute_env_vars
 
 
 class TestPipelineLoader:
@@ -595,4 +595,52 @@ tasks:
             spec = loader.load("missing_agent_test.yaml", project_workdir=project_dir)
             # 未找到 agent，保留原文本
             assert spec.tasks[0].command == "echo host=${agent:missing-agent.host}"
+
+
+class TestResolveTaskEnvVars:
+    """resolve_task_env_vars：把任务级 env 也纳入替换，使前端展示与实际执行一致。"""
+
+    def test_resolves_task_level_env_in_commands(self):
+        data = {
+            "name": "p",
+            "config": {"env": {"A": "1"}},
+            "pipelines": [
+                {
+                    "name": "sub",
+                    "config": {"env": {"B": "2"}},
+                    "tasks": [
+                        {
+                            "name": "t1",
+                            "command": "echo ${env.A}-${env.B}-${env.C}",
+                            "cwd": "/work/${env.C}",
+                            "env": {"C": "3"},
+                        },
+                        {"name": "t2", "steps": [{"run": "echo ${env.B}"}]},
+                    ],
+                }
+            ],
+        }
+
+        result = resolve_task_env_vars(data, {})
+
+        assert result["pipelines"][0]["tasks"][0]["command"] == "echo 1-2-3"
+        assert result["pipelines"][0]["tasks"][0]["cwd"] == "/work/3"
+        assert result["pipelines"][0]["tasks"][1]["steps"][0]["run"] == "echo 2"
+
+    def test_params_env_overrides_task_env(self):
+        data = {"name": "p", "tasks": [{"name": "t1", "command": "echo ${env.X}", "env": {"X": "task"}}]}
+
+        result = resolve_task_env_vars(data, {"X": "params"})
+
+        assert result["tasks"][0]["command"] == "echo params"
+
+    def test_commands_list_is_resolved(self):
+        data = {"name": "p", "tasks": [{"name": "t1", "commands": ["echo ${env.X}", "ls"], "env": {"X": "v"}}]}
+
+        result = resolve_task_env_vars(data, {})
+
+        assert result["tasks"][0]["commands"] == ["echo v", "ls"]
+
+    def test_non_dict_passthrough(self):
+        assert resolve_task_env_vars("not-a-dict", {}) == "not-a-dict"
 

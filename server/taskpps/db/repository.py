@@ -390,6 +390,7 @@ class RetryRecordRepository:
         command: str,
         original_command: str,
         log_path: str,
+        cwd: str = "",
     ) -> TaskRetryRecord:
         record = TaskRetryRecord(
             run_id=run_id,
@@ -399,6 +400,7 @@ class RetryRecordRepository:
             retry_version=retry_version,
             command=command,
             original_command=original_command,
+            cwd=cwd,
             log_path=log_path,
             status=TaskStatus.PENDING,
         )
