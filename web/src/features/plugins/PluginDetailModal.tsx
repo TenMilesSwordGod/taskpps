@@ -59,16 +59,16 @@ export default function PluginDetailModal({ plugin, onClose }: PluginDetailModal
         </Descriptions.Item>
       </Descriptions>
 
-      <div className="rounded-lg p-4" style={{ border: '1px solid #E3E4E8' }}>
-        <h4 className="text-sm font-semibold mb-3" style={{ color: '#121620' }}>帮助信息</h4>
+      <div className="rounded-lg p-4" style={{ border: '1px solid #E0E0E0' }}>
+        <h4 className="text-sm font-semibold mb-3" style={{ color: '#262626' }}>帮助信息</h4>
         {renderedHelp ? (
           <div
             className="prose prose-sm max-w-none text-xs leading-relaxed"
-            style={{ color: '#7C7F88' }}
+            style={{ color: '#8C8C8C' }}
             dangerouslySetInnerHTML={{ __html: renderedHelp }}
           />
         ) : (
-          <div className="text-xs" style={{ color: '#7C7F88' }}>(无帮助信息)</div>
+          <div className="text-xs" style={{ color: '#8C8C8C' }}>(无帮助信息)</div>
         )}
       </div>
     </Modal>

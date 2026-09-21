@@ -82,7 +82,7 @@ export default function PluginListPage() {
       key: 'name',
       width: 280,
       render: (name: string) => (
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#121620' }}>{name}</span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#262626' }}>{name}</span>
       ),
     },
     {
@@ -157,12 +157,12 @@ export default function PluginListPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F6F6F8' }}>
-      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}>
+    <div className="flex flex-col h-full p-6 gap-3" style={{ background: '#F5F5F5' }}>
+      <div className="shrink-0 px-5 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E0E0E0', boxShadow: 'rgba(30, 25, 20, 0.05) 0px 0px 0px 1px' }}>
         <div className="flex items-center gap-2">
-          <PlugZap size={18} color="#7C7F88" />
-          <span className="text-base font-semibold" style={{ color: '#121620' }}>插件管理</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs" style={{ background: '#F6F6F8', color: '#7C7F88' }}>
+          <PlugZap size={18} color="#8C8C8C" />
+          <span className="text-base font-semibold" style={{ color: '#262626' }}>插件管理</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs" style={{ background: '#F5F5F5', color: '#8C8C8C' }}>
             共 {plugins?.length ?? 0} 个
           </span>
         </div>
@@ -175,7 +175,7 @@ export default function PluginListPage() {
           />
           <Input
             allowClear
-            prefix={<Search size={14} color="#7C7F88" />}
+            prefix={<Search size={14} color="#8C8C8C" />}
             placeholder="搜索名称 / 类型 / 版本"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -223,7 +223,7 @@ export default function PluginListPage() {
         ) : filtered.length === 0 ? (
           <Empty
             description={
-              <span style={{ color: '#7C7F88' }}>
+              <span style={{ color: '#8C8C8C' }}>
                 {plugins?.length === 0 ? '暂无已注册插件' : '无匹配的插件'}
               </span>
             }
@@ -237,7 +237,7 @@ export default function PluginListPage() {
             pagination={false}
             size="middle"
             className="overflow-hidden"
-            style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E3E4E8', boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px' }}
+            style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #E0E0E0', boxShadow: 'rgba(30, 25, 20, 0.05) 0px 0px 0px 1px' }}
           />
         )}
       </div>

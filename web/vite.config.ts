@@ -62,7 +62,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:26521',
+        // v6 (2026-08): 支持环境变量覆盖代理目标（联调远程后端时
+        ///   `VITE_API_TARGET=http://host:port npm run dev`），默认本机自托管
+        target: process.env.VITE_API_TARGET || 'http://localhost:26521',
         changeOrigin: true,
       },
     },

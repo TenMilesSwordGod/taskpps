@@ -4,7 +4,6 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
 import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemirror/language';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintGutter } from '@codemirror/lint';
@@ -20,10 +19,32 @@ import {
   type YamlVariableIndex,
 } from '@/utils/yamlVariables';
 
+/**
+ * v5 (2026-08): 浅色主题 —— 与 DAG 画布的 n8n 风格统一。
+ * 此前用 oneDark 深色主题，与浅色画布并排时割裂感强（用户反馈"样式保持统一"）。
+ * 移除 oneDark 后 CodeMirror 回落到默认浅色语法高亮（defaultHighlightStyle fallback），
+ * 这里仅补充与 nodeTokens.INK 对齐的界面色（gutter/activeLine/选区等）。
+ */
+
 export interface YamlEditorRef {
   /** 滚动到指定行（1-indexed），并临时高亮 2s */
   scrollToLine: (line: number) => void;
 }
+
+/**
+ * v5 (2026-08): 浅色 CodeMirror 主题 —— 色值与 nodeTokens.INK（n8n 风格）对齐：
+ * 白底、slate 系 gutter/文本、淡灰 activeLine，与 DAG 画布并排时视觉统一
+ */
+const lightTheme = EditorView.theme({
+  '&': { backgroundColor: '#FFFFFF', color: '#334155' },
+  '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace', fontSize: 13 },
+  '.cm-gutters': { backgroundColor: '#F8FAFC', color: '#94A3B8', border: 'none', borderRight: '1px solid #E2E8F0' },
+  '.cm-activeLine': { backgroundColor: 'rgba(148, 163, 184, 0.08)' },
+  '.cm-activeLineGutter': { backgroundColor: 'rgba(148, 163, 184, 0.14)' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: '#BFDBFE' },
+  '.cm-cursor': { borderLeftColor: '#FF6D5A' },
+  '.cm-matchingBracket': { backgroundColor: 'rgba(148, 163, 184, 0.25)', outline: 'none' },
+});
 
 /** 变量悬浮所需的数据：YAML 上下文索引 + 调用方注入的项目配置 */
 export interface VariableHoverData {
@@ -47,8 +68,8 @@ export interface YamlEditorProps {
   readOnly?: boolean;
   /** 光标所在行包含 task name 时回调 */
   onCursorTaskChange?: (taskId: string | null) => void;
-  /** 保存回调 */
-  onSave?: () => void;
+  /** 保存回调；参数为编辑器当前完整内容（避免父组件读取 debounce 未落定的旧值） */
+  onSave?: (content?: string) => void;
   /** 是否正在保存 */
   saving?: boolean;
   /** v3 (2026-09): ${...} 悬浮解析数据；不传则无悬浮提示 */
@@ -100,6 +121,20 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
     }, 300);
   }, []);
 
+  // v7 (2026-08): 保存前必须先冲刷 debounce。
+  // 旧实现 onChange 有 300ms debounce，而 onSave 立即触发父组件的 handleSave，
+  // 父组件读到的 yamlText 还是旧值 —— 「快速输入后马上 Ctrl+S/点保存」会静默
+  // 丢掉最后一段输入。这里同步把当前文档交给父组件，并把内容作为参数传给 onSave。
+  const saveRef = useRef<() => void>(() => {});
+  saveRef.current = () => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    const current = view.state.doc.toString();
+    onChangeRef.current(current);
+    onSaveRef.current?.(current);
+  };
+
   useEffect(() => {
     if (!editorRef.current) return;
 
@@ -133,7 +168,8 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
         highlightSelectionMatches(),
         lintGutter(),
         yaml(),
-        oneDark,
+        // v5 (2026-08): 移除 oneDark，改用与画布统一的浅色主题
+        lightTheme,
         // v3 (2026-09): ${...} 悬浮展示解析值；数据通过 ref 读取，
         // 扩展本身只创建一次，避免编辑器频繁重建
         hoverTooltip((view, pos) => {
@@ -161,7 +197,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
           ...closeBracketsKeymap,
           ...searchKeymap,
           indentWithTab,
-          { key: 'Mod-s', run: () => { onSaveRef.current?.(); return true; } },
+          { key: 'Mod-s', run: () => { saveRef.current(); return true; } },
         ]),
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         updateListener,
@@ -183,6 +219,8 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
     viewRef.current = view;
 
     return () => {
+      // v7 (2026-08): 卸载时清掉未触发的 debounce，避免组件关闭后回调仍触发父组件 setState
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       view.destroy();
       viewRef.current = null;
     };
@@ -205,13 +243,13 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
 
   return (
     <div className="flex flex-col h-full">
-      {/* 工具栏 */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#252526] border-b border-[#333] shrink-0">
-        <span className="text-xs text-gray-400 font-medium">YAML 编辑器</span>
+      {/* 工具栏 —— v5 (2026-08): 浅色化，与页面工具栏（bg-gray-50 白系）统一 */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-white border-b border-[#E2E8F0] shrink-0">
+        <span className="text-xs text-[#64748B] font-medium">YAML 编辑器</span>
         <Space size="small">
           {onSave && (
             <Tooltip title="保存 (Ctrl+S)">
-              <Button type="primary" size="small" icon={<SaveOutlined />} onClick={onSave} loading={saving}>
+              <Button type="primary" size="small" icon={<SaveOutlined />} onClick={() => saveRef.current()} loading={saving}>
                 保存
               </Button>
             </Tooltip>
@@ -224,7 +262,7 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
 
       {/* v1 (2026-07): issue #195 — 错误信息统一展示 message + 可选 line/column/path */}
       {error && (
-        <div className="shrink-0 border-t border-[#333]">
+        <div className="shrink-0 border-t border-[#E2E8F0]">
           <Alert
             type="error"
             showIcon
@@ -238,7 +276,6 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
                 {error.message}
               </span>
             }
-            className="!bg-[#2d1b1b] !border-[#5a2020]"
           />
         </div>
       )}

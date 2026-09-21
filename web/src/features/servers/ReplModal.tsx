@@ -402,14 +402,14 @@ export default function ReplModal({ open, agent, onClose }: Props) {
       styles={{ body: { padding: 0 } }}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Terminal size={18} color="#3D5BFF" />
+          <Terminal size={18} color="#000000" />
           <span style={{ fontSize: 15, fontWeight: 600 }}>Web REPL</span>
           {agent && (
             <>
               <Tag color={agent.connected ? 'green' : 'default'} style={{ margin: 0 }}>
                 {agent.connected ? '在线' : '离线'}
               </Tag>
-              <span style={{ fontSize: 12, color: '#7C7F88', fontFamily: 'JetBrains Mono, monospace' }}>
+              <span style={{ fontSize: 12, color: '#999999', fontFamily: 'JetBrains Mono, monospace' }}>
                 {agent.name || agent.hostname || agent.agent_id}
               </span>
             </>
@@ -417,12 +417,12 @@ export default function ReplModal({ open, agent, onClose }: Props) {
         </div>
       }
     >
-      <div style={{ display: 'flex', height: 440, borderTop: '1px solid #E3E4E8' }}>
+      <div style={{ display: 'flex', height: 440, borderTop: '1px solid #E0E0E0' }}>
         {/* ===== 左侧 session 栏 ===== */}
         <div style={{
-          width: 150, flexShrink: 0, background: '#F2F3F5', padding: '8px 6px',
+          width: 150, flexShrink: 0, background: '#FFFFFF', padding: '8px 6px',
           display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto',
-          borderRight: '1px solid #E3E4E8',
+          borderRight: '1px solid #E0E0E0',
         }}>
           {sessions.map((s) => (
             <div
@@ -435,18 +435,18 @@ export default function ReplModal({ open, agent, onClose }: Props) {
                 display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px',
                 borderRadius: 4, cursor: 'pointer', fontSize: 12,
                 background: s.id === activeId ? '#FFFFFF' : 'transparent',
-                color: s.id === activeId ? '#121620' : '#6C7086',
+                color: s.id === activeId ? '#000000' : '#666666',
                 fontWeight: s.id === activeId ? 500 : 400,
-                border: s.id === activeId ? '1px solid #D0D5DD' : '1px solid transparent',
+                border: s.id === activeId ? '1px solid #CCCCCC' : '1px solid transparent',
               }}
             >
               {/* session 状态点 */}
               <span style={{
                 width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                background: s.status === 'running' ? '#f59e0b'
-                  : s.status === 'error' ? '#ef4444'
-                  : s.status === 'done' ? '#10b981'
-                  : '#9CA0AC',
+                background: s.status === 'running' ? '#000000'
+                  : s.status === 'error' ? '#333333'
+                  : s.status === 'done' ? '#999999'
+                  : '#CCCCCC',
               }} />
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {s.name}
@@ -460,7 +460,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
                   style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     width: 16, height: 16, borderRadius: 3, cursor: 'pointer', flexShrink: 0,
-                    color: '#9CA0AC', opacity: 0, transition: 'opacity 0.1s',
+                    color: '#999999', opacity: 0, transition: 'opacity 0.1s',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.opacity = '0'; }}
@@ -479,7 +479,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
               padding: '5px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12,
-              color: '#6C7086', marginTop: 4, border: '1px dashed #D0D5DD',
+              color: '#666666', marginTop: 4, border: '1px dashed #CCCCCC',
             }}
           >
             <Plus size={12} />
@@ -491,7 +491,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '10px 12px' }}>
           {/* 提示条 */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 11, color: '#7C7F88',
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 11, color: '#999999',
           }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
               <Clock size={11} />
@@ -505,15 +505,15 @@ export default function ReplModal({ open, agent, onClose }: Props) {
               onChange={(e) => setTimeoutVal(Math.max(5, Math.min(600, Number(e.target.value) || DEFAULT_TIMEOUT)))}
               style={{
                 width: 50, fontSize: 11, padding: '1px 4px', borderRadius: 3,
-                border: '1px solid #E3E4E8', textAlign: 'center',
-                fontFamily: 'JetBrains Mono, monospace', color: '#121620',
+                border: '1px solid #CCCCCC', textAlign: 'center',
+                fontFamily: 'JetBrains Mono, monospace', color: '#333333',
               }}
             />
             <span>秒</span>
             {activeSession?.cwd && (
               <>
-                <span style={{ color: '#E3E4E8' }}>|</span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#9CA0AC' }}>
+                <span style={{ color: '#E0E0E0' }}>|</span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#999999' }}>
                   {activeSession.cwd}
                 </span>
               </>
@@ -528,9 +528,9 @@ export default function ReplModal({ open, agent, onClose }: Props) {
                   style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     width: 24, height: 24, borderRadius: 4, cursor: 'pointer',
-                    color: isRunning ? '#ef4444' : '#7C7F88', transition: 'background 0.15s',
+                    color: isRunning ? '#FFFFFF' : '#999999', transition: 'background 0.15s',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F6F6F8'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F0F0F0'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                 >
                   {isRunning ? <Square size={13} /> : <Trash2 size={13} />}
@@ -543,7 +543,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
           <div
             ref={outputRef}
             style={{
-              background: '#1e1e2e',
+              background: '#000000',
               borderRadius: 6,
               padding: '12px 14px',
               flex: 1,
@@ -551,11 +551,11 @@ export default function ReplModal({ open, agent, onClose }: Props) {
               fontFamily: 'JetBrains Mono, SF Mono, Monaco, monospace',
               fontSize: 12.5,
               lineHeight: 1.6,
-              border: '1px solid #181825',
+              border: '1px solid #333333',
             }}
           >
             {(!activeSession || activeSession.lines.length === 0) ? (
-              <span style={{ color: '#6c7086' }}>
+              <span style={{ color: '#999999' }}>
                 输入命令并回车执行。上下箭头浏览历史命令。
               </span>
             ) : (() => {
@@ -565,19 +565,19 @@ export default function ReplModal({ open, agent, onClose }: Props) {
                 <div key={bi} style={{ marginBottom: block === lastBlock && isRunning ? 0 : 8 }}>
                   {/* 命令行 + 结果信息同行 */}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                    <span style={{ color: '#10b981', fontWeight: 600, flexShrink: 0, userSelect: 'none' }}>$</span>
-                    <span style={{ color: '#7EADFF', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    <span style={{ color: '#FFFFFF', fontWeight: 600, flexShrink: 0, userSelect: 'none' }}>$</span>
+                    <span style={{ color: '#FFFFFF', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       {block.command.content}
                     </span>
                     {block.result && (
                       <span style={{
-                        fontSize: 11, color: '#6c7086', flexShrink: 0,
+                        fontSize: 11, color: '#888888', flexShrink: 0,
                         display: 'inline-flex', alignItems: 'center', gap: 4,
                       }}>
                         {/exit_code:\s*0/.test(block.result) ? (
-                          <span style={{ color: '#10b981' }}>✔</span>
+                          <span style={{ color: '#FFFFFF' }}>✔</span>
                         ) : /exit_code:\s*[1-9]/.test(block.result) ? (
-                          <span style={{ color: '#F87171' }}>✘</span>
+                          <span style={{ color: '#FFFFFF' }}>✘</span>
                         ) : null}
                         <span>{block.result}</span>
                       </span>
@@ -588,7 +588,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
                     <div
                       key={line.seq}
                       style={{
-                        color: line.type === 'error' ? '#F87171' : '#C8D0E0',
+                        color: line.type === 'error' ? '#FFFFFF' : '#D4D4D4',
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
                         paddingLeft: 20,
@@ -601,7 +601,7 @@ export default function ReplModal({ open, agent, onClose }: Props) {
               ))
             })()}
             {isRunning && (
-              <span style={{ color: '#7EADFF', marginLeft: 4 }}>
+              <span style={{ color: '#FFFFFF', marginLeft: 4 }}>
                 <span className="animate-pulse">▎</span>
               </span>
             )}
@@ -620,8 +620,8 @@ export default function ReplModal({ open, agent, onClose }: Props) {
               }}
             >
               <div style={{
-                background: '#1e1e2e',
-                border: '1px solid #313244',
+                background: '#000000',
+                border: '1px solid #333333',
                 borderRadius: 6,
                 padding: '4px',
                 maxHeight: 180,
@@ -643,11 +643,11 @@ export default function ReplModal({ open, agent, onClose }: Props) {
                         display: 'flex', alignItems: 'center', gap: 8,
                         padding: '4px 8px', borderRadius: 4, cursor: 'pointer',
                         fontSize: 12.5, fontFamily: 'JetBrains Mono, monospace',
-                        color: '#C8D0E0',
-                        background: idx === completion.selected ? '#313244' : 'transparent',
+                        color: '#D4D4D4',
+                        background: idx === completion.selected ? '#2A2A2A' : 'transparent',
                       }}
                     >
-                      <Icon size={13} color={isDir ? '#f59e0b' : isFile ? '#7EADFF' : '#10b981'} />
+                      <Icon size={13} color={isDir ? '#999999' : isFile ? '#999999' : '#999999'} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {c}
                       </span>
@@ -661,11 +661,11 @@ export default function ReplModal({ open, agent, onClose }: Props) {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             marginTop: 8, padding: '8px 12px',
-            background: '#1e1e2e', borderRadius: 6,
-            border: '1px solid #181825',
+            background: '#000000', borderRadius: 6,
+            border: '1px solid #333333',
           }}>
             <span style={{
-              color: agent?.connected ? '#10b981' : '#6c7086',
+              color: agent?.connected ? '#FFFFFF' : '#999999',
               fontFamily: 'JetBrains Mono, monospace', fontSize: 13,
               flexShrink: 0, fontWeight: 500,
             }}>
@@ -681,13 +681,13 @@ export default function ReplModal({ open, agent, onClose }: Props) {
               placeholder={agent?.connected ? '输入命令…' : 'Agent 离线，无法执行'}
               style={{
                 flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                color: '#C8D0E0', fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 13, caretColor: '#C8D0E0',
+                color: '#E5E5E5', fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 13, caretColor: '#FFFFFF',
               }}
             />
             {isRunning && (
               <span style={{
-                fontSize: 10, color: '#f59e0b', flexShrink: 0,
+                fontSize: 10, color: '#FFFFFF', flexShrink: 0,
                 display: 'inline-flex', alignItems: 'center', gap: 3,
               }}>
                 <span className="animate-pulse">●</span> 执行中

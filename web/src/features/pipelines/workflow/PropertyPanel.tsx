@@ -10,6 +10,18 @@ const { TextArea } = Input;
 const { Text } = Typography;
 
 /**
+ * v7 (2026-08): 运行期只识别 fail/continue（runner: `on_failure != "continue"` 即按 fail），
+ * 旧面板写入的 stop/ignore/retry 实际都按 fail 执行，统一归一，避免 UI 语义与执行相反。
+ * 返回 '' 表示「未设置（继承上层配置）」。
+ */
+function normalizeOnFailure(value: string | undefined): string {
+  if (value === 'continue') return 'continue';
+  if (value === 'fail') return 'fail';
+  if (value === 'stop' || value === 'ignore' || value === 'retry') return 'fail';
+  return '';
+}
+
+/**
  * 属性编辑面板 — 浮动 Drawer
  * 选中节点后在右侧弹出，编辑完关闭
  *
@@ -42,12 +54,12 @@ export default function PropertyPanel({ selectedNode, visible, onClose, onSave, 
         description: (task as unknown as Record<string, string>)?.description || '',
         command: task?.command || '',
         cwd: task?.cwd || '',
-        timeout: task?.timeout || 300,
+        timeout: task?.timeout ?? undefined,
         retry: task?.retry || 0,
         when: task?.when || '',
         executionStrategy: selectedNode.data?.executionStrategy || 'sequential',
-        maxConcurrentTasks: selectedNode.data?.maxConcurrentTasks || 5,
-        on_failure: task?.on_failure || 'stop',
+        maxConcurrentTasks: selectedNode.data?.maxConcurrentTasks ?? undefined,
+        on_failure: normalizeOnFailure(task?.on_failure),
       });
     }
   }, [selectedNode?.id]);
@@ -70,7 +82,7 @@ export default function PropertyPanel({ selectedNode, visible, onClose, onSave, 
           timeout: (editData.timeout as number) || undefined,
           retry: (editData.retry as number) || 0,
           when: (editData.when as string) || undefined,
-          on_failure: (editData.on_failure as string) || undefined,
+          on_failure: normalizeOnFailure(editData.on_failure as string) || undefined,
         },
       };
     }
@@ -81,7 +93,7 @@ export default function PropertyPanel({ selectedNode, visible, onClose, onSave, 
         ...updatedNode.data,
         label: editData.name as string,
         executionStrategy: editData.executionStrategy as string,
-        maxConcurrentTasks: editData.maxConcurrentTasks as number,
+        maxConcurrentTasks: (editData.maxConcurrentTasks as number) ?? undefined,
       };
     }
 
@@ -195,14 +207,15 @@ export default function PropertyPanel({ selectedNode, visible, onClose, onSave, 
             </div>
             <div>
               <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>最大并发数</Text>
-              <InputNumber
-                size="small"
-                min={1}
-                max={20}
-                value={(editData.maxConcurrentTasks as number) || 5}
-                onChange={(v) => setEditData((d) => ({ ...d, maxConcurrentTasks: v }))}
-                style={{ width: '100%' }}
-              />
+                <InputNumber
+                  size="small"
+                  min={1}
+                  max={20}
+                  value={(editData.maxConcurrentTasks as number) ?? undefined}
+                  onChange={(v) => setEditData((d) => ({ ...d, maxConcurrentTasks: v }))}
+                  style={{ width: '100%' }}
+                  placeholder="默认"
+                />
             </div>
           </>
         )}
@@ -234,9 +247,10 @@ export default function PropertyPanel({ selectedNode, visible, onClose, onSave, 
                 <InputNumber
                   size="small"
                   min={0}
-                  value={(editData.timeout as number) || 300}
+                  value={(editData.timeout as number) ?? undefined}
                   onChange={(v) => setEditData((d) => ({ ...d, timeout: v }))}
                   style={{ width: '100%' }}
+                  placeholder="默认"
                 />
               </div>
               <div style={{ flex: 1 }}>
@@ -260,13 +274,13 @@ export default function PropertyPanel({ selectedNode, visible, onClose, onSave, 
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>失败策略</Text>
             <Select
               size="small"
-              value={(editData.on_failure as string) || 'stop'}
+              value={(editData.on_failure as string) || ''}
               onChange={(v) => setEditData((d) => ({ ...d, on_failure: v }))}
               style={{ width: '100%' }}
               options={[
-                { value: 'stop', label: '停止 (stop)' },
-                { value: 'ignore', label: '忽略 (ignore)' },
-                { value: 'retry', label: '重试 (retry)' },
+                { value: '', label: '默认（继承上层）' },
+                { value: 'fail', label: '失败即停止 (fail)' },
+                { value: 'continue', label: '继续执行 (continue)' },
               ]}
             />
           </div>

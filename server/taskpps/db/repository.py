@@ -637,21 +637,31 @@ class PipelineDefinitionRepository:
         raw_content: str,
         file_hash: str,
     ) -> tuple[PipelineDefinition, bool]:
-        stmt = select(PipelineDefinition).where(
-            PipelineDefinition.project_id == project_id,
-            PipelineDefinition.file_path == file_path,
-            PipelineDefinition.active == True,  # noqa: E712
+        # v7 (2026-08): 同 file_path 的行优先复用（含 inactive）。
+        # 旧实现只查 active 行：文件短暂非法时 _sync 会 deactivate 旧行，
+        # 修复后新建 definition_id，runs 按旧 id 关联导致运行历史在列表中消失。
+        stmt = (
+            select(PipelineDefinition)
+            .where(
+                PipelineDefinition.project_id == project_id,
+                PipelineDefinition.file_path == file_path,
+            )
+            .order_by(
+                PipelineDefinition.active.desc(),
+                PipelineDefinition.updated_at.desc(),
+            )
         )
         result = await self.session.execute(stmt)
-        existing = result.scalar_one_or_none()
+        existing = result.scalars().first()
 
         if existing is not None:
-            if existing.file_hash == file_hash:
+            if existing.active and existing.file_hash == file_hash:
                 return existing, False
             existing.name = name
             existing.content = content
             existing.raw_content = raw_content
             existing.file_hash = file_hash
+            existing.active = True
             existing.updated_at = datetime.now(timezone.utc)
             await self.session.commit()
             await self.session.refresh(existing)

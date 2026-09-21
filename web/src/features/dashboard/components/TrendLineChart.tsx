@@ -58,7 +58,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), h
  * 趋势折线图（按容器真实宽高自适应渲染，铺满父容器，避免拉伸）。
  * 支持鼠标悬停：跟随光标的竖线 + 高亮点 + tooltip（显示名称、数值，以及运行状态/时间）。
  */
-export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', unit = '', onPointClick }: TrendLineChartProps) {
+export default function TrendLineChart({ data, height = 220, color = '#1F1F1F', unit = '', onPointClick }: TrendLineChartProps) {
   const reactId = useId();
   const gradId = `trend-grad-${reactId.replace(/:/g, '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -218,7 +218,7 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* v2 (2026-07): 「暂无数据」内联在带 ref 的容器内，容器本身始终挂载，测量 effect 恒生效 */}
       {isEmpty && (
-        <div style={{ height: '100%', minHeight: height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C7F88', fontSize: 12 }}>
+        <div style={{ height: '100%', minHeight: height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8C8C8C', fontSize: 12 }}>
           暂无数据
         </div>
       )}
@@ -241,7 +241,7 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
         </defs>
 
         {/* 基线 */}
-        <line x1={PAD_L} y1={PAD_T + plotH} x2={width - PAD_R} y2={PAD_T + plotH} stroke="#E3E4E8" strokeWidth={1} />
+        <line x1={PAD_L} y1={PAD_T + plotH} x2={width - PAD_R} y2={PAD_T + plotH} stroke="#E0E0E0" strokeWidth={1} />
 
         {/* 区域填充 + 平滑曲线 */}
         <path
@@ -277,7 +277,7 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
                 <circle cx={c.x} cy={c.y} r={c.value > 0 ? 2.5 : 1.5} fill={c.value > 0 ? color : '#C9CBD3'} stroke="#fff" strokeWidth={1.2} />
               </g>
               {showLabel && (
-                <text x={labelX} y={PAD_T + plotH + 16} fontSize={10} fill="#7C7F88" textAnchor="middle">
+                <text x={labelX} y={PAD_T + plotH + 16} fontSize={10} fill="#8C8C8C" textAnchor="middle">
                   {c.label}
                 </text>
               )}
@@ -286,7 +286,7 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
         })}
 
         {/* y 轴峰值标注 */}
-        <text x={PAD_L} y={PAD_T - 4} fontSize={10} fill="#7C7F88">
+        <text x={PAD_L} y={PAD_T - 4} fontSize={10} fill="#8C8C8C">
           {maxVal}
           {unit}
         </text>
@@ -300,7 +300,7 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
             left: tipLeft,
             top: tipTop,
             transform: `translate(-50%, ${tipAbove ? '-100%' : '0'})`,
-            background: '#121620',
+            background: '#262626',
             color: '#fff',
             padding: '6px 10px',
             borderRadius: 6,
@@ -308,7 +308,7 @@ export default function TrendLineChart({ data, height = 220, color = '#3D5BFF', 
             lineHeight: 1.5,
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
-            boxShadow: '0 4px 12px rgba(1, 24, 33, 0.25)',
+            boxShadow: '0 4px 12px rgba(30, 25, 20, 0.25)',
             zIndex: 2,
           }}
         >

@@ -143,7 +143,7 @@ class PipelineYAML(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _normalize(self) -> "PipelineYAML":
+    def _normalize(self) -> PipelineYAML:
         if self.tasks is not None and self.pipelines is None:
             sub = SubPipeline(name=self.name, tasks=self.tasks)
             if self.config:
@@ -152,6 +152,27 @@ class PipelineYAML(BaseModel):
                 sub.config = PipelineConfig(**self.options.model_dump())
             object.__setattr__(self, "pipelines", [sub])
             object.__setattr__(self, "tasks", None)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_no_tasks_with_pipelines(self) -> PipelineYAML:
+        # v7 (2026-08): tasks 非空且 pipelines 存在时，ResolvedPipeline 只消费
+        # pipelines，顶层 tasks 被静默忽略（保存 200 但运行漏跑任务）。
+        # 空数组组合（tasks: [] / pipelines: []）无数据可丢，保持兼容。
+        if self.tasks and self.pipelines is not None:
+            raise ValueError("'tasks' and 'pipelines' cannot be used together")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_unique_subpipeline_names(self) -> PipelineYAML:
+        # v7 (2026-08): 重复 subpipeline name 时 get_subpipeline_by_name 只命中
+        # 第一个，第二个静默不执行；保存阶段直接拒绝
+        if self.pipelines:
+            seen: set[str] = set()
+            for sub in self.pipelines:
+                if sub.name in seen:
+                    raise ValueError(f"duplicate subpipeline name: {sub.name}")
+                seen.add(sub.name)
         return self
 
     def get_effective_config(self) -> PipelineConfig:

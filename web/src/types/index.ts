@@ -249,6 +249,8 @@ export interface SubPipeline {
   depends_on: string[];
   tasks: TaskYAML[];
   post?: PostConfig | null;
+  /** v7 (2026-08): 后端 SubPipeline.artifacts 支持子流水线级产物声明，补类型避免序列化丢失 */
+  artifacts?: ArtifactDeclaration[];
 }
 
 /** 流水线详情 */

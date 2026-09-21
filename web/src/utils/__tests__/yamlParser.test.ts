@@ -126,7 +126,7 @@ tasks:
     expect(result.pipeline?.tasks).toBeNull();
   });
 
-  it('同时存在 pipelines 与 tasks：不触发规范化（与后端条件一致）', () => {
+  it('同时存在 pipelines 与 tasks：顶层 tasks 会被执行器忽略，校验必须失败', () => {
     const yaml = `
 name: mixed
 pipelines:
@@ -139,9 +139,10 @@ tasks:
     command: echo
 `;
     const result = parseYamlToPipeline(yaml);
-    expect(result.success).toBe(true);
-    expect(result.pipeline?.pipelines).toHaveLength(1);
-    expect(result.pipeline?.tasks).toHaveLength(1);
+    // v7 (2026-08): ResolvedPipeline 只消费 pipelines，顶层 tasks 被静默忽略；
+    // 与后端 PipelineYAML 新增的互斥校验保持一致，解析阶段直接拒绝
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('不能同时使用');
   });
 
   // v1 (2026-09): issue #211 — 同一 pipeline 内 task name 必须唯一。

@@ -9,27 +9,32 @@ import type { RegisterRequest, LoginRequest } from '@/api/auth';
 /**
  * 登录/注册页（issue #204）。
  *
- * 设计参考 .debug/issue_204/design-spec.md：
- * - 全屏 #F6F6F8 背景，居中 400px 卡片（hairline 边框 + 12px 圆角）。
- * - Tabs 切换登录/注册（line 风格，选中下划线 #3D5BFF）。
+ * 设计参考 .debug/issue_204/design-spec.md + v3 全站外观改造（v4 黑白化）：
+ * - 全屏近白背景 + 左上角极淡黑灰光晕，居中 400px 卡片（柔和阴影，去边框）。
+ * - Tabs 切换登录/注册（line 风格，选中下划线黑色 #1F1F1F）。
  * - 登录表单：用户名 + 密码；注册表单：用户名 + 昵称 + 密码（评论5要求，无邮箱）。
  * - 登录成功 → 跳转 redirect 或 /dashboard；注册成功 → 切登录 Tab + 预填用户名。
  */
 
-/** 卡片样式（design-tokens loginCard） */
+/** 卡片样式（design-tokens loginCard）
+ * v3 (2026-07): 去 1px 边框，改用柔和多层阴影（elevation 二选一），圆角 16
+ */
 const cardStyle: CSSProperties = {
   width: 'min(400px, calc(100vw - 32px))',
   padding: 32,
   background: '#FFFFFF',
-  border: '1px solid #E3E4E8',
-  borderRadius: 12,
-  boxShadow: 'rgba(1, 24, 33, 0.05) 0px 0px 0px 1px',
+  border: 'none',
+  borderRadius: 16,
+  boxShadow: 'rgba(30, 25, 20, 0.08) 0px 1px 3px, rgba(30, 25, 20, 0.06) 0px 12px 32px',
 };
 
-/** 全屏背景容器 */
+/** 全屏背景容器
+ * v4 (2026-07): 近白底 + 左上角极淡黑灰径向光晕（黑白主题）
+ */
 const wrapperStyle: CSSProperties = {
   minHeight: '100vh',
-  background: '#F6F6F8',
+  background:
+    'radial-gradient(800px 480px at 18% -10%, rgba(31, 31, 31, 0.10), transparent 70%), #F5F5F5',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -115,9 +120,9 @@ export default function LoginPage() {
         <div style={brandStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <TaskPpsLogo size={32} />
-            <span style={{ fontSize: 20, fontWeight: 500, color: '#121620' }}>TaskPPS</span>
+            <span style={{ fontSize: 20, fontWeight: 500, color: '#262626' }}>TaskPPS</span>
           </div>
-          <span style={{ fontSize: 13, color: '#7C7F88' }}>
+          <span style={{ fontSize: 13, color: '#8C8C8C' }}>
             {activeTab === 'login' ? '登录以继续' : '创建你的账号'}
           </span>
         </div>

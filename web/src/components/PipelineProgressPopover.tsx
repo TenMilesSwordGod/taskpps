@@ -136,7 +136,7 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
                 gap: 6,
                 marginBottom: 4,
                 paddingBottom: 3,
-                borderBottom: '1px solid #E3E4E8',
+                borderBottom: '1px solid #E0E0E0',
               }}>
                 <span style={{
                   width: 8,
@@ -148,14 +148,14 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
                 <span style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: '#121620',
+                  color: '#262626',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                 }}>
                   {subpipeline || '主流水线'}
                 </span>
-                <span style={{ fontSize: 11, color: '#7C7F88', marginLeft: 'auto', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, color: '#8C8C8C', marginLeft: 'auto', flexShrink: 0 }}>
                   {subTasks.filter((t) => t.status === 'success').length}/{subTasks.length}
                 </span>
               </div>
@@ -198,7 +198,7 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
                   </div>
                   {/* 时间和状态图标行：在任务名下方，字号更小 */}
                   {(t.finished_at || t.status === 'success' || t.status === 'failed' || t.status === 'running') && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 11, fontSize: 10, color: '#7C7F88', marginTop: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 11, fontSize: 10, color: '#8C8C8C', marginTop: 1 }}>
                       {t.finished_at && (
                         <span data-testid="task-time" style={{ whiteSpace: 'nowrap' }}>
                           {dayjs(t.finished_at).format('MM-DD HH:mm:ss')}
@@ -228,8 +228,8 @@ export default function PipelineProgressPopover({ runId, tasks, taskSummary, chi
           {Object.entries(taskSummary).map(([status, count]) => (
             <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '2px 0' }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[status as TaskStatus] || '#9ca3af', flexShrink: 0 }} />
-              <span style={{ color: '#121620', flex: 1 }}>{status}</span>
-              <span style={{ fontWeight: 600, color: STATUS_COLOR[status as TaskStatus] || '#7C7F88' }}>{count}</span>
+              <span style={{ color: '#262626', flex: 1 }}>{status}</span>
+              <span style={{ fontWeight: 600, color: STATUS_COLOR[status as TaskStatus] || '#8C8C8C' }}>{count}</span>
             </div>
           ))}
         </div>

@@ -18,6 +18,47 @@ _credential_loader = None
 _agent_loader = None
 
 
+# v7 (2026-08): 拒绝重复 mapping key 的 SafeLoader。
+# 为什么需要：PyYAML 默认对重复 key 静默「后者覆盖前者」，而前端 js-yaml 会报
+# duplicated mapping key。两边不一致会导致「前端显示错误、后端照样保存」，
+# 重复的 env 变量 / name / task 字段被静默覆盖。
+# 注意：只检查「显式书写」的重复 key；`<<: *anchor` 合并后显式覆盖同名字段
+# 是合法 YAML 语义，不能误判（初版 flatten_mapping 实现踩过这个坑）。
+class _UniqueKeySafeLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        if isinstance(node, yaml.MappingNode):
+            explicit_keys: set = set()
+            for key_node, _ in node.value:
+                if key_node.tag == "tag:yaml.org,2002:merge" or (
+                    isinstance(key_node, yaml.ScalarNode) and key_node.value == "<<"
+                ):
+                    continue
+                key = self.construct_object(key_node, deep=deep)
+                try:
+                    hash(key)
+                except TypeError as exc:
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        f"found unacceptable key ({exc})",
+                        key_node.start_mark,
+                    ) from exc
+                if key in explicit_keys:
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        f"found duplicate key {key!r}",
+                        key_node.start_mark,
+                    )
+                explicit_keys.add(key)
+        return super().construct_mapping(node, deep)
+
+
+def load_yaml_strict(text: str) -> Any:
+    """解析 YAML 并拒绝重复 mapping key（抛 yaml.YAMLError 子类）。"""
+    return yaml.load(text, Loader=_UniqueKeySafeLoader)
+
+
 def _get_credential_loader(project_workdir: Path | None = None):
     global _credential_loader
     if project_workdir is not None:
@@ -211,8 +252,9 @@ class PipelineLoader:
         path = self.base_dir / pipeline_file
         try:
             resolved = path.resolve()
-            if not str(resolved).startswith(str(self.base_dir.resolve())):
-                raise FileNotFoundError(t("Path traversal not allowed: {path}", path=pipeline_file))
+            # v7 (2026-08): 用 relative_to 做目录归属判断，替代 startswith 前缀比较。
+            # startswith 会放行「同前缀兄弟目录」（如 pipelines_evil/），造成路径穿越。
+            resolved.relative_to(self.base_dir.resolve())
         except (OSError, ValueError):
             raise FileNotFoundError(t("Invalid pipeline file path: {path}", path=pipeline_file)) from None
 
@@ -220,7 +262,8 @@ class PipelineLoader:
             raise FileNotFoundError(t("Pipeline file not found: {path}", path=pipeline_file))
 
         with open(path) as f:
-            data = yaml.safe_load(f)
+            # v7 (2026-08): 严格解析，重复 key 视为非法（与前端 js-yaml 对齐）
+            data = load_yaml_strict(f.read())
 
         if data is None:
             raise ValueError(t("Pipeline file is empty: {path}", path=pipeline_file))
@@ -313,7 +356,8 @@ class PipelineLoader:
             raw_text = ""
             try:
                 raw_text = path.read_text(encoding="utf-8")
-                data = yaml.safe_load(raw_text)
+                # v7 (2026-08): 严格解析，重复 key 在列表中标记为非法
+                data = load_yaml_strict(raw_text)
                 if data is None:
                     invalid.append({
                         "file": rel,
@@ -364,7 +408,23 @@ class PipelineLoader:
 
         return valid, invalid
 
-    def parse_dict(self, data: dict, env: dict[str, str] | None = None, project_workdir: Path | None = None) -> PipelineYAML:
+    def parse_dict(
+        self,
+        data: dict,
+        env: dict[str, str] | None = None,
+        project_workdir: Path | None = None,
+        substitute: bool = True,
+    ) -> PipelineYAML:
+        """把已解析的 YAML dict 转成 PipelineYAML。
+
+        v7 (2026-08): substitute=False 用于「持久化/展示」场景（DB content、
+        GET by-id）—— 必须保留 ${credential:...} 等占位符。否则解析结果会带着
+        明文凭据入库，并通过 guest 可读的 by-id 接口泄漏，前端编辑器再次保存
+        还会把明文写回磁盘。运行时仍走 load()（默认替换）。
+        """
+        if not substitute:
+            return PipelineYAML(**data)
+
         if env is None:
             env = {}
 

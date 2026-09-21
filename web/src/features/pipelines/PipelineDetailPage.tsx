@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Space, Tooltip, message, Spin, Alert, Modal, Tag } from 'antd';
+import { Button, Space, Tooltip, message, Spin, Alert, Modal, Dropdown, Tag } from 'antd';
 import {
   ExportOutlined,
   FileImageOutlined,
@@ -11,6 +11,7 @@ import {
   EditOutlined,
   EyeOutlined,
   SaveOutlined,
+  DownOutlined,
 } from '@ant-design/icons';
 import { usePipelineById, usePipelineByFile, useSavePipelineById, useSavePipelineByFile } from '@/api/pipelines';
 import YamlEditor from './YamlEditor';
@@ -73,11 +74,55 @@ export default function PipelineDetailPage() {
   const [editedPipeline, setEditedPipeline] = useState<PipelineDetail | null>(null);
   const yamlEditorRef = useRef<YamlEditorRef>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // v6 (2026-08): critique P1 — YAML 草稿保护。
+  // 此前每次打开编辑器都 pipelineToYaml() 覆盖 yamlText，「打字→没保存→关闭→重开」
+  // 草稿静默蒸发，且与编辑模式（有确认+beforeunload）双标。现在跟踪 dirty：
+  // 有未保存修改时关闭需确认、重开恢复草稿、保存成功后自动清零。
+  const [yamlDirty, setYamlDirty] = useState(false);
+  // v6 (2026-08): 记录当前 yamlText 基于哪个数据源生成 ——
+  // 仅当「非 dirty 且数据源已变化」才允许重新生成，否则保留编辑器现有文本。
+  // v7 (2026-08): 从 pipeline 对象引用改为「数据源 key」（definitionId / 文件路径）。
+  //   保存后 invalidate → refetch 在结构变化时会换对象引用，旧逻辑误判为换流水线
+  //   并重新序列化，把用户注释/格式吞掉；key 只随路由参数变化。
+  const yamlSourceKey = isFileMode ? `file:${actualFilePath ?? ''}` : `id:${definitionId ?? ''}`;
+  const yamlSourceRef = useRef<string | null>(null);
+
+  // v7 (2026-08): 编辑器初始文本优先用磁盘原文（保留注释/空行/字段顺序），
+  // 仅当后端未返回 raw_content（旧数据/空串）时回退到结构化序列化
+  const pipelineEditorText = useCallback(
+    (p: PipelineDetail) =>
+      p.raw_content && p.raw_content.trim() ? p.raw_content : pipelineToYaml(p),
+    [],
+  );
+
+  // v7 (2026-08): P1 跨流水线串稿修复 —— 切换流水线/文件时组件不会重新挂载，
+  // 必须清掉上一份 YAML 草稿，否则保存会把 A 的内容写入 B。
+  // 用 ref 记录上一个 key，避免首次挂载/普通 re-render 触发清空。
+  const prevYamlSourceKeyRef = useRef(yamlSourceKey);
+  useEffect(() => {
+    if (prevYamlSourceKeyRef.current === yamlSourceKey) return;
+    prevYamlSourceKeyRef.current = yamlSourceKey;
+    setYamlText('');
+    setYamlError(null);
+    setEditedPipeline(null);
+    setYamlDirty(false);
+    yamlSourceRef.current = null;
+  }, [yamlSourceKey]);
+
+  // v7 (2026-08): 换源后编辑器仍开着时，等新 pipeline 到达自动填充
+  //（文件模式由下方 fileData 的 effect 负责）
+  useEffect(() => {
+    if (!isFileMode && yamlEditorOpen && pipeline && yamlSourceRef.current === null) {
+      const yaml = pipelineEditorText(pipeline);
+      setYamlText(yaml);
+      yamlSourceRef.current = yamlSourceKey;
+      setEditedPipeline(null);
+      setYamlError(null);
+    }
+  }, [isFileMode, yamlEditorOpen, pipeline, yamlSourceKey, pipelineEditorText]);
 
   // v1 (2026-07): issue #206 — 可视化编辑器模式
   const [editMode, setEditMode] = useState(false);
-  // v5 (2026-09, issue #216): 查看模式 YAML 的未保存标记
-  const [yamlDirty, setYamlDirty] = useState(false);
   // v4 (2026-07): dirty 状态驱动"保存"按钮 disabled；保存成功后清除
   const [editorDirty, setEditorDirty] = useState(false);
   const [editNodes, setEditNodes] = useState<Node<EditorNodeData>[]>([]);
@@ -93,30 +138,40 @@ export default function PipelineDetailPage() {
   const saveByIdMutation = useSavePipelineById(!isFileMode ? definitionId : undefined);
   const saveByFileMutation = useSavePipelineByFile(isFileMode ? projectId : undefined);
 
-  const handleSave = useCallback(() => {
-    if (!yamlText) return;
+  const saving = isFileMode ? saveByFileMutation.isPending : saveByIdMutation.isPending;
+
+  const handleSave = useCallback((contentOverride?: string) => {
+    // v7 (2026-08): 优先使用编辑器冲刷出的最新内容，避免 debounce 窗口内保存丢输入
+    const content = contentOverride ?? yamlText;
+    if (!content.trim()) {
+      // 旧实现直接 return，点击保存毫无反馈；空内容无法构成流水线，明确报错
+      message.error('YAML 内容为空，无法保存');
+      return;
+    }
+    // v7 (2026-08): 请求进行中忽略重复触发（Ctrl+S 不受按钮 loading 限制）
+    if (saving) return;
     // v5 (2026-09, issue #216): 保存成功后清除未保存标记
     const onSuccess = () => {
       message.success('已保存');
       setYamlDirty(false);
     };
     if (isFileMode && actualFilePath) {
-      saveByFileMutation.mutate({ file: actualFilePath, content: yamlText }, {
+      saveByFileMutation.mutate({ file: actualFilePath, content }, {
         onSuccess,
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     } else if (definitionId) {
-      saveByIdMutation.mutate(yamlText, {
+      saveByIdMutation.mutate(content, {
         onSuccess,
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     }
-  }, [yamlText, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
-
-  const saving = isFileMode ? saveByFileMutation.isPending : saveByIdMutation.isPending;
+  }, [yamlText, saving, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
 
   // v1 (2026-07): issue #206 — 编辑器中保存：nodes/edges → YAML → 写回
   const handleSaveFromEditor = useCallback(() => {
+    // v7 (2026-08): 与 YAML 保存一致，请求进行中忽略重复触发
+    if (saving) return;
     const { pipeline: editedPipeline, errors } = nodesToYaml(editNodes, editEdges);
     if (!editedPipeline) {
       message.error(`保存失败: ${errors.join(', ')}`);
@@ -140,7 +195,7 @@ export default function PipelineDetailPage() {
         onError: (err: Error) => message.error(`保存失败: ${err.message}`),
       });
     }
-  }, [editNodes, editEdges, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
+  }, [editNodes, editEdges, saving, isFileMode, actualFilePath, definitionId, saveByFileMutation, saveByIdMutation]);
 
   // v2 (2026-07): 未保存修改的离开守卫
   // v5 (2026-09, issue #216): 守卫范围从「仅编辑模式」扩展到「编辑模式或查看模式 YAML 编辑器」；
@@ -240,49 +295,86 @@ export default function PipelineDetailPage() {
   useEffect(() => {
     if (isFileMode && fileData && !yamlText) {
       setYamlText(fileData.raw_content);
+      yamlSourceRef.current = yamlSourceKey;
       // 对原始 YAML 做一次解析，生成 yamlError（但不阻止编辑器显示）
       const result = parseYamlToPipeline(fileData.raw_content);
       if (!result.success) {
         setYamlError(result.error!);
       }
     }
-  }, [isFileMode, fileData, yamlText]);
+  }, [isFileMode, fileData, yamlText, yamlSourceKey]);
 
-  // 打开 YAML 编辑器时，用当前 pipeline 生成 YAML
+  // v7 (2026-08): YAML 草稿的 beforeunload 守卫（与编辑模式对齐）。
+  // 旧实现只在 editMode 注册，view 模式下有未保存 YAML 时刷新/关标签页静默丢稿。
+  useEffect(() => {
+    if (!yamlEditorOpen || !yamlDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [yamlEditorOpen, yamlDirty]);
+
+  // 打开/关闭 YAML 编辑器
+  // v6 (2026-08): critique P1 — 草稿保护重写切换逻辑：
+  //   打开时：有未保存草稿则恢复草稿（不重新生成），仅无文本或已同步时才从 pipeline 生成；
+  //   关闭时：dirty 需确认丢弃，防止「打字→没保存→关闭→重开」静默丢稿。
   const handleToggleEditor = useCallback(() => {
-    // v5 (2026-09, issue #216): 关闭前若存在未保存修改，先确认再丢弃
-    if (yamlEditorOpen && yamlDirty) {
-      Modal.confirm({
-        title: '未保存的修改',
-        content: '关闭编辑器将丢失未保存的修改，确定继续？',
-        okText: '确定关闭',
-        cancelText: '继续编辑',
-        okButtonProps: { danger: true },
-        onOk: () => {
-          setYamlEditorOpen(false);
-          setYamlDirty(false);
-        },
-      });
+    if (yamlEditorOpen) {
+      if (yamlDirty) {
+        Modal.confirm({
+          title: '放弃未保存的 YAML 修改？',
+          content: '关闭编辑器将丢失未保存的内容。',
+          okText: '放弃并关闭',
+          okButtonProps: { danger: true },
+          cancelText: '继续编辑',
+          onOk: () => {
+            // v6 (2026-08): e2e 实测发现仅关面板不清草稿，「放弃」名不副实。
+            // 放弃 = 回到最后一次已保存状态：重新生成 YAML、清除草稿标记
+            if (pipeline) {
+              const yaml = pipelineEditorText(pipeline);
+              setYamlText(yaml);
+              yamlSourceRef.current = yamlSourceKey;
+              setEditedPipeline(null);
+              setYamlError(null);
+            } else if (isFileMode && fileData) {
+              // v7 (2026-08): 文件模式 pipeline 为 undefined，旧实现跳过还原，
+              // 「放弃并关闭」后草稿仍残留；这里显式回到磁盘原文
+              setYamlText(fileData.raw_content);
+              const result = parseYamlToPipeline(fileData.raw_content);
+              setYamlError(result.success ? null : result.error!);
+              setEditedPipeline(null);
+              yamlSourceRef.current = yamlSourceKey;
+            }
+            setYamlDirty(false);
+            setYamlEditorOpen(false);
+          },
+        });
+        return;
+      }
+      setYamlEditorOpen(false);
       return;
     }
-    if (!yamlEditorOpen && pipeline) {
-      // v3 (2026-09): 优先展示文件原文 raw_content。
-      // 为什么：pipelineToYaml(pipeline) 是从后端已解析模型反序列化的，Pydantic schema
-      // 未声明的字段（如用户实测的裸 `task:` 步骤列表）已被静默丢弃，编辑器内容 ≠ 真实文件。
-      // 旧数据 raw_content 为空时回退旧逻辑，保证兼容。
-      const raw = pipeline.raw_content;
-      const yaml = raw && raw.trim() ? raw : pipelineToYaml(pipeline);
+    // 打开：草稿优先 —— 仅在「无任何文本」或「非 dirty 且数据源已变化」时重新生成；
+    // 其余情况保留编辑器现有文本（用户草稿 / 已保存的用户格式）。
+    // v3 (2026-09, issue #216): pipelineEditorText 优先返回后端 raw_content（磁盘原文），
+    // 避免已解析模型丢失 schema 未声明字段；旧数据为空时回退 pipelineToYaml。
+    if (pipeline && (!yamlText || (!yamlDirty && yamlSourceRef.current !== yamlSourceKey))) {
+      const yaml = pipelineEditorText(pipeline);
       setYamlText(yaml);
+      yamlSourceRef.current = yamlSourceKey;
       setEditedPipeline(null);
       setYamlError(null);
       setYamlDirty(false);
     }
-    setYamlEditorOpen((prev) => !prev);
-  }, [yamlEditorOpen, yamlDirty, pipeline]);
+    setYamlEditorOpen(true);
+  }, [yamlEditorOpen, pipeline, yamlDirty, yamlText, yamlSourceKey, isFileMode, fileData, pipelineEditorText]);
 
   // YAML 内容变化时解析并更新流程图
   const handleYamlChange = useCallback((text: string) => {
     setYamlText(text);
+    // v6 (2026-08): 用户输入即产生未保存草稿
     // v5 (2026-09, issue #216): 任何编辑都标记未保存，供工具栏与 beforeunload 使用
     setYamlDirty(true);
     const result = parseYamlToPipeline(text);
@@ -442,23 +534,27 @@ export default function PipelineDetailPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 面包屑 — 显示项目名/流水线名 + 悬浮切换 */}
-      <div className="px-4 py-2 border-b border-gray-200 bg-white shrink-0">
-        <PipelineBreadcrumb
-          projectId={projectId!}
-          definitionId={definitionId}
-          pipelineName={pipeline?.name}
-          isFileMode={isFileMode}
-          filePath={actualFilePath}
-        />
-      </div>
+      {/* v11 (2026-08): 单行顶栏 —— 面包屑居左、操作居右。
+          旧版面包屑+工具栏两行通栏占 ~90px 且五个等权重按钮成"按钮汤"；
+          合并后垂直空间还给画布，导出三动作收敛为下拉（n8n 顶栏语汇） */}
+      <div
+        className="flex items-center justify-between gap-3 px-4 py-2 border-b bg-white shrink-0"
+        style={{ borderColor: '#E8EBF0' }}
+      >
+        <div className="flex items-center min-w-0 overflow-hidden">
+          <PipelineBreadcrumb
+            projectId={projectId!}
+            definitionId={definitionId}
+            pipelineName={pipeline?.name}
+            isFileMode={isFileMode}
+            filePath={actualFilePath}
+          />
+        </div>
 
-      {/* 工具栏 */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0">
-        <Space>
+        <Space className="flex items-center">
           {/* v1 (2026-07): issue #206 — 编辑/查看模式切换 */}
           {!isFileMode && (
-              <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'}>
+              <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'} placement="bottom">
                 <Button
                   icon={editMode ? <EyeOutlined /> : <EditOutlined />}
                   onClick={() => {
@@ -483,7 +579,7 @@ export default function PipelineDetailPage() {
               </Tooltip>
           )}
           {editMode && (
-            <Tooltip title="保存 (Ctrl+S)">
+            <Tooltip title="保存 (Ctrl+S)" placement="bottom">
               <Button
                 icon={<SaveOutlined />}
                 onClick={handleSaveFromEditor}
@@ -497,7 +593,7 @@ export default function PipelineDetailPage() {
           )}
           {!editMode && (
             <>
-              <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'}>
+              <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'} placement="bottom">
                 <Button
                   icon={yamlEditorOpen ? <CloseOutlined /> : <CodeOutlined />}
                   onClick={handleToggleEditor}
@@ -509,28 +605,25 @@ export default function PipelineDetailPage() {
                 {yamlEditorOpen && yamlDirty && <Tag color="warning">未保存</Tag>}
               </Tooltip>
               {!isFileMode && (
-                <>
-                  <Tooltip title="导出 PNG">
-                    <Button icon={<FileImageOutlined />} onClick={handleExportPng}>
-                      导出 PNG
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="导出 SVG">
-                    <Button icon={<ExportOutlined />} onClick={handleExportSvg}>
-                      导出 SVG
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="复制到剪贴板">
-                    <Button icon={<CopyOutlined />} onClick={handleCopy}>
-                      复制图片
-                    </Button>
-                  </Tooltip>
-                </>
+                // v11: 导出三动作（PNG/SVG/复制）收敛为下拉 —— 降低顶栏按钮密度，
+                // 低频动作不与高频动作（编辑模式/YAML）抢占同等视觉权重
+                <Dropdown
+                  placement="bottomRight"
+                  menu={{
+                    items: [
+                      { key: 'png', icon: <FileImageOutlined />, label: '导出 PNG', onClick: handleExportPng },
+                      { key: 'svg', icon: <ExportOutlined />, label: '导出 SVG', onClick: handleExportSvg },
+                      { key: 'copy', icon: <CopyOutlined />, label: '复制图片', onClick: handleCopy },
+                    ],
+                  }}
+                >
+                  <Button icon={<ExportOutlined />}>
+                    导出 <DownOutlined style={{ fontSize: 10 }} />
+                  </Button>
+                </Dropdown>
               )}
             </>
           )}
-        </Space>
-        <Space>
           {isFileMode && (
             <Alert
               type="warning"
@@ -543,7 +636,21 @@ export default function PipelineDetailPage() {
             <Button
               type="primary"
               icon={<PlayCircleOutlined />}
-              onClick={() => setTriggerOpen(true)}
+              // v6 (2026-08): critique P2 — 高风险时机守卫：编辑模式有未保存修改时，
+              // 运行的将是服务器上已保存的旧版本，须让用户显式确认而非静默执行
+              onClick={() => {
+                if (editMode && workflowEditorRef.current?.isDirty) {
+                  Modal.confirm({
+                    title: '画布存在未保存的修改',
+                    content: '本次运行将使用服务器上最近保存的版本，画布中的修改不会被包含。',
+                    okText: '仍要运行',
+                    cancelText: '返回保存',
+                    onOk: () => setTriggerOpen(true),
+                  });
+                  return;
+                }
+                setTriggerOpen(true);
+              }}
             >
               触发运行
             </Button>
@@ -553,9 +660,9 @@ export default function PipelineDetailPage() {
 
       {/* 主内容区：YAML 编辑器（可选） + DAG 画布/编辑器 + NodePalette */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* YAML 编辑器面板 — 仅查看模式 */}
+        {/* YAML 编辑器面板 — 仅查看模式。v5 (2026-08): 容器从深色 #1e1e1e 改白底，与画布 n8n 浅色风格统一 */}
         {!editMode && yamlEditorOpen && (
-          <div className="flex-shrink-0 border-r border-gray-200 bg-[#1e1e1e]" style={{ width: isFileMode ? '100%' : '40%', minWidth: 300 }}>
+          <div className="flex-shrink-0 border-r border-gray-200 bg-white" style={{ width: isFileMode ? '100%' : '40%', minWidth: 300 }}>
             <YamlEditor
               ref={yamlEditorRef}
               value={yamlText}

@@ -4,7 +4,7 @@ interface TaskPpsLogoProps {
 }
 
 /** 系统图标（内联 SVG，颜色可配） */
-export default function TaskPpsLogo({ size = 28, color = '#3D5BFF' }: TaskPpsLogoProps) {
+export default function TaskPpsLogo({ size = 28, color = '#1F1F1F' }: TaskPpsLogoProps) {
   return (
     <svg
       width={size}

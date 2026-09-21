@@ -78,6 +78,9 @@ export function useSavePipelineById(definitionId: string | undefined) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pipeline', definitionId] });
+      // v7 (2026-08): 保存可能改了 name/结构，列表页在 staleTime(30s) 内不会重拉，
+      // 不失效 ['pipelines'] 会导致返回列表仍显示旧名称/旧校验状态（与 by-file 行为不一致）
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
     },
   });
 }

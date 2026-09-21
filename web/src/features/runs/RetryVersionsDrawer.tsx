@@ -153,7 +153,7 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
                           </Tag>
                         )}
                         {isOriginal && (
-                          <Tag style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 6px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb' }}>
+                          <Tag style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 6px', background: '#F2F2F2', color: '#6b7280', border: '1px solid #E0E0E0' }}>
                             首次执行
                           </Tag>
                         )}

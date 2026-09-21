@@ -418,7 +418,7 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
   const selectedKeys = selectedTaskId ? [selectedTaskId] : resultSelected ? [RESULT_PAGE_KEY] : [];
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#fafafa', borderRight: '1px solid #e5e7eb' }}>
+    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#F8F8F7', borderRight: '1px solid #E0E0E0' }}>
       <style>{`.task-tree .ant-tree-switcher{width:0!important;padding:0!important;min-width:0!important;overflow:hidden!important}`}</style>
       <div className="px-3 py-2 border-b border-gray-200 bg-white sticky top-0 z-10 flex items-center gap-2">
         <PipelineIcon style={{ color: '#3b82f6', flexShrink: 0 }} />

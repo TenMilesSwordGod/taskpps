@@ -1,6 +1,6 @@
 import type { Node, Edge } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
-import type { PipelineDetail, PipelineConfig, TaskYAML, TaskType } from '@/types';
+import type { PipelineDetail, PipelineConfig, TaskYAML, TaskType, PostConfig, ArtifactDeclaration } from '@/types';
 import { layoutGraph } from './layoutGraph';
 import { normalizeTopLevelTasks } from '@/utils/normalizePipeline';
 
@@ -42,6 +42,22 @@ export interface EditorNodeData {
   postVariant?: 'on_fail' | 'on_success' | 'always';
   parentTaskId?: string;
   variant?: 'start' | 'end';
+  /**
+   * v7 (2026-08): 画布无法可视化编辑顶层 post/artifacts 与 subpipeline.artifacts，
+   * 暂存在容器节点 data 中，序列化时原样回填，避免「进编辑模式保存一次就丢」
+   */
+  post?: PostConfig | null;
+  artifacts?: ArtifactDeclaration[];
+  /**
+   * v7 (2026-08): 暂存完整 config —— 画布只编辑 execution_strategy/max_concurrent_tasks，
+   * 旧实现重建 config 时用 env:{}/retry:0/on_failure:'stop' 覆盖，会把 env 变量、
+   * timeout、retry、on_failure 等字段静默清空
+   */
+  config?: PipelineConfig | null;
+  /** 顶层 config 原始挂在 config 还是 options 字段，序列化时写回原字段 */
+  configField?: 'config' | 'options' | null;
+  /** 顶层 options 原始值（config 存在时 options 仍要原样保留，避免画布保存抹掉） */
+  options?: PipelineConfig | null;
   [key: string]: unknown;
 }
 
@@ -85,7 +101,9 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
   const nodes: Node<EditorNodeData>[] = [];
   const edges: Edge<EditorEdgeData>[] = [];
 
-  const topOptions = pipeline.options ?? pipeline.config ?? null;
+  // v7 (2026-08): 与后端 PipelineYAML.get_effective_config 对齐 —— config 优先于 options。
+  // 旧实现 options 优先，config+options 并存时画布展示的策略与实际执行不一致。
+  const topOptions = pipeline.config ?? pipeline.options ?? null;
 
   // === Start 节点（固定位置 0,0） ===
   nodes.push({
@@ -114,6 +132,12 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
       label: pipeline.name,
       executionStrategy: resolveStrategy(topOptions, null),
       maxConcurrentTasks: topOptions?.max_concurrent_tasks ?? undefined,
+      // v7 (2026-08): 暂存顶层 post/artifacts 与完整 config，供 nodesToYaml 回填
+      post: pipeline.post ?? null,
+      artifacts: pipeline.artifacts ?? [],
+      config: topOptions ?? null,
+      configField: pipeline.config ? 'config' : pipeline.options ? 'options' : null,
+      options: pipeline.options ?? null,
     },
   });
 
@@ -177,6 +201,9 @@ export function yamlToNodes(pipeline: PipelineDetail): YamlToNodesResult {
           label: sub.name,
           executionStrategy: strategy,
           maxConcurrentTasks: sub.config?.max_concurrent_tasks ?? topOptions?.max_concurrent_tasks ?? undefined,
+          // v7 (2026-08): 暂存 subpipeline.artifacts 与完整 config，供 nodesToYaml 回填
+          artifacts: sub.artifacts ?? [],
+          config: sub.config ?? null,
         },
       });
     }
