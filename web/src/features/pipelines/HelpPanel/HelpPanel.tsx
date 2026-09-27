@@ -1,4 +1,5 @@
-import { Tabs, Button, Tooltip } from 'antd'
+import { Tabs, Tooltip } from 'antd';
+import AppButton from '@/components/AppButton';
 import {
   MinusOutlined,
   ExpandOutlined,
@@ -29,9 +30,8 @@ export default function HelpPanel({
         onClick={onToggleMinimized}
       >
         <Tooltip title="展开 Help 面板" placement="left">
-          <Button
-            type="text"
-            size="small"
+          <AppButton
+            variant="text"
             icon={<HelpIcon />}
           />
         </Tooltip>
@@ -52,19 +52,17 @@ export default function HelpPanel({
         <div className="flex gap-1">
           {onToggleMaximized && (
             <Tooltip title={maximized ? '还原' : '最大化'}>
-              <Button
-                type="text"
-                size="small"
+              <AppButton
+                variant="text"
                 icon={<ExpandOutlined />}
                 onClick={onToggleMaximized}
               />
             </Tooltip>
           )}
           <Tooltip title="收起">
-            <Button
+            <AppButton
               data-testid="help-panel-minimize-btn"
-              type="text"
-              size="small"
+              variant="text"
               icon={<MinusOutlined />}
               onClick={onToggleMinimized}
             />

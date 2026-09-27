@@ -1,4 +1,5 @@
-import { Card, Col, Row, Statistic, Table, Tag, Button, Select, Segmented, Alert, Skeleton } from 'antd';
+import { Card, Col, Row, Statistic, Table, Tag, Select, Segmented, Alert, Skeleton } from 'antd';
+import AppButton from '@/components/AppButton';
 import type { CSSProperties, ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { GitBranch, Play, Loader, AlertCircle, History, RefreshCw } from 'lucide-react';
@@ -277,9 +278,9 @@ export default function DashboardPage() {
     <div className="p-6 space-y-4 overflow-auto h-full">
       {/* v2 (2026-09, issue #217): 手动刷新入口 + 加载失败提示 */}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Button size="small" icon={<RefreshCw size={14} />} onClick={refetchAll} disabled={isLoading}>
+        <AppButton icon={RefreshCw} onClick={refetchAll} disabled={isLoading}>
           刷新
-        </Button>
+        </AppButton>
       </div>
       {loadError && (
         <Alert
@@ -288,9 +289,9 @@ export default function DashboardPage() {
           message="看板数据加载失败"
           description={loadError instanceof Error ? loadError.message : '请稍后重试'}
           action={
-            <Button size="small" onClick={refetchAll}>
+            <AppButton onClick={refetchAll}>
               重试
-            </Button>
+            </AppButton>
           }
         />
       )}
@@ -398,9 +399,9 @@ export default function DashboardPage() {
       <Card
         title="最近运行"
         extra={
-          <Button type="link" size="small" icon={<History size={14} />} onClick={() => navigate('/runs')}>
+          <AppButton variant="link" icon={History} onClick={() => navigate('/runs')}>
             查看全部
-          </Button>
+          </AppButton>
         }
         style={{
           border: '1px solid #E3E4E8',

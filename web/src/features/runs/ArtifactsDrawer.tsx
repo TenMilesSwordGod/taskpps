@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Drawer, Spin, Empty, Alert, Tree, Button } from 'antd'
+import { Drawer, Spin, Empty, Alert, Tree } from 'antd';
+import AppButton from '@/components/AppButton';
 import { Download } from 'lucide-react'
 import { useArtifacts } from '@/api/runs'
 import type { ArtifactItem } from '@/types'
@@ -95,14 +96,15 @@ export default function ArtifactsDrawer({ runId, open, onClose }: ArtifactsDrawe
             checkStrictly
           />
           <div style={{ marginTop: 16 }}>
-            <Button
-              type="primary"
-              icon={<Download size={14} />}
+            <AppButton
+              variant="primary"
+              size="middle"
+              icon={Download}
               disabled={checkedItems.length === 0}
               onClick={handleDownload}
             >
               {checkedItems.length >= 2 ? '下载 zip' : '下载'}
-            </Button>
+            </AppButton>
           </div>
         </>
       )}

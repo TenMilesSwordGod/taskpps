@@ -1,12 +1,6 @@
 import { useMemo } from 'react';
-import {
-  Tabs,
-  Input,
-  Tag,
-  Descriptions,
-  Button,
-  Tooltip,
-} from 'antd';
+import { Tabs, Input, Tag, Descriptions, Tooltip } from 'antd';
+import AppButton from '@/components/AppButton';
 import {
   MinusOutlined,
   ExpandOutlined,
@@ -460,9 +454,8 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
         style={{ width: 40 }}
       >
         <Tooltip title="展开面板" placement="left">
-          <Button
-            type="text"
-            size="small"
+          <AppButton
+            variant="text"
             icon={<ExpandOutlined />}
             onClick={() => setPanelMinimized(false)}
           />
@@ -483,17 +476,15 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
           <span className="text-sm font-medium text-gray-600">属性面板</span>
           <div className="flex gap-1">
             <Tooltip title="最小化">
-              <Button
-                type="text"
-                size="small"
+              <AppButton
+                variant="text"
                 icon={<MinusOutlined />}
                 onClick={() => setPanelMinimized(true)}
               />
             </Tooltip>
             <Tooltip title={panelMaximized ? '还原' : '最大化'}>
-              <Button
-                type="text"
-                size="small"
+              <AppButton
+                variant="text"
                 icon={panelMaximized ? <CompressOutlined /> : <ExpandOutlined />}
                 onClick={() => setPanelMaximized(!panelMaximized)}
               />
@@ -520,17 +511,15 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
           </span>
           <div className="flex gap-1 shrink-0">
             <Tooltip title="最小化">
-              <Button
-                type="text"
-                size="small"
+              <AppButton
+                variant="text"
                 icon={<MinusOutlined />}
                 onClick={() => setPanelMinimized(true)}
               />
             </Tooltip>
             <Tooltip title={panelMaximized ? '还原' : '最大化'}>
-              <Button
-                type="text"
-                size="small"
+              <AppButton
+                variant="text"
                 icon={panelMaximized ? <CompressOutlined /> : <ExpandOutlined />}
                 onClick={() => setPanelMaximized(!panelMaximized)}
               />
@@ -558,17 +547,15 @@ export default function PropertiesPanel({ pipeline }: PropertiesPanelProps) {
         </span>
         <div className="flex gap-1 shrink-0">
           <Tooltip title="最小化">
-            <Button
-              type="text"
-              size="small"
+            <AppButton
+              variant="text"
               icon={<MinusOutlined />}
               onClick={() => setPanelMinimized(true)}
             />
           </Tooltip>
           <Tooltip title={panelMaximized ? '还原' : '最大化'}>
-            <Button
-              type="text"
-              size="small"
+            <AppButton
+              variant="text"
               icon={panelMaximized ? <CompressOutlined /> : <ExpandOutlined />}
               onClick={() => setPanelMaximized(!panelMaximized)}
             />

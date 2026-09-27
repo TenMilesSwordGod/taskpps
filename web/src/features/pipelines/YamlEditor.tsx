@@ -7,7 +7,8 @@ import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemir
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintGutter } from '@codemirror/lint';
-import { Alert, Button, Tooltip, Space } from 'antd';
+import { Alert, Tooltip, Space } from 'antd';
+import AppButton from '@/components/AppButton';
 import { SaveOutlined } from '@ant-design/icons';
 import type { ValidationError } from '@/types';
 import {
@@ -249,9 +250,9 @@ const YamlEditor = forwardRef<YamlEditorRef, YamlEditorProps>(function YamlEdito
         <Space size="small">
           {onSave && (
             <Tooltip title="保存 (Ctrl+S)">
-              <Button type="primary" size="small" icon={<SaveOutlined />} onClick={() => saveRef.current()} loading={saving}>
+              <AppButton variant="primary" icon={<SaveOutlined />} onClick={() => saveRef.current()} loading={saving}>
                 保存
-              </Button>
+              </AppButton>
             </Tooltip>
           )}
         </Space>

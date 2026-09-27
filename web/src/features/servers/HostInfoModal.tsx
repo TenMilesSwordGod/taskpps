@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Modal, Spin, Tag, Alert, Empty, Button } from 'antd';
+import { Modal, Spin, Tag, Alert, Empty } from 'antd';
+import AppButton from '@/components/AppButton';
 import {
   Cpu, MemoryStick, HardDrive, Server, Activity, AlertCircle, RefreshCw,
   MonitorSmartphone, ChevronDown, ChevronRight,
@@ -144,7 +145,7 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
           showIcon
           message="主机信息暂不可用"
           description="后端探测失败，请稍后重试或联系管理员。"
-          action={<Button size="small" onClick={() => refetch()}>重试</Button>}
+          action={<AppButton onClick={() => refetch()}>重试</AppButton>}
         />
       )}
 
@@ -264,14 +265,13 @@ export default function HostInfoModal({ open, agent, onClose }: Props) {
 
           {/* 底部操作 */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 8, borderTop: '1px solid #E0E0E0' }}>
-            <Button
+            <AppButton
               icon={isRefetching ? <Activity size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               onClick={() => refetch()}
               loading={isRefetching}
-              size="small"
             >
               重新探测
-            </Button>
+            </AppButton>
           </div>
         </>
       )}

@@ -1,5 +1,6 @@
 import { useMemo, useCallback, useState } from 'react';
-import { Drawer, Input, Select, InputNumber, Button, Space, Divider, Typography, Collapse } from 'antd';
+import { Drawer, Input, Select, InputNumber, Space, Divider, Typography, Collapse } from 'antd';
+import AppButton from '@/components/AppButton';
 import { CloseOutlined } from '@ant-design/icons';
 import type { Node, Edge } from '@xyflow/react';
 import type { TaskYAML, TaskType, PipelineConfig } from '@/types';
@@ -290,12 +291,12 @@ export default function PropertyPanel({ selectedNode, visible, onClose, onSave, 
 
         {/* 操作按钮 */}
         <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-          <Button danger size="small" onClick={handleDelete}>
+          <AppButton variant="danger" onClick={handleDelete}>
             删除节点
-          </Button>
+          </AppButton>
           <Space>
-            <Button size="small" onClick={onClose}>取消</Button>
-            <Button type="primary" size="small" onClick={handleSave}>确认</Button>
+            <AppButton onClick={onClose}>取消</AppButton>
+            <AppButton variant="primary" onClick={handleSave}>确认</AppButton>
           </Space>
         </Space>
       </div>

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
-import { Select, Input, Button, Empty, Tag, Tooltip } from 'antd';
+import { Select, Input, Empty, Tag, Tooltip } from 'antd';
+import AppButton from '@/components/AppButton';
 import { Trash2, Filter, Layers, Download, Copy, AlertCircle, AlertTriangle, Info, Bug, Terminal, ArrowDownToLine } from 'lucide-react';
 import { VariableSizeList as List } from 'react-window';
 import type { LogEntry } from './hooks/useSSELogs';
@@ -329,25 +330,24 @@ export default function LogViewer({
           size="small"
           allowClear
         />
-        <Button size="small" icon={<Trash2 size={14} />} onClick={onClear}>
+        <AppButton icon={Trash2} onClick={onClear}>
           清空
-        </Button>
+        </AppButton>
         {onCopyLogs && (
-          <Button size="small" icon={<Copy size={14} />} onClick={onCopyLogs} disabled={logs.length === 0}>
+          <AppButton icon={Copy} onClick={onCopyLogs} disabled={logs.length === 0}>
             复制
-          </Button>
+          </AppButton>
         )}
-        <Button size="small" icon={<Download size={14} />} onClick={handleExport} disabled={filtered.length === 0}>
+        <AppButton icon={Download} onClick={handleExport} disabled={filtered.length === 0}>
           导出
-        </Button>
-        <Button
-          size="small"
+        </AppButton>
+        <AppButton
           type={showTaskNames ? 'default' : 'text'}
           onClick={() => setShowTaskNames((v) => !v)}
           title={showTaskNames ? '隐藏任务名' : '显示任务名'}
         >
           {showTaskNames ? '≡ 任务名' : '≡'}
-        </Button>
+        </AppButton>
 
         <div style={{ flex: 1 }} />
 
@@ -406,16 +406,16 @@ export default function LogViewer({
             </List>
             {!stickyToBottomRef.current && filtered.length > 0 && (
               <div style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10 }}>
-                <Button
-                  type="primary"
-                  icon={<ArrowDownToLine size={14} />}
+                <AppButton
+                  variant="primary"
+                  icon={ArrowDownToLine}
                   onClick={() => {
                     stickyToBottomRef.current = true;
                     listRef.current?.scrollToItem(filtered.length - 1, 'end');
                   }}
                 >
                   滚动到底部
-                </Button>
+                </AppButton>
               </div>
             )}
           </Fragment>

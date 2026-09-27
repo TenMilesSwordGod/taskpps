@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { Button, Result } from 'antd';
+import { Result } from 'antd';
+import AppButton from '@/components/AppButton';
 
 /**
  * 全局错误边界（issue #213）。
@@ -46,9 +47,9 @@ export default class ErrorBoundary extends Component<Props, State> {
             title="页面出错了"
             subTitle="页面渲染时发生异常，请重新加载；若问题持续出现，请反馈给管理员。"
             extra={
-              <Button type="primary" onClick={this.handleReload}>
+              <AppButton size="middle" variant="primary" onClick={this.handleReload}>
                 重新加载
-              </Button>
+              </AppButton>
             }
           />
         </div>

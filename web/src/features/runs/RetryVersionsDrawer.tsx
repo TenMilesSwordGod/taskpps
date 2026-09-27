@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Drawer, Spin, Tag, Button, Empty, Modal, App, Tooltip } from 'antd';
+import { Drawer, Spin, Tag, Empty, Modal, App, Tooltip } from 'antd';
+import AppButton from '@/components/AppButton';
 import { History, Clock, Eye, Star, FileText, XCircle, Folder } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useRetryVersions, useSelectRetryReport, useRetryLogs, useCancelRetryRun } from '@/api/runs';
@@ -161,10 +162,9 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
                       {isActive && (
                         <div className="flex items-center gap-2">
                           <Spin size="small" />
-                          <Button
-                            size="small"
+                          <AppButton
                             danger
-                            type="text"
+                            variant="text"
                             icon={<XCircle size={13} />}
                             loading={cancelRetryRun.isPending}
                             onClick={async () => {
@@ -178,7 +178,7 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
                             }}
                           >
                             取消重试
-                          </Button>
+                          </AppButton>
                         </div>
                       )}
                     </div>
@@ -227,27 +227,25 @@ export default function RetryVersionsDrawer({ open, runId, taskName, onClose, on
                     <div className="flex items-center gap-2">
                       {!isSelected && retry.status !== 'running' && retry.status !== 'pending' && (
                         <Tooltip title={isOriginal ? '切回原始版本作为最终报告' : '将此版本设为最终报告'}>
-                          <Button
-                            size="small"
-                            type="text"
+                          <AppButton
+                            variant="text"
                             icon={<Star size={13} />}
                             onClick={() => handleSelect(isOriginal ? null : retry.id)}
                             loading={selectReport.isPending}
                           >
                             设为最终版本
-                          </Button>
+                          </AppButton>
                         </Tooltip>
                       )}
                       {/* 重试版本查看日志：运行中用 SSE 流式，已完成用 REST */}
                       {!isOriginal && (
-                        <Button
-                          size="small"
-                          type="text"
+                        <AppButton
+                          variant="text"
                           icon={<Eye size={13} />}
                           onClick={() => handleViewLog(retry.id, retry.status)}
                         >
                           查看日志
-                        </Button>
+                        </AppButton>
                       )}
                     </div>
                   </div>
