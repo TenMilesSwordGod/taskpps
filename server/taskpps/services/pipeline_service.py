@@ -27,7 +27,7 @@ from taskpps.domain.pipeline import ResolvedPipeline, ResolvedTask
 from taskpps.engine.retry_runner import RetryRunner, get_active_retry_runner
 from taskpps.engine.runner import PipelineRunner
 from taskpps.i18n import t
-from taskpps.loaders.pipeline_loader import PipelineLoader, substitute_env_vars
+from taskpps.loaders.pipeline_loader import PipelineLoader, resolve_task_env_vars, substitute_env_vars
 from taskpps.naming import generate_display_name
 
 logger = logging.getLogger("taskpps.services.pipeline_service")
@@ -1088,6 +1088,10 @@ class PipelineService:
 
         v2 (2026-07): 增加 substitute_env_vars 调用，使快照中的 ${env.X}/${credential:X.Y}/${agent:X.Y}
         模板在重试路径也被解析。此前仅 PipelineLoader.load() 会做替换，重试路径遗漏了这一步。
+        v2 (2026-09): 全局替换后再补一轮「按任务」替换（subpipeline config.env + task.env），
+        与快照展示路径 api/runs.py::_resolve_snapshot_vars 完全一致。原实现只做全局替换，
+        当 env 值自身再引用别的 env（如 EXEC_CMD="python3 a.py -v ip:${env.testip}"）时，
+        子流水线/任务级 env 不参与替换，重试会把 ${env.EXEC_CMD} 甚至内层 ${env.testip} 原样执行。
         """
         import yaml
 
@@ -1102,15 +1106,21 @@ class PipelineService:
                 logger.error("Pipeline snapshot is empty for run %s", run.id)
                 return None
 
+            # 运行参数传入的 env（优先级最高）必须与合并后的替换用 env 分开保存：
+            # resolve_task_env_vars 内部会按 config.env < sub config.env < task.env < 运行参数
+            # 重新组装任务级 env，若把 config.env 混进去会破坏这个优先级。
+            run_env = env or {}
             # 提取 pipeline 自身的 config.env，合并到 env 中
             # 与 PipelineLoader.load() 保持一致：config.env 可在命令中通过 ${env.X} 引用
             config_env = (data.get("config") or {}).get("env") or {}
             if isinstance(config_env, dict) and config_env:
                 merged = dict(config_env)
-                merged.update(env or {})
-                env = merged
+                merged.update(run_env)
+            else:
+                merged = dict(run_env)
 
-            data = substitute_env_vars(data, env or {}, project_workdir)
+            data = substitute_env_vars(data, merged, project_workdir)
+            data = resolve_task_env_vars(data, run_env, project_workdir)
 
             spec = PipelineYAML(**data)
             return ResolvedPipeline.from_yaml(spec, pipeline_file=run.pipeline_file)
@@ -1221,13 +1231,30 @@ class PipelineService:
 
     @staticmethod
     def _resolve_template(command: str, env: dict[str, str]) -> str:
+        """把命令里的 ${env.X} 占位符解析成最终文本。
+
+        v2 (2026-09): 改为多轮替换（上限 10 轮，与 substitute_env_vars 一致）。
+        为什么：env 变量自身可能再引用别的 env 变量（如
+        EXEC_CMD="python3 a.py -v ip:${env.testip}"），单轮替换只会展开第一层，
+        内层 ${env.testip} 被原样保留在重试记录/展示命令里，与真正执行的命令不一致。
+        上限轮次用于兜住自引用/循环引用，避免死循环。
+        """
         import re
+
+        if not isinstance(command, str):
+            return command
 
         def _replace(match):
             var_name = match.group(1)
             return env.get(var_name, match.group(0))
 
-        return re.sub(r"\$\{env\.([^}]+)\}", _replace, command)
+        result = command
+        for _ in range(10):
+            new_result = re.sub(r"\$\{env\.([^}]+)\}", _replace, result)
+            if new_result == result:
+                break
+            result = new_result
+        return result
 
     def list_pipelines(self) -> list[str]:
         all_pipelines = self.loader.load_all()
