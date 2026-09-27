@@ -1271,6 +1271,88 @@ class TestPipelineServiceRetry:
         task_plan = mock_runner.retry_tasks.call_args[0][0]
         assert task_plan[0]["command_override"] is False
 
+    async def test_task_display_command_resolves_nested_env(self):
+        """命令引用的 env 变量自身再引用别的 env 变量时，展示/记录文本必须解析到最终形态。
+
+        复现：config.env 定义 EXEC_CMD="python3 a.py -v ip:${env.testip}"，
+        任务命令写 "${env.EXEC_CMD} --LOG-LEVEL-DEBUG --test a"。
+        修复前 _resolve_template 只做一轮替换，会残留 ${env.testip}。
+        """
+        from taskpps.services.pipeline_service import PipelineService
+
+        task = ResolvedTask(
+            name="t1",
+            task_type="command",
+            command="${env.EXEC_CMD} --LOG-LEVEL-DEBUG --test a",
+        )
+        env = {"testip": "10.0.0.9", "EXEC_CMD": "python3 a.py -v ip:${env.testip}"}
+
+        assert (
+            PipelineService._task_display_command(task, env)
+            == "python3 a.py -v ip:10.0.0.9 --LOG-LEVEL-DEBUG --test a"
+        )
+
+    async def test_retry_run_resolves_nested_env_from_snapshot(self, db_engine, clean_db):
+        """嵌套 env 引用（EXEC_CMD 内含 ${env.testip}）在重试记录与执行命令里都必须是最终形态。"""
+        import yaml as _yaml
+
+        from taskpps.services.pipeline_service import PipelineService, _extract_env_overrides
+
+        snapshot = {
+            "name": "nested_env",
+            "pipelines": [
+                {
+                    "name": "sub",
+                    "config": {
+                        "env": {
+                            "testip": "10.0.0.9",
+                            "EXEC_CMD": "python3 a.py -v ip:${env.testip}",
+                        }
+                    },
+                    "tasks": [
+                        {
+                            "name": "step1",
+                            "command": "${env.EXEC_CMD} --LOG-LEVEL-DEBUG --test a",
+                        }
+                    ],
+                }
+            ],
+        }
+        async with get_session_factory()() as session:
+            run_repo = RunRepository(session)
+            task_repo = TaskRunRepository(session)
+            run = await run_repo.create_run(pipeline_name="nested_env", pipeline_file="nested_env.yaml")
+            run.snapshot_content = _yaml.safe_dump(snapshot, allow_unicode=True)
+            session.add(run)
+            await session.commit()
+            await task_repo.create_task_run(
+                run_id=run.id,
+                task_name="sub.step1",
+                task_type="command",
+                subpipeline_name="sub",
+            )
+            run_id = run.id
+            run_params = json.loads(run.params) if isinstance(run.params, str) else (run.params or {})
+
+        self._init_settings()
+        service = PipelineService()
+        expected = "python3 a.py -v ip:10.0.0.9 --LOG-LEVEL-DEBUG --test a"
+
+        # 重试执行使用 resolved pipeline 的 task.command（非 override 分支），也必须解析到最终形态
+        resolved = service._load_resolved_pipeline(
+            run, env=_extract_env_overrides(run_params), project_workdir=None
+        )
+        assert resolved is not None
+        assert resolved.get_subpipeline_by_name("sub").get_task_by_name("step1").command == expected
+
+        with patch("taskpps.services.pipeline_service.RetryRunner") as mock_runner_cls:
+            mock_runner = AsyncMock()
+            mock_runner_cls.return_value = mock_runner
+            result = await service.retry_run(run_id=run_id, tasks=["sub.step1"])
+            await asyncio.sleep(0)
+
+        assert result["retry_records"][0]["command"] == expected
+
     async def test_retry_run_rejects_command_override_for_invoke_task(self, db_engine, clean_db):
         """invoke 任务没有可编辑的 shell 命令，传 command override 应快速失败而非静默忽略。"""
         from taskpps.services.pipeline_service import PipelineService

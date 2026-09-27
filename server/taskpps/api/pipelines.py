@@ -229,7 +229,16 @@ async def list_pipelines(project_id: str | None = Query(None)):
                 recent_runs_data = await run_repo.list_runs(definition_id=def_id, limit=10) if def_id else []
                 recent_run_ids = [r.id for r in recent_runs_data]
                 recent_summaries = await run_repo.get_task_summaries(recent_run_ids) if recent_run_ids else {}
-                recent_runs = [{"task_summary": recent_summaries.get(r.id, {})} for r in recent_runs_data]
+                # v4 (2026-09): 折线图数据点需要 run 身份信息才能点击跳转详情。
+                # 在列表接口一次返回，避免前端为最多 10 个点逐个查询。
+                recent_runs = [
+                    {
+                        "id": r.id,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "task_summary": recent_summaries.get(r.id, {}),
+                    }
+                    for r in recent_runs_data
+                ]
 
                 last_run = None
                 last_operator = None

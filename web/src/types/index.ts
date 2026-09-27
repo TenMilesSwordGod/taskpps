@@ -99,6 +99,13 @@ export interface ValidationError {
   path?: string;
 }
 
+/** 流水线最近一次运行的摘要（成功率折线图点位跳转运行详情所需的最小数据） */
+export interface RecentRunSummary {
+  id: string;
+  created_at: string | null;
+  task_summary: Record<string, number>;
+}
+
 /** 流水线摘要 */
 export interface PipelineSummary {
   id: string;
@@ -122,8 +129,8 @@ export interface PipelineSummary {
   last_operator: string | null;
   /** 最后操作人展示名（nickname）；last_operator 为 null 时也为 null */
   last_operator_nickname: string | null;
-  /** 最近 N 次运行的 task_summary（用于折线图，按时间倒序，最近在前） */
-  recent_runs: { task_summary: Record<string, number> }[];
+  /** 最近 N 次运行摘要（按时间倒序，最近在前；用于折线图与运行详情跳转） */
+  recent_runs: RecentRunSummary[];
   /** YAML 校验是否通过（v1 2026-07: issue #195） */
   valid: boolean;
   /** 校验错误详情，合法时为 null（v1 2026-07: issue #195） */
