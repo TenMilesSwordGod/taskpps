@@ -484,3 +484,80 @@ describe('<PipelineListPage /> v3 - 新建与行操作入口', () => {
     })
   })
 })
+
+describe('<PipelineListPage /> 非法 YAML 行 key 稳定性', () => {
+  beforeEach(() => {
+    mockUsePipelines.mockReset()
+  })
+
+  it('同一文件夹多个非法 YAML 反复展开/收起不会重复显示', async () => {
+    mockUsePipelines.mockReturnValue({
+      data: {
+        items: [
+          makePipeline({
+            id: '',
+            name: 'bad-a',
+            file: 'bad-a.yaml',
+            folder: 'broken',
+            project_id: 'proj1',
+            project_name: 'Proj1',
+            valid: false,
+            validation_error: { message: 'bad yaml a' },
+          }),
+          makePipeline({
+            id: '',
+            name: 'bad-b',
+            file: 'bad-b.yaml',
+            folder: 'broken',
+            project_id: 'proj1',
+            project_name: 'Proj1',
+            valid: false,
+            validation_error: { message: 'bad yaml b' },
+          }),
+        ],
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    })
+
+    const { container } = render(<PipelineListPage />, { wrapper: Wrapper })
+
+    // v1 (2026-09): 项目默认展开后，文件夹行仍处于收起状态。
+    await waitFor(() => {
+      expect(screen.getByText('broken/')).toBeInTheDocument()
+    })
+
+    const folderRow = screen.getByText('broken/').closest('tr')
+    const folderIcon = folderRow?.querySelector('.pipeline-expand-icon') as HTMLElement | null
+    expect(folderIcon).not.toBeNull()
+
+    fireEvent.click(folderIcon!)
+    await waitFor(() => {
+      expect(screen.getAllByText('bad-a')).toHaveLength(1)
+      expect(screen.getAllByText('bad-b')).toHaveLength(1)
+    })
+
+    // v1 (2026-09): 多次切换暴露非法项 id 为空导致的重复 rowKey；
+    // 断言按文件文本计数，确保每次展开后每个非法 YAML 只出现一行。
+    for (let i = 0; i < 3; i += 1) {
+      fireEvent.click(folderIcon!)
+      await waitFor(() => {
+        expect(screen.queryByText('bad-a')).not.toBeInTheDocument()
+        expect(screen.queryByText('bad-b')).not.toBeInTheDocument()
+      })
+
+      fireEvent.click(folderIcon!)
+      await waitFor(() => {
+        expect(screen.getAllByText('bad-a')).toHaveLength(1)
+        expect(screen.getAllByText('bad-b')).toHaveLength(1)
+      })
+
+      const visibleKeys = [...container.querySelectorAll('tbody tr.ant-table-row[data-row-key]')]
+        .map((row) => row.getAttribute('data-row-key'))
+      expect(visibleKeys).not.toContain('')
+      expect(new Set(visibleKeys).size).toBe(visibleKeys.length)
+    }
+
+    expect(container.querySelectorAll('tbody tr.ant-table-row')).toHaveLength(4)
+  })
+})
