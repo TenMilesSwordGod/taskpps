@@ -250,6 +250,12 @@ export default function PipelineListPage() {
   const getRowKey = useCallback((record: Row): string => {
     if (record.kind === 'project') return `__proj__${record.name}`;
     if (record.kind === 'folder') return `__folder__${record.project_id}__${record.name}`;
+    // v1 (2026-09): 非法 YAML 无 DB 定义，后端 id 固定为空；直接作为 rowKey 会让
+    // 同表多个非法文件共享空 key，展开/收起树节点时发生复用并重复显示。
+    // 这里改用 project_id + file，既保证非法项唯一，也兼容不同项目的同名文件。
+    if (record.valid === false) {
+      return `__invalid__${record.project_id ?? '__default__'}__${record.file}`;
+    }
     return record.id;
   }, []);
 
