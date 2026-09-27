@@ -1,10 +1,11 @@
-import { useMemo, useState, useId, memo, type CSSProperties } from 'react';
+import { useMemo, useState, useId, memo, type CSSProperties, type KeyboardEvent } from 'react';
 import { Tooltip } from 'antd';
+import dayjs from 'dayjs';
+import { useNavigate } from 'react-router-dom';
+import type { RecentRunSummary } from '@/types';
 
-/** 单次运行的 task 汇总 */
-export interface RunSummary {
-  task_summary: Record<string, number>;
-}
+/** 保持组件原有导出名，实际契约由全局 RecentRunSummary 统一定义，避免前后端字段漂移 */
+export type RunSummary = RecentRunSummary;
 
 interface SuccessRateChartProps {
   /** 最近 N 次运行（按时间倒序，最近在前） */
@@ -101,7 +102,8 @@ const passTextStyle: CSSProperties = {
  *
  * 展示最近 N 次运行的 task 完成比趋势：
  * - 渐变区域填充 + 平滑曲线
- * - 悬停/点击数据点显示 Tooltip（第N次 + 完成比%）
+ * - 悬停数据点显示 Tooltip（第N次 + 时间 + 完成比%）
+ * - 点击/键盘激活数据点跳转对应运行详情
  * - 数据点颜色编码（绿=100% 蓝=部分 红=0%）
  * - 底部 HTML 徽章显示平均完成比 + 全通过次数
  * - 支持 prefers-reduced-motion
@@ -116,13 +118,16 @@ function SuccessRateChart({
   height = 36,
 }: SuccessRateChartProps) {
   const [hovered, setHovered] = useState<number | null>(null);
+  const navigate = useNavigate();
   const reactId = useId();
   const gradId = `src-grad-${reactId.replace(/:/g, '')}`;
 
-  // runs 按时间倒序（最近在前），折线图左旧右新需反转
+  // v4 (2026-09): 保留“最近在前”的反转结果，绘制和点击共用同一索引映射，
+  // 避免点击最左/最右点时跳错运行。
+  const orderedRuns = useMemo(() => [...runs].reverse(), [runs]);
   const points = useMemo(
-    () => [...runs].reverse().map((r) => computeCompletionRatio(r.task_summary ?? {})),
-    [runs],
+    () => orderedRuns.map((r) => computeCompletionRatio(r.task_summary ?? {})),
+    [orderedRuns],
   );
 
   const stats = useMemo(() => {
@@ -152,14 +157,29 @@ function SuccessRateChart({
   const areaPath = `${smoothPath} L${coords[coords.length - 1].x.toFixed(1)},${(PAD_TOP + plotH).toFixed(1)} L${coords[0].x.toFixed(1)},${(PAD_TOP + plotH).toFixed(1)} Z`;
 
   const avgPct = Math.round(stats!.avg * 100);
+  const hoveredRun = hovered !== null ? orderedRuns[hovered] : null;
+  const hoveredTime = hoveredRun?.created_at ? dayjs(hoveredRun.created_at).format('MM-DD HH:mm') : '';
   const tooltipText = hovered !== null
-    ? `第 ${points.length - hovered} 次（共 ${stats!.total} 次）：完成比 ${Math.round(points[hovered] * 100)}%`
+    ? `第 ${points.length - hovered} 次（共 ${stats!.total} 次）${hoveredTime ? ` · ${hoveredTime}` : ''}：完成比 ${Math.round(points[hovered] * 100)}% · 点击查看运行详情`
     : `最近 ${stats!.total} 次平均 ${avgPct}% · 全通过 ${stats!.passCount}/${stats!.total}`;
   const ariaLabel = `成功率折线图，最近${stats!.total}次运行，平均完成比${avgPct}%，全通过${stats!.passCount}次`;
 
+  // v4 (2026-09): 点击数据点直接进入该次运行详情，符合用户“选中某一次再跳 history”的直觉。
+  const handleRunClick = (index: number) => {
+    const run = orderedRuns[index];
+    if (!run?.id) return;
+    navigate(`/runs/${run.id}`);
+  };
+
+  const handleRunKeyDown = (event: KeyboardEvent<SVGCircleElement>, index: number) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    handleRunClick(index);
+  };
+
   return (
     <Tooltip title={tooltipText} placement="top">
-      <div style={containerStyle} aria-label={ariaLabel} role="img">
+      <div style={containerStyle} aria-label={ariaLabel} role="group">
         <svg
           width={width}
           height={height}
@@ -203,9 +223,15 @@ function SuccessRateChart({
                 cy={c.y}
                 r={8}
                 fill="transparent"
+                role="button"
+                tabIndex={0}
+                aria-label={`第 ${points.length - c.index} 次运行${orderedRuns[c.index]?.created_at ? `，${dayjs(orderedRuns[c.index].created_at).format('MM-DD HH:mm')}` : ''}，完成比 ${Math.round(c.value * 100)}%，点击查看运行详情`}
                 style={{ cursor: 'pointer' }}
                 onMouseEnter={() => setHovered(c.index)}
-                onClick={() => setHovered(c.index)}
+                onFocus={() => setHovered(c.index)}
+                onBlur={() => setHovered(null)}
+                onKeyDown={(event) => handleRunKeyDown(event, c.index)}
+                onClick={() => handleRunClick(c.index)}
               />
               <circle
                 cx={c.x}

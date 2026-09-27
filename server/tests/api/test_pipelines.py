@@ -372,3 +372,39 @@ async def test_list_pipelines_last_operator(app, setup_project, tmp_project, db_
         deploy2 = next(i for i in items2 if i.get("file") == "deploy.yaml")
         assert deploy2["last_operator"] == "alice"
         assert deploy2["last_operator_nickname"] == "Alice"
+
+
+@pytest.mark.asyncio
+async def test_list_pipelines_recent_runs_include_navigation_fields(app, setup_project, tmp_project, db_engine, clean_db):
+    """成功率折线图的数据点需要 run id 与时间，前端才能点击跳转运行详情。"""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
+        create_resp = await client.post(
+            "/api/projects/",
+            json={"workdir": str(tmp_project), "name": "recent-runs-project"},
+            headers=headers,
+        )
+        assert create_resp.status_code == 201
+
+        list_resp = await client.get("/api/pipelines/")
+        assert list_resp.status_code == 200
+        deploy = next(item for item in list_resp.json()["items"] if item.get("file") == "deploy.yaml")
+
+        run_resp = await client.post(
+            "/api/runs/",
+            json={"definition_id": deploy["id"], "params": {}},
+            headers=headers,
+        )
+        assert run_resp.status_code == 201
+        run_id = run_resp.json()["id"]
+
+        list_resp2 = await client.get("/api/pipelines/")
+        assert list_resp2.status_code == 200
+        deploy2 = next(item for item in list_resp2.json()["items"] if item.get("file") == "deploy.yaml")
+        assert len(deploy2["recent_runs"]) == 1
+
+        recent = deploy2["recent_runs"][0]
+        assert recent["id"] == run_id
+        assert recent["created_at"]
+        assert "task_summary" in recent
