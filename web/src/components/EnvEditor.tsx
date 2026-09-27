@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Input, Button, Tooltip, Row, Col } from 'antd';
+import { Input, Tooltip, Row, Col } from 'antd';
+import AppButton from '@/components/AppButton';
 import { PlusOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 
 interface EnvEntry {
@@ -125,9 +126,8 @@ export default function EnvEditor({ value, onChange }: EnvEditorProps) {
               />
             </Col>
             <Col>
-              <Button
-                type="text"
-                size="small"
+              <AppButton
+                variant="text"
                 danger
                 icon={<DeleteOutlined />}
                 onClick={() => removeRow(entry.id)}
@@ -137,16 +137,15 @@ export default function EnvEditor({ value, onChange }: EnvEditorProps) {
           </Row>
         );
       })}
-      <Button
-        type="dashed"
-        size="small"
+      <AppButton
+        variant="dashed"
         icon={<PlusOutlined />}
         onClick={addRow}
         block
         style={{ marginTop: 2 }}
       >
         添加
-      </Button>
+      </AppButton>
     </div>
   );
 }

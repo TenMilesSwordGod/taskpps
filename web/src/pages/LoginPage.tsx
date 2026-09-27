@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Button, Checkbox, Tabs, App } from 'antd';
+import { Form, Input, Checkbox, Tabs, App } from 'antd';
+import AppButton from '@/components/AppButton';
 import type { CSSProperties } from 'react';
 import TaskPpsLogo from '@/components/TaskPpsLogo';
 import { useLogin, useRegister } from '@/api/auth';
@@ -202,9 +203,9 @@ function LoginForm({ onSubmit, loading, prefillUsername }: LoginFormProps) {
       <Form.Item name="remember_me" valuePropName="checked" style={{ marginBottom: 12 }}>
           <Checkbox>30天内免登录</Checkbox>
       </Form.Item>
-      <Button type="primary" htmlType="submit" block loading={loading}>
+      <AppButton size="middle" variant="primary" htmlType="submit" block loading={loading}>
         登录
-      </Button>
+      </AppButton>
     </Form>
   );
 }
@@ -255,9 +256,9 @@ function RegisterForm({ onSubmit, loading }: RegisterFormProps) {
       >
         <Input.Password placeholder="至少 6 位" />
       </Form.Item>
-      <Button type="primary" htmlType="submit" block loading={loading} style={{ marginTop: 8 }}>
+      <AppButton size="middle" variant="primary" htmlType="submit" block loading={loading} style={{ marginTop: 8 }}>
         注册
-      </Button>
+      </AppButton>
     </Form>
   );
 }

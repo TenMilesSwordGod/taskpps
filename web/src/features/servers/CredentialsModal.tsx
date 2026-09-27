@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { App, Alert, Button, Empty, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd';
+import { App, Alert, Empty, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd';
+import AppButton from '@/components/AppButton';
 import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useDeleteCredential, useCredentials } from '@/api/credentials';
 import { useProjects } from '@/api/projects';
@@ -83,15 +84,14 @@ export default function CredentialsModal({ open, initialProjectId, onClose }: Cr
             </span>
           )}
           <div style={{ flex: 1 }} />
-          <Button
-            type="primary"
-            size="small"
-            icon={<Plus size={14} />}
+          <AppButton
+            variant="primary"
+            icon={Plus}
             disabled={!projectId}
             onClick={() => { setEditing(null); setFormOpen(true); }}
           >
             新增凭据
-          </Button>
+          </AppButton>
         </div>
 
         {isError ? (
@@ -155,15 +155,14 @@ export default function CredentialsModal({ open, initialProjectId, onClose }: Cr
                 width: 110,
                 render: (_: unknown, record) => (
                   <Space size={4}>
-                    <Button
-                      type="link"
-                      size="small"
+                    <AppButton
+                      variant="link"
                       icon={<Pencil size={13} />}
                       aria-label={`编辑凭据 ${record.id}`}
                       onClick={() => { setEditing(record); setFormOpen(true); }}
                     >
                       编辑
-                    </Button>
+                    </AppButton>
                     <Popconfirm
                       title={`删除凭据 "${record.id}"？`}
                       description="删除后引用该凭据的服务器将无法认证，此操作不可恢复。"
@@ -172,15 +171,14 @@ export default function CredentialsModal({ open, initialProjectId, onClose }: Cr
                       cancelText="取消"
                       onConfirm={() => handleDelete(record)}
                     >
-                      <Button
-                        type="link"
-                        size="small"
+                      <AppButton
+                        variant="link"
                         danger
                         icon={<Trash2 size={13} />}
                         aria-label={`删除凭据 ${record.id}`}
                       >
                         删除
-                      </Button>
+                      </AppButton>
                     </Popconfirm>
                   </Space>
                 ),

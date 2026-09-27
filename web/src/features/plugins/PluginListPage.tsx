@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Table, Tag, Button, Switch, Input, Empty, Space, Tooltip, Segmented, Alert, App } from 'antd';
+import { Table, Tag, Switch, Input, Empty, Space, Tooltip, Segmented, Alert, App } from 'antd';
+import AppButton from '@/components/AppButton';
 import {
   PlugZap,
   Search,
@@ -143,10 +144,9 @@ export default function PluginListPage() {
       render: (_: unknown, record: PluginResponse) => (
         <Space>
           <Tooltip title="查看详情">
-            <Button
-              type="text"
-              size="small"
-              icon={<Eye size={14} />}
+            <AppButton
+              variant="text"
+              icon={Eye}
               aria-label="查看详情"
               onClick={() => setDetailPlugin(record)}
             />
@@ -182,14 +182,14 @@ export default function PluginListPage() {
             style={{ width: 240 }}
           />
           <Tooltip title="刷新">
-            <Button
-              size="small"
-              icon={<RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />}
+            <AppButton
+              icon={RefreshCw}
+              iconClassName={isFetching ? 'animate-spin' : undefined}
               onClick={() => refetch()}
               disabled={isFetching}
             >
               刷新
-            </Button>
+            </AppButton>
           </Tooltip>
         </div>
       </div>
@@ -214,9 +214,9 @@ export default function PluginListPage() {
               message="插件列表加载失败"
               description={error instanceof Error ? error.message : '请稍后重试'}
               action={
-                <Button size="small" onClick={() => refetch()}>
+                <AppButton onClick={() => refetch()}>
                   重试
-                </Button>
+                </AppButton>
               }
             />
           </div>

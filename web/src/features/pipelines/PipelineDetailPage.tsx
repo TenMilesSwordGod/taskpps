@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Space, Tooltip, message, Spin, Alert, Modal, Dropdown, Tag } from 'antd';
+import { Space, Tooltip, message, Spin, Alert, Modal, Dropdown, Tag } from 'antd';
+import AppButton from '@/components/AppButton';
 import {
   ExportOutlined,
   FileImageOutlined,
@@ -555,7 +556,8 @@ export default function PipelineDetailPage() {
           {/* v1 (2026-07): issue #206 — 编辑/查看模式切换 */}
           {!isFileMode && (
               <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'} placement="bottom">
-                <Button
+                <AppButton
+                  size="middle"
                   icon={editMode ? <EyeOutlined /> : <EditOutlined />}
                   onClick={() => {
                     // v2 (2026-07): 切换到查看模式前检查未保存修改
@@ -575,32 +577,34 @@ export default function PipelineDetailPage() {
                   type={editMode ? 'primary' : 'default'}
                 >
                   {editMode ? '查看模式' : '编辑模式'}
-                </Button>
+                </AppButton>
               </Tooltip>
           )}
           {editMode && (
             <Tooltip title="保存 (Ctrl+S)" placement="bottom">
-              <Button
+              <AppButton
+                size="middle"
                 icon={<SaveOutlined />}
                 onClick={handleSaveFromEditor}
                 loading={saving}
                 disabled={!editorDirty}
-                type="primary"
+                variant="primary"
               >
                 保存
-              </Button>
+              </AppButton>
             </Tooltip>
           )}
           {!editMode && (
             <>
               <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'} placement="bottom">
-                <Button
+                <AppButton
+                  size="middle"
                   icon={yamlEditorOpen ? <CloseOutlined /> : <CodeOutlined />}
                   onClick={handleToggleEditor}
                   type={yamlEditorOpen ? 'primary' : 'default'}
                 >
                   {yamlEditorOpen ? '关闭编辑器' : 'YAML 编辑器'}
-                </Button>
+                </AppButton>
                 {/* v5 (2026-09, issue #216): 查看模式 YAML 修改后的未保存提示 */}
                 {yamlEditorOpen && yamlDirty && <Tag color="warning">未保存</Tag>}
               </Tooltip>
@@ -617,9 +621,9 @@ export default function PipelineDetailPage() {
                     ],
                   }}
                 >
-                  <Button icon={<ExportOutlined />}>
+                  <AppButton size="middle" icon={<ExportOutlined />}>
                     导出 <DownOutlined style={{ fontSize: 10 }} />
-                  </Button>
+                  </AppButton>
                 </Dropdown>
               )}
             </>
@@ -633,8 +637,9 @@ export default function PipelineDetailPage() {
             />
           )}
           {!isFileMode && (
-            <Button
-              type="primary"
+            <AppButton
+              size="middle"
+              variant="primary"
               icon={<PlayCircleOutlined />}
               // v6 (2026-08): critique P2 — 高风险时机守卫：编辑模式有未保存修改时，
               // 运行的将是服务器上已保存的旧版本，须让用户显式确认而非静默执行
@@ -653,7 +658,7 @@ export default function PipelineDetailPage() {
               }}
             >
               触发运行
-            </Button>
+            </AppButton>
           )}
         </Space>
       </div>

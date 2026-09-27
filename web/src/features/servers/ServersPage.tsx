@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Input, Empty, Tag, Tooltip, Alert, Button, Segmented, App } from 'antd';
+import { Input, Empty, Tag, Tooltip, Alert, Segmented, App } from 'antd';
+import AppButton from '@/components/AppButton';
 import {
   Search, Server, RefreshCw, AlertCircle, Radar,
   ChevronRight, FolderOpen, Clock, Plus, KeyRound,
@@ -276,34 +277,33 @@ export default function ServersPage() {
             style={{ width: 320 }}
           />
           <Tooltip title="手动刷新">
-            <Button
-              size="small"
-              icon={<RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />}
+            <AppButton
+              icon={RefreshCw}
+              iconClassName={isFetching ? 'animate-spin' : ''}
               onClick={() => refetch()}
               disabled={isFetching}
             >
               刷新
-            </Button>
+            </AppButton>
           </Tooltip>
           <Tooltip title="主动探测所有 agent 的 system / arch（通过 SSH uname）">
-            <Button
-              size="small"
-              icon={<Radar size={14} className={probing ? 'animate-spin' : ''} />}
+            <AppButton
+              icon={Radar}
+              iconClassName={probing ? 'animate-spin' : ''}
               onClick={runProbe}
               disabled={probing}
             >
               {probing ? '探测中…' : '探测 system/arch'}
-            </Button>
+            </AppButton>
           </Tooltip>
           {isAdmin && (
             <Tooltip title="管理服务器登录凭据（密码加密存储，保存后不可查看明文）">
-              <Button
-                size="small"
-                icon={<KeyRound size={14} />}
+              <AppButton
+                icon={KeyRound}
                 onClick={() => handleManageCredentials(undefined)}
               >
                 凭据管理
-              </Button>
+              </AppButton>
             </Tooltip>
           )}
           {isAdmin && (
@@ -315,15 +315,14 @@ export default function ServersPage() {
               }
             >
               {/* 无项目时禁用并提供原因，避免打开空表单无法提交的挫败感 */}
-              <Button
-                size="small"
-                type="primary"
-                icon={<Plus size={14} />}
+              <AppButton
+                variant="primary"
+                icon={Plus}
                 disabled={(projects ?? []).length === 0}
                 onClick={() => handleCreateAgent()}
               >
                 新增服务器
-              </Button>
+              </AppButton>
             </Tooltip>
           )}
         </div>
@@ -349,7 +348,7 @@ export default function ServersPage() {
                   <div>错误：{error instanceof Error ? error.message : String(error)}</div>
                 </div>
               }
-              action={<Button size="small" onClick={() => refetch()}>重试</Button>}
+              action={<AppButton onClick={() => refetch()}>重试</AppButton>}
             />
           </div>
         ) : filtered.length === 0 ? (
@@ -548,26 +547,25 @@ function EmptyAgentsGuide({
         </div>
       )}
       {isAdmin && (
-        <Button
-          type="primary"
-          size="small"
-          icon={<Plus size={14} />}
+        <AppButton
+          variant="primary"
+          icon={Plus}
           onClick={onAddServer}
           disabled={projectsLoading || (projects ?? []).length === 0}
           style={{ marginTop: 16, marginRight: 8 }}
         >
           新增服务器
-        </Button>
+        </AppButton>
       )}
-      <Button
-        size="small"
-        icon={<RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />}
+      <AppButton
+        icon={RefreshCw}
+        iconClassName={refreshing ? 'animate-spin' : ''}
         onClick={onRefresh}
         disabled={refreshing}
         style={{ marginTop: 16 }}
       >
         刷新
-      </Button>
+      </AppButton>
     </div>
   );
 }

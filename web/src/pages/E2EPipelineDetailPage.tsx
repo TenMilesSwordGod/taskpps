@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { Button, Space, Tooltip, message, Alert } from 'antd';
+import { Space, Tooltip, message, Alert } from 'antd';
+import AppButton from '@/components/AppButton';
 import { EditOutlined, EyeOutlined, SaveOutlined, CodeOutlined, CloseOutlined } from '@ant-design/icons';
 import YamlEditor from '@/features/pipelines/YamlEditor';
 import type { YamlEditorRef } from '@/features/pipelines/YamlEditor';
@@ -221,36 +222,39 @@ export default function E2EPipelineDetailPage() {
       >
         <Space>
           <Tooltip title={editMode ? '退出编辑模式' : '进入编辑模式'}>
-            <Button
+            <AppButton
+              size="middle"
               icon={editMode ? <EyeOutlined /> : <EditOutlined />}
               onClick={() => setEditMode((prev) => !prev)}
               type={editMode ? 'primary' : 'default'}
             >
               {editMode ? '查看模式' : '编辑模式'}
-            </Button>
+            </AppButton>
           </Tooltip>
           {editMode && (
             <Tooltip title="保存 (Ctrl+S)">
-              <Button
+              <AppButton
+                size="middle"
                 icon={<SaveOutlined />}
                 onClick={handleSaveFromEditor}
                 loading={saving}
                 disabled={!editorDirty}
-                type="primary"
+                variant="primary"
               >
                 保存
-              </Button>
+              </AppButton>
             </Tooltip>
           )}
           {!editMode && (
             <Tooltip title={yamlEditorOpen ? '关闭 YAML 编辑器' : '打开 YAML 编辑器'}>
-              <Button
+              <AppButton
+                size="middle"
                 icon={yamlEditorOpen ? <CloseOutlined /> : <CodeOutlined />}
                 onClick={handleToggleEditor}
                 type={yamlEditorOpen ? 'primary' : 'default'}
               >
                 {yamlEditorOpen ? '关闭编辑器' : 'YAML 编辑器'}
-              </Button>
+              </AppButton>
             </Tooltip>
           )}
         </Space>

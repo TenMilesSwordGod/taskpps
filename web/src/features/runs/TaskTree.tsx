@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Tree, Tooltip, Dropdown, Button } from 'antd';
+import { Tree, Tooltip, Dropdown } from 'antd';
+import AppButton from '@/components/AppButton';
 import type { DataNode } from 'antd/es/tree';
 import { Loader2, RotateCcw, History, AlertCircle, PanelLeftClose } from 'lucide-react';
 import { PipelineIcon, SubPipelineIcon, ResultIcon } from '@/components/icons';
@@ -427,9 +428,8 @@ export default function TaskTree({ pipeline, taskRuns, selectedTaskId, onSelect,
         {/* v3 (2026-09): 收起按钮放在树面板头部右侧，紧邻被收起的对象 */}
         {onCollapse && (
           <Tooltip title="隐藏任务树">
-            <Button
-              type="text"
-              size="small"
+            <AppButton
+              variant="text"
               aria-label="隐藏任务树"
               icon={<PanelLeftClose size={15} />}
               onClick={onCollapse}

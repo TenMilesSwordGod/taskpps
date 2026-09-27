@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect, useDeferredValue } from 'react';
-import { Card, Table, Button, Input, Space, Tooltip, Tag, Dropdown, App, Alert, Empty } from 'antd';
+import { Card, Table, Input, Space, Tooltip, Tag, Dropdown, App, Alert, Empty } from 'antd';
+import AppButton from '@/components/AppButton';
 import type { MenuProps } from 'antd';
 import { Search, RefreshCw, Play, ChevronRight, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MoreHorizontal, FilePlus, FolderPlus, FolderInput } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -319,9 +320,9 @@ export default function PipelineListPage() {
           message="流水线加载失败"
           description={error instanceof Error ? error.message : '请稍后重试'}
           action={
-            <Button size="small" onClick={() => refetch()}>
+            <AppButton onClick={() => refetch()}>
               重试
-            </Button>
+            </AppButton>
           }
           style={{ margin: '24px auto', maxWidth: 520, textAlign: 'left' }}
         />
@@ -330,21 +331,21 @@ export default function PipelineListPage() {
     if (deferredKeyword.trim()) {
       return (
         <Empty description={<span style={{ color: '#7C7F88' }}>无匹配的流水线</span>} className="my-10">
-          <Button size="small" onClick={() => setKeyword('')}>
+          <AppButton onClick={() => setKeyword('')}>
             清除搜索
-          </Button>
+          </AppButton>
         </Empty>
       );
     }
     return (
       <Empty description={<span style={{ color: '#7C7F88' }}>还没有流水线</span>} className="my-10">
         <Space>
-          <Button type="primary" size="small" onClick={() => setCreatePipelineOpen(true)}>
+          <AppButton variant="primary" onClick={() => setCreatePipelineOpen(true)}>
             新建流水线
-          </Button>
-          <Button size="small" onClick={() => setRegisterProjectOpen(true)}>
+          </AppButton>
+          <AppButton onClick={() => setRegisterProjectOpen(true)}>
             注册项目目录
-          </Button>
+          </AppButton>
         </Space>
       </Empty>
     );
@@ -534,11 +535,11 @@ export default function PipelineListPage() {
           <Space>
             {record.kind === 'pipeline' && (
               <Tooltip title="触发运行">
-                <Button type="text" size="small" icon={<Play size={14} />} aria-label="触发运行" onClick={() => handleOpenTrigger(record.id, record.project_id)} />
+                <AppButton variant="text" icon={Play} aria-label="触发运行" onClick={() => handleOpenTrigger(record.id, record.project_id)} />
               </Tooltip>
             )}
             <Dropdown menu={{ items }} trigger={['click']}>
-              <Button type="text" size="small" icon={<MoreHorizontal size={14} />} aria-label="更多操作" />
+              <AppButton variant="text" icon={MoreHorizontal} aria-label="更多操作" />
             </Dropdown>
           </Space>
         );
@@ -579,10 +580,10 @@ export default function PipelineListPage() {
                     ],
                   }}
                 >
-                  <Button type="primary" icon={<Plus size={14} />}>新建</Button>
+                  <AppButton variant="primary" icon={Plus}>新建</AppButton>
                 </Dropdown>
-                <Button icon={<RefreshCw size={14} />} onClick={() => refetch()}>刷新</Button>
-                <Button icon={<Play size={14} />} onClick={() => handleOpenTrigger(undefined)}>触发运行</Button>
+                <AppButton icon={RefreshCw} onClick={() => refetch()}>刷新</AppButton>
+                <AppButton icon={Play} onClick={() => handleOpenTrigger(undefined)}>触发运行</AppButton>
               </Space>
             </div>
           )}

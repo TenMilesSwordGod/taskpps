@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Table, Input, DatePicker, Space, Button, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, TreeSelect, Popconfirm, Alert, Empty } from 'antd';
+import { Table, Input, DatePicker, Space, Modal, Form, Radio, InputNumber, App, Tag, Tooltip, Segmented, TreeSelect, Popconfirm, Alert, Empty } from 'antd';
+import AppButton from '@/components/AppButton';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, Play, Trash2, RefreshCw, History, CircleDot, Search } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -205,9 +206,9 @@ export default function RunListPage() {
           message="运行历史加载失败"
           description={error instanceof Error ? error.message : '请稍后重试'}
           action={
-            <Button size="small" onClick={() => refetch()}>
+            <AppButton onClick={() => refetch()}>
               重试
-            </Button>
+            </AppButton>
           }
           style={{ margin: '24px auto', maxWidth: 520, textAlign: 'left' }}
         />
@@ -216,9 +217,9 @@ export default function RunListPage() {
     if (allItems.length === 0) {
       return (
         <Empty description={<span style={{ color: '#7C7F88' }}>还没有运行记录</span>} className="my-10">
-          <Button type="primary" size="small" onClick={() => setTriggerOpen(true)}>
+          <AppButton variant="primary" onClick={() => setTriggerOpen(true)}>
             触发运行
-          </Button>
+          </AppButton>
         </Empty>
       );
     }
@@ -226,9 +227,9 @@ export default function RunListPage() {
     if (hasActiveFilter) {
       return (
         <Empty description={<span style={{ color: '#7C7F88' }}>无匹配运行</span>} className="my-10">
-          <Button size="small" onClick={handleClearFilters}>
+          <AppButton onClick={handleClearFilters}>
             清除筛选
-          </Button>
+          </AppButton>
         </Empty>
       );
     }
@@ -314,9 +315,9 @@ export default function RunListPage() {
       width: 140,
       render: (_: unknown, record: RunResponse) => (
         <Space size={4}>
-          <Button type="link" size="small" icon={<Eye size={14} />} onClick={() => handleOpenDetail(record.id)}>
+          <AppButton variant="link" icon={Eye} onClick={() => handleOpenDetail(record.id)}>
             查看
-          </Button>
+          </AppButton>
           <Popconfirm
             title="确认删除"
             description="删除后不可恢复，确认删除该运行记录？"
@@ -325,9 +326,9 @@ export default function RunListPage() {
             cancelText="取消"
             okButtonProps={{ danger: true }}
           >
-            <Button data-testid="row-delete-btn" type="link" size="small" danger icon={<Trash2 size={14} />}>
+            <AppButton data-testid="row-delete-btn" variant="link" danger icon={Trash2}>
               删除
-            </Button>
+            </AppButton>
           </Popconfirm>
         </Space>
       ),
@@ -388,21 +389,21 @@ export default function RunListPage() {
         </div>
         <div className="flex items-center gap-2">
           <Tooltip title="手动刷新">
-            <Button
-              size="small"
-              icon={<RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />}
+            <AppButton
+              icon={RefreshCw}
+              iconClassName={isFetching ? 'animate-spin' : ''}
               onClick={() => refetch()}
               disabled={isFetching}
             >
               刷新
-            </Button>
+            </AppButton>
           </Tooltip>
-          <Button type="primary" size="small" icon={<Play size={14} />} onClick={() => setTriggerOpen(true)}>
+          <AppButton variant="primary" icon={Play} onClick={() => setTriggerOpen(true)}>
             触发运行
-          </Button>
-          <Button size="small" icon={<Trash2 size={14} />} danger onClick={handleOpenClean}>
+          </AppButton>
+          <AppButton icon={Trash2} variant="danger" onClick={handleOpenClean}>
             删除历史
-          </Button>
+          </AppButton>
         </div>
       </div>
 

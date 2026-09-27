@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Breadcrumb, Button, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert, Popover } from 'antd';
+import { Breadcrumb, Space, Spin, message, Popconfirm, Splitter, Tooltip, Tag, Progress, Alert, Popover } from 'antd';
+import AppButton from '@/components/AppButton';
 import { XCircle, RefreshCw, Clock, AlertCircle, Loader2, Bug, Package, PanelLeftOpen } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRun, useCancelRun, useRunConsole, usePipelineSnapshot, useRetryVersions, useResultPage } from '@/api/runs';
@@ -252,35 +253,33 @@ export default function RunDetailPage() {
           </div>
           <Space size={8} wrap align="center">
             <Tooltip title="手动刷新运行状态">
-              <Button size="small" icon={<RefreshCw size={14} />} onClick={handleRefresh}>
+              <AppButton icon={RefreshCw} onClick={handleRefresh}>
                 刷新
-              </Button>
+              </AppButton>
             </Tooltip>
             <Tooltip title={debugVisible ? '关闭 Debug' : 'Debug'}>
-              <Button
-                size="small"
-                icon={<Bug size={14} />}
+              <AppButton
+                icon={Bug}
                 type={debugVisible ? 'primary' : 'default'}
                 aria-pressed={debugVisible}
                 onClick={() => setDebugVisible((v) => !v)}
               >
                 Debug
-              </Button>
+              </AppButton>
             </Tooltip>
             <Tooltip title="Artifacts 下载">
-              <Button
-                size="small"
-                icon={<Package size={14} />}
+              <AppButton
+                icon={Package}
                 onClick={() => setArtifactsOpen(true)}
               >
                 Artifacts
-              </Button>
+              </AppButton>
             </Tooltip>
             {canCancel && (
               <Popconfirm title="确认取消运行？" onConfirm={handleCancel}>
-                <Button danger size="small" icon={<XCircle size={14} />} loading={cancelRun.isPending}>
+                <AppButton variant="danger" icon={XCircle} loading={cancelRun.isPending}>
                   取消运行
-                </Button>
+                </AppButton>
               </Popconfirm>
             )}
           </Space>
@@ -309,9 +308,8 @@ export default function RunDetailPage() {
         {treeCollapsed && (
           <div className="shrink-0 w-8 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col items-center gap-2 pt-2">
             <Tooltip title="显示任务树" placement="right">
-              <Button
-                type="text"
-                size="small"
+              <AppButton
+                variant="text"
                 aria-label="显示任务树"
                 icon={<PanelLeftOpen size={15} />}
                 onClick={() => setTreeCollapsed(false)}

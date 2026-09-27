@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, App, Button, Form, Input, InputNumber, Modal, Select, Switch, Tooltip } from 'antd';
+import { Alert, App, Form, Input, InputNumber, Modal, Select, Switch, Tooltip } from 'antd';
+import AppButton from '@/components/AppButton';
 import { Plus, Server, Zap } from 'lucide-react';
 import { useCreateAgent, useTryConnectAgent, useUpdateAgent } from '@/api/agents';
 import type { AgentUpdatePayload } from '@/api/agents';
@@ -167,25 +168,26 @@ export default function AgentFormModal({ open, agent, projects, defaultProjectId
         width={640}
         footer={[
           isEdit ? (
-            <Button key="test" onClick={handleTest} loading={tryConnect.isPending} icon={<Zap size={14} />}>
+            <AppButton key="test" onClick={handleTest} loading={tryConnect.isPending} icon={Zap}>
               测试连接
-            </Button>
+            </AppButton>
           ) : (
             <Tooltip key="test" title="保存后才能测试连接（需要读取磁盘上的配置与凭据）">
               <span>
-                <Button disabled icon={<Zap size={14} />}>测试连接</Button>
+                <AppButton disabled icon={Zap}>测试连接</AppButton>
               </span>
             </Tooltip>
           ),
-          <Button key="cancel" onClick={onClose}>取消</Button>,
-          <Button
+          <AppButton size="middle" key="cancel" onClick={onClose}>取消</AppButton>,
+          <AppButton
+            size="middle"
             key="ok"
-            type="primary"
+            variant="primary"
             onClick={handleOk}
             loading={createAgent.isPending || updateAgent.isPending}
           >
             保存
-          </Button>,
+          </AppButton>,
         ]}
       >
         <Alert
@@ -288,16 +290,15 @@ export default function AgentFormModal({ open, agent, projects, defaultProjectId
                       <>
                         {menu}
                         <div style={{ borderTop: '1px solid #F0F1F3', padding: 4 }}>
-                          <Button
-                            type="text"
-                            size="small"
+                          <AppButton
+                            variant="text"
                             icon={<Plus size={13} />}
                             disabled={!projectId}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => setCredentialModalOpen(true)}
                           >
                             新建凭据
-                          </Button>
+                          </AppButton>
                         </div>
                       </>
                     )}
