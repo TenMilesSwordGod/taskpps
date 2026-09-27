@@ -266,7 +266,8 @@ export default function LogViewer({
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    // v2 (2026-09, 选区高亮): 挂 log-viewer 类，供 index.css 覆盖深色底上的 ::selection
+    <div className="log-viewer" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div
         style={{
           display: 'flex',
