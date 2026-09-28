@@ -7,7 +7,9 @@ import uuid
 from pathlib import Path
 
 import paramiko
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from taskpps.services.agent_exec_env import normalize_env, normalize_shell
 
 logger = logging.getLogger(__name__)
 from fastapi.responses import StreamingResponse
@@ -271,15 +273,30 @@ async def agent_list():
     return result
 
 
+# env 值可能含 token/密钥；/agents/all 是 GET 放行（guest 可读）的接口，
+# 非管理员一律返回掩码（保留键名以便 UI 展示数量/条目），仅 admin 可见明文。
+_MASKED_ENV_VALUE = "******"
+
+
+def _mask_env(env: dict[str, str]) -> dict[str, str]:
+    return {key: _MASKED_ENV_VALUE for key in env}
+
+
 @router.get("/all", response_model=list[AgentWithConfig])
-async def agent_all():
+async def agent_all(request: Request):
     """返回所有已注册项目中 yaml 配置的 agent + 实时连接状态（未连接也展示）"""
     manager = AgentManager.instance()
     result: list[AgentWithConfig] = []
 
+    user_state = getattr(request.state, "user", None) or {}
+    is_admin = user_state.get("role") == "admin"
+
     agent_items, _ = await _load_agents_from_projects()
     for cfg in agent_items:
         agent_id = str(cfg.get("id", "") or "")
+        agent_env = normalize_env(cfg.get("env"), agent_id)
+        if not is_admin:
+            agent_env = _mask_env(agent_env)
         item = AgentWithConfig(
             agent_id=agent_id,
             name=str(cfg.get("name", "") or ""),
@@ -298,6 +315,9 @@ async def agent_all():
             agent_auto_bootstrap=_as_bool(cfg.get("agent_auto_bootstrap"), default=True),
             # v2 (2026-09): 回填回连地址，网页端才能看到/修改当前生效的 server_ws_host
             server_ws_host=str(cfg.get("server_ws_host", "") or ""),
+            # v2 (2026-09): 回填执行环境；手工 YAML 类型异常时归一化兜底，避免整页 500
+            shell=normalize_shell(cfg.get("shell")),
+            env=agent_env,
         )
         if manager.is_connected(agent_id):
             conn = manager.get_connection(agent_id)
@@ -362,17 +382,34 @@ async def agent_all():
     return result
 
 
+async def _find_agent_item(agent_id: str) -> dict | None:
+    """按 id 查 agent 配置项（来自 /agents/all 同一份缓存，保证读到最新写盘结果）。"""
+    agent_items, _ = await _load_agents_from_projects()
+    for item in agent_items:
+        if item.get("id") == agent_id:
+            return item
+    return None
+
+
 async def _resolve_agent_cwd(agent_id: str) -> str:
     """解析命令/补全的执行目录：请求未指定时回退到 agent 配置的 agent_work_dir。
 
     v1 (2026-07): 从 exec/exec_stream/complete 三处重复代码提取，
     保证各端点的 cwd 解析行为一致。
     """
-    agent_items, _ = await _load_agents_from_projects()
-    for item in agent_items:
-        if item.get("id") == agent_id and item.get("agent_work_dir"):
-            return item["agent_work_dir"]
-    return ""
+    item = await _find_agent_item(agent_id)
+    return str(item.get("agent_work_dir", "")) if item else ""
+
+
+async def _resolve_agent_exec_env(agent_id: str) -> tuple[dict[str, str], str]:
+    """返回 agent 配置的执行环境 (env, shell)。
+
+    v2 (2026-09): 与流水线执行器口径一致 —— agent env 是默认值，请求 env 覆盖之。
+    """
+    item = await _find_agent_item(agent_id)
+    if item is None:
+        return {}, ""
+    return normalize_env(item.get("env"), agent_id), normalize_shell(item.get("shell"))
 
 
 @router.post("/{agent_id}/exec")
@@ -397,6 +434,9 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
         )
 
     cwd = body.cwd or await _resolve_agent_cwd(agent_id)
+    # v2 (2026-09): 合并 agent yaml 的执行环境，请求 env 覆盖服务器默认值
+    agent_env, agent_shell = await _resolve_agent_exec_env(agent_id)
+    effective_env = {**agent_env, **(body.env or {})}
 
     command_id = str(uuid.uuid4())
     start_time = time.monotonic()
@@ -414,9 +454,10 @@ async def agent_exec(agent_id: str, body: AgentExecRequest):
             agent_id,
             command_id,
             body.command,
-            body.env or {},
+            effective_env,
             cwd,
             body.timeout,
+            shell=agent_shell,
         )
     except Exception as e:
         conn.cleanup_command(command_id)
@@ -476,6 +517,9 @@ async def agent_exec_stream(agent_id: str, body: AgentExecRequest):
     conn = manager.get_connection(agent_id)
 
     cwd = body.cwd or await _resolve_agent_cwd(agent_id)
+    # v2 (2026-09): Web REPL 同样使用 server 配置的执行环境（与 exec 一致）
+    agent_env, agent_shell = await _resolve_agent_exec_env(agent_id)
+    effective_env = {**agent_env, **(body.env or {})}
 
     command_id = str(uuid.uuid4())
     start_time = time.monotonic()
@@ -487,12 +531,12 @@ async def agent_exec_stream(agent_id: str, body: AgentExecRequest):
 
     conn.register_output_callback(command_id, on_output)
     fut = manager.create_pending(
-        agent_id, command_id, body.command, body.env or {}, cwd, body.timeout
+        agent_id, command_id, body.command, effective_env, cwd, body.timeout
     )
 
     try:
         await manager.send_command(
-            agent_id, command_id, body.command, body.env or {}, cwd, body.timeout
+            agent_id, command_id, body.command, effective_env, cwd, body.timeout, shell=agent_shell
         )
     except Exception as e:
         conn.cleanup_command(command_id)
@@ -681,7 +725,9 @@ async def get_agent_host_info(agent_id: str):
 
     # execution-agent：目前没存 host_info（需要 agent 端主动上报），返回空
     if agent_type in ("execution-agent", "agent", "websocket", "local") or not agent_type.startswith("ssh-"):
-        conn = manager.get_connection(agent_id)
+        # v2 (2026-09): 原实现直接引用未定义的 manager，execution-agent 查询
+        # host-info 必然 NameError→500（既有 bug，测试暴露为 AttributeError）
+        conn = AgentManager.instance().get_connection(agent_id)
         info = AgentHostInfo(agent_id=agent_id, source="agent")
         if conn:
             info.hostname = conn.hostname

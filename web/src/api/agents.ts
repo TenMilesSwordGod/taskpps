@@ -19,6 +19,10 @@ export interface AgentCreatePayload {
   agent_auto_bootstrap?: boolean;
   /** agent 回连服务端的地址；留空由服务端自动探测（远端不可达时必填） */
   server_ws_host?: string;
+  /** 执行 shell；留空使用默认解释器 */
+  shell?: string;
+  /** 服务器级默认环境变量；空对象表示清除配置 */
+  env?: Record<string, string>;
 }
 
 /** 编辑服务器请求体（id/project 不可改） */

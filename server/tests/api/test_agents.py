@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -15,8 +15,9 @@ def app():
 
 @pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0905", domain="server/api", priority="P2")
-async def test_try_connect(app, setup_project, tmp_project):
+async def test_try_connect(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
+    from tests.auth._helpers import register_and_auth_headers
 
     cfg.set_project_root(tmp_project)
     cfg._settings = None
@@ -24,8 +25,11 @@ async def test_try_connect(app, setup_project, tmp_project):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # POST 被中间件强制鉴权，用例历史上按匿名调用实际断言的是 401
+        headers = await register_and_auth_headers(client)
         response = await client.post(
             "/api/agents/try-connect",
+            headers=headers,
             json={"agent_id": "staging-server", "timeout": 5},
         )
         assert response.status_code in (200, 400, 404)
@@ -33,8 +37,9 @@ async def test_try_connect(app, setup_project, tmp_project):
 
 @pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0906", domain="server/api", priority="P2")
-async def test_check(app, setup_project, tmp_project):
+async def test_check(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
+    from tests.auth._helpers import register_and_auth_headers
 
     cfg.set_project_root(tmp_project)
     cfg._settings = None
@@ -42,8 +47,10 @@ async def test_check(app, setup_project, tmp_project):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         response = await client.post(
             "/api/agents/check",
+            headers=headers,
             json={"agent_id": "staging-server"},
         )
         assert response.status_code in (200, 400, 404)
@@ -51,8 +58,9 @@ async def test_check(app, setup_project, tmp_project):
 
 @pytest.mark.asyncio
 @pytest.mark.zentao("TC-S0907", domain="server/api", priority="P1")
-async def test_check_agent_not_found(app, setup_project, tmp_project):
+async def test_check_agent_not_found(app, setup_project, tmp_project, db_engine):
     import taskpps.config as cfg
+    from tests.auth._helpers import register_and_auth_headers
 
     cfg.set_project_root(tmp_project)
     cfg._settings = None
@@ -60,8 +68,10 @@ async def test_check_agent_not_found(app, setup_project, tmp_project):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await register_and_auth_headers(client)
         response = await client.post(
             "/api/agents/try-connect",
+            headers=headers,
             json={"agent_id": "nonexistent", "timeout": 5},
         )
         assert response.status_code in (400, 404)
@@ -116,8 +126,9 @@ async def test_host_info_execution_agent(app, setup_project, tmp_project):
             loader.get.return_value = agent_cfg
             loader.resolve_credential.return_value = None
             MockLoader.return_value = loader
-            with patch("taskpps.api.agents.manager") as mock_mgr:
-                mock_mgr.get_connection.return_value = None
+            # 修复后端点通过 AgentManager.instance() 获取连接，patch 方式与其他用例一致
+            with patch("taskpps.api.agents.AgentManager.instance") as mock_instance:
+                mock_instance.return_value.get_connection.return_value = None
                 response = await client.get("/api/agents/exec-agent/host-info")
     assert response.status_code == 200
     data = response.json()
@@ -208,7 +219,9 @@ async def test_host_info_ssh_auth_failed(app, setup_project, tmp_project, db_eng
                 "password": "wrong",
             }
             MockLoader.return_value = loader
-            with patch.dict("sys.modules", {"paramiko": mock_paramiko}):
+            # 必须 patch 模块属性：endpoint 用的是 `import paramiko` 的全局引用，
+            # 仅替换 sys.modules 不会影响已绑定的引用（旧写法靠真实网络碰巧过）
+            with patch("taskpps.api.agents.paramiko", mock_paramiko):
                 response = await client.get("/api/agents/ssh-bad-pw/host-info")
     assert response.status_code == 200
     data = response.json()
@@ -254,6 +267,10 @@ async def test_host_info_ssh_success(app, setup_project, tmp_project, db_engine)
         "uptime": "10:00:00 up 1 day",
         "lscpu": "Model name: TestCPU\nCPU(s): 2\nCore(s) per socket: 2\nSocket(s): 1",
         "free -h": "Mem:           8Gi        2Gi       4Gi",
+        # 必须分别匹配两条 grep：探测实现分别执行 `grep MemAvailable/MemTotal`，
+        # 原来只配 "/proc/meminfo" 会让两条都拿到同一段文本，percent 恒为 0
+        "grep MemAvailable": "MemAvailable:   6000000 kB",
+        "grep MemTotal": "MemTotal:       8388608 kB",
         "/proc/meminfo": "MemTotal:       8388608 kB\nMemAvailable:   6000000 kB",
         "df -h": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1       20G   8G   12G  40% /",
     }
@@ -282,7 +299,8 @@ async def test_host_info_ssh_success(app, setup_project, tmp_project, db_engine)
                 "key_path": "/tmp/key",
             }
             MockLoader.return_value = loader
-            with patch.dict("sys.modules", {"paramiko": mock_paramiko}):
+            # 必须 patch 模块属性，否则 endpoint 用真实 paramiko 读 /tmp/key 直接失败
+            with patch("taskpps.api.agents.paramiko", mock_paramiko):
                 response = await client.get("/api/agents/ssh-ok/host-info")
     assert response.status_code == 200
     data = response.json()

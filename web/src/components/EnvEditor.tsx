@@ -12,6 +12,11 @@ interface EnvEntry {
 interface EnvEditorProps {
   value?: Record<string, string>;
   onChange?: (value: Record<string, string>) => void;
+  /**
+   * 覆盖标题旁的提示内容：默认提示含流水线模板语法（${credential...} 等），
+   * 服务器执行环境不支持模板解析，需传入不含该语法说明的文案，避免误导。
+   */
+  tooltip?: React.ReactNode;
 }
 
 let nextId = 0;
@@ -37,7 +42,7 @@ function entriesToObj(entries: EnvEntry[]): Record<string, string> {
   return result;
 }
 
-export default function EnvEditor({ value, onChange }: EnvEditorProps) {
+export default function EnvEditor({ value, onChange, tooltip }: EnvEditorProps) {
   const [entries, setEntries] = useState<EnvEntry[]>(() => buildEntries(value));
   const valueRef = useRef(value);
   const syncingRef = useRef(false);
@@ -92,12 +97,14 @@ export default function EnvEditor({ value, onChange }: EnvEditorProps) {
         </span>
         <Tooltip
           title={
-            <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-              <div style={{ marginBottom: 4 }}>支持以下变量引用语法：</div>
-              <div><code>{'${credential.<name>}'}</code> — 引用凭证</div>
-              <div><code>{'${env.<name>}'}</code> — 引用环境变量</div>
-              <div><code>{'${task.<name>.output}'}</code> — 引用上游任务输出</div>
-            </div>
+            tooltip ?? (
+              <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+                <div style={{ marginBottom: 4 }}>支持以下变量引用语法：</div>
+                <div><code>{'${credential.<name>}'}</code> — 引用凭证</div>
+                <div><code>{'${env.<name>}'}</code> — 引用环境变量</div>
+                <div><code>{'${task.<name>.output}'}</code> — 引用上游任务输出</div>
+              </div>
+            )
           }
         >
           <QuestionCircleOutlined style={{ color: '#9ca3af', fontSize: 12, cursor: 'help' }} />

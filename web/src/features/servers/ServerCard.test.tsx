@@ -94,6 +94,31 @@ describe('<ServerCard />', () => {
     expect(screen.getByText('运行中 0 / 等待中 0 / 并发 1')).toBeInTheDocument()
   })
 
+  it('信息区展示执行 shell 与环境变量数量', () => {
+    render(
+      <ServerCard agent={makeAgent({ shell: '/bin/zsh', env: { A: '1', B: '2' } })} />,
+      { wrapper: Wrapper },
+    )
+    expect(screen.getByText('/bin/zsh')).toBeInTheDocument()
+    expect(screen.getByText(/ENV 2/)).toBeInTheDocument()
+  })
+
+  it('未配置执行环境时展示默认提示', () => {
+    render(<ServerCard agent={makeAgent({ shell: '', env: {} })} />, { wrapper: Wrapper })
+    expect(screen.getByText('默认 shell')).toBeInTheDocument()
+    expect(screen.getByText(/ENV 0/)).toBeInTheDocument()
+  })
+
+  it('点击执行环境按钮回调 onShowExecEnv', async () => {
+    const onShowExecEnv = vi.fn()
+    render(
+      <ServerCard agent={makeAgent()} onShowExecEnv={onShowExecEnv} />,
+      { wrapper: Wrapper },
+    )
+    fireEvent.click(screen.getByRole('button', { name: '执行环境（Shell / 环境变量）' }))
+    expect(onShowExecEnv).toHaveBeenCalledTimes(1)
+  })
+
   it('无运行/等待命令时状态不可点击且不会弹出空队列', async () => {
     render(<ServerCard agent={makeAgent({ running_commands: 0, queued_commands: 0 })} />, { wrapper: Wrapper })
     const status = screen.getByText('运行中 0 / 等待中 0 / 并发 4')

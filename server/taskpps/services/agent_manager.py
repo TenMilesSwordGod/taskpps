@@ -63,17 +63,20 @@ class AgentConnection:
         async with self._send_lock:
             await self.ws.send_json({"type": msg_type, "data": data})
 
-    async def send_command(self, command_id: str, command: str, env: dict[str, str], cwd: str, timeout: int) -> None:
-        await self.send_msg(
-            "exec_command",
-            {
-                "command_id": command_id,
-                "command": command,
-                "env": env,
-                "cwd": cwd,
-                "timeout": timeout,
-            },
-        )
+    async def send_command(
+        self, command_id: str, command: str, env: dict[str, str], cwd: str, timeout: int, shell: str = ""
+    ) -> None:
+        payload = {
+            "command_id": command_id,
+            "command": command,
+            "env": env,
+            "cwd": cwd,
+            "timeout": timeout,
+        }
+        # v2 (2026-09): shell 未配置时不发送该字段，保持旧报文与未升级 agent 兼容
+        if shell:
+            payload["shell"] = shell
+        await self.send_msg("exec_command", payload)
 
     async def send_cancel(self, command_id: str) -> None:
         await self.send_msg("cancel_command", {"command_id": command_id})
@@ -425,12 +428,19 @@ class AgentManager:
             self._global_max_concurrent = max_concurrent
 
     async def send_command(
-        self, agent_id: str, command_id: str, command: str, env: dict[str, str], cwd: str, timeout: int
+        self,
+        agent_id: str,
+        command_id: str,
+        command: str,
+        env: dict[str, str],
+        cwd: str,
+        timeout: int,
+        shell: str = "",
     ) -> None:
         conn = self._connections.get(agent_id)
         if conn is None:
             raise RuntimeError(t("Agent '{agent_id}' not connected", agent_id=agent_id))
-        await conn.send_command(command_id, command, env, cwd, timeout)
+        await conn.send_command(command_id, command, env, cwd, timeout, shell=shell)
 
     async def cancel_command(self, agent_id: str, command_id: str) -> None:
         conn = self._connections.get(agent_id)

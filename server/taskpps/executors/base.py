@@ -20,6 +20,17 @@ class ExecutorResult:
 
 
 class BaseExecutor(ABC):
+    # v2 (2026-09): 由 create_executor 从 agent yaml 注入的执行环境。
+    # 未配置时为空；实例属性由工厂覆盖，这里只作为缺省值防止 AttributeError。
+    agent_env: dict[str, str] = {}
+    agent_shell: str = ""
+
+    def apply_agent_env(self, env: dict[str, str]) -> dict[str, str]:
+        """把 agent 配置 env 作为默认值，本次执行 env（流水线/任务/运行参数）覆盖之。"""
+        if not self.agent_env:
+            return dict(env)
+        return {**self.agent_env, **env}
+
     @abstractmethod
     async def execute(
         self,
