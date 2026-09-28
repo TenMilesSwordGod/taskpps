@@ -2,12 +2,97 @@ package agent
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 )
+
+// TestExecutorPerRequestShell 验证命令级 shell 覆盖 agent 启动时的默认 shell。
+// 用脚本伪造成 shell：命中标记说明 req.Shell 确实被用作解释器。
+func TestExecutorPerRequestShell(t *testing.T) {
+	dir := t.TempDir()
+	fakeShell := filepath.Join(dir, "myshell")
+	script := "#!/bin/sh\necho REQUEST_SHELL_MARKER\nexec /bin/sh \"$@\"\n"
+	if err := os.WriteFile(fakeShell, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake shell: %v", err)
+	}
+
+	var out strings.Builder
+	resultCh := make(chan ExecResult, 1)
+	executor := NewExecutor("/bin/sh", dir,
+		func(cid, data string) { out.WriteString(data) },
+		func(cid, data string) {},
+		func(result ExecResult) { resultCh <- result },
+	)
+
+	executor.Execute(ExecCommand{
+		CommandID: "shell-001",
+		Command:   "echo per_request_done",
+		Cwd:       dir,
+		Shell:     fakeShell,
+	})
+
+	var result ExecResult
+	select {
+	case result = <-resultCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for result")
+	}
+
+	if result.ExitCode != 0 {
+		t.Errorf("expected exit_code=0, got %d", result.ExitCode)
+	}
+	if !strings.Contains(out.String(), "REQUEST_SHELL_MARKER") {
+		t.Errorf("per-request shell not used, output=%q", out.String())
+	}
+	if !strings.Contains(out.String(), "per_request_done") {
+		t.Errorf("command not executed, output=%q", out.String())
+	}
+}
+
+// TestExecutorPerRequestShellFailsWhenMissing 验证请求里的 shell 不存在时必须
+// 直接失败并把错误返回给调用方，而不是悄悄降级到 bash/dash/sh。
+//
+// 设计决策：启动配置的 shell 缺失走 fallback（issue #56，保证兼容老环境），
+// 但命令级 shell 是用户在网页上显式配置的——静默换解释器会让用户看到
+// zsh 配置却在 bash 里跑，只有 agent 端日志能发现，属于掩盖配置错误。
+func TestExecutorPerRequestShellFailsWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	var out strings.Builder
+	resultCh := make(chan ExecResult, 1)
+	executor := NewExecutor("/bin/sh", dir,
+		func(cid, data string) { out.WriteString(data) },
+		func(cid, data string) {},
+		func(result ExecResult) { resultCh <- result },
+	)
+
+	executor.Execute(ExecCommand{
+		CommandID: "shell-002",
+		Command:   "echo should_not_run",
+		Cwd:       dir,
+		Shell:     "/nonexistent/shell-xyz",
+	})
+
+	var result ExecResult
+	select {
+	case result = <-resultCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for result")
+	}
+
+	if result.ExitCode == 0 {
+		t.Errorf("expected failure for missing per-request shell, got exit_code=0 output=%q", out.String())
+	}
+	if result.Error == "" {
+		t.Errorf("expected error message for missing shell, got empty")
+	}
+	if strings.Contains(out.String(), "should_not_run") {
+		t.Errorf("command must not run under a fallback shell, output=%q", out.String())
+	}
+}
 
 func TestExecutorSuccess(t *testing.T) {
 	var receivedResult *ExecResult

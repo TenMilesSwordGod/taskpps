@@ -102,6 +102,9 @@ class AgentExecutor(BaseExecutor):
         cwd: str | None = None,
     ) -> ExecutorResult:
         self._cancelled = False
+        # v2 (2026-09): agent 配置 env 作为默认值，任务 env 覆盖之；
+        # 合并后的 env 同时进入 pending 记录（UI 排障看到的即实际执行的）
+        env = self.apply_agent_env(env)
         command_id = str(uuid.uuid4())
         self._command_id = command_id
 
@@ -217,7 +220,10 @@ class AgentExecutor(BaseExecutor):
             )
 
         try:
-            await self._manager.send_command(self._agent_id, command_id, command, env, effective_cwd, effective_timeout)
+            # v2 (2026-09): shell 随命令下发（需要新 agent 二进制支持；旧 agent 忽略该字段）
+            await self._manager.send_command(
+                self._agent_id, command_id, command, env, effective_cwd, effective_timeout, shell=self.agent_shell
+            )
         except Exception as e:
             logger.exception("Failed to send command to agent '%s'", self._agent_id)
             self._manager.cleanup_command(self._agent_id, command_id)

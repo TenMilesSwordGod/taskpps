@@ -8,6 +8,18 @@ import pytest
 from taskpps.executors.agent_executor import AgentExecutor
 
 
+@pytest.fixture(autouse=True)
+def _no_offline_wait(monkeypatch):
+    """agent_offline_timeout 默认 300s，本文件只验证断连分支的处理结果。
+
+    置 0 后分支语义不变（直接失败或进入 bootstrap），避免每个断连用例
+    真等 5 分钟，导致整个文件无法在 CI 里跑完。
+    """
+    from taskpps.config import get_settings
+
+    monkeypatch.setattr(get_settings().executor, "agent_offline_timeout", 0)
+
+
 @pytest.fixture
 def mock_manager():
     mgr = MagicMock()
@@ -18,6 +30,9 @@ def mock_manager():
     mgr.create_pending = MagicMock()
     mgr.register_output_callback = MagicMock()
     mgr.acquire_agent = AsyncMock()
+    # Issue #106 之后 AgentExecutor.execute 会获取全局并发槽位，mock 需要补齐这两个方法
+    mgr.acquire_global = AsyncMock()
+    mgr.release_global = MagicMock()
     mgr.release_agent = MagicMock()
     mgr.promote_command_to_running = MagicMock()
     mgr.get_connection = MagicMock(return_value=None)
@@ -43,7 +58,7 @@ class TestAgentExecutorExecute:
 
         assert result.exit_code == 0
         mock_manager.send_command.assert_called_once_with(
-            "agent-1", executor._command_id, "echo hello", {}, "/custom/cwd", 30
+            "agent-1", executor._command_id, "echo hello", {}, "/custom/cwd", 30, shell=""
         )
 
     @pytest.mark.asyncio
@@ -182,7 +197,7 @@ class TestAgentExecutorExecute:
 
         assert result.exit_code == 0
         mock_manager.send_command.assert_called_once_with(
-            "agent-1", executor._command_id, "echo hello", {}, "/home/agent", 30
+            "agent-1", executor._command_id, "echo hello", {}, "/home/agent", 30, shell=""
         )
 
     @pytest.mark.asyncio
@@ -197,7 +212,9 @@ class TestAgentExecutorExecute:
         result = await executor.execute("echo hello", {}, log_path, timeout=30)
 
         assert result.exit_code == 0
-        mock_manager.send_command.assert_called_once_with("agent-1", executor._command_id, "echo hello", {}, "", 30)
+        mock_manager.send_command.assert_called_once_with(
+            "agent-1", executor._command_id, "echo hello", {}, "", 30, shell=""
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.zentao("TC-S0492", domain="server/executors", priority="P1")
@@ -216,7 +233,7 @@ class TestAgentExecutorExecute:
 
         assert result.exit_code == 0
         mock_manager.send_command.assert_called_once_with(
-            "agent-1", executor._command_id, "echo hello", {}, "/home/agent", default_timeout
+            "agent-1", executor._command_id, "echo hello", {}, "/home/agent", default_timeout, shell=""
         )
 
 

@@ -74,6 +74,10 @@ class AgentWithConfig(BaseModel):
     agent_auto_bootstrap: bool = True
     # agent 回连服务端的地址（留空则服务端自动探测）；远端无法反连探测 IP 时靠它覆盖
     server_ws_host: str = ""
+    # v2 (2026-09): 执行环境（网页可查看/编辑）——shell 覆盖默认解释器，
+    # env 作为该服务器上所有命令的默认环境变量（任务级 env 优先级更高）
+    shell: str = ""
+    env: dict[str, str] = {}
     # 实时状态字段（未连接时为空）
     hostname: str = ""
     platform: str = ""
@@ -119,6 +123,9 @@ class AgentConfigCreateRequest(BaseModel):
     # v2 (2026-09): 暴露给网页表单。服务端自动探测的 IP 对远端主机可能不可达，
     # 没有这个字段时用户只能手改 YAML，部署会一直等待握手直到超时。
     server_ws_host: str = ""
+    # v2 (2026-09): 执行环境随创建一起写入，避免"先建后用编辑弹窗补配"的两步操作
+    shell: str = ""
+    env: dict[str, str] = {}
 
     @field_validator("id")
     @classmethod
@@ -148,6 +155,9 @@ class AgentConfigUpdateRequest(BaseModel):
     agent_auto_bootstrap: bool | None = None
     # v2 (2026-09): 与 create 对齐，编辑时允许覆盖/清空回连地址
     server_ws_host: str | None = None
+    # v2 (2026-09): 执行环境编辑。None=未提交（保留），""/{} = 清除该字段
+    shell: str | None = None
+    env: dict[str, str] | None = None
 
     @field_validator("port")
     @classmethod

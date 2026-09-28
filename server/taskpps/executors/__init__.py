@@ -14,6 +14,7 @@ from taskpps.executors.ssh import SSHExecutor
 from taskpps.i18n import t
 from taskpps.loaders.agent_loader import AgentLoader
 from taskpps.loaders.credential_loader import CredentialLoader
+from taskpps.services.agent_exec_env import normalize_env, normalize_shell
 from taskpps.services.agent_manager import AgentManager
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,19 @@ logger = logging.getLogger(__name__)
 
 class AgentNotFoundError(Exception):
     pass
+
+
+def _attach_agent_exec_env(executor: BaseExecutor, agent_data: dict[str, Any] | None) -> BaseExecutor:
+    """把 agent yaml 的 shell/env 注入执行器。
+
+    v2 (2026-09): 统一在工厂注入，保证 runner/retry_runner/plugin delegate
+    所有创建路径拿到同一份执行环境，不依赖各调用点自觉传递。
+    未配置时显式置空，避免实例共用类属性默认值导致串配置。
+    """
+    if agent_data:
+        executor.agent_env = normalize_env(agent_data.get("env"), str(agent_data.get("id", "")))
+        executor.agent_shell = normalize_shell(agent_data.get("shell"))
+    return executor
 
 
 def create_executor(
@@ -79,7 +93,9 @@ def create_executor(
                 effective_max_parallel = max_parallel
             if effective_max_parallel is not None:
                 agent_data = {**agent_data, "max_parallel": effective_max_parallel}
-            return AgentExecutor(agent_id=task.host, manager=manager, agent_data=agent_data)
+            return _attach_agent_exec_env(
+                AgentExecutor(agent_id=task.host, manager=manager, agent_data=agent_data), agent_data
+            )
 
         return _make_ssh_executor(host, port, agent_data, task, project_workdir)
 
@@ -144,10 +160,8 @@ def _create_plugin_remote_delegate(
         if agent_data.get("execution_agent", True):
             manager = AgentManager.instance()
             if manager.is_connected(task.host):
-                return AgentExecutor(
-                    agent_id=task.host,
-                    manager=manager,
-                    agent_data=agent_data,
+                return _attach_agent_exec_env(
+                    AgentExecutor(agent_id=task.host, manager=manager, agent_data=agent_data), agent_data
                 )
             return _make_ssh_executor(host, port, agent_data, task, project_workdir)
         return _make_ssh_executor(host, port, agent_data, task, project_workdir)
@@ -200,12 +214,15 @@ def _make_ssh_executor(
             )
         )
 
-    return SSHExecutor(
-        host=host,
-        port=port,
-        username=username,
-        password=password,
-        key_path=key_path,
+    return _attach_agent_exec_env(
+        SSHExecutor(
+            host=host,
+            port=port,
+            username=username,
+            password=password,
+            key_path=key_path,
+        ),
+        agent_data,
     )
 
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from taskpps.config import get_agents_dir, get_credentials_dir, get_pipelines_dir
+from taskpps.services.agent_exec_env import env_value_to_str
 from taskpps.services.config_yaml_store import (
     create_single_entry,
     delete_entry,
@@ -40,7 +41,15 @@ _FORM_FIELDS = (
     "agent_auto_bootstrap",
     # v2 (2026-09): agent 回连地址纳入表单字段，否则远端主机不可达时只能手改 YAML
     "server_ws_host",
+    # v2 (2026-09): 执行环境（shell/env）纳入表单字段，支持网页查看/编辑并落盘
+    "shell",
+    "env",
 )
+
+# 环境变量名遵循 POSIX shell 的 name 规则；shell 只允许路径/命令名安全字符，
+# 防止把参数（如 "/bin/bash -x"）写进配置后在执行链路产生歧义。
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_SHELL_RE = re.compile(r"^[A-Za-z0-9_./+-]+$")
 
 
 def create_agent(project_workdir: Path, payload: dict[str, Any]) -> dict[str, Any]:
@@ -71,12 +80,15 @@ def update_agent(project_workdir: Path, project_id: str, agent_id: str, updates:
     for field, value in updates.items():
         if value is None:
             continue
-        if isinstance(value, str) and value == "":
+        # 空字符串/空 dict 都表示"清除该字段"，避免 YAML 里留下空壳配置
+        if (isinstance(value, str) and value == "") or (isinstance(value, dict) and not value):
             item.pop(field, None)
         else:
             item[field] = value
 
-    _validate_item(item, project_workdir)
+    # v2 (2026-09): 只校验本次提交的字段。手工 YAML 里既有的 shell/env 如果非法
+    # （如 shell: "/bin/bash -l"），不应连带阻断改名等无关编辑。
+    _validate_item(item, project_workdir, exec_env_fields=set(updates))
     replace_entry(base, "agents", agent_id, location, item)
     logger.info("agent 配置已更新: project_workdir=%s id=%s", project_workdir, agent_id)
     return _to_view(agent_id, item, project_id)
@@ -129,15 +141,21 @@ def _build_item(payload: dict[str, Any], project_workdir: Path) -> dict[str, Any
         value = payload[field]
         if value is None:
             continue
-        # 空字符串不写盘，保持 YAML 干净；但布尔 False 必须保留
+        # 空字符串/空 dict 不写盘，保持 YAML 干净；但布尔 False 必须保留
         if isinstance(value, str) and value == "":
+            continue
+        if isinstance(value, dict) and not value:
             continue
         item[field] = value
     _validate_item(item, project_workdir)
     return item
 
 
-def _validate_item(item: dict[str, Any], project_workdir: Path) -> None:
+def _validate_item(
+    item: dict[str, Any],
+    project_workdir: Path,
+    exec_env_fields: set[str] | None = None,
+) -> None:
     agent_type = str(item.get("type", "") or "")
     credential_id = item.get("credential_id")
     if credential_id and not credential_exists(project_workdir, str(credential_id)):
@@ -145,6 +163,46 @@ def _validate_item(item: dict[str, Any], project_workdir: Path) -> None:
     # SSH 类型必须有 host；local/execution-agent 允许空 host（走 WS 回连）
     if agent_type.startswith("ssh") and not item.get("host"):
         raise ValueError("SSH 类型服务器必须填写 host")
+    _validate_exec_env(item, exec_env_fields)
+
+
+def _validate_exec_env(item: dict[str, Any], fields: set[str] | None = None) -> None:
+    """校验并归一化 shell/env。
+
+    设计决策（为什么在这里归一化而不是只校验）：
+    网页提交的 env 值可能是 YAML 数字/布尔，执行链路要求 dict[str, str]，
+    在写盘前统一 str()，保证落盘内容与运行时类型一致。
+
+    fields=None 表示全量校验（创建）；编辑时由调用方传入本次提交的字段集合，
+    只处理提交过的字段，避免手工 YAML 的既有非法值阻断无关编辑。
+    """
+    if fields is None or "shell" in fields:
+        raw_shell = item.get("shell")
+        if raw_shell is not None:
+            shell = str(raw_shell).strip()
+            if shell == "":
+                item.pop("shell", None)
+            elif not _SHELL_RE.fullmatch(shell):
+                raise ValueError(f"shell 非法: {raw_shell!r}（只允许路径/命令名字符，不能含空格）")
+            else:
+                item["shell"] = shell
+
+    if fields is not None and "env" not in fields:
+        return
+    raw_env = item.get("env")
+    if raw_env is None:
+        return
+    if not isinstance(raw_env, dict):
+        raise ValueError("env 必须是 KEY: VALUE 键值映射")
+    env: dict[str, str] = {}
+    for key, value in raw_env.items():
+        if not _ENV_KEY_RE.fullmatch(str(key)):
+            raise ValueError(f"环境变量名非法: {key}（只允许字母/数字/下划线，且不以数字开头）")
+        if value is None or isinstance(value, (dict, list)):
+            raise ValueError(f"环境变量 {key} 的值必须是字符串/数字/布尔")
+        # 复用运行时同一转换：布尔统一小写 true/false，避免落盘值与执行值不一致
+        env[str(key)] = env_value_to_str(value)
+    item["env"] = env
 
 
 def _to_view(agent_id: str, item: dict[str, Any], project_id: str) -> dict[str, Any]:

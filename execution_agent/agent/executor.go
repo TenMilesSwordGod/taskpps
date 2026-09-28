@@ -117,7 +117,15 @@ func (e *Executor) Execute(req ExecCommand) {
 		ctx, cancel = context.WithCancel(context.Background())
 	}
 
-	cmd := exec.CommandContext(ctx, e.shell, "-c", req.Command)
+	// v2 (2026-09): 命令级 shell 优先于 agent 启动配置（网页端每个 server 可配置）。
+	// 刻意不做 resolveShell 降级：用户显式配置的 shell 若在目标机不存在，
+	// 必须报错让用户看到（结果里带 fork/exec 错误），而不是悄悄换 bash/dash/sh
+	// 执行——那会让"配置了 zsh"的语义静默失效，只有 agent 日志能发现。
+	shell := e.shell
+	if req.Shell != "" {
+		shell = req.Shell
+	}
+	cmd := exec.CommandContext(ctx, shell, "-c", req.Command)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if req.Cwd != "" {

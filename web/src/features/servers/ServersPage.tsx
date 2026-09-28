@@ -12,6 +12,7 @@ import ServerCard from './ServerCard';
 import HostInfoModal from './HostInfoModal';
 import ReplModal from './ReplModal';
 import AgentFormModal from './AgentFormModal';
+import ExecEnvModal from './ExecEnvModal';
 import CredentialsModal from './CredentialsModal';
 import apiClient from '@/api/client';
 import { RelativeTime } from '@/components/RelativeTime';
@@ -173,6 +174,19 @@ export default function ServersPage() {
     setReplAgent(agent);
   }, []);
   const handleCloseRepl = useCallback(() => setReplAgent(null), []);
+
+  // 执行环境（shell/env）modal 状态。
+  // v2 (2026-09): 只存 agent_id，渲染时从最新列表派生 —— 保存后 5s 轮询/失效刷新
+  // 的窗口内重新打开弹窗，也能拿到最新环境而不是旧快照（避免误把旧值回写）。
+  const [execEnvAgentId, setExecEnvAgentId] = useState<string | null>(null);
+  const handleShowExecEnv = useCallback((agent: AgentWithConfig) => {
+    setExecEnvAgentId(agent.agent_id);
+  }, []);
+  const handleCloseExecEnv = useCallback(() => setExecEnvAgentId(null), []);
+  const execEnvAgent = useMemo(
+    () => (execEnvAgentId ? (agents ?? []).find((a) => a.agent_id === execEnvAgentId) ?? null : null),
+    [agents, execEnvAgentId],
+  );
 
   // 新增服务器（可带入默认项目，例如从空态引导直接进入）
   const [defaultProjectId, setDefaultProjectId] = useState<string | undefined>(undefined);
@@ -433,6 +447,7 @@ export default function ServersPage() {
                             detectedArch={det?.arch}
                             onShowDetail={handleShowDetail}
                             onShowRepl={handleShowRepl}
+                            onShowExecEnv={handleShowExecEnv}
                             isAdmin={isAdmin}
                             onEdit={handleEditAgent}
                             onDelete={handleDeleteAgent}
@@ -453,6 +468,9 @@ export default function ServersPage() {
 
       {/* Web REPL modal */}
       <ReplModal open={!!replAgent} agent={replAgent} onClose={handleCloseRepl} />
+
+      {/* 执行环境（shell/env）查看/编辑，仅管理员可保存 */}
+      <ExecEnvModal open={!!execEnvAgent} agent={execEnvAgent} canEdit={isAdmin} onClose={handleCloseExecEnv} />
 
       {/* 新增/编辑服务器（仅管理员入口可达，后端同样校验） */}
       <AgentFormModal

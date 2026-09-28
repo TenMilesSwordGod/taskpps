@@ -364,6 +364,10 @@ export interface AgentWithConfig {
   execution_agent?: boolean;
   /** 是否允许自动部署 agent */
   agent_auto_bootstrap?: boolean;
+  /** 执行 shell（agent yaml 配置；空表示使用默认解释器） */
+  shell?: string;
+  /** 服务器级默认环境变量（同名时流水线/任务 env 优先） */
+  env?: Record<string, string>;
   hostname: string;
   platform: string;
   system: string;

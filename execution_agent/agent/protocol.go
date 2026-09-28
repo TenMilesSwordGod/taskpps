@@ -45,6 +45,9 @@ type ExecCommand struct {
 	Env       map[string]string `json:"env"`
 	Cwd       string            `json:"cwd"`
 	Timeout   int               `json:"timeout"`
+	// Shell 是可选的命令级解释器（v2 2026-09）。空字符串表示沿用 agent
+	// 启动时的 shell；旧版服务端不发送该字段，Unmarshal 后自然为空。
+	Shell string `json:"shell,omitempty"`
 }
 
 type CancelCommand struct {

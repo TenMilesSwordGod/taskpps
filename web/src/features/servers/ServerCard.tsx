@@ -4,7 +4,7 @@ import type { AgentWithConfig, PendingCommandItem } from '@/types';
 import {
   Cpu, Globe, Hash, Activity, Wifi, WifiOff, Plug, Unplug, HelpCircle,
   CloudUpload, Loader2, Info, ExternalLink, Clock, Timer, Terminal, RefreshCw,
-  Pencil, Trash2,
+  Pencil, Trash2, SquareTerminal,
 } from 'lucide-react';
 import { useDeployAgent, useUpdateDeployAgent, usePendingCommands, useAgentStatus } from '@/api/agents';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,8 @@ interface ServerCardProps {
   detectedArch?: string;
   onShowDetail?: (agent: AgentWithConfig) => void;
   onShowRepl?: (agent: AgentWithConfig) => void;
+  /** 查看/编辑执行环境（shell + 默认环境变量） */
+  onShowExecEnv?: (agent: AgentWithConfig) => void;
   /** 仅管理员可见编辑/删除入口（权限判断在页面层，卡片保持展示型） */
   isAdmin?: boolean;
   onEdit?: (agent: AgentWithConfig) => void;
@@ -385,7 +387,9 @@ function StatusDot({ state }: { state: DotState }) {
   );
 }
 
-function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowRepl, isAdmin, onEdit, onDelete }: ServerCardProps) {
+function ServerCard({
+  agent, detectedSystem, detectedArch, onShowDetail, onShowRepl, onShowExecEnv, isAdmin, onEdit, onDelete,
+}: ServerCardProps) {
   // 每卡独立拉取实时状态：谁先回来谁先点亮，不再等整批都好才一起显示
   const liveQuery = useAgentStatus(agent.agent_id);
   const live = liveQuery.data;
@@ -424,6 +428,9 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
   const versionDisplay = liveVersion ? `v${liveVersion}` : (agent.agent_version ? `v${agent.agent_version}` : '—');
   const osArchText = osArchLabel(systemLabel, archLabel);
   const maxParallel = (hasLive ? live!.max_parallel : agent.max_parallel) ?? 1;
+  // v2 (2026-09): 执行环境展示（未配置时明确显示"默认"，避免误以为是空值）
+  const agentShell = (agent.shell || '').trim();
+  const agentEnvCount = Object.keys(agent.env ?? {}).length;
   const connectedAt = hasLive && live!.connected_at ? live!.connected_at : agent.connected_at;
   const deployDisabled = !online && agent.net_status === 'unreachable';
   // 最近更新时间：每卡状态拉取完成时刻（dataUpdatedAt 为 ms）
@@ -527,6 +534,21 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
           <Cpu size={11} style={{ flexShrink: 0, color: '#8C8C8C' }} />
           <span style={{ fontSize: 12, color: '#262626' }}>{osArchText}</span>
         </div>
+        {/* v2 (2026-09): 执行环境（shell + env 数量），点击右侧图标按钮可查看/编辑 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, gridColumn: '1 / -1', minWidth: 0 }}>
+          <SquareTerminal size={11} style={{ flexShrink: 0, color: '#8C8C8C' }} />
+          {agentShell ? (
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#262626', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {agentShell}
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, color: '#8C8C8C' }}>默认 shell</span>
+          )}
+          <span style={{ color: '#E0E0E0' }}>·</span>
+          <span style={{ fontSize: 12, color: agentEnvCount > 0 ? '#262626' : '#8C8C8C' }}>
+            ENV {agentEnvCount}
+          </span>
+        </div>
       </div>
 
       {/* 上次执行时间 */}
@@ -585,6 +607,11 @@ function ServerCard({ agent, detectedSystem, detectedArch, onShowDetail, onShowR
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <IconBtn
+            icon={<SquareTerminal size={15} />}
+            title="执行环境（Shell / 环境变量）"
+            onClick={() => onShowExecEnv?.(agent)}
+          />
           <IconBtn
             icon={<Terminal size={15} />}
             title={online ? 'Web REPL — 执行命令（不占用并发）' : 'Agent 离线，无法执行'}
@@ -674,6 +701,7 @@ export default memo(ServerCard, (prev, next) => {
     prev.detectedArch === next.detectedArch &&
     prev.onShowDetail === next.onShowDetail &&
     prev.onShowRepl === next.onShowRepl &&
+    prev.onShowExecEnv === next.onShowExecEnv &&
     prev.isAdmin === next.isAdmin &&
     prev.onEdit === next.onEdit &&
     prev.onDelete === next.onDelete

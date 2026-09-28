@@ -298,6 +298,10 @@ class TestProbeRemoteHostInfo:
                 "free -h": "              total        used        free      shared  buff/cache   available\n"
                 "Mem:           16Gi        4.2Gi       8.1Gi       0.1Gi       3.7Gi        11Gi\n"
                 "Swap:         2.0Gi       0.0Ki       2.0Gi",
+                # 探测实现分别执行 `grep MemAvailable/MemTotal`，必须分别匹配；
+                # 只配 /proc/meminfo 会让两条 grep 都返回 MemTotal，percent 恒为 0
+                "grep MemAvailable": "MemAvailable:   12000000 kB",
+                "grep MemTotal": "MemTotal:       16777216 kB",
                 "/proc/meminfo": "MemTotal:       16777216 kB\nMemAvailable:   12000000 kB\nBuffers:         100000 kB",
                 "df -h": "Filesystem      Size  Used Avail Use% Mounted on\n"
                 "/dev/sda1        50G   20G   28G  42% /\n"

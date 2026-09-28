@@ -66,6 +66,8 @@ func TestExecCommandSerialization(t *testing.T) {
 		Env:       map[string]string{"KEY": "VAL"},
 		Cwd:       "/tmp",
 		Timeout:   30,
+		// v2 (2026-09): 服务器可按命令下发 shell，覆盖 agent 启动时的默认值
+		Shell: "/bin/zsh",
 	}
 
 	data, err := json.Marshal(cmd)
@@ -83,6 +85,21 @@ func TestExecCommandSerialization(t *testing.T) {
 	}
 	if decoded.Timeout != 30 {
 		t.Errorf("expected 30, got %d", decoded.Timeout)
+	}
+	if decoded.Shell != "/bin/zsh" {
+		t.Errorf("expected /bin/zsh, got %s", decoded.Shell)
+	}
+}
+
+// TestExecCommandWithoutShellKeepsBackwardCompat 验证旧服务端报文（无 shell 字段）
+// 仍可解析为空字符串，agent 端据此回退到启动时的 shell。
+func TestExecCommandWithoutShellKeepsBackwardCompat(t *testing.T) {
+	var decoded ExecCommand
+	if err := json.Unmarshal([]byte(`{"command_id":"c","command":"echo hi","env":{},"cwd":"/tmp","timeout":5}`), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.Shell != "" {
+		t.Errorf("expected empty shell, got %s", decoded.Shell)
 	}
 }
 

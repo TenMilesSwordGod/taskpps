@@ -15,6 +15,27 @@ from taskpps.i18n import t
 logger = logging.getLogger(__name__)
 
 
+def build_remote_command(command: str, env: dict[str, str], cwd: str, shell: str) -> str:
+    """拼装远端登录 shell 中执行的完整命令串。
+
+    设计决策（为什么单独抽成纯函数）：
+    - 拼接涉及 profile/env/cwd/shell 四段，直接内联在 execute 里难以单测；
+      抽出来后可对空 env、带空格路径、命令引号转义做无 SSH 依赖的验证。
+    - 未配置 shell 时不加 exec 包装，保持与历史行为一致；配置后
+      `exec <shell> -c <command>` 只改变解释器，profile/env/cd 仍在登录 shell 中完成。
+    """
+    env_exports = " ".join(f"export {shlex.quote(k)}={shlex.quote(v)}" for k, v in env.items())
+    profile_setup = (
+        "source /etc/profile 2>/dev/null; "
+        "[ -f ~/.bash_profile ] && source ~/.bash_profile 2>/dev/null; "
+        "[ -f ~/.bashrc ] && source ~/.bashrc 2>/dev/null"
+    )
+    runner = f"exec {shlex.quote(shell)} -c {shlex.quote(command)}" if shell else command
+    # 逐段过滤空串，避免 env 为空时拼出 `&&  &&` 的语法错误
+    segments = [part for part in (f"cd {shlex.quote(cwd or '.')}", env_exports, runner) if part]
+    return f"{profile_setup}; " + " && ".join(segments)
+
+
 class SSHExecutor(BaseExecutor):
     def __init__(
         self,
@@ -49,6 +70,8 @@ class SSHExecutor(BaseExecutor):
         cwd: str | None = None,
     ) -> ExecutorResult:
         self._ensure_log_dir(log_path)
+        # v2 (2026-09): agent 配置 env 作为默认值，任务 env 覆盖之
+        env = self.apply_agent_env(env)
 
         def _run_ssh():
             connect_kwargs = self._make_connect_kwargs()
@@ -65,14 +88,7 @@ class SSHExecutor(BaseExecutor):
                 self._client = client
                 logger.info("SSHExecutor: connected to %s@%s:%d", self.username, self.host, self.port)
 
-                env_exports = " ".join(f"export {shlex.quote(k)}={shlex.quote(v)}" for k, v in env.items())
-                effective_cwd = cwd or "."
-                profile_setup = (
-                    "source /etc/profile 2>/dev/null; "
-                    "[ -f ~/.bash_profile ] && source ~/.bash_profile 2>/dev/null; "
-                    "[ -f ~/.bashrc ] && source ~/.bashrc 2>/dev/null"
-                )
-                full_command = f"{profile_setup}; cd {shlex.quote(effective_cwd)} && {env_exports} && {command}"
+                full_command = build_remote_command(command, env, cwd or ".", self.agent_shell)
 
                 transport = client.get_transport()
                 if transport is None:

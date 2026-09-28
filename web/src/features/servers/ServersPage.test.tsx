@@ -539,6 +539,31 @@ describe('<ServersPage />', () => {
     expect(screen.getByLabelText('删除服务器配置')).toBeInTheDocument()
   })
 
+  it('执行环境弹窗：列表刷新后重新打开展示最新值（不留旧快照）', async () => {
+    mockUseIsAdmin.mockReturnValue(true)
+    const base = { isLoading: false, refetch: vi.fn(), isFetching: false, error: null }
+    mockUseAgentsWithConfig.mockReturnValue({
+      ...base,
+      data: [makeAgent({ agent_id: 'env-live', project_id: 'p1', shell: '/bin/bash', env: { A: '1' } })],
+    })
+    const { rerender } = render(<ServersPage />, { wrapper: Wrapper })
+
+    fireEvent.click(await screen.findByLabelText('执行环境（Shell / 环境变量）'))
+    await waitFor(() => expect(screen.getByDisplayValue('/bin/bash')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }))
+    await waitFor(() => expect(screen.queryByDisplayValue('/bin/bash')).not.toBeInTheDocument())
+
+    // 模拟保存后后台刷新拿到新值（弹窗此前存的是旧快照）
+    mockUseAgentsWithConfig.mockReturnValue({
+      ...base,
+      data: [makeAgent({ agent_id: 'env-live', project_id: 'p1', shell: '/bin/zsh', env: { A: '2' } })],
+    })
+    rerender(<ServersPage />)
+
+    fireEvent.click(screen.getByLabelText('执行环境（Shell / 环境变量）'))
+    await waitFor(() => expect(screen.getByDisplayValue('/bin/zsh')).toBeInTheDocument())
+  })
+
   it('管理员：点击新增服务器打开表单弹窗', async () => {
     mockUseIsAdmin.mockReturnValue(true)
     mockUseAgentsWithConfig.mockReturnValue({

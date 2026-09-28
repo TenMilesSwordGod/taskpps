@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
-from unittest.mock import AsyncMock
+
+from tests.auth._helpers import register_and_auth_headers
 
 
 class TestAgentExecStream:
     @pytest.mark.asyncio
     async def test_exec_stream_not_connected(self, client):
+        # POST 被中间件强制鉴权，匿名调用得到的是 401 而非预期的 404
+        headers = await register_and_auth_headers(client)
         response = await client.post(
             "/api/agents/nonexistent/exec/stream",
+            headers=headers,
             json={"command": "echo hello", "timeout": 10},
         )
         assert response.status_code == 404
@@ -19,6 +24,7 @@ class TestAgentExecStream:
     async def test_exec_stream_streams_output_and_result(self, client):
         from taskpps.services.agent_manager import AgentConnection, AgentManager
 
+        headers = await register_and_auth_headers(client)
         manager = AgentManager.instance()
         ws = AsyncMock()
         ws.send_json = AsyncMock()
@@ -38,6 +44,7 @@ class TestAgentExecStream:
         try:
             response = await client.post(
                 "/api/agents/stream-agent/exec/stream",
+                headers=headers,
                 json={"command": "echo hello", "timeout": 10},
             )
             assert response.status_code == 200
@@ -63,6 +70,7 @@ class TestAgentExecStream:
             PendingCommandInfo,
         )
 
+        headers = await register_and_auth_headers(client)
         manager = AgentManager.instance()
         ws = AsyncMock()
         ws.send_json = AsyncMock()
@@ -88,6 +96,7 @@ class TestAgentExecStream:
         try:
             response = await client.post(
                 "/api/agents/busy-stream-agent/exec/stream",
+                headers=headers,
                 json={"command": "ls -la", "timeout": 10},
             )
             assert response.status_code != 409
